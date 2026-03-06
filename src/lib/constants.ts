@@ -44,7 +44,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha Signature',
         description: 'Premium ceremonial-grade matcha latte, hand-whisked with silky oat milk. Our best seller.',
         price: 35000,
-        image: '/products/matcha-signature.jpg',
+        image: '/products/matcha-signature.png',
         category: 'signature',
         badge: 'best-seller',
         modifiers: {
@@ -58,7 +58,7 @@ export const PRODUCTS: Product[] = [
         name: 'Iced Matcha Latte',
         description: 'Smooth and creamy matcha blended with fresh milk, served over ice.',
         price: 28000,
-        image: '/products/matcha-latte.jpg',
+        image: '/products/matcha-latte.png',
         category: 'classic',
         modifiers: {
             iceLevel: ['Normal Ice', 'Less Ice', 'No Ice'],
@@ -71,7 +71,7 @@ export const PRODUCTS: Product[] = [
         name: 'Dirty Matcha',
         description: 'Matcha meets espresso. A bold, earthy fusion for the daring palate.',
         price: 38000,
-        image: '/products/dirty-matcha.jpg',
+        image: '/products/dirty-matcha.png',
         category: 'signature',
         badge: 'new',
         modifiers: {
@@ -85,7 +85,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha Biscoff',
         description: 'Creamy matcha topped with crushed Biscoff cookies and caramel drizzle.',
         price: 42000,
-        image: '/products/matcha-biscoff.jpg',
+        image: '/products/matcha-biscoff.png',
         category: 'hidden-menu',
         badge: 'best-seller',
         modifiers: {
@@ -99,7 +99,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha Strawberry',
         description: 'Sweet strawberry puree swirled into our signature matcha. A visual masterpiece.',
         price: 36000,
-        image: '/products/matcha-strawberry.jpg',
+        image: '/products/matcha-strawberry.png',
         category: 'seasonal',
         badge: 'new',
         modifiers: {
@@ -113,7 +113,7 @@ export const PRODUCTS: Product[] = [
         name: 'Hot Matcha',
         description: 'Pure ceremonial-grade matcha whisked to perfection. Warm, earthy, meditative.',
         price: 30000,
-        image: '/products/hot-matcha.jpg',
+        image: '/products/hot-matcha.png',
         category: 'classic',
         modifiers: {
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
@@ -125,7 +125,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha Affogato',
         description: 'Vanilla gelato drowned in a shot of concentrated matcha. Decadent.',
         price: 45000,
-        image: '/products/matcha-affogato.jpg',
+        image: '/products/matcha-affogato.png',
         category: 'hidden-menu',
         modifiers: {
             addOns: ADD_ONS,
@@ -136,7 +136,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha Croissant',
         description: 'Buttery, flaky croissant infused with matcha cream filling.',
         price: 25000,
-        image: '/products/matcha-croissant.jpg',
+        image: '/products/matcha-croissant.png',
         category: 'pastries',
         badge: 'new',
     },
@@ -145,7 +145,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha White Choc Cookie',
         description: 'Thick, chewy matcha cookie loaded with white chocolate chunks.',
         price: 18000,
-        image: '/products/matcha-cookie.jpg',
+        image: '/products/matcha-cookie.png',
         category: 'pastries',
         badge: 'best-seller',
     },
@@ -154,7 +154,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha Tiramisu',
         description: 'Japanese-Italian fusion. Layers of mascarpone and matcha-soaked ladyfingers.',
         price: 35000,
-        image: '/products/matcha-tiramisu.jpg',
+        image: '/products/matcha-tiramisu.png',
         category: 'pastries',
     },
     {
@@ -162,7 +162,7 @@ export const PRODUCTS: Product[] = [
         name: 'Yuzu Matcha Sparkle',
         description: 'Sparkling yuzu citrus meets matcha. Refreshingly unusual.',
         price: 38000,
-        image: '/products/yuzu-matcha.jpg',
+        image: '/products/yuzu-matcha.png',
         category: 'seasonal',
         badge: 'new',
     },
@@ -171,7 +171,7 @@ export const PRODUCTS: Product[] = [
         name: 'Matcha Mochi Latte',
         description: 'Chewy mochi pearls swimming in a rich matcha latte. Textural heaven.',
         price: 40000,
-        image: '/products/matcha-mochi.jpg',
+        image: '/products/matcha-mochi.png',
         category: 'hidden-menu',
         badge: 'sold-out',
         modifiers: {

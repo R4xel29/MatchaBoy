@@ -1,0 +1,80 @@
+import { PrismaClient } from "@prisma/client"
+import { PRODUCTS, CATEGORIES } from "../src/lib/constants"
+import bcrypt from "bcryptjs"
+
+const prisma = new PrismaClient()
+
+async function main() {
+    console.log("Seeding database...")
+
+    // Delete all data first
+    await prisma.orderItem.deleteMany()
+    await prisma.order.deleteMany()
+    await prisma.product.deleteMany()
+    await prisma.category.deleteMany()
+    await prisma.user.deleteMany()
+
+    // 1. Create Default Users (Admin, Driver, Customer)
+    const password = await bcrypt.hash("password123", 10)
+
+    await prisma.user.create({
+        data: {
+            name: "Admin User",
+            email: "admin@matchaboy.com",
+            password,
+            role: "ADMIN"
+        }
+    })
+
+    await prisma.user.create({
+        data: {
+            name: "Driver Andi",
+            email: "driver@matchaboy.com",
+            password,
+            role: "DRIVER",
+            phone: "081234567890"
+        }
+    })
+
+    // 2. Insert Categories
+    for (const c of CATEGORIES) {
+        if (c.id === 'all') continue // skip the 'all' virtual category
+
+        await prisma.category.create({
+            data: {
+                id: c.id,
+                slug: c.slug,
+                name: c.name
+            }
+        })
+    }
+
+    // 3. Insert Products
+    for (const p of PRODUCTS) {
+        if (!p.category || p.category === 'all') continue
+
+        await prisma.product.create({
+            data: {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                price: p.price,
+                image: p.image,
+                badge: p.badge,
+                categoryId: p.category
+            }
+        })
+    }
+
+    console.log("Seeding finished successfully.")
+}
+
+main()
+    .then(async () => {
+        await prisma.$disconnect()
+    })
+    .catch(async (e) => {
+        console.error(e)
+        await prisma.$disconnect()
+        process.exit(1)
+    })

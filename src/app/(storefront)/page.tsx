@@ -1,63 +1,51 @@
-'use client';
+import { prisma } from "@/lib/prisma"
+import StorefrontClient from "./StorefrontClient"
+import { PRODUCTS } from "@/lib/constants"
 
-import { useState } from 'react';
-import { Hero } from '@/components/storefront/Hero';
-import { CategoryTabs } from '@/components/storefront/CategoryTabs';
-import { ProductGrid } from '@/components/storefront/ProductGrid';
-import { ProductModal } from '@/components/storefront/ProductModal';
-import { CATEGORIES, PRODUCTS } from '@/lib/constants';
-import type { Product } from '@/types';
+export const revalidate = 60 // Revalidate every 60 seconds
 
-export default function StorefrontPage() {
-  const [activeCategory, setActiveCategory] = useState('all');
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+export default async function StorefrontPage() {
+  const [categories, products] = await Promise.all([
+    prisma.category.findMany({
+      orderBy: { createdAt: 'asc' }
+    }),
+    prisma.product.findMany({
+      orderBy: { createdAt: 'desc' } // Newest first
+    })
+  ])
 
-  const handleProductClick = (product: Product) => {
-    if (product.badge === 'sold-out') return;
-    setSelectedProduct(product);
-    setIsModalOpen(true);
-  };
+  // Map Prisma 'Category' to the frontend 'Category' type format
+  // For the 'all' category, we construct it virtually.
+  const mappedCategories = [
+    { id: 'all', name: 'All', slug: 'all' },
+    ...categories.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug
+    }))
+  ]
+
+  // The database returns Decimal/Int for prices. Map Prisma Product to frontend Product 
+  const mappedProducts = products.map((p: any) => {
+    // Find matching local product to steal its modifiers configurations
+    const localRef = PRODUCTS.find(localP => localP.id === p.id)
+
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      image: p.image || undefined,
+      category: p.categoryId,
+      badge: p.badge as "new" | "best-seller" | "sold-out" | undefined,
+      modifiers: localRef?.modifiers
+    }
+  })
 
   return (
-    <>
-      {/* Hero Section */}
-      <Hero />
-
-      {/* Category Navigation (Sticky) */}
-      <CategoryTabs
-        categories={CATEGORIES}
-        activeCategory={activeCategory}
-        onCategoryChange={setActiveCategory}
-      />
-
-      {/* Menu Section */}
-      <section
-        id="menu-section"
-        className="px-4 py-6 pb-32 max-w-2xl mx-auto"
-      >
-        <div className="mb-5">
-          <h2 className="font-heading font-bold text-2xl text-foreground">
-            Our Menu
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Pilih dan nikmati matcha favoritmu
-          </p>
-        </div>
-
-        <ProductGrid
-          products={PRODUCTS}
-          activeCategory={activeCategory}
-          onProductClick={handleProductClick}
-        />
-      </section>
-
-      {/* Product Customization Modal */}
-      <ProductModal
-        product={selectedProduct}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
-    </>
-  );
+    <StorefrontClient 
+      categories={mappedCategories} 
+      products={mappedProducts} 
+    />
+  )
 }

@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------------
+// NEXTAUTH.JS ADAPTER MODELS
+// -----------------------------------------------------------------------------
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("CUSTOMER") // CUSTOMER, DRIVER, ADMIN
+  
+  accounts      Account[]
+  sessions      Session[]
+  
+  // App Specific
+  phone         String?
+  orders        Order[]       @relation("UserOrders")
+  driverOrders  Order[]       @relation("DriverOrders")
+  locations     Location[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?
+  access_token       String?
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// -----------------------------------------------------------------------------
+// APP CORE MODELS
+// -----------------------------------------------------------------------------
+
+model Location {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address   String
+  lat       Float?
+  lng       Float?
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  slug        String    @unique
+  name        String
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  price       Int
+  image       String?
+  badge       String?  // e.g., 'best-seller', 'new', 'sold-out'
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+  
+  orderItems  OrderItem[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Order {
+  id            String        @id @default(cuid())
+  
+  // Relations
+  userId        String?
+  user          User?         @relation("UserOrders", fields: [userId], references: [id])
+  driverId      String?
+  driver        User?         @relation("DriverOrders", fields: [driverId], references: [id])
+  
+  // Customer Info snapshot
+  customerName  String
+  customerPhone String
+  address       String
+  distanceKm    Float?
+  
+  // Financials
+  subtotal      Int
+  deliveryFee   Int
+  total         Int
+  
+  paymentMethod String        // COD, MIDTRANS
+  status        String        @default("ASSIGNED") // ASSIGNED, TO_STORE, PICKED_UP, ON_DELIVERY, DELIVERED
+  items         OrderItem[]
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model OrderItem {
+  id            String   @id @default(cuid())
+  orderId       String
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  
+  qty           Int
+  price         Int      // Price at the time of order
+  modifiers     String?  // Stored as JSON string or plain text for simple modifiers
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}

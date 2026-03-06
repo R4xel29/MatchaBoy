@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, DM_Sans } from "next/font/google";
+import { ToastProvider } from "@/components/ui/Toast";
+import { AuthProvider } from "@/components/providers/AuthProvider";
 import "./globals.css";
 
 const playfair = Playfair_Display({
@@ -48,7 +50,9 @@ export default function RootLayout({
       <body
         className={`${playfair.variable} ${dmSans.variable} antialiased`}
       >
-        {children}
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
       </body>
     </html>
   );

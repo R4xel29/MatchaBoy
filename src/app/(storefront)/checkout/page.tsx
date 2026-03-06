@@ -49,6 +49,7 @@ export default function CheckoutPage() {
   const totalPrice = useCartStore((s) => s.totalPrice);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
+  const clearCart = useCartStore((s) => s.clearCart);
   const address = useLocationStore((s) => s.address);
   const setAddress = useLocationStore((s) => s.setAddress);
 
@@ -90,14 +91,43 @@ export default function CheckoutPage() {
   const onSubmit = async (data: CheckoutFormData) => {
     setIsSubmitting(true);
 
-    // Simulate order creation
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      const payload = {
+        name: data.name,
+        phone: data.phone,
+        address: address, // { label, detail, lat, lng, distance, deliveryFee }
+        notes: data.notes,
+        paymentMethod,
+        items: items.map(item => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.basePrice,
+          totalPrice: item.totalPrice,
+          modsString: `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map(a => a.name).join(', +') : ''}`
+        })),
+        deliveryFee: address?.deliveryFee || 0,
+      };
 
-    if (paymentMethod === 'midtrans') {
-      // Navigate to dummy payment page
-      router.push('/checkout/payment?method=midtrans');
-    } else {
-      router.push('/checkout/payment?method=cod');
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const responseData = await res.json();
+
+      if (!res.ok) {
+        throw new Error(responseData.error || 'Gagal membuat pesanan');
+      }
+
+      // If Midtrans, route to payment gateway (to be implemented)
+      // For COD, redirect to the real tracking page!
+      clearCart();
+      router.push(`/orders/${responseData.orderId}`);
+    } catch (error: any) {
+      alert(error.message);
+      setIsSubmitting(false);
     }
   };
 

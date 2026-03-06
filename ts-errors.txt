@@ -1,0 +1,43 @@
+﻿.next/dev/types/validator.ts(153,31): error TS2344: Type 'typeof import("C:/UBIG/Matchaboy/matchaboy/src/app/api/admin/orders/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/admin/orders/[id]">'.
+  Types of property 'PATCH' are incompatible.
+    Type '(request: Request, { params }: { params: { id: string; }; }) => Promise<NextResponse<any>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+.next/dev/types/validator.ts(162,31): error TS2344: Type 'typeof import("C:/UBIG/Matchaboy/matchaboy/src/app/api/admin/products/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/admin/products/[id]">'.
+  Types of property 'PATCH' are incompatible.
+    Type '(request: Request, { params }: { params: { id: string; }; }) => Promise<NextResponse<any>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+.next/types/validator.ts(153,31): error TS2344: Type 'typeof import("C:/UBIG/Matchaboy/matchaboy/src/app/api/admin/orders/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/admin/orders/[id]">'.
+  Types of property 'PATCH' are incompatible.
+    Type '(request: Request, { params }: { params: { id: string; }; }) => Promise<NextResponse<any>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+.next/types/validator.ts(162,31): error TS2344: Type 'typeof import("C:/UBIG/Matchaboy/matchaboy/src/app/api/admin/products/[id]/route")' does not satisfy the constraint 'RouteHandlerConfig<"/api/admin/products/[id]">'.
+  Types of property 'PATCH' are incompatible.
+    Type '(request: Request, { params }: { params: { id: string; }; }) => Promise<NextResponse<any>>' is not assignable to type '(request: NextRequest, context: { params: Promise<{ id: string; }>; }) => void | Response | Promise<void | Response>'.
+      Types of parameters '__1' and 'context' are incompatible.
+        Type '{ params: Promise<{ id: string; }>; }' is not assignable to type '{ params: { id: string; }; }'.
+          Types of property 'params' are incompatible.
+            Property 'id' is missing in type 'Promise<{ id: string; }>' but required in type '{ id: string; }'.
+prisma/seed.ts(1,10): error TS2305: Module '"@prisma/client"' has no exported member 'PrismaClient'.
+src/app/(admin)/admin/orders/AdminOrdersClient.tsx(7,15): error TS2305: Module '"@prisma/client"' has no exported member 'Order'.
+src/app/(admin)/admin/orders/AdminOrdersClient.tsx(7,22): error TS2305: Module '"@prisma/client"' has no exported member 'OrderItem'.
+src/app/(admin)/admin/orders/AdminOrdersClient.tsx(7,33): error TS2305: Module '"@prisma/client"' has no exported member 'Product'.
+src/app/(admin)/admin/orders/AdminOrdersClient.tsx(155,40): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/app/(admin)/admin/page.tsx(132,37): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/app/(admin)/admin/products/AdminProductsClient.tsx(7,15): error TS2305: Module '"@prisma/client"' has no exported member 'Product'.
+src/app/(admin)/admin/products/AdminProductsClient.tsx(7,24): error TS2305: Module '"@prisma/client"' has no exported member 'Category'.
+src/app/(storefront)/page.tsx(21,23): error TS7006: Parameter 'c' implicitly has an 'any' type.
+src/app/(storefront)/page.tsx(29,39): error TS7006: Parameter 'p' implicitly has an 'any' type.
+src/app/(storefront)/profile/page.tsx(32,38): error TS7006: Parameter 'order' implicitly has an 'any' type.
+src/app/(storefront)/profile/page.tsx(39,28): error TS7006: Parameter 'i' implicitly has an 'any' type.
+src/app/(storefront)/profile/page.tsx(49,43): error TS7006: Parameter 'acc' implicitly has an 'any' type.
+src/app/(storefront)/profile/page.tsx(49,48): error TS7006: Parameter 'o' implicitly has an 'any' type.
+src/lib/prisma.ts(1,10): error TS2305: Module '"@prisma/client"' has no exported member 'PrismaClient'.

@@ -3,11 +3,16 @@
 import { useState, useEffect } from 'react';
 import { motion, useMotionValueEvent, useScroll } from 'framer-motion';
 import { Search, User, MapPin } from 'lucide-react';
-import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
-export function AppHeader() {
+interface AppHeaderProps {
+  onSearchClick?: () => void;
+}
+
+export function AppHeader({ onSearchClick }: AppHeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const { scrollY } = useScroll();
+  const router = useRouter();
 
   useMotionValueEvent(scrollY, 'change', (latest) => {
     setScrolled(latest > 80);
@@ -70,6 +75,7 @@ export function AppHeader() {
         {/* Right Icons */}
         <div className="flex items-center gap-1 shrink-0">
           <button
+            onClick={onSearchClick}
             className="w-10 h-10 flex items-center justify-center rounded-full 
               hover:bg-matcha-100/50 transition-colors touch-target"
             aria-label="Search"
@@ -81,6 +87,7 @@ export function AppHeader() {
             />
           </button>
           <button
+            onClick={() => router.push('/profile')}
             className="w-10 h-10 flex items-center justify-center rounded-full 
               hover:bg-matcha-100/50 transition-colors touch-target"
             aria-label="Profile"
