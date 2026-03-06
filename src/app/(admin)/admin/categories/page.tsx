@@ -10,12 +10,10 @@ export default async function AdminCategoriesPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold font-heading">Category Management</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage product categories for your menu.
-        </p>
+        <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Categories</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Organize your menu categories</p>
       </div>
       <AdminCategoriesClient initialCategories={categories} />
     </div>

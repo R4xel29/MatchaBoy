@@ -11,7 +11,7 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { name, description, price, categoryId, badge, image } = body;
+        const { name, description, price, categoryId, badge, image, modifiers } = body;
 
         if (!name || !description || !price || !categoryId) {
             return new NextResponse('Missing required fields', { status: 400 });
@@ -25,6 +25,7 @@ export async function POST(request: Request) {
                 categoryId,
                 badge: badge || null,
                 image: image || null,
+                modifiers: modifiers ? JSON.stringify(modifiers) : null,
             },
             include: { category: true },
         });

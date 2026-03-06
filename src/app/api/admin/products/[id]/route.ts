@@ -15,7 +15,7 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { name, description, price, categoryId, badge, image } = body;
+        const { name, description, price, categoryId, badge, image, modifiers } = body;
 
         const data: Record<string, any> = {};
         if (name !== undefined) data.name = name;
@@ -24,6 +24,7 @@ export async function PATCH(
         if (categoryId !== undefined) data.categoryId = categoryId;
         if (badge !== undefined) data.badge = badge;
         if (image !== undefined) data.image = image;
+        if (modifiers !== undefined) data.modifiers = modifiers ? JSON.stringify(modifiers) : null;
 
         const product = await prisma.product.update({
             where: { id },

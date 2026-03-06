@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client"
-import { PRODUCTS, CATEGORIES } from "../src/lib/constants"
+import { PRODUCTS, CATEGORIES, ADD_ONS } from "../src/lib/constants"
 import bcrypt from "bcryptjs"
 
 const prisma = new PrismaClient()
@@ -49,7 +49,7 @@ async function main() {
         })
     }
 
-    // 3. Insert Products
+    // 3. Insert Products (with modifiers persisted as JSON)
     for (const p of PRODUCTS) {
         if (!p.category || p.category === 'all') continue
 
@@ -61,7 +61,8 @@ async function main() {
                 price: p.price,
                 image: p.image,
                 badge: p.badge,
-                categoryId: p.category
+                categoryId: p.category,
+                modifiers: p.modifiers ? JSON.stringify(p.modifiers) : null,
             }
         })
     }

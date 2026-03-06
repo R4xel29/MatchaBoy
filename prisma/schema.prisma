@@ -99,6 +99,7 @@ model Product {
   price       Int
   image       String?
   badge       String?  // e.g., 'best-seller', 'new', 'sold-out'
+  modifiers   String?  // JSON: { iceLevel?: string[], sugarLevel?: string[], addOns?: {id,name,price}[] }
   categoryId  String
   category    Category @relation(fields: [categoryId], references: [id])
   

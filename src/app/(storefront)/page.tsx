@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import StorefrontClient from "./StorefrontClient"
-import { PRODUCTS } from "@/lib/constants"
+import { ADD_ONS } from "@/lib/constants"
 
 export const revalidate = 60 // Revalidate every 60 seconds
 
@@ -15,7 +15,6 @@ export default async function StorefrontPage() {
   ])
 
   // Map Prisma 'Category' to the frontend 'Category' type format
-  // For the 'all' category, we construct it virtually.
   const mappedCategories = [
     { id: 'all', name: 'All', slug: 'all' },
     ...categories.map((c: any) => ({
@@ -25,10 +24,17 @@ export default async function StorefrontPage() {
     }))
   ]
 
-  // The database returns Decimal/Int for prices. Map Prisma Product to frontend Product 
+  // Map Prisma Product to frontend Product, reading modifiers from DB
   const mappedProducts = products.map((p: any) => {
-    // Find matching local product to steal its modifiers configurations
-    const localRef = PRODUCTS.find(localP => localP.id === p.id)
+    // Parse modifiers from DB JSON — no more matching against constants.ts
+    let modifiers = undefined;
+    if (p.modifiers) {
+      try {
+        modifiers = JSON.parse(p.modifiers);
+      } catch {
+        modifiers = undefined;
+      }
+    }
 
     return {
       id: p.id,
@@ -38,7 +44,7 @@ export default async function StorefrontPage() {
       image: p.image || undefined,
       category: p.categoryId,
       badge: p.badge as "new" | "best-seller" | "sold-out" | undefined,
-      modifiers: localRef?.modifiers
+      modifiers
     }
   })
 

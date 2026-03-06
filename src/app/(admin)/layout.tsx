@@ -3,13 +3,12 @@ import { AdminSidebar } from '@/components/admin/AdminSidebar';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh bg-muted/30 flex">
-      {/* Sidebar Navigation */}
+    <div className="min-h-dvh bg-[#F8F9FB]">
       <AdminSidebar />
 
-      {/* Main Content Area — padding for desktop sidebar + mobile header */}
-      <main className="flex-1 lg:pl-64 pt-14 lg:pt-0">
-        <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Main Content */}
+      <main className="lg:pl-[260px] pt-14 lg:pt-0 min-h-dvh">
+        <div className="max-w-[1200px] mx-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           {children}
         </div>
       </main>
