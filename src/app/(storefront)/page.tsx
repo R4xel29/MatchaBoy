@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma"
 import StorefrontClient from "./StorefrontClient"
 import { ADD_ONS } from "@/lib/constants"
 
-export const revalidate = 60 // Revalidate every 60 seconds
+export const dynamic = 'force-dynamic' // Render at request time — avoids build-time DB access
 
 export default async function StorefrontPage() {
   const [categories, products, banners] = await Promise.all([
