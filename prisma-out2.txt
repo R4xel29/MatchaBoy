@@ -1,0 +1,29 @@
+﻿Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "postgres", schema "public" at "db.wlcergeosgpzxasxcyyi.supabase.co:5432"
+
+node.exe : Error: P1001: 
+Can't reach database server 
+at `db.wlcergeosgpzxasxcyyi.su
+pabase.co:5432`
+At line:1 char:1
++ & "C:\Program 
+Files\nodejs/node.exe" 
+"C:\Program 
+Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
+    + CategoryInfo          : 
+    NotSpecified: (Error: P1  
+  001: C...pabase.co:5432`:   
+ String) [], RemoteExcepti    
+on
+    + FullyQualifiedErrorId : 
+    NativeCommandError
+ 
+
+Please make sure your 
+database server is running at 
+`db.wlcergeosgpzxasxcyyi.supab
+ase.co:5432`.
