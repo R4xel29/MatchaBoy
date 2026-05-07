@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { Loader2, ArrowLeft } from "lucide-react"
@@ -9,10 +9,20 @@ import { registerUser } from "@/app/actions/auth"
 import { signIn } from "next-auth/react"
 import { useToast } from "@/components/ui/Toast"
 
-export default function RegisterPage() {
+export default function RegisterPageWrapper() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#18442D]" /></div>}>
+      <RegisterPage />
+    </Suspense>
+  )
+}
+
+function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const refCode = searchParams.get('ref') || ''
   const { showToast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -84,6 +94,15 @@ export default function RegisterPage() {
               {error}
             </div>
           )}
+
+          {refCode && (
+            <div className="p-3 bg-emerald-50 text-emerald-700 text-sm rounded-xl border border-emerald-100 text-center flex items-center justify-center gap-2">
+              🎉 Kamu diajak teman! Daftar dan beli pertama untuk dapat bonus.
+            </div>
+          )}
+
+          {/* Hidden referral code field */}
+          <input type="hidden" name="referralCode" value={refCode} />
           
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-[#18442D]">Nama Lengkap</label>

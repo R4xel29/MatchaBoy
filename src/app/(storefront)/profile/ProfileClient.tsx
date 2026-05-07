@@ -22,11 +22,21 @@ import {
   Smartphone,
   Loader2,
   Trash2,
-  MapNext 
+  MapPinned,
+  Gift,
+  Share2,
+  Copy,
+  Check,
+  QrCode,
+  Ticket,
+  Target,
+  Award,
+  Trophy
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
 import Image from 'next/image';
+import { useCartStore } from '@/stores/cart-store';
 
 // Data shapes
 type OrderShape = {
@@ -43,11 +53,28 @@ type UserShape = {
   points: number;
   totalOrders: number;
   memberSince: string;
+  referralCode: string;
 };
 
-type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings';
+type VoucherShape = {
+  id: string;
+  code: string;
+  type: string;
+  description: string;
+  isUsed: boolean;
+  expiresAt: string | null;
+};
+
+type MilestoneInfo = {
+  milestone1: { target: number; reward: string; enabled: boolean };
+  milestone2: { target: number; reward: string; enabled: boolean };
+  milestone3: { target: number; reward: string; enabled: boolean };
+};
+
+type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty';
 
 const MENU_ITEMS: { icon: any; label: string; id: SectionType; badge: string | null; current: boolean }[] = [
+  { icon: Gift, label: 'Poin & Voucher', id: 'loyalty', badge: null, current: true },
   { icon: Package, label: 'Pesanan Saya', id: 'orders', badge: '3', current: true },
   { icon: Heart, label: 'Favorit', id: 'favorites', badge: null, current: false },
   { icon: MapPin, label: 'Alamat Tersimpan', id: 'addresses', badge: null, current: false },
@@ -57,10 +84,14 @@ const MENU_ITEMS: { icon: any; label: string; id: SectionType; badge: string | n
 
 export default function ProfileClient({
   user: initialUser,
-  orders
+  orders,
+  vouchers = [],
+  milestones = null,
 }: {
   user: UserShape;
   orders: OrderShape[];
+  vouchers?: VoucherShape[];
+  milestones?: MilestoneInfo | null;
 }) {
   const router = useRouter();
   const [activeSection, setActiveSection] = useState<SectionType>('menu');
@@ -81,6 +112,7 @@ export default function ProfileClient({
       case 'addresses': return 'Alamat Tersimpan';
       case 'notifications': return 'Notifikasi';
       case 'settings': return 'Pengaturan';
+      case 'loyalty': return 'Poin & Voucher';
       default: return 'Profile';
     }
   };
@@ -93,7 +125,7 @@ export default function ProfileClient({
         <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
         <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-black/5 rounded-full blur-2xl" />
 
-        <div className="flex items-center gap-3 px-4 py-4 max-w-2xl mx-auto relative z-10">
+        <div className="flex items-center gap-3 px-4 py-4 max-w-4xl mx-auto relative z-10">
           <button
             onClick={handleBack}
             className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 transition-all active:scale-95 touch-target backdrop-blur-md"
@@ -118,7 +150,7 @@ export default function ProfileClient({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: 'auto', opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              className="px-4 pb-6 pt-2 max-w-2xl mx-auto overflow-hidden relative z-10"
+              className="px-4 pb-6 pt-2 max-w-4xl mx-auto overflow-hidden relative z-10"
             >
               <div className="flex items-center gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/10 shadow-inner">
@@ -155,7 +187,7 @@ export default function ProfileClient({
         </AnimatePresence>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <AnimatePresence mode="wait">
           {/* Main Menu */}
           {activeSection === 'menu' && (
@@ -192,6 +224,7 @@ export default function ProfileClient({
               {/* Logout */}
               <button 
                 onClick={async () => {
+                   useCartStore.getState().clearCart();
                    await signOut({ redirect: false });
                    router.push('/');
                    router.refresh();
@@ -204,6 +237,7 @@ export default function ProfileClient({
           )}
 
           {/* Render Sections */}
+          {activeSection === 'loyalty' && <LoyaltySection user={user} vouchers={vouchers} milestones={milestones} />}
           {activeSection === 'orders' && <OrdersSection orders={orders} router={router} />}
           {activeSection === 'favorites' && <FavoritesSection />}
           {activeSection === 'addresses' && <AddressesSection />}
@@ -337,67 +371,6 @@ function FavoritesSection() {
 }
 
 function AddressesSection() {
-  const [addresses, setAddresses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newAddress, setNewAddress] = useState("");
-
-  const fetchAddresses = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/user/locations');
-      if(res.ok) {
-        setAddresses(await res.json());
-      }
-    } catch(err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchAddresses();
-  }, []);
-
-  const handleSetDefault = async (id: string) => {
-    try {
-      await fetch(`/api/user/locations/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isDefault: true })
-      });
-      fetchAddresses();
-    } catch(err) {
-      console.error(err);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/user/locations/${id}`, { method: 'DELETE' });
-      setAddresses(addresses.filter(a => a.id !== id));
-    } catch(err) {
-      console.error(err);
-    }
-  };
-
-  const handleAddAddress = async () => {
-    if(!newAddress) return;
-    try {
-      await fetch('/api/user/locations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: newAddress, isDefault: addresses.length === 0 })
-      });
-      setNewAddress("");
-      setShowAddForm(false);
-      fetchAddresses();
-    } catch(err) {
-      console.error(err);
-    }
-  };
-
   return (
     <motion.section
       key="addresses"
@@ -406,128 +379,124 @@ function AddressesSection() {
       exit={{ opacity: 0, y: 20 }}
       className="space-y-4"
     >
-      {!showAddForm ? (
-        <button 
-          onClick={() => setShowAddForm(true)}
-          className="w-full py-4 border-2 border-dashed border-[#18442D]/30 rounded-3xl text-[#18442D] font-medium flex items-center justify-center gap-2 hover:bg-[#18442D]/5 transition-colors active:scale-[0.98]">
-          <Plus className="w-5 h-5" />
-          Tambah Alamat Baru
-        </button>
-      ) : (
-        <div className="p-4 bg-white rounded-3xl border border-gray-100 shadow-sm">
-          <textarea
-            value={newAddress}
-            onChange={(e) => setNewAddress(e.target.value)}
-            placeholder="Alamat lengkap (beserta patokan)"
-            className="w-full p-4 border border-gray-200 rounded-2xl resize-none focus:outline-none focus:border-[#18442D]/50 mb-3 bg-gray-50/50"
-            rows={3}
-          />
-          <div className="flex gap-2">
-            <button 
-              onClick={handleAddAddress}
-              className="px-6 py-2.5 bg-[#18442D] text-white rounded-xl text-sm font-medium flex-1">
-              Simpan
-            </button>
-            <button 
-              onClick={() => setShowAddForm(false)}
-              className="px-6 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium">
-              Batal
-            </button>
-          </div>
+      <div className="text-center py-16 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
+        <div className="w-20 h-20 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-5">
+          <MapPin className="w-10 h-10 text-amber-400" />
         </div>
-      )}
-
-      {loading ? (
-        <div className="flex justify-center p-8">
-           <Loader2 className="w-6 h-6 animate-spin text-[#18442D]" />
-        </div>
-      ) : (
-        addresses.map((address, i) => (
-          <motion.div
-             key={address.id}
-             initial={{ opacity: 0, x: -10 }}
-             animate={{ opacity: 1, x: 0 }}
-             transition={{ delay: i * 0.1 }}
-             className={`p-5 rounded-3xl border ${address.isDefault ? 'border-[#18442D] bg-[#18442D]/5 shadow-sm' : 'border-gray-100 bg-white hover:border-gray-200'} transition-all`}
-          >
-            <div className="flex justify-between items-start mb-2">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-xl ${address.isDefault ? 'bg-[#18442D] text-white' : 'bg-gray-100 text-gray-600'}`}>
-                  {address.isDefault ? <Home className="w-5 h-5" /> : <MapPin className="w-5 h-5"/>}
-                </div>
-                <div>
-                  <div className="flex gap-2 items-center">
-                    <h4 className="font-bold text-gray-900 leading-none">{address.isDefault ? 'Utama' : 'Tersimpan'}</h4>
-                    {address.isDefault && (
-                      <span className="px-2 py-0.5 rounded border border-[#18442D]/30 bg-white text-[#18442D] text-[9px] font-bold uppercase tracking-wider">Utama</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p className="text-sm text-gray-600 pl-[44px] leading-relaxed mt-1">{address.address}</p>
-            <div className="flex gap-4 pl-[44px] mt-4">
-              {!address.isDefault && (
-                <button 
-                  onClick={() => handleSetDefault(address.id)}
-                  className="text-[13px] font-semibold text-[#18442D] hover:underline">Jadikan Utama</button>
-              )}
-              <button 
-                onClick={() => handleDelete(address.id)}
-                className="text-[13px] font-semibold text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1">
-                <Trash2 className="w-3 h-3" /> Hapus
-              </button>
-            </div>
-          </motion.div>
-        ))
-      )}
+        <span className="inline-block px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-bold uppercase tracking-wider mb-4">
+          Coming Soon
+        </span>
+        <h3 className="font-serif text-xl text-gray-800 mb-2">Fitur Segera Hadir</h3>
+        <p className="text-sm text-gray-500 leading-relaxed max-w-xs mx-auto">
+          Fitur alamat tersimpan sedang dalam pengembangan. Kamu akan segera bisa menyimpan dan mengelola alamat pengiriman favoritmu! 🏠
+        </p>
+      </div>
     </motion.section>
   );
 }
 
 function NotificationsSection() {
-  const notifs = [
-    { id: '1', type: 'order', title: 'Pesanan Diterima', desc: 'Yeay! Pesanan MATCH-XA98 telah sampai di tujuan.', time: '2 jam yang lalu', unread: true },
-    { id: '2', type: 'promo', title: 'Promo Spesial Weekend ✨', desc: 'Dapatkan diskon 20% untuk semua varian Matcha Latte khusus hari ini.', time: '1 hari yang lalu', unread: true },
-    { id: '3', type: 'system', title: 'Poin Bertambah', desc: 'Selamat! Kamu mendapatkan 5 Poin dari pesanan sebelumnya.', time: '3 hari yang lalu', unread: false },
-  ];
+  const [notifs, setNotifs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  const fetchNotifs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/user/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifs(data.notifications || []);
+      }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchNotifs(); }, []);
+
+  const markRead = async (id: string, linkUrl?: string) => {
+    try {
+      await fetch('/api/user/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notificationId: id }),
+      });
+      setNotifs(notifs.map(n => n.id === id ? { ...n, isRead: true } : n));
+      if (linkUrl) router.push(linkUrl);
+    } catch (err) { console.error(err); }
+  };
+
+  const markAllRead = async () => {
+    try {
+      await fetch('/api/user/notifications', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ markAll: true }),
+      });
+      setNotifs(notifs.map(n => ({ ...n, isRead: true })));
+    } catch (err) { console.error(err); }
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
       case 'order': return <Package className="w-5 h-5 text-blue-500" />;
       case 'promo': return <Heart className="w-5 h-5 text-pink-500" />;
+      case 'points': return <Gift className="w-5 h-5 text-emerald-500" />;
       default: return <Bell className="w-5 h-5 text-[#18442D]" />;
     }
   };
 
+  const timeAgo = (date: string) => {
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 60) return `${mins} menit lalu`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours} jam lalu`;
+    const days = Math.floor(hours / 24);
+    return `${days} hari lalu`;
+  };
+
+  const unreadCount = notifs.filter(n => !n.isRead).length;
+
   return (
-    <motion.section
-      key="notifications"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 20 }}
-      className="space-y-4"
-    >
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-2">
-        {notifs.map((notif, i) => (
-          <div 
-            key={notif.id}
-            className={`flex gap-3 p-4 rounded-2xl ${notif.unread ? 'bg-[#18442D]/5' : 'bg-white hover:bg-gray-50'} mb-1 last:mb-0 relative transition-colors cursor-pointer`}
-          >
-            {notif.unread && (
-              <span className="absolute top-5 right-4 w-2 h-2 rounded-full bg-[#18442D]"></span>
-            )}
-            <div className={`mt-0.5 p-2 rounded-xl h-fit ${notif.unread ? 'bg-white shadow-sm' : 'bg-gray-50'}`}>
-              {getIcon(notif.type)}
+    <motion.section key="notifications" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="space-y-4">
+      {unreadCount > 0 && (
+        <div className="flex justify-end">
+          <button onClick={markAllRead} className="text-[12px] font-semibold text-[#18442D] hover:underline">
+            Tandai Semua Dibaca ({unreadCount})
+          </button>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-[#18442D]" /></div>
+      ) : notifs.length === 0 ? (
+        <div className="text-center py-12 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
+          <Bell className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <h3 className="font-serif text-lg text-gray-800 mb-1">Belum Ada Notifikasi</h3>
+          <p className="text-sm text-gray-500">Pesan dan informasi penting akan muncul di sini.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-2">
+          {notifs.map((notif) => (
+            <div
+              key={notif.id}
+              onClick={() => markRead(notif.id, notif.linkUrl)}
+              className={`flex gap-3 p-4 rounded-2xl ${notif.isRead ? 'bg-white hover:bg-gray-50' : 'bg-[#18442D]/5'} mb-1 last:mb-0 relative transition-colors cursor-pointer`}
+            >
+              {!notif.isRead && <span className="absolute top-5 right-4 w-2 h-2 rounded-full bg-[#18442D]" />}
+              <div className={`mt-0.5 p-2 rounded-xl h-fit ${!notif.isRead ? 'bg-white shadow-sm' : 'bg-gray-50'}`}>
+                {getIcon(notif.type)}
+              </div>
+              <div className="pr-4">
+                <h4 className={`text-sm mb-1 ${!notif.isRead ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{notif.title}</h4>
+                <p className={`text-[13px] leading-relaxed mb-1.5 ${!notif.isRead ? 'text-gray-600' : 'text-gray-500'}`}>{notif.message}</p>
+                <span className="text-[10px] text-gray-400 font-medium">{timeAgo(notif.createdAt)}</span>
+              </div>
             </div>
-            <div className="pr-4">
-              <h4 className={`text-sm mb-1 ${notif.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{notif.title}</h4>
-              <p className={`text-[13px] leading-relaxed mb-1.5 ${notif.unread ? 'text-gray-600' : 'text-gray-500'}`}>{notif.desc}</p>
-              <span className="text-[10px] text-gray-400 font-medium">{notif.time}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </motion.section>
   );
 }
@@ -632,6 +601,202 @@ function SettingsSection({ user, onUpdate }: { user: UserShape, onUpdate: (user:
       
       <div className="text-center pt-2">
         <p className="text-xs text-gray-400 font-mono">Matchaboy App v1.0.0</p>
+      </div>
+    </motion.section>
+  );
+}
+
+function LoyaltySection({ user, vouchers, milestones }: { user: UserShape; vouchers: VoucherShape[]; milestones: MilestoneInfo | null }) {
+  const [copied, setCopied] = useState(false);
+  const [showQR, setShowQR] = useState(false);
+
+  const copyReferralCode = () => {
+    const referralUrl = `${window.location.origin}/register?ref=${user.referralCode}`;
+    navigator.clipboard.writeText(referralUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const maxPoints = milestones?.milestone3?.target || 15;
+  const progressPercent = Math.min((user.points / maxPoints) * 100, 100);
+
+  const getVoucherIcon = (type: string) => {
+    switch (type) {
+      case 'FREE_TOPPING': return '🧋';
+      case 'UPGRADE_SIZE': return '📐';
+      case 'FREE_DRINK': return '🍵';
+      default: return '🎁';
+    }
+  };
+
+  return (
+    <motion.section
+      key="loyalty"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="space-y-4"
+    >
+      {/* Points Progress Card */}
+      <div className="bg-gradient-to-br from-[#18442D] to-[#1a5c3a] rounded-3xl p-5 text-white relative overflow-hidden">
+        <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/5 rounded-full blur-2xl" />
+        <div className="absolute -bottom-8 -left-8 w-32 h-32 bg-black/10 rounded-full blur-xl" />
+        
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-[11px] uppercase tracking-wider text-white/60 font-semibold">Total Poin Kamu</p>
+              <p className="text-4xl font-serif font-bold mt-1">{user.points}</p>
+            </div>
+            <button
+              onClick={() => setShowQR(!showQR)}
+              className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center hover:bg-white/20 transition-all active:scale-95"
+            >
+              <QrCode className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-3">
+            <div className="flex justify-between text-[10px] text-white/60 mb-1.5 font-medium">
+              <span>{user.points} / {maxPoints} poin</span>
+              <span>🎁 {milestones?.milestone3?.reward || 'Minuman Gratis'}</span>
+            </div>
+            <div className="h-2.5 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
+              <motion.div
+                className="h-full bg-gradient-to-r from-green-400 to-emerald-300 rounded-full"
+                initial={{ width: 0 }}
+                animate={{ width: `${progressPercent}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+              />
+            </div>
+          </div>
+
+          {/* Milestone markers */}
+          {milestones && (
+            <div className="flex gap-2 mt-3">
+              {milestones.milestone1.enabled && (
+                <div className={`flex-1 text-center py-1.5 rounded-xl text-[9px] font-bold ${
+                  user.points >= milestones.milestone1.target ? 'bg-green-400/20 text-green-300' : 'bg-white/5 text-white/40'
+                }`}>
+                  <Target className="w-3 h-3 mx-auto mb-0.5" />
+                  {milestones.milestone1.target}p · {milestones.milestone1.reward}
+                </div>
+              )}
+              {milestones.milestone2.enabled && (
+                <div className={`flex-1 text-center py-1.5 rounded-xl text-[9px] font-bold ${
+                  user.points >= milestones.milestone2.target ? 'bg-blue-400/20 text-blue-300' : 'bg-white/5 text-white/40'
+                }`}>
+                  <Award className="w-3 h-3 mx-auto mb-0.5" />
+                  {milestones.milestone2.target}p · {milestones.milestone2.reward}
+                </div>
+              )}
+              {milestones.milestone3.enabled && (
+                <div className={`flex-1 text-center py-1.5 rounded-xl text-[9px] font-bold ${
+                  user.points >= milestones.milestone3.target ? 'bg-emerald-400/20 text-emerald-300' : 'bg-white/5 text-white/40'
+                }`}>
+                  <Trophy className="w-3 h-3 mx-auto mb-0.5" />
+                  {milestones.milestone3.target}p · {milestones.milestone3.reward}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* QR Code (toggled) */}
+      <AnimatePresence>
+        {showQR && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 text-center">
+              <p className="text-xs text-gray-500 mb-3 font-medium">Tunjukkan QR ini ke kasir untuk mendapat poin</p>
+              {/* QR Code using Google Charts API */}
+              <div className="inline-block p-3 bg-white rounded-2xl border-2 border-dashed border-[#18442D]/20">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(user.referralCode)}&bgcolor=ffffff&color=18442D`}
+                  alt="QR Code"
+                  width={180}
+                  height={180}
+                  className="rounded-lg"
+                />
+              </div>
+              <p className="text-xs text-gray-400 mt-3 font-mono">{user.referralCode}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Referral Code */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-10 h-10 rounded-2xl bg-violet-50 flex items-center justify-center">
+            <Share2 className="w-5 h-5 text-violet-600" />
+          </div>
+          <div>
+            <h4 className="text-[14px] font-bold text-gray-800">Ajak Teman, Dapat Reward!</h4>
+            <p className="text-[11px] text-gray-500">Bagikan link di bawah ini</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-100 text-[12px] font-mono text-gray-600 truncate">
+            {typeof window !== 'undefined' ? `${window.location.origin}/register?ref=${user.referralCode}` : user.referralCode}
+          </div>
+          <button
+            onClick={copyReferralCode}
+            className={`px-4 py-2.5 rounded-xl text-[12px] font-semibold flex items-center gap-1.5 transition-all active:scale-95 ${
+              copied ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-[#18442D] text-white hover:bg-[#123321]'
+            }`}
+          >
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Disalin!' : 'Salin'}
+          </button>
+        </div>
+      </div>
+
+      {/* Vouchers */}
+      <div>
+        <h3 className="font-serif text-lg font-medium text-gray-800 mb-3 flex items-center gap-2">
+          <Ticket className="w-5 h-5 text-[#18442D]" />
+          Voucher Aktif
+        </h3>
+        {vouchers.length === 0 ? (
+          <div className="text-center py-8 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
+            <Gift className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <h4 className="font-serif text-base text-gray-800 mb-1">Belum Ada Voucher</h4>
+            <p className="text-[12px] text-gray-500">Kumpulkan poin dari setiap pembelian untuk mendapat voucher!</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {vouchers.map((v, i) => (
+              <motion.div
+                key={v.id}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3"
+              >
+                <div className="text-2xl">{getVoucherIcon(v.type)}</div>
+                <div className="flex-1">
+                  <p className="text-[13px] font-bold text-gray-800">{v.description}</p>
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">Kode: {v.code.slice(0, 8).toUpperCase()}</p>
+                  {v.expiresAt && (
+                    <p className="text-[10px] text-amber-600 mt-0.5">
+                      Berlaku sampai {new Date(v.expiresAt).toLocaleDateString('id-ID')}
+                    </p>
+                  )}
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-[9px] font-bold uppercase tracking-wider">
+                  Aktif
+                </span>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
     </motion.section>
   );

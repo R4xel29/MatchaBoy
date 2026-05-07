@@ -24,7 +24,8 @@ model User {
   sessions Session[]
 
   // App Specific
-  phone         String?
+  phone         String?   @unique
+  phoneVerified Boolean  @default(false)
   orders        Order[]        @relation("UserOrders")
   cashierOrders Order[]        @relation("CashierOrders")
   locations     Location[]
@@ -32,6 +33,17 @@ model User {
   notifications Notification[]
   activityLogs  ActivityLog[]
   cashierShifts CashierShift[]
+
+  // Loyalty & Points
+  points          Int     @default(0)
+  referralCode    String  @unique @default(cuid())
+  referredById    String?
+  referredBy      User?   @relation("Referrals", fields: [referredById], references: [id])
+  referrals       User[]  @relation("Referrals")
+  referralBonusPaid Boolean @default(false) // true jika referrer sudah dapat bonus dari user ini
+
+  pointHistory    PointHistory[]
+  vouchers        Voucher[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -125,7 +137,8 @@ model Order {
   cashier   User?   @relation("CashierOrders", fields: [cashierId], references: [id])
 
   // Order channel
-  orderType     String  @default("DELIVERY") // DELIVERY, PICKUP, DINE_IN
+  orderType     String  @default("PICKUP") // DELIVERY, PICKUP, DINE_IN
+  source        String  @default("POS")    // POS, APP — asal order
 
   // Customer Info snapshot
   customerName  String
@@ -136,8 +149,16 @@ model Order {
   // Dine-in specific
   tableNumber   String?
 
+  // Pickup specific
+  pickupDate    DateTime?
+  pickupTime    String?    // e.g. "14:30"
+  pickupReminderSent Boolean @default(false)
+
   // Notes
   notes         String?
+
+  // Payment proof (for QRIS/Transfer)
+  paymentProofUrl String?
 
   // Financials
   subtotal    Int
@@ -147,6 +168,11 @@ model Order {
   paymentMethod String // CASH, QRIS, COD, MIDTRANS
   status        String      @default("PENDING") // PENDING, PREPARING, READY, COMPLETED, ASSIGNED, TO_STORE, PICKED_UP, ON_DELIVERY, DELIVERED, CANCELLED
   items         OrderItem[]
+
+  // Loyalty
+  hasTumbler    Boolean @default(false) // Pelanggan bawa tumbler/wadah sendiri
+  pointsEarned  Int     @default(0)     // Total poin yang didapat dari order ini
+  pointsAwarded Boolean @default(false) // Sudah diberi poin atau belum
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -187,11 +213,14 @@ model Notification {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type    String // 'order', 'promo', 'system'
+  type    String // 'order', 'promo', 'system', 'points'
   title   String
   message String
   isRead  Boolean @default(false)
   linkUrl String?
+
+  senderId String? // ID admin pengirim (null = system)
+  data     String? // JSON metadata
 
   createdAt DateTime @default(now())
 }
@@ -236,4 +265,183 @@ model CashierShift {
   notes        String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// LOYALTY & POINTS MODELS
+// -----------------------------------------------------------------------------
+
+// Riwayat perolehan dan penggunaan poin pelanggan
+model PointHistory {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount      Int      // Positif = dapat poin, Negatif = poin dikurangi (redeem)
+  type        String   // EARN_ORDER, EARN_CASHIER, EARN_REFERRAL, EARN_TUMBLER, REDEEM_MILESTONE, ADMIN_ADJUST
+  description String   // Deskripsi human-readable, contoh: "Beli 2 cup Matcha Latte"
+
+  orderId     String?  // Referensi ke Order jika ada
+
+  createdAt   DateTime @default(now())
+}
+
+// Voucher reward yang didapat dari milestone poin atau referral
+model Voucher {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  code        String    @unique @default(cuid()) // Kode unik voucher
+  type        String    // FREE_TOPPING, UPGRADE_SIZE, FREE_DRINK, REFERRAL_REWARD, CUSTOM
+  description String    // Deskripsi reward yang bisa dibaca, contoh: "Gratis 1 Topping"
+  isUsed      Boolean   @default(false)
+  usedAt      DateTime?
+  expiresAt   DateTime? // Opsional: tanggal kadaluarsa
+
+  // Referral tracking: jika voucher ini hasil dari referral
+  fromReferralUserId String? // ID user yang diajak (referee)
+
+  createdAt   DateTime  @default(now())
+}
+
+// Pengaturan sistem loyalty yang bisa diedit admin tanpa coding
+// Hanya ada 1 row yang dipakai (singleton config)
+model LoyaltySettings {
+  id                    String  @id @default(cuid())
+
+  // Milestone 1 (kelipatan)
+  milestone1Points      Int     @default(5)          // Setiap kelipatan N poin
+  milestone1Reward      String  @default("FREE_TOPPING") // Jenis reward
+  milestone1Desc        String  @default("Gratis 1 Topping") // Keterangan untuk pelanggan
+  milestone1Enabled     Boolean @default(true)
+
+  // Milestone 2 (kelipatan)
+  milestone2Points      Int     @default(10)
+  milestone2Reward      String  @default("UPGRADE_SIZE")
+  milestone2Desc        String  @default("Free Upgrade Size")
+  milestone2Enabled     Boolean @default(true)
+
+  // Milestone 3 - Target Utama (RESET setelah ini)
+  milestone3Points      Int     @default(15)
+  milestone3Reward      String  @default("FREE_DRINK")
+  milestone3Desc        String  @default("1 Minuman Gratis Pilihan")
+  milestone3Enabled     Boolean @default(true)
+  milestone3ResetPoints Boolean @default(true) // Jika true, poin dikurangi setelah milestone 3
+
+  // Pengaturan Tumbler Bonus
+  tumblerBonusEnabled   Boolean @default(true)
+  tumblerBonusPoints    Int     @default(1)           // Extra poin per transaksi pakai tumbler
+  tumblerDiscountPct    Int     @default(0)           // Diskon % untuk pengguna tumbler (0 = tidak ada diskon)
+
+  // Pengaturan Referral
+  referralEnabled       Boolean @default(true)
+  referralRewardType    String  @default("VOUCHER")   // POINTS atau VOUCHER
+  referralRewardPoints  Int     @default(5)           // Jika POINTS: berapa poin yang diberikan ke referrer
+  referralRewardVoucher String  @default("FREE_DRINK") // Jika VOUCHER: jenis voucher untuk referrer
+
+  // Pengaturan Perhitungan Poin
+  pointMode             String  @default("PER_TRANSACTION") // PER_TRANSACTION atau PER_AMOUNT
+  pointPerTransaction   Int     @default(1)                  // Poin per transaksi (jika PER_TRANSACTION)
+  pointPerAmount        Int     @default(10000)              // Per berapa rupiah = 1 poin (jika PER_AMOUNT)
+  referralRewardDesc    String  @default("1 Minuman Gratis (Hadiah Referral)")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Template pesan notifikasi otomatis
+model NotificationTemplate {
+  id        String   @id @default(cuid())
+  trigger   String   @unique // ORDER_COMPLETED, POINTS_EARNED, WELCOME, PICKUP_REMINDER, CUSTOM
+  title     String
+  message   String   // Supports {{name}}, {{points}}, {{orderNo}}, {{pickupTime}} placeholders
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Pengaturan toko (jam operasional, dll)
+model StoreSettings {
+  id                  String   @id @default(cuid())
+  openTime            String   @default("08:00")
+  closeTime           String   @default("21:00")
+  pickupSlotInterval  Int      @default(5)       // interval menit per slot
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// Pengaturan pembayaran (QRIS, Bank Transfer, COD)
+model PaymentSettings {
+  id              String   @id @default(cuid())
+
+  // COD
+  codEnabled      Boolean  @default(true)
+  codWhatsApp     String   @default("")    // Nomor WA admin untuk COD
+
+  // QRIS
+  qrisEnabled     Boolean  @default(true)
+  qrisImage       String?  // URL gambar QRIS
+  qrisLogo        String?  // URL logo QRIS
+  qrisLabel       String   @default("QRIS")
+
+  // Bank Transfer
+  transferEnabled Boolean  @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Bank accounts untuk transfer
+model BankAccount {
+  id            String   @id @default(cuid())
+  bankName      String   // "BCA", "BRI", "Mandiri"
+  bankLogo      String?  // URL logo bank
+  accountNumber String
+  accountName   String
+  isActive      Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Referral Tiers — tiered referral rewards
+model ReferralTier {
+  id             String   @id @default(cuid())
+  tierNumber     Int      // 1, 2, 3...
+  targetInvites  Int      // Jumlah orang yang harus diajak
+  rewardType     String   // VOUCHER, POINTS, CUSTOM
+  rewardValue    String   // Jenis voucher atau jumlah poin
+  rewardDesc     String   // Deskripsi hadiah
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Referral Events — event/promo-based referral campaigns
+model ReferralEvent {
+  id              String    @id @default(cuid())
+  name            String    // "Promo Lebaran", "Anniversary"
+  description     String?
+  rewardType      String    // VOUCHER, POINTS, CUSTOM
+  rewardValue     String
+  rewardDesc      String
+  refereeReward   String?   // Reward untuk yang diajak
+  startDate       DateTime
+  endDate         DateTime
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Report Settings — pengaturan format laporan
+model ReportSettings {
+  id              String   @id @default(cuid())
+  storeName       String   @default("Matchaboy")
+  storeLogo       String?  // URL logo untuk header laporan
+  storeAddress    String   @default("")
+  storePhone      String   @default("")
+  footerText      String   @default("Terima kasih atas kepercayaan Anda")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

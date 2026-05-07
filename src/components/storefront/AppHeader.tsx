@@ -56,7 +56,7 @@ export function AppHeader({ onSearchClick }: AppHeaderProps) {
         transition={{ duration: 0.2 }}
       />
 
-      <div className="flex items-center justify-between px-4 py-3 max-w-2xl mx-auto">
+      <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 max-w-7xl mx-auto w-full">
         {/* Logo */}
         <div className="flex items-center gap-2 shrink-0">
           <div className="w-10 h-10 rounded-xl bg-matcha-700/5 flex items-center justify-center shadow-sm overflow-hidden p-1.5 border border-matcha-700/10 backdrop-blur-sm">

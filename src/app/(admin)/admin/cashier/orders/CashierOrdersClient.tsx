@@ -11,6 +11,9 @@ import {
   Truck,
   Check,
   ChefHat,
+  ListFilter,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface OrderItem {
@@ -46,24 +49,35 @@ const ORDER_TYPE_ICONS: Record<string, React.ElementType> = {
   PICKUP: ShoppingBag,
 };
 
+type TabType = 'antrian' | 'selesai';
+
 export default function CashierOrdersClient({ initialOrders }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<TabType>('antrian');
   const [typeFilter, setTypeFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
-  const filteredOrders = initialOrders.filter((o) => {
+  // Split orders by tab
+  const ACTIVE_STATUSES = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'ON_DELIVERY'];
+  const DONE_STATUSES = ['COMPLETED', 'DELIVERED', 'CANCELLED'];
+
+  const antrianOrders = initialOrders.filter(o => ACTIVE_STATUSES.includes(o.status));
+  const selesaiOrders = initialOrders.filter(o => DONE_STATUSES.includes(o.status));
+
+  const currentOrders = activeTab === 'antrian' ? antrianOrders : selesaiOrders;
+
+  const filteredOrders = currentOrders.filter((o) => {
     const matchesSearch =
       o.id.toLowerCase().includes(search.toLowerCase()) ||
       o.customerName.toLowerCase().includes(search.toLowerCase());
     const matchesType = typeFilter === 'ALL' || o.orderType === typeFilter;
-    const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
-    return matchesSearch && matchesType && matchesStatus;
+    return matchesSearch && matchesType;
   });
 
   const nextStatusMap: Record<string, string> = {
     PENDING: 'PREPARING',
+    PENDING_PAYMENT: 'PREPARING',
     PREPARING: 'READY',
     READY: 'COMPLETED',
     ASSIGNED: 'PREPARING',
@@ -102,6 +116,10 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
         return 'bg-violet-50 text-violet-700';
       case 'ASSIGNED':
         return 'bg-cyan-50 text-cyan-700';
+      case 'PENDING_PAYMENT':
+        return 'bg-orange-50 text-orange-700';
+      case 'CANCELLED':
+        return 'bg-red-50 text-red-700';
       default:
         return 'bg-slate-100 text-slate-600';
     }
@@ -127,6 +145,38 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
         </p>
       </div>
 
+      {/* Tabs: Antrian / Selesai */}
+      <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+        <button
+          onClick={() => setActiveTab('antrian')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            activeTab === 'antrian'
+              ? 'bg-white text-amber-700 shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <AlertCircle className="w-4 h-4" />
+          Antrian
+          {antrianOrders.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[20px] text-center">
+              {antrianOrders.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('selesai')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            activeTab === 'selesai'
+              ? 'bg-white text-emerald-700 shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          Selesai Hari Ini
+          <span className="text-[10px] text-muted-foreground">({selesaiOrders.length})</span>
+        </button>
+      </div>
+
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
@@ -148,18 +198,6 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
           <option value="PICKUP">Pickup</option>
           <option value="DELIVERY">Delivery</option>
         </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-        >
-          <option value="ALL">Semua Status</option>
-          <option value="PREPARING">Preparing</option>
-          <option value="READY">Ready</option>
-          <option value="COMPLETED">Completed</option>
-          <option value="ASSIGNED">Assigned</option>
-          <option value="DELIVERED">Delivered</option>
-        </select>
       </div>
 
       {/* Order Cards */}
@@ -167,7 +205,9 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
         {filteredOrders.length === 0 ? (
           <div className="col-span-full py-16 text-center text-muted-foreground/50 bg-white rounded-2xl border border-border/40">
             <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Belum ada pesanan</p>
+            <p className="text-sm">
+              {activeTab === 'antrian' ? 'Tidak ada pesanan dalam antrian' : 'Belum ada pesanan selesai'}
+            </p>
           </div>
         ) : (
           filteredOrders.map((order) => {
@@ -203,6 +243,7 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-[13px] font-semibold text-foreground">{order.customerName}</p>
+                        <p className="text-[10px] text-muted-foreground">{order.customerPhone}</p>
                       </div>
                       <span className="text-sm font-bold text-foreground">{formatRupiah(order.total)}</span>
                     </div>
@@ -221,12 +262,12 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
                   </div>
                 </div>
 
-                {/* Actions */}
-                {order.status !== 'COMPLETED' && order.status !== 'DELIVERED' && (
+                {/* Actions — only for active orders */}
+                {activeTab === 'antrian' && nextStatusMap[order.status] && (
                   <div className="px-4 py-3 bg-muted/20 border-t border-border/30">
                     <button
                       onClick={() => advanceStatus(order.id, order.status)}
-                      disabled={isUpdating === order.id || !nextStatusMap[order.status]}
+                      disabled={isUpdating === order.id}
                       className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
                     >
                       {isUpdating === order.id ? (

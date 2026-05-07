@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { processOrderCompletion } from '@/lib/loyalty-utils';
 
 export async function PATCH(
     request: Request,
@@ -17,7 +18,7 @@ export async function PATCH(
         const body = await request.json();
         const { status } = body;
 
-        const validStatuses = ['PENDING_PAYMENT', 'ASSIGNED', 'TO_STORE', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED'];
+        const validStatuses = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED', 'ASSIGNED', 'TO_STORE', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED', 'CANCELLED'];
         if (!validStatuses.includes(status)) {
             return new NextResponse('Invalid status', { status: 400 });
         }
@@ -48,6 +49,46 @@ export async function PATCH(
             entityId: id,
             details: `Mengubah status pesanan #${id.slice(-6).toUpperCase()} (${existingOrder.customerName}) dari ${existingOrder.status} menjadi ${status}`
         });
+
+        // Otomatis tambah poin jika status COMPLETED atau DELIVERED
+        if (status === 'COMPLETED' || status === 'DELIVERED') {
+            try {
+                const completionResult = await processOrderCompletion(id);
+                
+                // Send in-app notification to user
+                if (order.userId) {
+                    try {
+                        const { sendTemplatedNotification, sendNotification } = await import('@/lib/notification-service');
+                        
+                        // Try templated first, fallback to direct
+                        const sent = await sendTemplatedNotification({
+                            userId: order.userId,
+                            trigger: 'ORDER_COMPLETED',
+                            variables: {
+                                name: existingOrder.customerName,
+                                orderNo: id.slice(0, 8).toUpperCase(),
+                                points: String(completionResult?.cups || 0),
+                            },
+                            linkUrl: `/orders/${id}`,
+                        });
+                        
+                        if (!sent) {
+                            await sendNotification({
+                                userId: order.userId,
+                                type: 'order',
+                                title: 'Pesanan Selesai! 🎉',
+                                message: `Pesanan #${id.slice(0, 8).toUpperCase()} telah selesai. Kamu mendapat ${completionResult?.cups || 0} poin!`,
+                                linkUrl: `/orders/${id}`,
+                            });
+                        }
+                    } catch (notifErr) {
+                        console.error('Notification error (non-blocking):', notifErr);
+                    }
+                }
+            } catch (err) {
+                console.error('Loyalty processing error (non-blocking):', err);
+            }
+        }
 
         return NextResponse.json(order);
     } catch (error) {

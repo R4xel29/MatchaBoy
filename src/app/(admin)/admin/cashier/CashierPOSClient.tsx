@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -13,8 +13,16 @@ import {
   X,
   Check,
   Loader2,
+  QrCode,
+  User,
+  SkipForward,
+  Gift,
+  Phone,
+  Camera,
+  CheckCircle2,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import QRCameraScanner from '@/components/cashier/QRCameraScanner';
 
 type POSProduct = {
   id: string;
@@ -67,6 +75,22 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastOrderId, setLastOrderId] = useState('');
 
+  // QR Scan + Points state
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [qrInput, setQrInput] = useState('');
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrCustomer, setQrCustomer] = useState<{ id: string; name: string; points: number } | null>(null);
+  const [qrError, setQrError] = useState('');
+  const [pointsAwarded, setPointsAwarded] = useState(false);
+
+  // Phone lookup state
+  const [phoneLookupResult, setPhoneLookupResult] = useState<{ id: string; name: string; phone: string; points: number } | null>(null);
+  const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
+  const phoneDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Pre-order QR scan state
+  const [showPreScanQR, setShowPreScanQR] = useState(false);
+
   // Modifier modal state
   const [modifierProduct, setModifierProduct] = useState<POSProduct | null>(null);
   const [modIce, setModIce] = useState('Normal Ice');
@@ -84,6 +108,43 @@ export default function CashierPOSClient({ products, categories }: Props) {
       return matchesSearch && matchesCategory;
     });
   }, [products, search, categoryFilter]);
+
+  // Phone number auto-lookup with debounce
+  const handlePhoneChange = (phone: string) => {
+    setCustomerPhone(phone);
+    setPhoneLookupResult(null);
+    
+    if (phoneDebounceRef.current) clearTimeout(phoneDebounceRef.current);
+    if (phone.length < 8) return;
+    
+    phoneDebounceRef.current = setTimeout(async () => {
+      setPhoneLookupLoading(true);
+      try {
+        const res = await fetch(`/api/cashier/lookup-phone?phone=${encodeURIComponent(phone)}`);
+        const data = await res.json();
+        if (data.found) {
+          setPhoneLookupResult(data.user);
+          if (!customerName) setCustomerName(data.user.name);
+        }
+      } catch {}
+      finally { setPhoneLookupLoading(false); }
+    }, 500);
+  };
+
+  // Handle pre-order QR scan result
+  const handlePreScanResult = async (code: string) => {
+    setShowPreScanQR(false);
+    setPhoneLookupLoading(true);
+    try {
+      const res = await fetch(`/api/cashier/orders/lookup-customer?code=${encodeURIComponent(code)}`);
+      const data = await res.json();
+      if (data.user) {
+        setCustomerName(data.user.name);
+        setPhoneLookupResult({ id: data.user.id, name: data.user.name, phone: '', points: data.user.points });
+      }
+    } catch {}
+    finally { setPhoneLookupLoading(false); }
+  };
 
   // Cart calculations
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -196,7 +257,6 @@ export default function CashierPOSClient({ products, categories }: Props) {
       if (!res.ok) throw new Error(data.error || 'Gagal membuat pesanan');
 
       setLastOrderId(data.orderId);
-      setShowSuccess(true);
 
       // Reset form
       setCart([]);
@@ -205,7 +265,12 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setAddress('');
       setNotes('');
 
-      setTimeout(() => setShowSuccess(false), 4000);
+      // Show QR scan modal instead of success toast
+      setShowQRModal(true);
+      setQrInput('');
+      setQrCustomer(null);
+      setQrError('');
+      setPointsAwarded(false);
     } catch (error: any) {
       alert(error.message);
     } finally {
@@ -328,7 +393,44 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
           {/* Customer Info */}
           <div className="bg-white rounded-2xl border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4 space-y-3">
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">Info Pelanggan</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">Info Pelanggan</p>
+              <button
+                onClick={() => setShowPreScanQR(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
+              >
+                <Camera className="w-3 h-3" /> Scan QR
+              </button>
+            </div>
+
+            {/* Phone with auto-lookup */}
+            <div className="relative">
+              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+              <input
+                type="tel"
+                placeholder="No. HP pelanggan"
+                value={customerPhone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                className={`w-full pl-10 pr-10 py-2.5 text-sm bg-muted/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all ${
+                  phoneLookupResult ? 'border-green-400 bg-green-50/30' : 'border-border/40'
+                }`}
+              />
+              {phoneLookupLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-amber-600" />}
+              {phoneLookupResult && <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />}
+            </div>
+
+            {/* Member found badge */}
+            {phoneLookupResult && (
+              <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-green-50 border border-green-200">
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                  <User className="w-4 h-4 text-green-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xs font-bold text-green-800">{phoneLookupResult.name}</p>
+                  <p className="text-[10px] text-green-600">✓ Member · {phoneLookupResult.points} poin</p>
+                </div>
+              </div>
+            )}
 
             <input
               type="text"
@@ -337,16 +439,6 @@ export default function CashierPOSClient({ products, categories }: Props) {
               onChange={(e) => setCustomerName(e.target.value)}
               className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
             />
-
-            {(orderType === 'PICKUP' || orderType === 'DELIVERY') && (
-              <input
-                type="tel"
-                placeholder="No. HP"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
-              />
-            )}
 
             {orderType === 'DELIVERY' && (
               <textarea
@@ -417,7 +509,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
               <div className="border-t border-border/30 p-4 space-y-3">
                 {/* Payment method */}
                 <div className="flex gap-2">
-                  {['CASH', 'QRIS'].map((method) => (
+                  {['CASH', 'QRIS', 'TRANSFER'].map((method) => (
                     <button
                       key={method}
                       onClick={() => setPaymentMethod(method)}
@@ -593,6 +685,165 @@ export default function CashierPOSClient({ products, categories }: Props) {
                     (modifierProduct.price + modAddOns.reduce((s, a) => s + a.price, 0)) * modQty
                   )}
                 </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* QR Scan + Points Modal */}
+      <AnimatePresence>
+        {showQRModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-border overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-5 border-b border-border/30 bg-gradient-to-r from-amber-50 to-amber-100/50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center">
+                    <QrCode className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-heading font-bold text-lg text-foreground">Scan QR Pelanggan</h3>
+                    <p className="text-xs text-muted-foreground">Order #{lastOrderId.slice(0, 8).toUpperCase()} berhasil dibuat</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {!pointsAwarded ? (
+                  <>
+                    <p className="text-sm text-muted-foreground mb-3">Scan QR pelanggan untuk menambahkan poin dan menghubungkan pesanan ke akun.</p>
+                    
+                    {/* Camera QR Scanner */}
+                    <QRCameraScanner
+                      onScan={(result) => {
+                        setQrInput(result);
+                        // Auto-lookup customer
+                        setQrLoading(true);
+                        fetch(`/api/cashier/orders/lookup-customer?code=${encodeURIComponent(result)}`)
+                          .then(r => r.json())
+                          .then(d => {
+                            if (d.user) { setQrCustomer(d.user); setQrError(''); }
+                            else { setQrError('Pelanggan tidak ditemukan'); setQrCustomer(null); }
+                          })
+                          .catch(() => setQrError('Gagal mencari pelanggan'))
+                          .finally(() => setQrLoading(false));
+                      }}
+                      placeholder="Masukkan kode referral pelanggan..."
+                    />
+                    {qrLoading && <div className="flex justify-center py-2"><Loader2 className="w-5 h-5 animate-spin text-amber-600" /></div>}
+                    {qrError && <p className="text-xs text-red-500 font-medium">{qrError}</p>}
+
+                    {/* Customer found */}
+                    {qrCustomer && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        className="p-4 rounded-xl bg-green-50 border border-green-200 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                            <User className="w-5 h-5 text-green-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold text-green-800">{qrCustomer.name}</p>
+                            <p className="text-xs text-green-600">Poin saat ini: {qrCustomer.points}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            setQrLoading(true);
+                            try {
+                              const res = await fetch('/api/cashier/orders/award-points', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ orderId: lastOrderId, userId: qrCustomer.id }),
+                              });
+                              if (res.ok) { setPointsAwarded(true); }
+                              else { setQrError('Gagal menambahkan poin'); }
+                            } catch { setQrError('Gagal menambahkan poin'); }
+                            finally { setQrLoading(false); }
+                          }}
+                          disabled={qrLoading}
+                          className="w-full py-2.5 rounded-xl bg-green-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-green-700 disabled:opacity-50">
+                          <Gift className="w-4 h-4" /> Tambahkan Poin & Hubungkan Order
+                        </button>
+                      </motion.div>
+                    )}
+
+                    <div className="flex gap-2 pt-2">
+                      {!qrCustomer && (
+                        <button onClick={() => {
+                          setQrLoading(true);
+                          fetch(`/api/cashier/orders/lookup-customer?code=${encodeURIComponent(qrInput.trim())}`)
+                            .then(r => r.json())
+                            .then(d => {
+                              if (d.user) { setQrCustomer(d.user); setQrError(''); }
+                              else { setQrError('Pelanggan tidak ditemukan'); }
+                            })
+                            .catch(() => setQrError('Gagal'))
+                            .finally(() => setQrLoading(false));
+                        }}
+                          disabled={!qrInput.trim() || qrLoading}
+                          className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white font-semibold text-sm disabled:opacity-50">
+                          Cari Pelanggan
+                        </button>
+                      )}
+                      <button onClick={() => { setShowQRModal(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); }}
+                        className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted/50 flex items-center justify-center gap-1">
+                        <SkipForward className="w-3.5 h-3.5" /> Lewati
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center py-4">
+                    <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                      <Check className="w-8 h-8 text-green-600" />
+                    </div>
+                    <h4 className="font-bold text-lg text-foreground mb-1">Poin Berhasil Ditambahkan!</h4>
+                    <p className="text-sm text-muted-foreground">Order dihubungkan ke akun {qrCustomer?.name}</p>
+                    <button onClick={() => { setShowQRModal(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); }}
+                      className="mt-4 px-6 py-2.5 rounded-xl bg-amber-600 text-white font-semibold text-sm">
+                      Selesai
+                    </button>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Pre-order QR Scan Modal */}
+      <AnimatePresence>
+        {showPreScanQR && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+            onClick={() => setShowPreScanQR(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-border overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-border/30 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-amber-600" />
+                  <h3 className="font-heading font-bold text-base text-foreground">Scan QR Pelanggan</h3>
+                </div>
+                <button onClick={() => setShowPreScanQR(false)} className="p-1.5 hover:bg-muted rounded-lg">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-4">
+                <QRCameraScanner
+                  onScan={handlePreScanResult}
+                  placeholder="Masukkan kode referral..."
+                />
               </div>
             </motion.div>
           </motion.div>

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
@@ -20,29 +20,46 @@ import {
   Image as ImageIcon,
   MonitorSmartphone,
   Clock,
-  Receipt
+  Receipt,
+  Gift,
+  Share2,
+  Bell,
+  Store,
+  BarChart3,
+  CreditCard,
+  Settings
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import Image from 'next/image';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { label: 'Orders', href: '/admin/orders', icon: ShoppingCart },
+  { label: 'Laporan Penjualan', href: '/admin/reports', icon: BarChart3 },
   { label: 'Products', href: '/admin/products', icon: Package },
   { label: 'Promo Banners', href: '/admin/hero-banners', icon: ImageIcon },
   { label: 'Categories', href: '/admin/categories', icon: FolderOpen },
+  { label: 'Notifikasi', href: '/admin/notifications', icon: Bell },
   { label: 'Pengguna', href: '/admin/customers', icon: Users },
   { label: 'Admin & Staf', href: '/admin/users', icon: Shield },
+  { label: 'Payment Settings', href: '/admin/payment-settings', icon: CreditCard },
+  { label: 'Store Settings', href: '/admin/store-settings', icon: Store },
   { label: 'Activity Logs', href: '/admin/logs', icon: ClipboardList },
+];
+
+const LOYALTY_ITEMS = [
+  { label: 'Loyalty Settings', href: '/admin/loyalty', icon: Gift },
+  { label: 'Referral Settings', href: '/admin/referral-settings', icon: Settings },
+  { label: 'Referral Tracking', href: '/admin/referrals', icon: Share2 },
 ];
 
 const CASHIER_ITEMS = [
   { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
-  { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt },
+  { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
+  { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
   { label: 'Shift', href: '/admin/cashier/shift', icon: Clock },
 ];
 
-function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: string; onNavigate?: () => void; pendingCount: number }) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -126,6 +143,7 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
         {CASHIER_ITEMS.map((item) => {
           const isActive = pathname === item.href || 
             (item.href !== '/admin/cashier' && pathname.startsWith(item.href));
+          const showBadge = (item as any).hasBadge && pendingCount > 0;
           
           return (
             <Link
@@ -146,8 +164,54 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 />
               )}
+              <div className="relative">
+                <item.icon className={`w-[18px] h-[18px] relative z-10 transition-transform duration-200
+                  ${isActive ? 'text-white' : 'text-muted-foreground group-hover:text-amber-600 group-hover:scale-110'}`} 
+                />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-1.5 z-20 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                )}
+              </div>
+              <span className="relative z-10 flex-1">{item.label}</span>
+              {isActive && (
+                <ChevronRight className="w-3.5 h-3.5 relative z-10 text-white/60" />
+              )}
+            </Link>
+          );
+        })}
+
+        {/* Loyalty Section */}
+        <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
+        <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600/70">
+          Loyalty & Referral
+        </p>
+        {LOYALTY_ITEMS.map((item) => {
+          const isActive = pathname === item.href || 
+            pathname.startsWith(item.href + '/');
+          
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavigate}
+              className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-200 relative
+                ${isActive 
+                  ? 'text-white' 
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                }`}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="admin-nav-pill"
+                  className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-emerald-500 rounded-xl shadow-md shadow-emerald-700/15"
+                  initial={false}
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
               <item.icon className={`w-[18px] h-[18px] relative z-10 transition-transform duration-200
-                ${isActive ? 'text-white' : 'text-muted-foreground group-hover:text-amber-600 group-hover:scale-110'}`} 
+                ${isActive ? 'text-white' : 'text-muted-foreground group-hover:text-emerald-600 group-hover:scale-110'}`} 
               />
               <span className="relative z-10 flex-1">{item.label}</span>
               {isActive && (
@@ -186,6 +250,21 @@ function SidebarContent({ pathname, onNavigate }: { pathname: string; onNavigate
 export function AdminSidebar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cashier/orders/pending-count');
+      const data = await res.json();
+      setPendingCount(data.count || 0);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 30000); // Every 30 seconds
+    return () => clearInterval(interval);
+  }, [fetchPendingCount]);
 
   return (
     <>
@@ -193,9 +272,12 @@ export function AdminSidebar() {
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 h-14 glass border-b border-border/30 flex items-center px-4 gap-3">
         <button 
           onClick={() => setMobileOpen(true)} 
-          className="p-2 hover:bg-muted/60 rounded-xl transition-colors active:scale-95"
+          className="p-2 hover:bg-muted/60 rounded-xl transition-colors active:scale-95 relative"
         >
           <Menu className="w-5 h-5" />
+          {pendingCount > 0 && (
+            <span className="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-red-500 border border-white animate-pulse" />
+          )}
         </button>
         <div className="flex items-center gap-2.5 flex-1">
           <div className="w-8 h-8 rounded-xl bg-matcha-700/5 flex items-center justify-center shadow-sm overflow-hidden p-1 border border-matcha-700/10">
@@ -231,7 +313,7 @@ export function AdminSidebar() {
               >
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
-              <SidebarContent pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+              <SidebarContent pathname={pathname} onNavigate={() => setMobileOpen(false)} pendingCount={pendingCount} />
             </motion.aside>
           </>
         )}
@@ -239,7 +321,7 @@ export function AdminSidebar() {
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[260px] bg-card/80 backdrop-blur-xl border-r border-border/30 flex-col z-50">
-        <SidebarContent pathname={pathname} />
+        <SidebarContent pathname={pathname} pendingCount={pendingCount} />
       </aside>
     </>
   );

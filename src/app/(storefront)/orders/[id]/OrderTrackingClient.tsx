@@ -15,8 +15,9 @@ import {
   MessageCircle,
   ChefHat,
   ShoppingBag,
+  RefreshCw,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { formatRupiah } from '@/lib/utils';
 
 export type TrackingOrderShape = {
@@ -44,22 +45,40 @@ type OrderStep = {
   completed: boolean;
 };
 
-function getOrderSteps(orderType: string): OrderStep[] {
+const STATUS_ORDER_PICKUP = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'];
+const STATUS_ORDER_DELIVERY = ['PENDING', 'PENDING_PAYMENT', 'ASSIGNED', 'PREPARING', 'ON_DELIVERY', 'DELIVERED'];
+
+function getOrderSteps(orderType: string, currentStatus: string): OrderStep[] {
   if (orderType === 'PICKUP') {
-    return [
-      { key: 'pending', label: 'Pesanan Diterima', icon: Check, active: false, completed: true },
-      { key: 'preparing', label: 'Sedang Disiapkan', icon: ChefHat, active: true, completed: false },
-      { key: 'ready', label: 'Siap Diambil', icon: ShoppingBag, active: false, completed: false },
-      { key: 'completed', label: 'Selesai', icon: Check, active: false, completed: false },
+    const steps: OrderStep[] = [
+      { key: 'PENDING', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
+      { key: 'PREPARING', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: false },
+      { key: 'READY', label: 'Siap Diambil', icon: ShoppingBag, active: false, completed: false },
+      { key: 'COMPLETED', label: 'Selesai', icon: Check, active: false, completed: false },
     ];
+    const currentIdx = STATUS_ORDER_PICKUP.indexOf(currentStatus);
+    // Map PENDING_PAYMENT to PENDING index
+    const effectiveIdx = currentStatus === 'PENDING_PAYMENT' ? 0 : currentIdx;
+    steps.forEach((step, i) => {
+      if (i < effectiveIdx) { step.completed = true; }
+      else if (i === effectiveIdx) { step.active = true; step.completed = currentStatus === 'COMPLETED'; }
+    });
+    return steps;
   }
   // DELIVERY
-  return [
-    { key: 'assigned', label: 'Pesanan Diterima', icon: Check, active: false, completed: true },
-    { key: 'preparing', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: true },
-    { key: 'on_delivery', label: 'Dalam Pengiriman', icon: Truck, active: true, completed: false },
-    { key: 'delivered', label: 'Tiba di Tujuan', icon: MapPin, active: false, completed: false },
+  const steps: OrderStep[] = [
+    { key: 'ASSIGNED', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
+    { key: 'PREPARING', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: false },
+    { key: 'ON_DELIVERY', label: 'Dalam Pengiriman', icon: Truck, active: false, completed: false },
+    { key: 'DELIVERED', label: 'Tiba di Tujuan', icon: MapPin, active: false, completed: false },
   ];
+  const currentIdx = STATUS_ORDER_DELIVERY.indexOf(currentStatus);
+  const effectiveIdx = currentStatus === 'PENDING_PAYMENT' ? 0 : currentIdx;
+  steps.forEach((step, i) => {
+    if (i < effectiveIdx) { step.completed = true; }
+    else if (i === effectiveIdx) { step.active = true; step.completed = currentStatus === 'DELIVERED'; }
+  });
+  return steps;
 }
 
 function getOrderTypeLabel(type: string) {
@@ -80,6 +99,31 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   const router = useRouter();
   const orderId = order.id;
   const [copied, setCopied] = useState(false);
+  const [currentStatus, setCurrentStatus] = useState(order.status);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  // Auto-poll status every 10 seconds
+  const pollStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status !== currentStatus) {
+          setCurrentStatus(data.status);
+          setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        }
+      }
+    } catch {}
+  }, [orderId, currentStatus]);
+
+  useEffect(() => {
+    // Don't poll if order is already completed/delivered
+    const finalStatuses = ['COMPLETED', 'DELIVERED', 'CANCELLED'];
+    if (finalStatuses.includes(currentStatus)) return;
+
+    const interval = setInterval(pollStatus, 10000);
+    return () => clearInterval(interval);
+  }, [pollStatus, currentStatus]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(orderId);
@@ -88,13 +132,14 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   };
 
   const OrderTypeIcon = getOrderTypeIcon(order.orderType);
-  const steps = getOrderSteps(order.orderType);
+  const steps = getOrderSteps(order.orderType, currentStatus);
+  const isFinished = ['COMPLETED', 'DELIVERED'].includes(currentStatus);
 
   return (
     <div className="min-h-dvh bg-background pb-safe">
       {/* Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border/50">
-        <div className="flex items-center gap-3 px-4 py-3 max-w-2xl mx-auto">
+        <div className="flex items-center gap-3 px-4 py-3 max-w-6xl mx-auto">
           <button
             onClick={() => router.back()}
             className="w-10 h-10 flex items-center justify-center rounded-full 
@@ -120,7 +165,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         </div>
       </header>
 
-      <div className="max-w-2xl mx-auto px-4 py-5 space-y-5">
+      <div className="max-w-6xl mx-auto px-4 py-5 flex flex-col lg:flex-row gap-8 items-start">
+        {/* Left Column */}
+        <div className="w-full lg:flex-1 space-y-6">
         {/* Status Banner */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -133,7 +180,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
               <OrderTypeIcon className="w-5 h-5" />
-              <span className="text-sm font-bold uppercase">{order.status.replace('_', ' ')}</span>
+              <span className="text-sm font-bold uppercase">{currentStatus.replace('_', ' ')}</span>
             </div>
             <p className="text-matcha-200 text-xs">
               {getOrderTypeLabel(order.orderType)}
@@ -212,8 +259,28 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               </motion.div>
             ))}
           </div>
-        </section>
 
+          {/* Auto-refresh indicator */}
+          {!isFinished && (
+            <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
+              <RefreshCw className="w-3 h-3 animate-spin" />
+              <span>Update otomatis setiap 10 detik</span>
+              {lastUpdated && <span>· Terakhir: {lastUpdated}</span>}
+            </div>
+          )}
+
+          {isFinished && (
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
+              <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+              <p className="text-sm font-bold text-emerald-800">Pesanan Selesai!</p>
+              <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Matchaboy</p>
+            </div>
+          )}
+        </section>
+        </div> {/* END LEFT COLUMN */}
+
+        {/* Right Column */}
+        <div className="w-full lg:w-[400px] space-y-6 lg:sticky lg:top-24">
         {/* Order Items */}
         <section>
           <h2 className="font-heading font-bold text-base mb-3">Detail Pesanan</h2>
@@ -282,6 +349,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           <MessageCircle className="w-4 h-4" />
           Hubungi Admin
         </button>
+        </div> {/* END RIGHT COLUMN */}
       </div>
     </div>
   );

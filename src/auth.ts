@@ -77,5 +77,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 return user
             }
         })
-    ]
+    ],
+    callbacks: {
+        ...authConfig.callbacks,
+        // Override jwt callback to fetch role from DB for OAuth users
+        async jwt({ token, user, account, trigger }) {
+            // On initial sign-in, user object is available
+            if (user) {
+                token.sub = user.id
+                token.role = (user as any).role || "CUSTOMER"
+            }
+
+            // For OAuth sign-in, fetch the actual role from the DB
+            // because PrismaAdapter doesn't include custom fields in the user object
+            if (account && account.provider !== "credentials" && token.sub) {
+                try {
+                    const dbUser = await prisma.user.findUnique({
+                        where: { id: token.sub },
+                        select: { role: true }
+                    })
+                    if (dbUser) {
+                        token.role = dbUser.role
+                    }
+                } catch (e) {
+                    console.error("[AUTH] Failed to fetch user role:", e)
+                }
+            }
+
+            return token
+        },
+    },
 })

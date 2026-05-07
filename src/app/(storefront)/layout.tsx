@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, createContext, useContext } from 'react';
+import { useState, createContext, useContext, useEffect } from 'react';
+import { useSession } from 'next-auth/react';
 import { AppHeader } from '@/components/storefront/AppHeader';
 import { FloatingCart } from '@/components/storefront/FloatingCart';
+import { PhoneNumberModal } from '@/components/storefront/PhoneNumberModal';
 
 // Context to pass search control down to page
 interface StorefrontContextType {
@@ -25,6 +27,22 @@ export default function StorefrontLayout({
   children: React.ReactNode;
 }) {
   const [searchOpen, setSearchOpen] = useState(false);
+  const { data: session, status } = useSession();
+  const [needsPhone, setNeedsPhone] = useState(false);
+
+  // Check if logged-in user has phone number
+  useEffect(() => {
+    if (status === 'authenticated' && session?.user) {
+      fetch('/api/user/check-phone')
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.hasPhone) {
+            setNeedsPhone(true);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [status, session]);
 
   return (
     <StorefrontContext.Provider
@@ -38,6 +56,11 @@ export default function StorefrontLayout({
         <AppHeader onSearchClick={() => setSearchOpen(true)} />
         <main>{children}</main>
         <FloatingCart />
+
+        {/* Blocking Phone Number Modal */}
+        {needsPhone && (
+          <PhoneNumberModal onComplete={() => setNeedsPhone(false)} />
+        )}
       </div>
     </StorefrontContext.Provider>
   );

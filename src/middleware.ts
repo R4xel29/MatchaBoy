@@ -6,7 +6,7 @@ import { authConfig } from '@/auth.config'
 // Initialize NextAuth with only the Edge-compatible configuration
 const { auth } = NextAuth(authConfig)
 
-const protectedRoutes = ['/profile', '/admin']
+const protectedRoutes = ['/profile', '/admin', '/checkout']
 const authRoutes = ['/login', '/register']
 
 export default auth((req) => {

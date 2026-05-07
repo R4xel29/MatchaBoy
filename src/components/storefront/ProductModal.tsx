@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Plus, Minus, Check } from 'lucide-react';
@@ -13,25 +13,57 @@ interface ProductModalProps {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
+  editCartItemId?: string;
+  initialData?: any; // To preload ice, sugar, addOns, qty
 }
 
 const ICE_LEVELS: IceLevel[] = ['Normal Ice', 'Less Ice', 'No Ice'];
 const SUGAR_LEVELS: SugarLevel[] = ['Normal Sugar', 'Less Sugar'];
 
-export function ProductModal({ product, isOpen, onClose }: ProductModalProps) {
+export function ProductModal({ product, isOpen, onClose, editCartItemId, initialData }: ProductModalProps) {
   const addItem = useCartStore((s) => s.addItem);
+  const editItem = useCartStore((s) => s.editItem);
 
   const [iceLevel, setIceLevel] = useState<IceLevel>('Normal Ice');
   const [sugarLevel, setSugarLevel] = useState<SugarLevel>('Normal Sugar');
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>([]);
   const [quantity, setQuantity] = useState(1);
+  const [isDesktop, setIsDesktop] = useState(false);
 
-  // Reset state when product changes
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 768px)');
+    setIsDesktop(mediaQuery.matches);
+    
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  // Sync state with initialData when modal opens
+  useMemo(() => {
+    if (isOpen) {
+      if (initialData) {
+        setIceLevel(initialData.iceLevel || 'Normal Ice');
+        setSugarLevel(initialData.sugarLevel || 'Normal Sugar');
+        setSelectedAddOns(initialData.addOns || []);
+        setQuantity(initialData.quantity || 1);
+      } else {
+        setIceLevel('Normal Ice');
+        setSugarLevel('Normal Sugar');
+        setSelectedAddOns([]);
+        setQuantity(1);
+      }
+    }
+  }, [isOpen, initialData]);
+
+  // Reset state on explicit close (fallback)
   const resetState = () => {
-    setIceLevel('Normal Ice');
-    setSugarLevel('Normal Sugar');
-    setSelectedAddOns([]);
-    setQuantity(1);
+    if (!initialData) {
+      setIceLevel('Normal Ice');
+      setSugarLevel('Normal Sugar');
+      setSelectedAddOns([]);
+      setQuantity(1);
+    }
   };
 
   const addOnTotal = useMemo(
@@ -51,7 +83,8 @@ export function ProductModal({ product, isOpen, onClose }: ProductModalProps) {
 
   const handleAddToCart = () => {
     if (!product) return;
-    addItem({
+    
+    const itemData = {
       productId: product.id,
       name: product.name,
       image: product.image,
@@ -60,7 +93,14 @@ export function ProductModal({ product, isOpen, onClose }: ProductModalProps) {
       iceLevel,
       sugarLevel,
       addOns: selectedAddOns,
-    });
+    };
+
+    if (editCartItemId) {
+      editItem(editCartItemId, itemData);
+    } else {
+      addItem(itemData);
+    }
+    
     onClose();
     resetState();
   };
@@ -83,42 +123,47 @@ export function ProductModal({ product, isOpen, onClose }: ProductModalProps) {
             onClick={onClose}
           />
 
-          {/* Bottom Sheet */}
+          {/* Modal / Bottom Sheet */}
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
+            initial={isDesktop ? { opacity: 0, scale: 0.95, x: '-50%', y: '-45%' } : { y: '100%' }}
+            animate={isDesktop ? { opacity: 1, scale: 1, x: '-50%', y: '-50%' } : { y: 0 }}
+            exit={isDesktop ? { opacity: 0, scale: 0.95, x: '-50%', y: '-45%' } : { y: '100%' }}
             transition={{ type: 'spring', stiffness: 350, damping: 35 }}
-            drag="y"
+            drag={isDesktop ? false : "y"}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={(_, { offset }) => {
-              if (offset.y > 150) onClose();
+              if (!isDesktop && offset.y > 150) onClose();
             }}
-            className="fixed bottom-0 left-0 right-0 z-[61] 
-              bg-card rounded-t-3xl shadow-2xl
-              max-h-[90vh] overflow-y-auto
-              pb-safe"
+            className={`fixed z-[61] bg-card shadow-2xl flex flex-col overflow-hidden
+              ${isDesktop 
+                ? 'top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl max-h-[85vh]' 
+                : 'bottom-0 left-0 right-0 rounded-t-3xl max-h-[90vh]'
+              }`}
           >
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-1 sticky top-0 bg-card rounded-t-3xl z-10">
-              <div className="w-10 h-1 rounded-full bg-border" />
-            </div>
+            {/* Drag handle (Mobile only) */}
+            {!isDesktop && (
+              <div className="flex justify-center pt-3 pb-1 shrink-0 bg-card z-10">
+                <div className="w-10 h-1 rounded-full bg-border" />
+              </div>
+            )}
 
             {/* Close button */}
             <button
               onClick={onClose}
               className="absolute top-4 right-4 z-20 
                 w-9 h-9 flex items-center justify-center 
-                rounded-full bg-muted hover:bg-muted/80 
+                rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60 
                 transition-colors touch-target"
               aria-label="Close"
             >
-              <X className="w-4 h-4 text-muted-foreground" />
+              <X className="w-4 h-4 text-white" />
             </button>
 
-            {/* Product Image */}
-            <div className="relative w-full aspect-[16/10] bg-matcha-50 mx-auto overflow-hidden">
+            {/* Scrollable Content Area */}
+            <div className="overflow-y-auto flex-1 w-full pb-safe">
+              {/* Product Image */}
+              <div className="relative w-full aspect-[16/10] bg-matcha-50 mx-auto shrink-0">
               <Image
                 src={product.image}
                 alt={product.name}
@@ -277,7 +322,7 @@ export function ProductModal({ product, isOpen, onClose }: ProductModalProps) {
                   </motion.button>
                 </div>
 
-                {/* Add to Cart */}
+                {/* Add/Save to Cart */}
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={handleAddToCart}
@@ -288,9 +333,11 @@ export function ProductModal({ product, isOpen, onClose }: ProductModalProps) {
                     active:shadow-md
                     transition-shadow"
                 >
-                  Add — {formatRupiah(totalPrice)}
+                  {editCartItemId ? 'Simpan — ' : 'Add — '}
+                  {formatRupiah(totalPrice)}
                 </motion.button>
               </div>
+            </div>
             </div>
           </motion.div>
         </>

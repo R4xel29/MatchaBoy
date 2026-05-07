@@ -42,7 +42,7 @@ export function CategoryTabs({
     >
       <div
         ref={scrollRef}
-        className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide max-w-2xl mx-auto"
+        className="flex gap-2 px-4 sm:px-6 lg:px-8 py-3 overflow-x-auto scrollbar-hide max-w-7xl mx-auto w-full"
       >
         {categories.map((cat) => {
           const isActive = cat.id === activeCategory;

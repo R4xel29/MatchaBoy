@@ -80,7 +80,9 @@ export async function POST(req: Request) {
     const secureTotal = secureSubtotal + deliveryFee
 
     // Determine initial status based on order type
-    let initialStatus = 'PREPARING'
+    // Walk-in POS orders → directly COMPLETED
+    // Delivery → ASSIGNED (needs processing)
+    let initialStatus = 'COMPLETED'
     if (orderType === 'DELIVERY') {
       initialStatus = 'ASSIGNED'
     }
@@ -91,6 +93,7 @@ export async function POST(req: Request) {
         userId: null, // POS orders don't need a user
         cashierId: session.user.id,
         orderType,
+        source: 'POS',
         customerName: body.customerName,
         customerPhone: body.customerPhone || '-',
         address: body.address || '',

@@ -7,6 +7,7 @@ import type { CartItem, IceLevel, SugarLevel, AddOn } from '@/types';
 interface CartState {
     items: CartItem[];
     addItem: (item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
+    editItem: (oldId: string, item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
     removeItem: (id: string) => void;
     updateQuantity: (id: string, quantity: number) => void;
     clearCart: () => void;
@@ -66,6 +67,51 @@ export const useCartStore = create<CartState>()(
                         totalPrice: calcItemTotal(item),
                     };
                     return { items: [...state.items, newItem] };
+                });
+            },
+
+            editItem: (oldId, item) => {
+                const newId = generateCartItemId(
+                    item.productId,
+                    item.iceLevel,
+                    item.sugarLevel,
+                    item.addOns
+                );
+
+                set((state) => {
+                    // Check if an item with the new ID already exists
+                    const existingNewId = state.items.find((i) => i.id === newId && i.id !== oldId);
+                    
+                    if (existingNewId) {
+                        // If it exists, remove the old one and merge quantity into the new one
+                        return {
+                            items: state.items
+                                .filter((i) => i.id !== oldId)
+                                .map((i) =>
+                                    i.id === newId
+                                        ? {
+                                              ...i,
+                                              quantity: i.quantity + item.quantity,
+                                              totalPrice: calcItemTotal({
+                                                  ...i,
+                                                  quantity: i.quantity + item.quantity,
+                                              }),
+                                          }
+                                        : i
+                                ),
+                        };
+                    }
+
+                    // Otherwise, just replace the old item with the new one
+                    const newItem: CartItem = {
+                        ...item,
+                        id: newId,
+                        totalPrice: calcItemTotal(item),
+                    };
+
+                    return {
+                        items: state.items.map((i) => (i.id === oldId ? newItem : i)),
+                    };
                 });
             },
 

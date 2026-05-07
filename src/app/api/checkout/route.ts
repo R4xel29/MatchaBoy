@@ -7,13 +7,24 @@ export async function POST(req: Request) {
         const session = await auth()
         const body = await req.json()
 
+        // Must be logged in
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Login diperlukan untuk memesan' }, { status: 401 })
+        }
+
         // Server-side validation
         if (!body.items || body.items.length === 0) {
             return NextResponse.json({ error: 'Keranjang kosong' }, { status: 400 })
         }
 
-        if (!body.address || !body.name || !body.phone) {
-            return NextResponse.json({ error: 'Data pengiriman tidak lengkap' }, { status: 400 })
+        if (!body.name || !body.phone) {
+            return NextResponse.json({ error: 'Nama dan nomor HP wajib diisi' }, { status: 400 })
+        }
+
+        // Validate pickup fields
+        const orderType = body.orderType || 'PICKUP'
+        if (orderType === 'PICKUP' && (!body.pickupDate || !body.pickupTime)) {
+            return NextResponse.json({ error: 'Tanggal dan jam pengambilan wajib diisi' }, { status: 400 })
         }
 
         // --- SECURE SERVER-SIDE PRICE CALCULATION ---
@@ -60,37 +71,57 @@ export async function POST(req: Request) {
             orderItemsToCreate.push({
                 productId: dbProduct.id,
                 qty: item.quantity,
-                price: secureItemPrice, // Base + add-ons
+                price: secureItemPrice,
                 modifiers: item.modsString || null
             })
         }
 
-        const deliveryFee = body.deliveryFee || 0
+        const deliveryFee = orderType === 'PICKUP' ? 0 : (body.deliveryFee || 0)
         const secureTotal = secureSubtotal + deliveryFee
 
-        // Format address into a single string
-        const fullAddress = `${body.address.label} - ${body.address.detail}${body.notes ? ` (Catatan: ${body.notes})` : ''}`
+        // Build address string
+        const address = orderType === 'PICKUP'
+            ? 'Ambil di toko'
+            : `${body.address?.label || ''} - ${body.address?.detail || ''}`
 
         // Create the order
         const order = await prisma.order.create({
             data: {
-                userId: session?.user?.id || null,
+                userId: session.user.id,
+                orderType,
                 customerName: body.name,
                 customerPhone: body.phone,
-                address: fullAddress,
-                distanceKm: body.address.distance || 0,
+                address,
+                distanceKm: orderType === 'PICKUP' ? 0 : (body.address?.distance || 0),
+                pickupDate: body.pickupDate ? new Date(body.pickupDate) : null,
+                pickupTime: body.pickupTime || null,
+                paymentProofUrl: body.paymentProofUrl || null,
                 subtotal: secureSubtotal,
                 deliveryFee,
                 total: secureTotal,
-                paymentMethod: body.paymentMethod.toUpperCase(),
-                status: body.paymentMethod === 'cod' ? 'ASSIGNED' : 'PENDING_PAYMENT',
+                paymentMethod: body.paymentMethod?.toUpperCase() || 'TRANSFER',
+                status: 'PENDING',
+                notes: body.notes || null,
                 items: {
                     create: orderItemsToCreate
                 }
             }
         })
 
-        // If Midtrans, we would generate a Snap Token here in Phase 9.3
+        // Send order notification to user
+        try {
+            const { sendNotification } = await import('@/lib/notification-service')
+            await sendNotification({
+                userId: session.user.id,
+                type: 'order',
+                title: 'Pesanan Diterima! 🍵',
+                message: `Pesanan ${order.id.slice(0, 8).toUpperCase()} berhasil dibuat. ${orderType === 'PICKUP' ? `Ambil pada ${body.pickupTime} tanggal ${body.pickupDate}` : 'Akan segera diproses.'}`,
+                linkUrl: `/orders/${order.id}`,
+                data: { orderId: order.id },
+            })
+        } catch (e) {
+            console.error('[CHECKOUT] Notification error:', e)
+        }
 
         return NextResponse.json({ success: true, orderId: order.id, total: secureTotal })
     } catch (error) {

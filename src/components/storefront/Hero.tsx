@@ -124,7 +124,7 @@ export function Hero({ banners = [] }: { banners?: any[] }) {
           </div>
 
           {/* Content */}
-          <div className="relative z-10 flex flex-col justify-end h-full p-6 pb-20">
+          <div className="relative z-10 w-full max-w-7xl mx-auto flex flex-col justify-end h-full px-4 sm:px-6 lg:px-8 pb-20">
             <motion.h1
               initial={{ y: 30, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}

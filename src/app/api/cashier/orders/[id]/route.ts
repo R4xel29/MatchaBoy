@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { processOrderCompletion } from '@/lib/loyalty-utils'
 
 export async function PATCH(
   req: Request,
@@ -21,7 +22,17 @@ export async function PATCH(
       data: { status: body.status }
     })
 
-    return NextResponse.json({ success: true, order })
+    // Otomatis tambah poin jika status berubah ke COMPLETED atau DELIVERED
+    let loyaltyResult = null
+    if (body.status === 'COMPLETED' || body.status === 'DELIVERED') {
+      try {
+        loyaltyResult = await processOrderCompletion(id)
+      } catch (err) {
+        console.error('Loyalty processing error (non-blocking):', err)
+      }
+    }
+
+    return NextResponse.json({ success: true, order, loyaltyResult })
   } catch (error) {
     console.error('Update order error:', error)
     return NextResponse.json({ error: 'Failed to update order' }, { status: 500 })
