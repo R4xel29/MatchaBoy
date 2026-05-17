@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, createContext, useContext, useEffect } from 'react';
+import { useState, createContext, useContext, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { AppHeader } from '@/components/storefront/AppHeader';
@@ -70,7 +70,9 @@ export default function StorefrontLayout({
         <AppHeader onSearchClick={() => setSearchOpen(true)} />
         <main className="pb-20 md:pb-0">{children}</main>
         <FloatingCart />
-        <BottomNav />
+        <Suspense fallback={null}>
+          <BottomNav />
+        </Suspense>
         <QROverlay 
           key={session?.user?.id ? `qr-${session.user.id}-${qrOpen}` : 'qr-guest'} 
           isOpen={qrOpen} 
