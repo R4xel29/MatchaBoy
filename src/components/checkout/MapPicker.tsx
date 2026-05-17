@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Navigation, Search, AlertTriangle, Check, Loader2 } from 'lucide-react';
-import { GoogleMap, Marker, Circle, useJsApiLoader } from '@react-google-maps/api';
-import { STORE, DELIVERY_CONFIG } from '@/lib/constants';
-import { getDistanceFromStore, calculateDeliveryFee, isWithinDeliveryRange } from '@/lib/delivery-utils';
+import { MapPin, Navigation, Search, AlertTriangle, Check, Loader2, X, LocateFixed } from 'lucide-react';
+import type L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { calculateDistance, calculateDeliveryFee, isWithinDeliveryRange } from '@/lib/delivery-utils';
 import { formatRupiah } from '@/lib/utils';
 
 interface MapPickerProps {
@@ -19,71 +19,310 @@ interface MapPickerProps {
   }) => void;
   initialLat?: number;
   initialLng?: number;
+  deliveryFeePerKm?: number;
+  maxDeliveryDistance?: number;
 }
 
-// Dummy preset locations for demonstration
-const PRESET_LOCATIONS = [
-  { name: 'Sudirman, Jakarta Selatan', lat: -6.2088, lng: 106.8220, detail: 'Jl. Jend. Sudirman' },
-  { name: 'Senayan, Jakarta Selatan', lat: -6.2273, lng: 106.8020, detail: 'Senayan Area' },
-  { name: 'Kemang, Jakarta Selatan', lat: -6.2615, lng: 106.8132, detail: 'Jl. Kemang Raya' },
-  { name: 'Menteng, Jakarta Pusat', lat: -6.1944, lng: 106.8425, detail: 'Jl. Menteng Raya' },
-  { name: 'PIK, Jakarta Utara', lat: -6.1100, lng: 106.7400, detail: 'Pantai Indah Kapuk' },
-  { name: 'Bekasi Barat', lat: -6.2349, lng: 106.9896, detail: 'Bekasi Barat Area' },
-  { name: 'Tangerang Selatan', lat: -6.2838, lng: 106.7190, detail: 'BSD City' },
-  { name: 'Depok, Margonda', lat: -6.3924, lng: 106.8227, detail: 'Jl. Margonda Raya' },
-];
+interface GeoResult {
+  display_name: string;
+  lat: string;
+  lon: string;
+  address?: {
+    road?: string;
+    suburb?: string;
+    city?: string;
+    state?: string;
+    village?: string;
+    county?: string;
+  };
+}
 
-export function MapPicker({ onLocationSelect, initialLat, initialLng }: MapPickerProps) {
+export function MapPicker({
+  onLocationSelect,
+  initialLat,
+  initialLng,
+  deliveryFeePerKm = 2000,
+  maxDeliveryDistance = 10,
+}: MapPickerProps) {
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const storeMarkerRef = useRef<L.Marker | null>(null);
+
+  const [storeLat, setStoreLat] = useState(-7.756928);
+  const [storeLng, setStoreLng] = useState(113.211502);
+  const [pinLat, setPinLat] = useState(initialLat ?? -7.756928);
+  const [pinLng, setPinLng] = useState(initialLng ?? 113.211502);
+  const [mapLoaded, setMapLoaded] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState<typeof PRESET_LOCATIONS[0] | null>(null);
-  const [pinLat, setPinLat] = useState(initialLat ?? STORE.lat);
-  const [pinLng, setPinLng] = useState(initialLng ?? STORE.lng);
+  const [searchResults, setSearchResults] = useState<GeoResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
 
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY as string,
-  });
+  const [selectedAddress, setSelectedAddress] = useState<string | null>(null);
+  const [addressDetail, setAddressDetail] = useState<string>('');
+  const [isReversing, setIsReversing] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
 
-  const onMapClick = useCallback((e: google.maps.MapMouseEvent) => {
-    if (e.latLng) {
-      const newLat = e.latLng.lat();
-      const newLng = e.latLng.lng();
-      setPinLat(newLat);
-      setPinLng(newLng);
-      // Automatically select custom location
-      setSelectedLocation({
-        name: 'Lokasi Custom (Pin)',
-        detail: `Kordinat: ${newLat.toFixed(4)}, ${newLng.toFixed(4)}`,
-        lat: newLat,
-        lng: newLng
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+
+  // Initialize Leaflet map
+  useEffect(() => {
+    let mapInstance: L.Map | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
+    let isInitialized = false;
+
+    const initMap = (L: any) => {
+      const container = mapContainer.current;
+      if (!container) return false;
+      if (mapRef.current) return true; // already initialized
+
+      const map = L.map(container, {
+        center: [pinLat, pinLng],
+        zoom: 14,
+        zoomControl: false,
+        attributionControl: false,
       });
-      setSearchQuery('Lokasi Custom (Pin)');
+
+      mapInstance = map;
+      mapRef.current = map;
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Zoom control bottom-right
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+      // Store marker
+      const storeIcon = L.divIcon({
+        html: `<div class="w-5 h-5 bg-[#D4A574] rounded-full border-2 border-white shadow-md"></div>`,
+        className: '',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      });
+
+      storeMarkerRef.current = L.marker([storeLat, storeLng], { icon: storeIcon })
+        .bindPopup('<b>Arus Store</b>')
+        .addTo(map);
+
+      // Draggable user marker
+      const userIcon = L.divIcon({
+        html: `<div class="relative flex items-center justify-center">
+                 <div class="absolute w-12 h-12 bg-red-400/20 rounded-full animate-ping"></div>
+                 <div class="w-8 h-8 bg-red-500 rounded-full border-3 border-white shadow-xl flex items-center justify-center z-10">
+                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                 </div>
+               </div>`,
+        className: '',
+        iconSize: [48, 48],
+        iconAnchor: [24, 24],
+      });
+
+      const userMarker = L.marker([pinLat, pinLng], {
+        icon: userIcon,
+        draggable: true,
+      }).addTo(map);
+
+      markerRef.current = userMarker;
+
+      userMarker.on('dragend', () => {
+        const pos = userMarker.getLatLng();
+        if (pos) {
+          setPinLat(pos.lat);
+          setPinLng(pos.lng);
+          reverseGeocode(pos.lat, pos.lng);
+        }
+      });
+
+      // Click on map to move pin
+      map.on('click', (e: L.LeafletMouseEvent) => {
+        setPinLat(e.latlng.lat);
+        setPinLng(e.latlng.lng);
+        markerRef.current?.setLatLng(e.latlng);
+        reverseGeocode(e.latlng.lat, e.latlng.lng);
+      });
+
+      setMapLoaded(true);
+      return true;
+    };
+
+    import('leaflet').then((leaflet) => {
+      const L = leaflet.default;
+
+      // Try immediately
+      if (initMap(L)) {
+        isInitialized = true;
+        return;
+      }
+
+      // If container not ready, poll for it
+      pollInterval = setInterval(() => {
+        if (initMap(L)) {
+          isInitialized = true;
+          if (pollInterval) clearInterval(pollInterval);
+        }
+      }, 100);
+    });
+
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+      if (mapInstance) {
+        mapInstance.remove();
+        mapRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update store marker when store location changes
+  useEffect(() => {
+    if (storeMarkerRef.current) {
+      storeMarkerRef.current.setLatLng([storeLat, storeLng]);
+    }
+  }, [storeLat, storeLng]);
+
+  // Reverse geocode: coordinates → address name
+  const reverseGeocode = useCallback(async (lat: number, lng: number) => {
+    setIsReversing(true);
+    try {
+      const res = await fetch(`/api/geocode?mode=reverse&lat=${lat}&lng=${lng}`);
+      const data = await res.json();
+      if (data.display_name) {
+        const addr = data.address;
+        const label = addr?.road
+          ? `${addr.road}${addr.suburb ? `, ${addr.suburb}` : ''}`
+          : data.display_name.split(',').slice(0, 3).join(',');
+        const detail = data.display_name;
+        setSelectedAddress(label);
+        setAddressDetail(detail);
+        setSearchQuery(label);
+      }
+    } catch {
+      setSelectedAddress(`Lokasi (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+      setAddressDetail(`Kordinat: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+    } finally {
+      setIsReversing(false);
     }
   }, []);
 
-  const distance = getDistanceFromStore(pinLat, pinLng);
-  const deliveryFee = calculateDeliveryFee(distance);
-  const withinRange = isWithinDeliveryRange(distance);
+  // Fetch store location from settings
+  useEffect(() => {
+    fetch('/api/admin/store-settings')
+      .then(r => r.json())
+      .then(d => {
+        if (d.storeLat && d.storeLng) {
+          setStoreLat(d.storeLat);
+          setStoreLng(d.storeLng);
+          if (!initialLat && !initialLng) {
+            setPinLat(d.storeLat);
+            setPinLng(d.storeLng);
+            
+            // Move marker and map to match store settings
+            if (mapRef.current) {
+              mapRef.current.setView([d.storeLat, d.storeLng], 14);
+            }
+            if (markerRef.current) {
+              markerRef.current.setLatLng([d.storeLat, d.storeLng]);
+            }
+            reverseGeocode(d.storeLat, d.storeLng);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [initialLat, initialLng, reverseGeocode]);
 
-  const filteredLocations = PRESET_LOCATIONS.filter((loc) =>
-    loc.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Forward geocode search (Nominatim via proxy)
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setSelectedAddress(null);
 
-  const handleSelectPreset = useCallback(
-    (loc: typeof PRESET_LOCATIONS[0]) => {
-      setSelectedLocation(loc);
-      setPinLat(loc.lat);
-      setPinLng(loc.lng);
-      setSearchQuery(loc.name);
-    },
-    []
-  );
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+    if (value.length < 3) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`);
+        const data: GeoResult[] = await res.json();
+        setSearchResults(Array.isArray(data) ? data : []);
+        setShowResults(true);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 500); // Debounce 500ms to respect Nominatim rate limit
+  };
+
+  const handleSelectResult = (result: GeoResult) => {
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+    const addr = result.address;
+    const label = addr?.road
+      ? `${addr.road}${addr.suburb ? `, ${addr.suburb}` : ''}`
+      : result.display_name.split(',').slice(0, 3).join(',');
+
+    setPinLat(lat);
+    setPinLng(lng);
+    setSelectedAddress(label);
+    setAddressDetail(result.display_name);
+    setSearchQuery(label);
+    setShowResults(false);
+
+    // Move marker and fly to
+    markerRef.current?.setLatLng([lat, lng]);
+    mapRef.current?.flyTo([lat, lng], 16, { duration: 1.5 });
+  };
+
+  const handleDetectLocation = () => {
+    if (!('geolocation' in navigator)) return;
+    setIsDetecting(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setPinLat(lat);
+        setPinLng(lng);
+        markerRef.current?.setLatLng([lat, lng]);
+        mapRef.current?.flyTo([lat, lng], 16, { duration: 1.5 });
+        reverseGeocode(lat, lng);
+        setIsDetecting(false);
+      },
+      () => {
+        setIsDetecting(false);
+        // Fallback: simulate near store
+        const rndOff = () => (Math.random() - 0.5) * 0.04;
+        const lat = storeLat + rndOff();
+        const lng = storeLng + rndOff();
+        setPinLat(lat);
+        setPinLng(lng);
+        markerRef.current?.setLatLng([lat, lng]);
+        mapRef.current?.flyTo([lat, lng], 16, { duration: 1 });
+        reverseGeocode(lat, lng);
+      },
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  };
+
+  // Distance & fee calculations (using actual store location)
+  const distance = calculateDistance(storeLat, storeLng, pinLat, pinLng);
+  const deliveryFee = calculateDeliveryFee(distance, deliveryFeePerKm);
+  const withinRange = isWithinDeliveryRange(distance, maxDeliveryDistance);
 
   const handleConfirm = () => {
-    if (!selectedLocation) return;
+    if (!selectedAddress) return;
     onLocationSelect({
-      label: selectedLocation.name,
-      detail: selectedLocation.detail,
+      label: selectedAddress,
+      detail: addressDetail,
       lat: pinLat,
       lng: pinLng,
       distance,
@@ -91,184 +330,102 @@ export function MapPicker({ onLocationSelect, initialLat, initialLng }: MapPicke
     });
   };
 
-  const handleDetectLocation = () => {
-    // Simulate geolocation — pick a random nearby point
-    const randomOffset = () => (Math.random() - 0.5) * 0.08;
-    const lat = STORE.lat + randomOffset();
-    const lng = STORE.lng + randomOffset();
-    const mockLoc = {
-      name: 'Lokasi Saat Ini',
-      lat,
-      lng,
-      detail: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-    };
-    handleSelectPreset(mockLoc);
-  };
-
   return (
     <div className="space-y-4">
       {/* Search Bar */}
       <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10" />
         <input
           type="text"
           value={searchQuery}
-          onChange={(e) => {
-            setSearchQuery(e.target.value);
-            setSelectedLocation(null);
-          }}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          onFocus={() => searchResults.length > 0 && setShowResults(true)}
           placeholder="Cari alamat pengiriman..."
-          className="w-full pl-10 pr-4 py-3 rounded-xl border border-border 
-            bg-card text-sm text-foreground placeholder:text-muted-foreground
-            focus:outline-none focus:ring-2 focus:ring-matcha-500/30 focus:border-matcha-500
-            transition-all"
+          className="w-full pl-10 pr-10 py-3 rounded-xl border border-border bg-card text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500 transition-all"
         />
-      </div>
-
-      {/* Detect Location Button */}
-      <button
-        onClick={handleDetectLocation}
-        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl 
-          border border-dashed border-matcha-400 bg-matcha-50/50
-          text-matcha-700 text-sm font-medium
-          hover:bg-matcha-50 transition-colors touch-target"
-      >
-        <Navigation className="w-4 h-4" />
-        Gunakan lokasi saat ini
-      </button>
-
-      {/* Real Google Map Visual */}
-      <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-muted border border-border">
-        {!isLoaded ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-matcha-50">
-            <Loader2 className="w-8 h-8 animate-spin text-matcha-600" />
-          </div>
-        ) : (
-          <GoogleMap
-            mapContainerStyle={{ width: '100%', height: '100%' }}
-            center={{ lat: pinLat, lng: pinLng }}
-            zoom={14}
-            onClick={onMapClick}
-            options={{
-              disableDefaultUI: true,
-              zoomControl: true,
-            }}
+        {(isSearching || isReversing) && (
+          <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted-foreground" />
+        )}
+        {searchQuery && !isSearching && (
+          <button
+            type="button"
+            onClick={() => { setSearchQuery(''); setSearchResults([]); setShowResults(false); setSelectedAddress(null); }}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100"
           >
-            {/* Store marker */}
-            <Marker
-              position={{ lat: STORE.lat, lng: STORE.lng }}
-              icon={{
-                path: typeof window !== "undefined" ? window.google.maps.SymbolPath.CIRCLE : 0,
-                scale: 8,
-                fillColor: "#1B4332",
-                fillOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: "#ffffff",
-              }}
-            />
+            <X className="w-3 h-3 text-muted-foreground" />
+          </button>
+        )}
 
-            {/* Delivery radius circle */}
-            <Circle
-              center={{ lat: STORE.lat, lng: STORE.lng }}
-              radius={DELIVERY_CONFIG.maxDistanceKm * 1000}
-              options={{
-                fillColor: "#1B4332",
-                fillOpacity: 0.05,
-                strokeColor: "#1B4332",
-                strokeOpacity: 0.3,
-                strokeWeight: 2,
-                clickable: false,
-              }}
-            />
-
-            {/* User pin */}
-            {selectedLocation && (
-              <Marker
-                position={{ lat: pinLat, lng: pinLng }}
-                animation={typeof window !== "undefined" ? window.google.maps.Animation.DROP : undefined}
-              />
-            )}
-          </GoogleMap>
+        {/* Search Dropdown */}
+        {showResults && searchResults.length > 0 && (
+          <div className="absolute left-0 right-0 top-full mt-1 bg-card rounded-xl border border-border shadow-lg z-50 max-h-60 overflow-y-auto">
+            {searchResults.map((r, i) => (
+              <button
+                type="button"
+                key={`${r.lat}-${r.lon}-${i}`}
+                onClick={() => handleSelectResult(r)}
+                className="w-full flex items-start gap-3 px-4 py-3 hover:bg-brand-50 transition-colors text-left border-b border-border/30 last:border-0"
+              >
+                <MapPin className="w-4 h-4 text-brand-500 mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {r.address?.road || r.display_name.split(',')[0]}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground line-clamp-2">{r.display_name}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Preset Location Suggestions */}
-      {!selectedLocation && searchQuery.length === 0 && (
-        <div className="space-y-1.5">
-          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider px-1">
-            Alamat Populer
-          </p>
-          {PRESET_LOCATIONS.map((loc) => (
-            <button
-              key={loc.name}
-              onClick={() => handleSelectPreset(loc)}
-              className="w-full flex items-start gap-3 px-4 py-3 rounded-xl
-                bg-card border border-border/50 hover:border-matcha-300
-                transition-colors text-left touch-target"
-            >
-              <MapPin className="w-4 h-4 text-matcha-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-foreground">{loc.name}</p>
-                <p className="text-xs text-muted-foreground">{loc.detail}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* GPS Detection */}
+      <button
+        type="button"
+        onClick={handleDetectLocation}
+        disabled={isDetecting}
+        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-brand-400 bg-brand-50/50 text-brand-700 text-sm font-medium hover:bg-brand-50 transition-colors disabled:opacity-50"
+      >
+        {isDetecting ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <LocateFixed className="w-4 h-4" />
+        )}
+        {isDetecting ? 'Mendeteksi lokasi...' : 'Gunakan lokasi saat ini'}
+      </button>
 
-      {/* Search results */}
-      {!selectedLocation && searchQuery.length > 0 && (
-        <div className="space-y-1.5">
-          {filteredLocations.length > 0 ? (
-            filteredLocations.map((loc) => (
-              <button
-                key={loc.name}
-                onClick={() => handleSelectPreset(loc)}
-                className="w-full flex items-start gap-3 px-4 py-3 rounded-xl
-                  bg-card border border-border/50 hover:border-matcha-300
-                  transition-colors text-left touch-target"
-              >
-                <MapPin className="w-4 h-4 text-matcha-500 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-foreground">{loc.name}</p>
-                  <p className="text-xs text-muted-foreground">{loc.detail}</p>
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="text-center py-6 text-sm text-muted-foreground">
-              Tidak ada hasil untuk &ldquo;{searchQuery}&rdquo;
-            </div>
-          )}
+      {/* Leaflet Map */}
+      <div className="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-muted border border-border">
+        {!mapLoaded && (
+          <div className="absolute inset-0 flex items-center justify-center bg-brand-50 z-10">
+            <Loader2 className="w-8 h-8 animate-spin text-brand-600" />
+          </div>
+        )}
+        <div ref={mapContainer} className="w-full h-full" />
+        {/* Hint overlay */}
+        <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full text-[10px] font-medium text-gray-600 shadow-sm border border-white z-[1000]">
+          Tap/geser pin untuk atur lokasi
         </div>
-      )}
+      </div>
 
       {/* Selected Location Info */}
-      {selectedLocation && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-3"
-        >
-          {/* Address card */}
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-matcha-50 border border-matcha-200">
-            <MapPin className="w-4 h-4 text-matcha-600 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">{selectedLocation.name}</p>
-              <p className="text-xs text-muted-foreground">{selectedLocation.detail}</p>
+      {selectedAddress && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-brand-50 border border-brand-200">
+            <MapPin className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-foreground">{selectedAddress}</p>
+              <p className="text-xs text-muted-foreground line-clamp-2">{addressDetail}</p>
             </div>
             <button
-              onClick={() => {
-                setSelectedLocation(null);
-                setSearchQuery('');
-              }}
-              className="text-xs text-matcha-600 font-medium hover:underline touch-target"
+              type="button"
+              onClick={() => { setSelectedAddress(null); setSearchQuery(''); }}
+              className="text-xs text-brand-600 font-medium hover:underline shrink-0"
             >
               Ubah
             </button>
           </div>
 
-          {/* Distance & Fee */}
           <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-card border border-border/50">
             <div>
               <p className="text-xs text-muted-foreground">Jarak</p>
@@ -276,39 +433,27 @@ export function MapPicker({ onLocationSelect, initialLat, initialLng }: MapPicke
             </div>
             <div className="text-right">
               <p className="text-xs text-muted-foreground">Ongkos Kirim</p>
-              <p className="text-sm font-bold text-matcha-700">
-                {withinRange ? formatRupiah(deliveryFee) : '-'}
-              </p>
+              <p className="text-sm font-bold text-brand-700">{withinRange ? formatRupiah(deliveryFee) : '-'}</p>
             </div>
           </div>
 
-          {/* Out of range warning */}
           {!withinRange && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200"
-            >
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
               <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-              <p className="text-sm text-red-700">
-                Maaf, lokasi di luar jangkauan pengiriman kami (max {DELIVERY_CONFIG.maxDistanceKm} km).
-              </p>
+              <p className="text-sm text-red-700">Maaf, lokasi di luar jangkauan pengiriman kami (max {maxDeliveryDistance} km).</p>
             </motion.div>
           )}
 
-          {/* Confirm Button */}
           {withinRange && (
             <motion.button
+              type="button"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleConfirm}
-              className="w-full py-3.5 rounded-xl gradient-matcha text-white 
-                font-semibold text-sm shadow-lg shadow-matcha-700/20
-                flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl gradient-brand text-white font-semibold text-sm shadow-lg flex items-center justify-center gap-2"
             >
-              <Check className="w-4 h-4" />
-              Konfirmasi Alamat
+              <Check className="w-4 h-4" /> Konfirmasi Alamat
             </motion.button>
           )}
         </motion.div>

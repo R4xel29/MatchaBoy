@@ -139,7 +139,7 @@ export const useCartStore = create<CartState>()(
             totalPrice: () => get().items.reduce((sum, i) => sum + i.totalPrice, 0),
         }),
         {
-            name: 'Matchaboy-cart-v1',
+            name: 'Arus-cart-v1',
             storage: createJSONStorage(() => localStorage),
             version: 1,
         }

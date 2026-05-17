@@ -11,7 +11,7 @@ import { useToast } from "@/components/ui/Toast"
 
 export default function RegisterPageWrapper() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#18442D]" /></div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" /></div>}>
       <RegisterPage />
     </Suspense>
   )
@@ -66,7 +66,7 @@ function RegisterPage() {
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col px-6">
       <div className="pt-8 pb-4">
-        <Link href="/" className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-[#18442D] transition-colors">
+        <Link href="/" className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-[#B48A5E] transition-colors">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Kembali ke Home
         </Link>
@@ -78,7 +78,7 @@ function RegisterPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <h1 className="font-serif text-4xl text-[#18442D] mb-2">Join Matchaboy</h1>
+          <h1 className="font-serif text-4xl text-[#B48A5E] mb-2">Join Arus</h1>
           <p className="text-gray-500">Create an account to start ordering.</p>
         </motion.div>
         
@@ -105,35 +105,35 @@ function RegisterPage() {
           <input type="hidden" name="referralCode" value={refCode} />
           
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#18442D]">Nama Lengkap</label>
+            <label className="text-sm font-medium text-[#B48A5E]">Nama Lengkap</label>
             <input
               type="text"
               name="name"
               required
-              className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#18442D]/20 focus:border-[#18442D] transition-all"
+              className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#B48A5E]/20 focus:border-[#B48A5E] transition-all"
               placeholder="John Doe"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#18442D]">Email</label>
+            <label className="text-sm font-medium text-[#B48A5E]">Email</label>
             <input
               type="email"
               name="email"
               required
-              className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#18442D]/20 focus:border-[#18442D] transition-all"
+              className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#B48A5E]/20 focus:border-[#B48A5E] transition-all"
               placeholder="matcha@example.com"
             />
           </div>
           
           <div className="space-y-1.5">
-            <label className="text-sm font-medium text-[#18442D]">Password</label>
+            <label className="text-sm font-medium text-[#B48A5E]">Password</label>
             <input
               type="password"
               name="password"
               required
               minLength={6}
-              className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#18442D]/20 focus:border-[#18442D] transition-all"
+              className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#B48A5E]/20 focus:border-[#B48A5E] transition-all"
               placeholder="Minimal 6 karakter"
             />
           </div>
@@ -141,7 +141,7 @@ function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 mt-6 bg-[#18442D] text-white rounded-full font-medium shadow-md hover:bg-[#123321] active:scale-[0.98] transition-all disabled:opacity-70 flex justify-center items-center"
+            className="w-full py-4 mt-6 bg-[#B48A5E] text-white rounded-full font-medium shadow-md hover:bg-[#946F48] active:scale-[0.98] transition-all disabled:opacity-70 flex justify-center items-center"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Create Account"}
           </button>
@@ -190,7 +190,7 @@ function RegisterPage() {
         >
           <p className="text-gray-500 text-sm">
             Sudah punya akun?{' '}
-            <Link href="/login" className="text-[#18442D] font-medium hover:underline">
+            <Link href="/login" className="text-[#B48A5E] font-medium hover:underline">
               Log in di sini
             </Link>
           </p>

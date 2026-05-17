@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import type { Category } from '@/types';
 
 interface CategoryTabsProps {
@@ -38,7 +39,7 @@ export function CategoryTabs({
   return (
     <div
       id="category-tabs"
-      className="sticky top-[60px] z-40 bg-cream/95 backdrop-blur-sm border-b border-matcha-100/50 pt-safe"
+      className="sticky top-[60px] z-40 bg-cream/95 backdrop-blur-sm border-b border-brand-100/50 pt-safe"
     >
       <div
         ref={scrollRef}
@@ -51,19 +52,18 @@ export function CategoryTabs({
               key={cat.id}
               data-category-id={cat.id}
               onClick={() => onCategoryChange(cat.id)}
-              className={`relative shrink-0 px-5 py-2 rounded-full text-sm font-medium 
-                transition-colors touch-target whitespace-nowrap
-                ${
-                  isActive
-                    ? 'text-white'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-matcha-50'
-                }`}
+              className={cn(
+                "relative shrink-0 px-5 py-2 rounded-full text-sm font-medium transition-colors touch-target whitespace-nowrap",
+                isActive
+                  ? "text-white"
+                  : "text-muted-foreground hover:text-foreground hover:bg-brand-50"
+              )}
             >
               {/* Animated pill background */}
               {isActive && (
                 <motion.div
                   layoutId="activeCategory"
-                  className="absolute inset-0 bg-matcha-700 rounded-full shadow-sm"
+                  className="absolute inset-0 bg-brand-700 rounded-full shadow-sm"
                   transition={{
                     type: 'spring',
                     stiffness: 500,

@@ -13,6 +13,7 @@ export const authConfig = {
             if (user) {
                 token.sub = user.id
                 token.role = (user as any).role || "CUSTOMER"
+                token.referralCode = (user as any).referralCode
             }
             // For OAuth sign-in, the role might not be on the user object from the provider
             // so we need to check if it's set, if not it will default to CUSTOMER which is correct
@@ -22,6 +23,7 @@ export const authConfig = {
             if (session.user) {
                 session.user.role = token.role as string
                 session.user.id = token.sub as string
+                session.user.referralCode = token.referralCode as string
             }
             return session
         }

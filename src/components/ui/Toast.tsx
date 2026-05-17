@@ -69,13 +69,13 @@ function ToastItem({
   }, [onDismiss]);
 
   const icons: Record<ToastType, React.ReactNode> = {
-    success: <Check className="w-4 h-4 text-matcha-600" />,
+    success: <Check className="w-4 h-4 text-brand-600" />,
     error: <AlertTriangle className="w-4 h-4 text-red-500" />,
-    info: <ShoppingBag className="w-4 h-4 text-matcha-600" />,
+    info: <ShoppingBag className="w-4 h-4 text-brand-600" />,
   };
 
   const bgColors: Record<ToastType, string> = {
-    success: 'bg-matcha-50 border-matcha-200 text-matcha-800',
+    success: 'bg-brand-50 border-brand-200 text-brand-800',
     error: 'bg-red-50 border-red-200 text-red-800',
     info: 'bg-card border-border text-foreground',
   };

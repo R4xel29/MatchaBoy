@@ -91,8 +91,8 @@ export function PickupTimePicker({
               onClick={() => onDateChange(date.value)}
               className={`flex-shrink-0 px-4 py-3 rounded-2xl border-2 text-center transition-all active:scale-95 min-w-[80px]
                 ${selectedDate === date.value
-                  ? 'border-[#18442D] bg-[#18442D] text-white shadow-lg shadow-[#18442D]/20'
-                  : 'border-gray-200 bg-white hover:border-[#18442D]/30 text-gray-700'
+                  ? 'border-[#B48A5E] bg-[#B48A5E] text-white shadow-lg shadow-[#B48A5E]/20'
+                  : 'border-gray-200 bg-white hover:border-[#B48A5E]/30 text-gray-700'
                 }`}
             >
               <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70">{date.dayLabel}</p>
@@ -129,8 +129,8 @@ export function PickupTimePicker({
                   onClick={() => onTimeChange(time)}
                   className={`py-2.5 rounded-xl text-[13px] font-bold transition-all active:scale-95
                     ${selectedTime === time
-                      ? 'bg-[#18442D] text-white shadow-md shadow-[#18442D]/20'
-                      : 'bg-gray-50 text-gray-700 hover:bg-[#18442D]/10 border border-gray-100'
+                      ? 'bg-[#B48A5E] text-white shadow-md shadow-[#B48A5E]/20'
+                      : 'bg-gray-50 text-gray-700 hover:bg-[#B48A5E]/10 border border-gray-100'
                     }`}
                 >
                   {time}

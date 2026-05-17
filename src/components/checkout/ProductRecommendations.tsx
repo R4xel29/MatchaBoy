@@ -36,9 +36,9 @@ export function ProductRecommendations({ onSelectProduct }: ProductRecommendatio
           <button
             key={product.id}
             onClick={() => onSelectProduct(product)}
-            className="snap-start shrink-0 w-36 bg-card rounded-2xl border border-border overflow-hidden text-left hover:border-matcha-400 transition-colors group"
+            className="snap-start shrink-0 w-36 bg-card rounded-2xl border border-border overflow-hidden text-left hover:border-brand-400 transition-colors group"
           >
-            <div className="w-full aspect-[4/3] relative bg-matcha-50">
+            <div className="w-full aspect-[4/3] relative bg-brand-50">
               <Image
                 src={product.image || '/placeholder-matcha.jpg'}
                 alt={product.name}
@@ -52,10 +52,10 @@ export function ProductRecommendations({ onSelectProduct }: ProductRecommendatio
                 {product.name}
               </h4>
               <div className="mt-2 flex items-center justify-between">
-                <span className="font-bold text-matcha-700 text-xs">
+                <span className="font-bold text-brand-700 text-xs">
                   {formatRupiah(product.price)}
                 </span>
-                <div className="w-6 h-6 rounded-full bg-matcha-100 flex items-center justify-center text-matcha-700 group-hover:bg-matcha-600 group-hover:text-white transition-colors">
+                <div className="w-6 h-6 rounded-full bg-brand-100 flex items-center justify-center text-brand-700 group-hover:bg-brand-600 group-hover:text-white transition-colors">
                   <Plus className="w-3.5 h-3.5" />
                 </div>
               </div>

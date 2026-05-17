@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
 import { processOrderCompletion } from '@/lib/loyalty-utils';
+import { deductStockForOrder } from '@/lib/inventory-utils';
 
 export async function PATCH(
     request: Request,
@@ -10,7 +11,7 @@ export async function PATCH(
 ) {
     try {
         const session = await auth();
-        // RBAC: Only ADMIN or DRIVER could theoretically update orders, but let's stick to ADMIN for Phase 10
+        // RBAC: Admin-only — cashier uses /api/cashier/orders/[id] instead
         if (session?.user?.role !== 'ADMIN') {
             return new NextResponse('Unauthorized', { status: 401 });
         }
@@ -49,6 +50,12 @@ export async function PATCH(
             entityId: id,
             details: `Mengubah status pesanan #${id.slice(-6).toUpperCase()} (${existingOrder.customerName}) dari ${existingOrder.status} menjadi ${status}`
         });
+
+        // Potong stok jika status PREPARING
+        if (status === 'PREPARING') {
+            // Non-blocking
+            deductStockForOrder(id).catch(err => console.error('Stock deduction error:', err));
+        }
 
         // Otomatis tambah poin jika status COMPLETED atau DELIVERED
         if (status === 'COMPLETED' || status === 'DELIVERED') {

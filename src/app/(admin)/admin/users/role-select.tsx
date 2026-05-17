@@ -30,7 +30,7 @@ export default function RoleSelect({ userId, currentRole }: { userId: string, cu
         value={role} 
         onChange={handleRoleChange} 
         disabled={loading}
-        className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-[#18442D] focus:border-[#18442D] disabled:opacity-50"
+        className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-[#B48A5E] focus:border-[#B48A5E] disabled:opacity-50"
       >
         <option value="CUSTOMER">Customer</option>
         <option value="CASHIER">Cashier</option>

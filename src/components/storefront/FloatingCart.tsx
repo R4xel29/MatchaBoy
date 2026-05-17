@@ -33,13 +33,13 @@ export function FloatingCart() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-          className="fixed bottom-0 left-0 right-0 z-50 px-4 pb-safe"
+          className="fixed bottom-16 md:bottom-0 left-0 right-0 z-50 px-4 pb-safe md:pb-4"
         >
           <div className="max-w-2xl mx-auto mb-3">
             <motion.button
               whileTap={{ scale: 0.98 }}
               onClick={() => router.push('/checkout')}
-              className="w-full flex items-center justify-between gap-3 px-5 py-4 rounded-2xl gradient-matcha text-white shadow-[0_8px_32px_rgba(27,67,50,0.35)] active:shadow-[0_4px_16px_rgba(27,67,50,0.3)] transition-shadow"
+              className="w-full flex items-center justify-between gap-3 px-5 py-4 rounded-2xl gradient-brand text-white shadow-[0_8px_32px_rgba(27,67,50,0.35)] active:shadow-[0_4px_16px_rgba(27,67,50,0.3)] transition-shadow"
             >
               {/* Left: bag + count */}
               <div className="flex items-center gap-3">
@@ -49,13 +49,13 @@ export function FloatingCart() {
                     key={count}
                     initial={{ scale: 0.5 }}
                     animate={{ scale: 1 }}
-                    className="absolute -top-2 -right-2 w-5 h-5 bg-matcha-300 text-matcha-900 text-[10px] font-bold rounded-full flex items-center justify-center"
+                    className="absolute -top-2 -right-2 w-5 h-5 bg-brand-300 text-brand-900 text-[10px] font-bold rounded-full flex items-center justify-center"
                   >
                     {count}
                   </motion.span>
                 </div>
                 <div className="text-left">
-                  <p className="text-xs text-matcha-200">
+                  <p className="text-xs text-brand-200">
                     {count} {count === 1 ? 'item' : 'items'}
                   </p>
                   <p className="font-bold text-sm">

@@ -29,7 +29,7 @@ export default function ImpersonateButton({ userId, userName }: { userId: string
          onClick={() => setIsModalOpen(true)}
          disabled={loading}
          title={`Masuk sebagai ${userName}`}
-         className="inline-flex flex-col items-center justify-center p-1.5 hover:bg-matcha-50 rounded-lg text-muted-foreground hover:text-matcha-600 transition-colors disabled:opacity-50"
+         className="inline-flex flex-col items-center justify-center p-1.5 hover:bg-brand-50 rounded-lg text-muted-foreground hover:text-brand-600 transition-colors disabled:opacity-50"
       >
          <UserCircle className="w-4 h-4" />
          <span className="text-[9px] mt-0.5 font-medium">Impersonate</span>

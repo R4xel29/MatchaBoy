@@ -6,7 +6,7 @@ import { authConfig } from '@/auth.config'
 // Initialize NextAuth with only the Edge-compatible configuration
 const { auth } = NextAuth(authConfig)
 
-const protectedRoutes = ['/profile', '/admin', '/checkout']
+const protectedRoutes = ['/profile', '/admin', '/checkout', '/driver']
 const authRoutes = ['/login', '/register']
 
 export default auth((req) => {
@@ -24,6 +24,9 @@ export default auth((req) => {
             if (role === 'CASHIER') {
                 return NextResponse.redirect(new URL('/admin/cashier', req.url))
             }
+            if (role === 'DRIVER') {
+                return NextResponse.redirect(new URL('/driver', req.url))
+            }
             return NextResponse.redirect(new URL('/profile', req.url))
         }
         return NextResponse.next()
@@ -40,6 +43,22 @@ export default auth((req) => {
         // Admin routes: allow ADMIN and CASHIER roles
         if (pathname.startsWith('/admin')) {
             if (role !== 'ADMIN' && role !== 'CASHIER') {
+                return NextResponse.redirect(new URL('/profile', req.url))
+            }
+
+            // Cashier can only access specific pages
+            if (role === 'CASHIER') {
+                const cashierAllowed = ['/admin/cashier', '/admin/orders']
+                const isAllowed = cashierAllowed.some(route => pathname.startsWith(route)) || pathname === '/admin'
+                if (!isAllowed) {
+                    return NextResponse.redirect(new URL('/admin/cashier', req.url))
+                }
+            }
+        }
+
+        // Driver routes: allow DRIVER role only
+        if (pathname.startsWith('/driver')) {
+            if (role !== 'DRIVER') {
                 return NextResponse.redirect(new URL('/profile', req.url))
             }
         }

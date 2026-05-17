@@ -20,6 +20,7 @@ import {
   Phone,
   Camera,
   CheckCircle2,
+  Leaf,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
@@ -74,6 +75,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastOrderId, setLastOrderId] = useState('');
+  const [hasTumbler, setHasTumbler] = useState(false);
 
   // QR Scan + Points state
   const [showQRModal, setShowQRModal] = useState(false);
@@ -238,6 +240,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
         address: orderType === 'DELIVERY' ? address : '',
         notes,
         paymentMethod,
+        hasTumbler,
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -264,6 +267,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setCustomerPhone('');
       setAddress('');
       setNotes('');
+      setHasTumbler(false);
 
       // Show QR scan modal instead of success toast
       setShowQRModal(true);
@@ -457,6 +461,36 @@ export default function CashierPOSClient({ products, categories }: Props) {
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
             />
+
+            {/* Tumbler Toggle */}
+            <button
+              type="button"
+              onClick={() => setHasTumbler(!hasTumbler)}
+              className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                hasTumbler
+                  ? 'border-emerald-400 bg-emerald-50'
+                  : 'border-border/40 bg-muted/20 hover:border-emerald-300'
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                hasTumbler ? 'bg-emerald-500' : 'bg-gray-100'
+              }`}>
+                <Leaf className={`w-4 h-4 ${hasTumbler ? 'text-white' : 'text-gray-400'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-bold ${hasTumbler ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+                  Pelanggan Bawa Tumbler 🌿
+                </p>
+                <p className="text-[10px] text-muted-foreground">Bonus poin extra & kurangi plastik</p>
+              </div>
+              <div className={`w-9 h-5 rounded-full transition-colors shrink-0 relative ${
+                hasTumbler ? 'bg-emerald-500' : 'bg-gray-200'
+              }`}>
+                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                  hasTumbler ? 'left-[18px]' : 'left-0.5'
+                }`} />
+              </div>
+            </button>
           </div>
 
           {/* Cart Items */}

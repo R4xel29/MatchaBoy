@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Gift, ChevronRight, Star, Sparkles } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 export function PointsWidget() {
   const { data: session, status } = useSession();
@@ -57,7 +58,10 @@ export function PointsWidget() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         onClick={() => router.push('/profile')}
-        className="block w-full max-w-2xl mx-auto text-left relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#18442D] to-[#0f2a1c] p-4 sm:p-5 shadow-lg group transition-all hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.99] border border-emerald-900/30"
+        className={cn(
+          "block w-full max-w-2xl mx-auto text-left relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#745432] p-4 sm:p-5 shadow-lg group transition-all",
+          "hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.99] border border-emerald-900/30"
+        )}
       >
         {/* Decorative background elements */}
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/15 rounded-full blur-2xl group-hover:bg-emerald-400/25 transition-colors duration-500" />
@@ -108,13 +112,13 @@ export function PointsWidget() {
                 return (
                   <div key={i} className="relative group/node flex flex-col items-center justify-center">
                     {milestone ? (
-                      <div className={`
-                        w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10 cursor-pointer
-                        ${isEarned 
-                          ? 'bg-emerald-400 border-emerald-400 text-[#0f2a1c] shadow-[0_0_10px_rgba(52,211,153,0.5)]' 
-                          : 'bg-[#0f2a1c] border-emerald-500/50 text-emerald-500/50 hover:border-emerald-400 hover:text-emerald-400'}
-                      `}>
-                        <Star className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${isEarned ? 'fill-[#0f2a1c]' : ''}`} />
+                      <div className={cn(
+                        "w-4 h-4 sm:w-5 sm:h-5 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10 cursor-pointer",
+                        isEarned 
+                          ? 'bg-emerald-400 border-emerald-400 text-[#745432] shadow-[0_0_10px_rgba(52,211,153,0.5)]' 
+                          : 'bg-[#745432] border-emerald-500/50 text-emerald-500/50 hover:border-emerald-400 hover:text-emerald-400'
+                      )}>
+                        <Star className={`w-2.5 h-2.5 sm:w-3 sm:h-3 ${isEarned ? 'fill-[#745432]' : ''}`} />
                         
                         {/* Milestone Tooltip */}
                         <div className="absolute -top-8 sm:-top-9 opacity-0 group-hover/node:opacity-100 transition-all translate-y-1 group-hover/node:translate-y-0 pointer-events-none whitespace-nowrap z-20">
@@ -134,16 +138,28 @@ export function PointsWidget() {
                         )}
                       </div>
                     ) : (
-                      <div className={`
-                        w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full transition-all duration-300 z-10
-                        ${isEarned ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] scale-110' : 'bg-white/10'}
-                      `} />
+                      <div className={cn(
+                        "w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full transition-all duration-300 z-10",
+                        isEarned ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] scale-110' : 'bg-white/10'
+                      )} />
                     )}
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {/* Tumbler Bonus Info */}
+          {settings?.tumblerBonusEnabled && settings?.tumblerBonusPoints > 0 && (
+            <div className="flex items-center gap-2.5 mt-3 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-400/20 backdrop-blur-sm">
+              <span className="text-base">🌿</span>
+              <p className="text-[10px] font-bold text-emerald-200/90 leading-snug">
+                Bawa tumbler, dapat <span className="text-emerald-300">+{settings.tumblerBonusPoints} poin bonus</span>
+                {settings.tumblerDiscountPct > 0 && <> + <span className="text-emerald-300">diskon {settings.tumblerDiscountPct}%</span></>}
+                {' '}setiap pembelian!
+              </p>
+            </div>
+          )}
           
         </div>
       </motion.button>

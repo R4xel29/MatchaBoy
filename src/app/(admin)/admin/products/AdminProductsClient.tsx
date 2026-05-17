@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
 import {
   Search, Plus, Edit2, Trash2, Power, PowerOff, X, Save, Loader2,
-  ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus
+  ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus, History
 } from 'lucide-react';
 
 // ── Types ──
@@ -15,7 +15,8 @@ interface ProductItem {
   image: string | null; badge: string | null; categoryId: string;
   category: CategoryItem; modifiers: string | null;
 }
-interface Props { initialProducts: ProductItem[]; categories: CategoryItem[]; }
+interface IngredientItem { id: string; name: string; unit: string; costPerUnit: number; }
+interface Props { initialProducts: ProductItem[]; categories: CategoryItem[]; ingredients: IngredientItem[]; }
 
 interface AddOnItem { id: string; name: string; price: number; }
 interface ModifiersData {
@@ -55,7 +56,7 @@ function compressToWebP(file: File, maxSize = 800, quality = 0.8): Promise<Blob>
   });
 }
 
-export default function AdminProductsClient({ initialProducts, categories }: Props) {
+export default function AdminProductsClient({ initialProducts, categories, ingredients }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -79,6 +80,13 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
   const [modAddOns, setModAddOns] = useState<AddOnItem[]>([]);
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
+
+  // Recipe state
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [recipeProduct, setRecipeProduct] = useState<ProductItem | null>(null);
+  const [recipeItems, setRecipeItems] = useState<{ ingredientId: string; quantity: string }[]>([]);
+  const [loadingRecipe, setLoadingRecipe] = useState(false);
+  const [savingRecipe, setSavingRecipe] = useState(false);
 
   const filteredProducts = initialProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -173,6 +181,57 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
 
   const removeAddOn = (id: string) => setModAddOns(prev => prev.filter(a => a.id !== id));
 
+  // ── Recipe Helpers ──
+  const openRecipeModal = async (product: ProductItem) => {
+    setRecipeProduct(product);
+    setRecipeItems([]);
+    setLoadingRecipe(true);
+    setShowRecipeModal(true);
+    try {
+      const res = await fetch(`/api/admin/products/${product.id}/recipe`);
+      if (res.ok) {
+        const data = await res.json();
+        setRecipeItems(data.map((item: any) => ({
+          ingredientId: item.ingredientId,
+          quantity: item.quantity.toString()
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching recipe:', err);
+    } finally {
+      setLoadingRecipe(false);
+    }
+  };
+
+  const addRecipeItem = () => setRecipeItems(prev => [...prev, { ingredientId: ingredients[0]?.id || '', quantity: '1' }]);
+  const removeRecipeItem = (index: number) => setRecipeItems(prev => prev.filter((_, i) => i !== index));
+  const updateRecipeItem = (index: number, field: string, value: string) => {
+    setRecipeItems(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleSaveRecipe = async () => {
+    if (!recipeProduct) return;
+    setSavingRecipe(true);
+    try {
+      const res = await fetch(`/api/admin/products/${recipeProduct.id}/recipe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ingredients: recipeItems }),
+      });
+      if (!res.ok) throw new Error('Failed to save recipe');
+      setShowRecipeModal(false);
+      router.refresh();
+    } catch (err) {
+      alert('Error saving recipe');
+    } finally {
+      setSavingRecipe(false);
+    }
+  };
+
   // ── Save ──
   const handleSave = async () => {
     if (!formData.name || !formData.description || !formData.price || !formData.categoryId) { alert('Fill all required fields'); return; }
@@ -230,16 +289,16 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input type="text" placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:border-matcha-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
+            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
         </div>
         <div className="flex gap-2">
           <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+            className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <option value="all">All Categories</option>
             {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
           </select>
           <button onClick={() => openModal()}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-matcha text-white hover:opacity-90 transition-all shadow-md shadow-matcha-700/15 active:scale-[0.98] whitespace-nowrap">
+            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md shadow-brand-700/15 active:scale-[0.98] whitespace-nowrap">
             <Plus className="w-4 h-4" /> Add
           </button>
         </div>
@@ -255,6 +314,7 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
               <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
               <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Modifiers</th>
               <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+              <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">HPP / Recipe</th>
               <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
@@ -276,7 +336,7 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                     </div>
                   </td>
                   <td className="px-5 py-3">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-matcha-50 text-matcha-700">{product.category.name}</span>
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-brand-50 text-brand-700">{product.category.name}</span>
                   </td>
                   <td className="px-5 py-3 font-semibold text-[13px]">{formatRupiah(product.price)}</td>
                   <td className="px-5 py-3 text-[11px] text-muted-foreground">{getModifierSummary(product.modifiers)}</td>
@@ -286,6 +346,11 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                         ${isSoldOut ? 'bg-rose-50 text-rose-600 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
                       {isSoldOut ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                       {isSoldOut ? 'Sold Out' : 'Available'}
+                    </button>
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <button onClick={() => openRecipeModal(product)} className="text-[10px] font-bold text-brand-600 hover:underline flex items-center gap-1 justify-end">
+                      <History className="w-3 h-3" /> Recipe
                     </button>
                   </td>
                   <td className="px-5 py-3 text-right">
@@ -326,7 +391,7 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                   <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{product.description}</p>
                   <div className="flex items-center gap-2 mt-1.5">
                     <span className="font-bold text-sm">{formatRupiah(product.price)}</span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-matcha-50 text-matcha-700">{product.category.name}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-brand-50 text-brand-700">{product.category.name}</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">{getModifierSummary(product.modifiers)}</p>
                 </div>
@@ -376,9 +441,9 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                   </div>
                 ) : (
                   <button type="button" onClick={() => fileInputRef.current?.click()}
-                    className="w-full aspect-[16/10] rounded-xl border-2 border-dashed border-border/50 hover:border-matcha-400 bg-muted/20 hover:bg-matcha-50/30 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer">
+                    className="w-full aspect-[16/10] rounded-xl border-2 border-dashed border-border/50 hover:border-brand-400 bg-muted/20 hover:bg-brand-50/30 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer">
                     {uploading ? (
-                      <><Loader2 className="w-6 h-6 text-matcha-500 animate-spin" /><span className="text-xs text-muted-foreground">Compressing & uploading...</span></>
+                      <><Loader2 className="w-6 h-6 text-brand-500 animate-spin" /><span className="text-xs text-muted-foreground">Compressing & uploading...</span></>
                     ) : (
                       <><Upload className="w-6 h-6 text-muted-foreground/40" /><span className="text-xs text-muted-foreground">Click to upload — Auto WebP</span></>
                     )}
@@ -392,23 +457,23 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
               <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Product Name *</label>
                 <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:bg-white transition-all" />
+                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Description *</label>
                 <textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} rows={2}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:bg-white transition-all resize-none" />
+                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all resize-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Price (Rp) *</label>
                   <input type="number" value={formData.price} onChange={e => setFormData(p => ({ ...p, price: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:bg-white transition-all" />
+                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
                 </div>
                 <div>
                   <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Category *</label>
                   <select value={formData.categoryId} onChange={e => setFormData(p => ({ ...p, categoryId: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:bg-white transition-all">
+                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all">
                     {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
                   </select>
                 </div>
@@ -417,7 +482,7 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
               {/* ── Modifiers Section ── */}
               <div className="pt-4 border-t border-border/30">
                 <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Snowflake className="w-3.5 h-3.5 text-matcha-600" /> Product Modifiers
+                  <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers
                 </h4>
                 <p className="text-[10px] text-muted-foreground mb-3">Select which customization options are available for this product</p>
 
@@ -429,8 +494,8 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                       <button key={level} type="button" onClick={() => toggleIce(level)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
                           ${modIce.includes(level)
-                            ? 'bg-matcha-600 text-white border-matcha-600 shadow-sm'
-                            : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-matcha-400'}`}>
+                            ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                            : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
                         {level}
                       </button>
                     ))}
@@ -445,8 +510,8 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                       <button key={level} type="button" onClick={() => toggleSugar(level)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
                           ${modSugar.includes(level)
-                            ? 'bg-matcha-600 text-white border-matcha-600 shadow-sm'
-                            : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-matcha-400'}`}>
+                            ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                            : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
                         {level}
                       </button>
                     ))}
@@ -462,7 +527,7 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                         <div key={addon.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
                           <span className="text-xs font-medium text-foreground">{addon.name}</span>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-matcha-600 font-medium">+{formatRupiah(addon.price)}</span>
+                            <span className="text-xs text-brand-600 font-medium">+{formatRupiah(addon.price)}</span>
                             <button type="button" onClick={() => removeAddOn(addon.id)}
                               className="p-0.5 hover:bg-rose-50 rounded text-muted-foreground hover:text-rose-500 transition-colors">
                               <CircleMinus className="w-3.5 h-3.5" />
@@ -475,12 +540,12 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
                   <div className="flex gap-2">
                     <input value={newAddOnName} onChange={e => setNewAddOnName(e.target.value)} placeholder="Add-on name"
                       onKeyDown={e => e.key === 'Enter' && addAddOn()}
-                      className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:bg-white transition-all" />
+                      className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
                     <input type="number" value={newAddOnPrice} onChange={e => setNewAddOnPrice(e.target.value)} placeholder="Price"
                       onKeyDown={e => e.key === 'Enter' && addAddOn()}
-                      className="w-24 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:bg-white transition-all" />
+                      className="w-24 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
                     <button type="button" onClick={addAddOn}
-                      className="p-2 rounded-lg bg-matcha-50 text-matcha-600 hover:bg-matcha-100 transition-colors">
+                      className="p-2 rounded-lg bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors">
                       <CirclePlus className="w-4 h-4" />
                     </button>
                   </div>
@@ -492,7 +557,7 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
             <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10 sticky bottom-0">
               <button onClick={closeModal} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
               <button onClick={handleSave} disabled={saving || uploading}
-                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-matcha text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-matcha-700/15">
+                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-700/15">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saving ? 'Saving...' : 'Save'}
               </button>
@@ -513,6 +578,95 @@ export default function AdminProductsClient({ initialProducts, categories }: Pro
             <div className="flex gap-2">
               <button onClick={() => setDeleteTarget(null)} className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
               <button onClick={handleDelete} className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ Recipe Modal ═══════ */}
+      {showRecipeModal && recipeProduct && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30">
+              <div>
+                <h3 className="text-base font-bold font-heading">Product Recipe</h3>
+                <p className="text-[11px] text-muted-foreground">Manage ingredients for <strong>{recipeProduct.name}</strong></p>
+              </div>
+              <button onClick={() => setShowRecipeModal(false)} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              {loadingRecipe ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
+                  <p className="text-sm text-muted-foreground">Loading recipe...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-3">
+                    {recipeItems.map((item, index) => {
+                      const selectedIng = ingredients.find(i => i.id === item.ingredientId);
+                      return (
+                        <div key={index} className="flex gap-2 items-end bg-muted/20 p-3 rounded-xl border border-border/30 group">
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Ingredient</label>
+                            <select 
+                              value={item.ingredientId} 
+                              onChange={(e) => updateRecipeItem(index, 'ingredientId', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs bg-white border border-border/40 rounded-lg"
+                            >
+                              {ingredients.map(ing => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
+                            </select>
+                          </div>
+                          <div className="w-24">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Qty ({selectedIng?.unit || '-'})</label>
+                            <input 
+                              type="number" 
+                              value={item.quantity} 
+                              onChange={(e) => updateRecipeItem(index, 'quantity', e.target.value)}
+                              className="w-full px-2 py-1.5 text-xs bg-white border border-border/40 rounded-lg"
+                            />
+                          </div>
+                          <div className="w-24">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Cost</label>
+                            <div className="px-2 py-1.5 text-[11px] font-semibold text-emerald-700">
+                              {formatRupiah((selectedIng?.costPerUnit || 0) * parseFloat(item.quantity || '0'))}
+                            </div>
+                          </div>
+                          <button onClick={() => removeRecipeItem(index)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button onClick={addRecipeItem} className="w-full py-2 border-2 border-dashed border-border/40 rounded-xl text-xs font-bold text-muted-foreground hover:border-brand-400 hover:text-brand-600 transition-all flex items-center justify-center gap-2">
+                    <Plus className="w-4 h-4" /> Add Ingredient
+                  </button>
+
+                  <div className="mt-6 p-4 bg-brand-50 rounded-2xl border border-brand-100 flex justify-between items-center">
+                    <div>
+                      <p className="text-[10px] font-bold text-brand-700 uppercase tracking-wider">Total HPP per Serving</p>
+                      <p className="text-xl font-bold text-brand-900">
+                        {formatRupiah(recipeItems.reduce((acc, item) => {
+                          const ing = ingredients.find(i => i.id === item.ingredientId);
+                          return acc + (ing?.costPerUnit || 0) * parseFloat(item.quantity || '0');
+                        }, 0))}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Sale Price</p>
+                      <p className="text-lg font-bold text-foreground">{formatRupiah(recipeProduct.price)}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10">
+              <button onClick={() => setShowRecipeModal(false)} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
+              <button onClick={handleSaveRecipe} disabled={savingRecipe || loadingRecipe}
+                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
+                {savingRecipe ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Recipe
+              </button>
             </div>
           </div>
         </div>

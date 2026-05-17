@@ -10,8 +10,10 @@ import { z } from 'zod';
 import {
   ArrowLeft, Phone, User, CreditCard, Banknote,
   ChevronDown, ChevronUp, Trash2, Plus, Minus,
-  ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle,
+  ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle, MapPin,
+  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2
 } from 'lucide-react';
+import { MapPicker } from '@/components/checkout/MapPicker';
 import { useCartStore } from '@/stores/cart-store';
 import { formatRupiah } from '@/lib/utils';
 import { PickupTimePicker } from '@/components/checkout/PickupTimePicker';
@@ -51,6 +53,26 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('TRANSFER');
   const [showPickupWarning, setShowPickupWarning] = useState(false);
 
+  // Tumbler state
+  const [hasTumbler, setHasTumbler] = useState(false);
+  const [tumblerBonusPoints, setTumblerBonusPoints] = useState(0);
+  const [tumblerDiscountPct, setTumblerDiscountPct] = useState(0);
+  const [tumblerEnabled, setTumblerEnabled] = useState(false);
+
+  // Voucher state
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<{ id: string; code: string; type: string; description: string } | null>(null);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
+
+  // Points state
+  const [userPoints, setUserPoints] = useState(0);
+  const [usePoints, setUsePoints] = useState(false);
+  const [pointsToUse, setPointsToUse] = useState(0);
+
+  // Toast state
+  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+
   // Modal State
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -59,12 +81,27 @@ export default function CheckoutPage() {
   // Store settings
   const [storeSettings, setStoreSettings] = useState({
     openTime: '08:00', closeTime: '21:00', pickupSlotInterval: 5,
+    deliveryFeePerKm: 2000, maxDeliveryDistance: 10
   });
+
+  const [deliveryAddress, setDeliveryAddress] = useState<{ label: string, detail: string, lat: number, lng: number, distance: number, deliveryFee: number } | null>(null);
 
   useEffect(() => {
     fetch('/api/admin/store-settings')
       .then(r => r.json())
-      .then(d => { if (d.openTime) setStoreSettings(d); })
+      .then(d => { if (d.openTime) setStoreSettings({ ...storeSettings, ...d }); })
+      .catch(() => {});
+
+    // Fetch tumbler bonus settings
+    fetch('/api/admin/loyalty/settings')
+      .then(r => r.json())
+      .then(d => {
+        if (d.tumblerBonusEnabled) {
+          setTumblerEnabled(true);
+          setTumblerBonusPoints(d.tumblerBonusPoints || 0);
+          setTumblerDiscountPct(d.tumblerDiscountPct || 0);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -79,23 +116,64 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (session?.user) {
       if (session.user.name) setValue('name', session.user.name);
-      // Phone will be filled from profile API
+      // Phone + points from profile API
       fetch('/api/user/profile')
         .then(r => r.json())
-        .then(d => { if (d.phone) setValue('phone', d.phone); })
+        .then(d => {
+          if (d.phone) setValue('phone', d.phone);
+          if (d.points !== undefined) setUserPoints(d.points);
+        })
         .catch(() => {});
     }
   }, [session, setValue]);
 
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const t = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(t);
+    }
+  }, [toast]);
+
   const subtotal = totalPrice();
-  const grandTotal = subtotal; // No delivery fee for pickup
+  const tumblerDiscount = hasTumbler && tumblerDiscountPct > 0 ? Math.round(subtotal * tumblerDiscountPct / 100) : 0;
+  const voucherDiscount = appliedVoucher
+    ? appliedVoucher.type === 'FREE_DRINK' ? 25000
+    : appliedVoucher.type === 'FREE_TOPPING' ? 3000
+    : appliedVoucher.type === 'UPGRADE_SIZE' ? 5000
+    : appliedVoucher.type === 'REFERRAL_REWARD' ? 25000 : 10000
+    : 0;
+  const pointsDiscount = usePoints ? pointsToUse * 1000 : 0;
+  const grandTotal = Math.max(0, subtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + (orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0);
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    setVoucherLoading(true);
+    setVoucherError('');
+    try {
+      const res = await fetch('/api/checkout/validate-voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: voucherCode.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setAppliedVoucher(data.voucher);
+      setToast({ message: `Voucher "${data.voucher.description}" berhasil diterapkan!`, type: 'success' });
+    } catch (e: any) {
+      setVoucherError(e.message);
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
 
   const canSubmit = useMemo(() => {
     if (items.length === 0) return false;
     if (orderType === 'PICKUP' && (!pickupDate || !pickupTime)) return false;
+    if (orderType === 'DELIVERY' && !deliveryAddress) return false;
     return true;
-  }, [items.length, orderType, pickupDate, pickupTime]);
+  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress]);
 
   const onSubmit = async (data: CheckoutFormData) => {
     if (!canSubmit) return;
@@ -107,6 +185,9 @@ export default function CheckoutPage() {
         phone: data.phone,
         notes: data.notes,
         orderType,
+        hasTumbler,
+        voucherCode: appliedVoucher?.code || undefined,
+        pointsUsed: usePoints ? pointsToUse : 0,
         pickupDate: pickupDate || undefined,
         pickupTime: pickupTime || undefined,
         paymentProofUrl: paymentProofUrl || undefined,
@@ -120,7 +201,8 @@ export default function CheckoutPage() {
           modsString: `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map(a => a.name).join(', +') : ''}`,
           addOnIds: item.addOns.map(a => a.id),
         })),
-        deliveryFee: 0,
+        address: deliveryAddress ? { ...deliveryAddress } : undefined,
+        deliveryFee: orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0,
       };
 
       const res = await fetch('/api/checkout', {
@@ -135,7 +217,7 @@ export default function CheckoutPage() {
       clearCart();
       router.push(`/orders/${responseData.orderId}`);
     } catch (error: any) {
-      alert(error.message);
+      setToast({ message: error.message, type: 'error' });
       setIsSubmitting(false);
     }
   };
@@ -171,7 +253,7 @@ export default function CheckoutPage() {
   if (status === 'loading') {
     return (
       <div className="min-h-dvh bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-[#18442D] border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-3 border-[#B48A5E] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -184,7 +266,7 @@ export default function CheckoutPage() {
           animate={{ scale: 1, opacity: 1 }}
           className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl border border-gray-100"
         >
-          <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-[#18442D] to-[#1a5c3a] flex items-center justify-center">
+          <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-[#B48A5E] to-[#946F48] flex items-center justify-center">
             <User className="w-7 h-7 text-white" />
           </div>
           <h3 className="text-center font-serif text-xl font-bold text-gray-900 mb-2">
@@ -196,7 +278,7 @@ export default function CheckoutPage() {
           <button
             type="button"
             onClick={() => router.push('/login?callbackUrl=/checkout')}
-            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-[#18442D] to-[#1a5c3a] text-white font-bold text-[15px] hover:opacity-90 transition-opacity shadow-lg shadow-[#18442D]/20"
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-[15px] hover:opacity-90 transition-opacity shadow-lg shadow-[#B48A5E]/20"
           >
             Masuk / Daftar
             <ArrowRight className="w-4 h-4" />
@@ -210,12 +292,12 @@ export default function CheckoutPage() {
   if (items.length === 0) {
     return (
       <div className="min-h-dvh bg-background flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-20 h-20 rounded-full bg-matcha-50 flex items-center justify-center mb-5">
-          <ShoppingBag className="w-8 h-8 text-matcha-400" />
+        <div className="w-20 h-20 rounded-full bg-brand-50 flex items-center justify-center mb-5">
+          <ShoppingBag className="w-8 h-8 text-brand-400" />
         </div>
         <h2 className="font-heading font-bold text-xl text-foreground mb-2">Keranjang Kosong</h2>
         <p className="text-sm text-muted-foreground mb-6">Yuk, tambahkan matcha favoritmu dulu!</p>
-        <button onClick={() => router.push('/')} className="px-6 py-3 rounded-xl gradient-matcha text-white font-semibold text-sm">
+        <button onClick={() => router.push('/')} className="px-6 py-3 rounded-xl gradient-brand text-white font-semibold text-sm">
           Kembali ke Menu
         </button>
       </div>
@@ -245,7 +327,7 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 onClick={() => setShowPickupWarning(false)}
-                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#18442D] to-[#1a5c3a] text-white font-bold text-[15px]"
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-[15px]"
               >
                 Mengerti
               </button>
@@ -276,10 +358,10 @@ export default function CheckoutPage() {
               onClick={() => setOrderType('PICKUP')}
               className={`flex items-center gap-3 px-4 py-4 rounded-2xl border-2 transition-all active:scale-[0.98]
                 ${orderType === 'PICKUP'
-                  ? 'border-[#18442D] bg-[#18442D]/5 shadow-sm'
+                  ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm'
                   : 'border-gray-200 bg-white hover:border-gray-300'}`}
             >
-              <Store className={`w-5 h-5 ${orderType === 'PICKUP' ? 'text-[#18442D]' : 'text-gray-400'}`} />
+              <Store className={`w-5 h-5 ${orderType === 'PICKUP' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
               <div className="text-left">
                 <p className="text-sm font-bold">Ambil Langsung</p>
                 <p className="text-[10px] text-gray-500">Pre-order & pickup</p>
@@ -287,17 +369,17 @@ export default function CheckoutPage() {
             </button>
             <button
               type="button"
-              disabled
-              className="flex items-center gap-3 px-4 py-4 rounded-2xl border-2 border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed relative"
+              onClick={() => setOrderType('DELIVERY')}
+              className={`flex items-center gap-3 px-4 py-4 rounded-2xl border-2 transition-all active:scale-[0.98]
+                ${orderType === 'DELIVERY'
+                  ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm'
+                  : 'border-gray-200 bg-white hover:border-gray-300'}`}
             >
-              <Truck className="w-5 h-5 text-gray-400" />
+              <Truck className={`w-5 h-5 ${orderType === 'DELIVERY' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
               <div className="text-left">
-                <p className="text-sm font-bold text-gray-400">Delivery</p>
-                <p className="text-[10px] text-gray-400">Antar ke alamat</p>
+                <p className="text-sm font-bold">Delivery</p>
+                <p className="text-[10px] text-gray-500">Antar ke alamat</p>
               </div>
-              <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-amber-400 text-[9px] font-bold text-white uppercase tracking-wider shadow-sm">
-                Soon
-              </span>
             </button>
           </div>
         </section>
@@ -306,7 +388,7 @@ export default function CheckoutPage() {
         {orderType === 'PICKUP' && (
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
             <h2 className="font-serif font-bold text-base flex items-center gap-2">
-              <Clock className="w-4 h-4 text-[#18442D]" />
+              <Clock className="w-4 h-4 text-[#B48A5E]" />
               Waktu Pengambilan
             </h2>
             <PickupTimePicker
@@ -321,17 +403,32 @@ export default function CheckoutPage() {
           </motion.section>
         )}
 
+        {/* ── 2b. Delivery Address ────────────────────────────────── */}
+        {orderType === 'DELIVERY' && (
+          <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+            <h2 className="font-serif font-bold text-base flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-[#B48A5E]" />
+              Alamat Pengiriman
+            </h2>
+            <MapPicker
+              onLocationSelect={setDeliveryAddress}
+              deliveryFeePerKm={storeSettings.deliveryFeePerKm}
+              maxDeliveryDistance={storeSettings.maxDeliveryDistance}
+            />
+          </motion.section>
+        )}
+
         {/* ── 3. Customer Details ───────────────────────────── */}
         <section className="space-y-3">
           <h2 className="font-serif font-bold text-base flex items-center gap-2">
-            <User className="w-4 h-4 text-[#18442D]" />
+            <User className="w-4 h-4 text-[#B48A5E]" />
             Detail Pemesan
           </h2>
           <div className="space-y-3">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Nama Lengkap</label>
               <input {...register('name')} placeholder="Nama kamu"
-                className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-[#18442D] transition-all" />
+                className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] transition-all" />
               {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
             </div>
             <div>
@@ -339,34 +436,101 @@ export default function CheckoutPage() {
               <div className="relative">
                 <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input {...register('phone')} placeholder="08123456789" type="tel"
-                  className="w-full pl-10 pr-4 py-3 rounded-2xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-[#18442D] transition-all" />
+                  className="w-full pl-10 pr-4 py-3 rounded-2xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] transition-all" />
               </div>
               {errors.phone && <p className="text-xs text-red-500 mt-1">{errors.phone.message}</p>}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1.5">Catatan (opsional)</label>
               <input {...register('notes')} placeholder="Catatan untuk pesanan..."
-                className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-[#18442D] transition-all" />
+                className="w-full px-4 py-3 rounded-2xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] transition-all" />
             </div>
           </div>
         </section>
 
+        {/* ── 3b. Tumbler Toggle (Eco Card) ──────────────────── */}
+        {tumblerEnabled && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <button
+              type="button"
+              onClick={() => setHasTumbler(!hasTumbler)}
+              className={`w-full relative overflow-hidden rounded-2xl border-2 p-4 transition-all duration-300 text-left active:scale-[0.98] ${
+                hasTumbler
+                  ? 'border-emerald-400 bg-gradient-to-r from-emerald-50 to-green-50 shadow-md shadow-emerald-100'
+                  : 'border-gray-200 bg-white hover:border-emerald-300'
+              }`}
+            >
+              {/* Decorative leaf pattern */}
+              {hasTumbler && (
+                <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-emerald-400/10 blur-xl" />
+              )}
+
+              <div className="relative z-10 flex items-start gap-3.5">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  hasTumbler
+                    ? 'bg-emerald-500 shadow-lg shadow-emerald-200'
+                    : 'bg-gray-100'
+                }`}>
+                  <Leaf className={`w-6 h-6 transition-colors ${hasTumbler ? 'text-white' : 'text-gray-400'}`} />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <p className={`text-sm font-bold transition-colors ${
+                      hasTumbler ? 'text-emerald-800' : 'text-gray-800'
+                    }`}>
+                      Saya Bawa Tumbler / Wadah Sendiri
+                    </p>
+                    {hasTumbler && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">
+                        Aktif ✓
+                      </span>
+                    )}
+                  </div>
+                  <p className={`text-xs leading-relaxed transition-colors ${
+                    hasTumbler ? 'text-emerald-600' : 'text-gray-500'
+                  }`}>
+                    Kurangi plastik, dapatkan <strong>+{tumblerBonusPoints} poin bonus</strong>
+                    {tumblerDiscountPct > 0 && <> + <strong>diskon {tumblerDiscountPct}%</strong></>}
+                    {' '}setiap pembelian! 🌍
+                  </p>
+                </div>
+
+                {/* Toggle indicator */}
+                <div className={`w-11 h-6 rounded-full transition-colors duration-300 shrink-0 mt-1 relative ${
+                  hasTumbler ? 'bg-emerald-500' : 'bg-gray-200'
+                }`}>
+                  <motion.div
+                    initial={false}
+                    animate={{ x: hasTumbler ? 20 : 0 }}
+                    className="absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow-sm"
+                  />
+                </div>
+              </div>
+            </button>
+          </motion.section>
+        )}
+
         {/* ── 4. Order Summary ──────────────────────────────── */}
         <section className="space-y-3">
           <h2 className="font-serif font-bold text-base flex items-center gap-2">
-            <ShoppingBag className="w-4 h-4 text-[#18442D]" />
+            <ShoppingBag className="w-4 h-4 text-[#B48A5E]" />
             Pesanan ({itemCount} item)
           </h2>
           <div className="space-y-2 pb-2">
                   {items.map((item) => (
                     <div key={item.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-white border border-gray-100">
                       {item.image ? (
-                        <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-matcha-50 relative">
+                        <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-brand-50 relative">
                           <Image src={item.image} alt={item.name} fill className="object-cover" sizes="56px" />
                         </div>
                       ) : (
-                        <div className="w-14 h-14 rounded-xl shrink-0 bg-matcha-50 flex items-center justify-center">
-                          <ShoppingBag className="w-5 h-5 text-matcha-200" />
+                        <div className="w-14 h-14 rounded-xl shrink-0 bg-brand-50 flex items-center justify-center">
+                          <ShoppingBag className="w-5 h-5 text-brand-200" />
                         </div>
                       )}
                       
@@ -374,7 +538,7 @@ export default function CheckoutPage() {
                         <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
                         <p className="text-[11px] text-gray-500 line-clamp-1">{item.iceLevel} · {item.sugarLevel}{item.addOns.length > 0 && ` · +${item.addOns.map(a => a.name).join(', ')}`}</p>
                         <div className="flex items-center gap-2 mt-0.5">
-                          <p className="text-xs font-bold text-[#18442D]">{formatRupiah(item.totalPrice)}</p>
+                          <p className="text-xs font-bold text-[#B48A5E]">{formatRupiah(item.totalPrice)}</p>
                           <button 
                             type="button" 
                             onClick={() => handleEditOrAdd(item, true)} 
@@ -404,7 +568,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => router.push('/')}
-                  className="w-full mt-2 py-3 rounded-xl border border-dashed border-[#18442D]/30 text-[#18442D] font-bold text-sm hover:bg-[#18442D]/5 transition-colors"
+                  className="w-full mt-2 py-3 rounded-xl border border-dashed border-[#B48A5E]/30 text-[#B48A5E] font-bold text-sm hover:bg-[#B48A5E]/5 transition-colors"
                 >
                   + Tambah Menu Lain
                 </button>
@@ -416,10 +580,98 @@ export default function CheckoutPage() {
           {/* ── Product Recommendations ─────────────────────────── */}
           <ProductRecommendations onSelectProduct={handleSelectRecommendation} />
 
-        {/* ── 5. Payment ────────────────────────────────────── */}
+        {/* ── 5a. Voucher Section ──────────────────────────── */}
         <section className="space-y-3">
           <h2 className="font-serif font-bold text-base flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-[#18442D]" />
+            <Ticket className="w-4 h-4 text-[#B48A5E]" />
+            Voucher
+          </h2>
+          {appliedVoucher ? (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-200">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-emerald-800">{appliedVoucher.description}</p>
+                <p className="text-xs text-emerald-600">Kode: {appliedVoucher.code}</p>
+              </div>
+              <button type="button" onClick={() => { setAppliedVoucher(null); setVoucherCode(''); }} className="p-1.5 rounded-full hover:bg-emerald-100">
+                <X className="w-4 h-4 text-emerald-600" />
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  value={voucherCode}
+                  onChange={(e) => { setVoucherCode(e.target.value); setVoucherError(''); }}
+                  placeholder="Masukkan kode voucher"
+                  className="flex-1 px-4 py-3 rounded-2xl border-2 border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyVoucher}
+                  disabled={voucherLoading || !voucherCode.trim()}
+                  className="px-5 py-3 rounded-2xl bg-[#B48A5E] text-white font-bold text-sm hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
+                >
+                  {voucherLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Pakai'}
+                </button>
+              </div>
+              {voucherError && <p className="text-xs text-red-500 flex items-center gap-1"><XCircle className="w-3 h-3" />{voucherError}</p>}
+            </div>
+          )}
+        </section>
+
+        {/* ── 5b. Points Section ──────────────────────────── */}
+        {userPoints > 0 && (
+          <section className="space-y-3">
+            <h2 className="font-serif font-bold text-base flex items-center gap-2">
+              <Coins className="w-4 h-4 text-[#B48A5E]" />
+              Poin Saya ({userPoints} poin)
+            </h2>
+            <button
+              type="button"
+              onClick={() => { setUsePoints(!usePoints); if (!usePoints) setPointsToUse(Math.min(userPoints, Math.floor(subtotal / 1000))); }}
+              className={`w-full flex items-center gap-3.5 p-4 rounded-2xl border-2 transition-all text-left active:scale-[0.98] ${
+                usePoints ? 'border-amber-400 bg-amber-50/50 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'
+              }`}
+            >
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+                usePoints ? 'bg-amber-500 shadow-md' : 'bg-gray-100'
+              }`}>
+                <Coins className={`w-5 h-5 ${usePoints ? 'text-white' : 'text-gray-400'}`} />
+              </div>
+              <div className="flex-1">
+                <p className={`text-sm font-bold ${usePoints ? 'text-amber-800' : 'text-gray-800'}`}>Gunakan Poin</p>
+                <p className={`text-xs ${usePoints ? 'text-amber-600' : 'text-gray-500'}`}>
+                  {usePoints ? `${pointsToUse} poin = diskon ${formatRupiah(pointsToUse * 1000)}` : `1 poin = Rp1.000 (maks. ${Math.min(userPoints, Math.floor(subtotal / 1000))} poin)`}
+                </p>
+              </div>
+              <div className={`w-11 h-6 rounded-full transition-colors duration-300 shrink-0 relative ${usePoints ? 'bg-amber-500' : 'bg-gray-200'}`}>
+                <motion.div initial={false} animate={{ x: usePoints ? 20 : 0 }} className="absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow-sm" />
+              </div>
+            </button>
+            {usePoints && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+                <div className="flex items-center gap-3 px-1">
+                  <span className="text-xs text-gray-500 shrink-0">1</span>
+                  <input
+                    type="range"
+                    min={1}
+                    max={Math.min(userPoints, Math.floor(subtotal / 1000))}
+                    value={pointsToUse}
+                    onChange={(e) => setPointsToUse(parseInt(e.target.value))}
+                    className="flex-1 accent-amber-500 h-2"
+                  />
+                  <span className="text-xs text-gray-500 shrink-0">{Math.min(userPoints, Math.floor(subtotal / 1000))}</span>
+                </div>
+              </motion.div>
+            )}
+          </section>
+        )}
+
+        {/* ── 6. Payment ────────────────────────────────────── */}
+        <section className="space-y-3">
+          <h2 className="font-serif font-bold text-base flex items-center gap-2">
+            <CreditCard className="w-4 h-4 text-[#B48A5E]" />
             Pembayaran
           </h2>
           <PaymentUpload
@@ -442,13 +694,43 @@ export default function CheckoutPage() {
             {orderType === 'PICKUP' && pickupDate && pickupTime && (
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" />Pickup</span>
-                <span className="font-medium text-[#18442D]">{pickupDate} · {pickupTime}</span>
+                <span className="font-medium text-[#B48A5E]">{pickupDate} · {pickupTime}</span>
+              </div>
+            )}
+            {orderType === 'DELIVERY' && deliveryAddress && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500 flex items-center gap-1.5"><Truck className="w-3.5 h-3.5" />Ongkir ({deliveryAddress.distance.toFixed(1)} km)</span>
+                <span className="font-medium text-[#B48A5E]">{formatRupiah(deliveryAddress.deliveryFee)}</span>
+              </div>
+            )}
+            {hasTumbler && tumblerDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-emerald-600 flex items-center gap-1.5"><Leaf className="w-3.5 h-3.5" />Diskon Tumbler</span>
+                <span className="font-medium text-emerald-600">-{formatRupiah(tumblerDiscount)}</span>
+              </div>
+            )}
+            {appliedVoucher && voucherDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-purple-600 flex items-center gap-1.5"><Ticket className="w-3.5 h-3.5" />Voucher</span>
+                <span className="font-medium text-purple-600">-{formatRupiah(voucherDiscount)}</span>
+              </div>
+            )}
+            {usePoints && pointsDiscount > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-amber-600 flex items-center gap-1.5"><Coins className="w-3.5 h-3.5" />Poin ({pointsToUse})</span>
+                <span className="font-medium text-amber-600">-{formatRupiah(pointsDiscount)}</span>
+              </div>
+            )}
+            {hasTumbler && (
+              <div className="flex justify-between text-sm">
+                <span className="text-emerald-600 flex items-center gap-1.5">🌿 Bonus Poin</span>
+                <span className="font-medium text-emerald-600">+{tumblerBonusPoints} poin</span>
               </div>
             )}
             <div className="border-t border-gray-100 pt-2.5">
               <div className="flex justify-between">
                 <span className="font-bold text-gray-900">Total</span>
-                <span className="font-bold text-lg text-[#18442D]">{formatRupiah(grandTotal)}</span>
+                <span className="font-bold text-lg text-[#B48A5E]">{formatRupiah(grandTotal)}</span>
               </div>
             </div>
           </div>
@@ -459,13 +741,15 @@ export default function CheckoutPage() {
             whileTap={canSubmit ? { scale: 0.98 } : {}}
             className={`w-full py-4 font-bold text-[15px] transition-all
               ${canSubmit && !isSubmitting
-                ? 'bg-gradient-to-r from-[#18442D] to-[#1a5c3a] text-white'
+                ? 'bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white'
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
           >
             {isSubmitting
               ? 'Memproses...'
               : orderType === 'PICKUP' && (!pickupDate || !pickupTime)
               ? 'Pilih waktu pengambilan'
+              : orderType === 'DELIVERY' && !deliveryAddress
+              ? 'Pilih alamat pengiriman'
               : `Pesan Sekarang · ${formatRupiah(grandTotal)}`}
           </motion.button>
         </section>
@@ -480,6 +764,26 @@ export default function CheckoutPage() {
         editCartItemId={editingCartItem?.id || undefined}
         initialData={editingCartItem || undefined}
       />
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -40, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -40, x: '-50%' }}
+            className={`fixed top-4 left-1/2 z-[100] max-w-sm w-[90vw] px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border ${
+              toast.type === 'error'
+                ? 'bg-red-50 border-red-200 text-red-800'
+                : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            }`}
+          >
+            {toast.type === 'error' ? <XCircle className="w-5 h-5 text-red-500 shrink-0" /> : <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />}
+            <p className="text-sm font-medium flex-1">{toast.message}</p>
+            <button onClick={() => setToast(null)} className="p-1 rounded-full hover:bg-black/5"><X className="w-4 h-4" /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

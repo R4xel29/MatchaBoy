@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface HeroSlide {
   id: number;
@@ -17,23 +18,23 @@ const SLIDES: HeroSlide[] = [
   {
     id: 1,
     image: '/hero/hero-1.jpg',
-    alt: 'Matcha being poured into a glass',
-    headline: 'Maybe You Need\nMatcha Drink',
-    subheadline: 'Premium ceremonial-grade matcha, delivered fresh.',
+    alt: 'Arus signature brew',
+    headline: 'Seduhan Arum\nUntuk Harimu',
+    subheadline: 'Nikmati kualitas premium Arus, diantar segar ke tempatmu.',
   },
   {
     id: 2,
     image: '/hero/hero-2.jpg',
-    alt: 'Matchaboy signature collection',
-    headline: 'New Culture\nMatcha',
-    subheadline: 'Bold flavors for the new generation.',
+    alt: 'Arus signature collection',
+    headline: 'The New Standard\nOf Brewing',
+    subheadline: 'Cita rasa berani untuk generasi baru.',
   },
   {
     id: 3,
     image: '/hero/hero-3.jpg',
-    alt: 'Matcha pastries collection',
-    headline: 'More Than Just\nA Drink',
-    subheadline: 'Croissants, cookies & tiramisu — all matcha.',
+    alt: 'Arus pastries collection',
+    headline: 'Sempurnakan\nMomenmu',
+    subheadline: 'Pilihan pastry & minuman terbaik dari Arus.',
   },
 ];
 
@@ -106,7 +107,7 @@ export function Hero({ banners = [] }: { banners?: any[] }) {
           onPointerUp={() => setIsAutoPlaying(true)}
         >
           {/* Background image placeholder */}
-          <div className="absolute inset-0 bg-gradient-to-br from-matcha-800 via-matcha-700 to-matcha-600">
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600">
             <Image
               src={slides[current].image}
               alt={slides[current].alt}
@@ -146,10 +147,9 @@ export function Hero({ banners = [] }: { banners?: any[] }) {
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.5, duration: 0.4 }}
               onClick={scrollToMenu}
-              className="mt-5 self-start px-8 py-3.5 bg-matcha-500 hover:bg-matcha-400 
-                text-matcha-900 font-semibold rounded-full text-sm tracking-wide
-                transition-colors touch-target shadow-lg shadow-matcha-500/30
-                active:scale-[0.97]"
+              className={cn(
+                "mt-5 self-start px-8 py-3.5 bg-brand-500 hover:bg-brand-400 text-brand-900 font-semibold rounded-full text-sm tracking-wide transition-colors touch-target shadow-lg shadow-brand-500/30 active:scale-[0.97]"
+              )}
             >
               Order Now
             </motion.button>
@@ -194,7 +194,7 @@ export function Hero({ banners = [] }: { banners?: any[] }) {
             }}
             className={`h-2 rounded-full transition-all duration-300 ${
               i === current
-                ? 'w-7 bg-matcha-500'
+                ? 'w-7 bg-brand-500'
                 : 'w-2 bg-white/50 hover:bg-white/70'
             }`}
             aria-label={`Go to slide ${i + 1}`}

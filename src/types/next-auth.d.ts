@@ -8,12 +8,14 @@ declare module "next-auth" {
         user: {
             id: string
             role: string
+            referralCode?: string
         } & DefaultSession["user"]
     }
 
     interface User {
         id: string
         role?: string
+        referralCode?: string
     }
 }
 
@@ -21,5 +23,6 @@ declare module "next-auth/jwt" {
     /** Returned by the `jwt` callback and `getToken`, when using JWT sessions */
     interface JWT {
         role?: string
+        referralCode?: string
     }
 }

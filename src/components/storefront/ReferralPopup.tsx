@@ -11,6 +11,9 @@ interface ReferralPopupProps {
 }
 
 export function ReferralPopup({ referralCode }: ReferralPopupProps) {
+  // Temporarily disabled per user request
+  return null;
+
   const { data: session, status } = useSession();
   const router = useRouter();
   const [showBig, setShowBig] = useState(false);
@@ -23,13 +26,13 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
   useEffect(() => {
     // Delay 3s before showing
     const timer = setTimeout(() => {
-      const bigDismissed = localStorage.getItem('matchaboy-referral-big-dismissed');
+      const bigDismissed = localStorage.getItem('arus-referral-big-dismissed');
 
       if (!bigDismissed) {
         setShowBig(true);
       } else {
         // Show mini once per session
-        const miniDismissed = sessionStorage.getItem('matchaboy-referral-mini-dismissed');
+        const miniDismissed = sessionStorage.getItem('arus-referral-mini-dismissed');
         if (!miniDismissed) {
           setShowMini(true);
         }
@@ -60,21 +63,21 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
       return;
     }
     const text = encodeURIComponent(
-      `Cobain Matchaboy! 🍵 Matcha premium yang enak banget. Daftar pakai link ini dan dapatkan reward spesial:\n${getReferralUrl()}`
+      `Cobain Arus! 🍵 Matcha premium yang enak banget. Daftar pakai link ini dan dapatkan reward spesial:\n${getReferralUrl()}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   const handleDismissBig = () => {
     setShowBig(false);
-    localStorage.setItem('matchaboy-referral-big-dismissed', 'true');
+    localStorage.setItem('arus-referral-big-dismissed', 'true');
     // Show mini after big is dismissed
     setShowMini(true);
   };
 
   const handleDismissMini = () => {
     setShowMini(false);
-    sessionStorage.setItem('matchaboy-referral-mini-dismissed', 'true');
+    sessionStorage.setItem('arus-referral-mini-dismissed', 'true');
   };
 
   return (
@@ -92,7 +95,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
               className="w-full max-w-sm rounded-3xl bg-white shadow-2xl overflow-hidden"
             >
               {/* Header gradient */}
-              <div className="bg-gradient-to-br from-[#18442D] to-[#1a5c3a] px-6 pt-6 pb-8 text-white relative overflow-hidden">
+              <div className="bg-gradient-to-br from-[#B48A5E] to-[#946F48] px-6 pt-6 pb-8 text-white relative overflow-hidden">
                 <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/5 rounded-full blur-2xl" />
                 <div className="relative z-10">
                   <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center mb-4 border border-white/10">
@@ -116,7 +119,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
                       <button
                         onClick={handleCopy}
                         className={`px-4 py-2.5 rounded-xl text-[12px] font-bold flex items-center gap-1.5 transition-all active:scale-95 ${
-                          copied ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-[#18442D] text-white'
+                          copied ? 'bg-green-50 text-green-600 border border-green-200' : 'bg-[#B48A5E] text-white'
                         }`}
                       >
                         {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -133,12 +136,12 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
                   </>
                 ) : isLoggedIn ? (
                   <button onClick={() => router.push('/profile')}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#18442D] text-white font-semibold text-sm hover:opacity-90 transition-opacity">
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#B48A5E] text-white font-semibold text-sm hover:opacity-90 transition-opacity">
                     Lihat Halaman Referral
                   </button>
                 ) : (
                   <button onClick={() => router.push('/login?callbackUrl=/')}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#18442D] text-white font-semibold text-sm hover:opacity-90 transition-opacity">
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#B48A5E] text-white font-semibold text-sm hover:opacity-90 transition-opacity">
                     Login untuk Mendapat Kode Referral
                   </button>
                 )}
@@ -161,7 +164,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
             transition={{ type: 'spring', stiffness: 400, damping: 30 }}
             className="fixed bottom-20 left-4 right-4 z-[80] max-w-md mx-auto"
           >
-            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#18442D] to-[#1a5c3a] text-white shadow-xl shadow-[#18442D]/30">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white shadow-xl shadow-[#B48A5E]/30">
               <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
                 <Gift className="w-5 h-5" />
               </div>
@@ -172,7 +175,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
                     if (isLoggedIn) {
                       router.push('/profile');
                     } else {
-                      setShowMini(false); setShowBig(true); localStorage.removeItem('matchaboy-referral-big-dismissed'); 
+                      setShowMini(false); setShowBig(true); localStorage.removeItem('arus-referral-big-dismissed'); 
                     }
                   }}
                   className="text-[11px] text-white/70 font-medium underline underline-offset-2"

@@ -176,7 +176,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
         </div>
         <button
           onClick={() => handleOpenModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-matcha-600 hover:bg-matcha-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" />
           <span className="hidden sm:inline">Tambah Banner</span>
@@ -209,7 +209,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                     <button 
                        onClick={() => toggleStatus(banner)}
                        title={banner.isActive ? "Tampilkan" : "Sembunyikan"}
-                       className={`p-2 rounded-xl backdrop-blur-md shadow-sm transition-colors text-white ${banner.isActive ? 'bg-matcha-500/80 hover:bg-matcha-500' : 'bg-gray-500/80 hover:bg-gray-500'}`}
+                       className={`p-2 rounded-xl backdrop-blur-md shadow-sm transition-colors text-white ${banner.isActive ? 'bg-brand-500/80 hover:bg-brand-500' : 'bg-gray-500/80 hover:bg-gray-500'}`}
                     >
                        {banner.isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                     </button>
@@ -256,8 +256,8 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Gambar Banner</label>
                     <div className="flex gap-2 items-center">
-                       <input value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} placeholder="https://... atau klik Upload" className="flex-1 text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-matcha-500 focus:ring-1 focus:ring-matcha-500 transition-all" />
-                       <label className="relative cursor-pointer shrink-0 px-4 py-2.5 bg-matcha-100 text-matcha-700 font-medium text-sm rounded-xl hover:bg-matcha-200 transition-colors flex items-center justify-center min-w-[100px]">
+                       <input value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} placeholder="https://... atau klik Upload" className="flex-1 text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all" />
+                       <label className="relative cursor-pointer shrink-0 px-4 py-2.5 bg-brand-100 text-brand-700 font-medium text-sm rounded-xl hover:bg-brand-200 transition-colors flex items-center justify-center min-w-[100px]">
                            {uploadingImage ? <Loader2 className="w-4 h-4 animate-spin"/> : 'Upload'}
                            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-0 h-0 opacity-0 cursor-pointer" disabled={uploadingImage} />
                        </label>
@@ -265,28 +265,28 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Judul Besar (Headline)</label>
-                    <textarea value={formData.headline} onChange={e => setFormData({...formData, headline: e.target.value})} placeholder="More Than Just&#10;A Drink" rows={2} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-matcha-500 focus:ring-1 focus:ring-matcha-500 transition-all resize-none" />
+                    <textarea value={formData.headline} onChange={e => setFormData({...formData, headline: e.target.value})} placeholder="More Than Just&#10;A Drink" rows={2} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all resize-none" />
                     <p className="text-[10px] text-muted-foreground mt-1">Tekan Enter untuk membuat baris baru. Hindari judul terlalu panjang.</p>
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Sub-judul (Kecil)</label>
-                    <input value={formData.subheadline} onChange={e => setFormData({...formData, subheadline: e.target.value})} placeholder="Premium ceremonial-grade matcha..." className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-matcha-500 focus:ring-1 focus:ring-matcha-500 transition-all" />
+                    <input value={formData.subheadline} onChange={e => setFormData({...formData, subheadline: e.target.value})} placeholder="Premium ceremonial-grade matcha..." className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                      <div>
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Urutan Tampil (Order)</label>
-                        <input type="number" value={formData.order} onChange={e => setFormData({...formData, order: Number(e.target.value)})} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-matcha-500 focus:ring-1 focus:ring-matcha-500 transition-all" />
+                        <input type="number" value={formData.order} onChange={e => setFormData({...formData, order: Number(e.target.value)})} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all" />
                      </div>
                      <div>
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Fit Gambar</label>
-                        <select value={formData.isCover ? 'cover' : 'contain'} onChange={e => setFormData({...formData, isCover: e.target.value === 'cover'})} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-matcha-500 focus:ring-1 focus:ring-matcha-500 transition-all appearance-none cursor-pointer">
+                        <select value={formData.isCover ? 'cover' : 'contain'} onChange={e => setFormData({...formData, isCover: e.target.value === 'cover'})} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all appearance-none cursor-pointer">
                            <option value="cover">Penuhi Layar (Bisa Terpotong)</option>
                            <option value="contain">Utuh (Tanpa Potong / Ada Padding)</option>
                         </select>
                      </div>
                      <div>
                         <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Status</label>
-                        <select value={formData.isActive ? 'yes' : 'no'} onChange={e => setFormData({...formData, isActive: e.target.value === 'yes'})} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-matcha-500 focus:ring-1 focus:ring-matcha-500 transition-all appearance-none cursor-pointer">
+                        <select value={formData.isActive ? 'yes' : 'no'} onChange={e => setFormData({...formData, isActive: e.target.value === 'yes'})} className="w-full text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all appearance-none cursor-pointer">
                            <option value="yes">Aktif, Tampilkan</option>
                            <option value="no">Disembunyikan</option>
                         </select>
@@ -296,7 +296,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
 
                <div className="flex justify-end gap-3 pt-4 border-t border-border/40 mt-2 bg-white sticky bottom-0">
                  <button disabled={loading} onClick={() => setIsModalOpen(false)} className="px-4 py-2 font-medium text-sm text-foreground hover:bg-muted rounded-xl transition-colors">Batal</button>
-                 <button disabled={loading} onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-matcha-600 text-white font-medium text-sm rounded-xl hover:bg-matcha-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed">
+                 <button disabled={loading} onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white font-medium text-sm rounded-xl hover:bg-brand-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed">
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     Simpan
                  </button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
 import {
@@ -14,7 +15,14 @@ import {
   ListFilter,
   CheckCircle2,
   AlertCircle,
+  UserPlus,
+  Bell,
+  X,
+  Eye,
+  MapPin
 } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 
 interface OrderItem {
   id: string;
@@ -28,6 +36,8 @@ interface OrderData {
   customerName: string;
   customerPhone: string;
   orderType: string;
+  tableNumber?: string | null;
+  address?: string;
   paymentMethod: string;
   total: number;
   status: string;
@@ -37,6 +47,8 @@ interface OrderData {
 
 interface Props {
   initialOrders: OrderData[];
+  storeLat: number;
+  storeLng: number;
 }
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
@@ -51,7 +63,7 @@ const ORDER_TYPE_ICONS: Record<string, React.ElementType> = {
 
 type TabType = 'antrian' | 'selesai';
 
-export default function CashierOrdersClient({ initialOrders }: Props) {
+export default function CashierOrdersClient({ initialOrders, storeLat, storeLng }: Props) {
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('antrian');
@@ -65,6 +77,33 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
   const antrianOrders = initialOrders.filter(o => ACTIVE_STATUSES.includes(o.status));
   const selesaiOrders = initialOrders.filter(o => DONE_STATUSES.includes(o.status));
 
+  // Auto-refresh and Notification Logic
+  const prevAntrianCount = useRef(antrianOrders.length);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 10000); // Refresh every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [router]);
+
+  useEffect(() => {
+    // If new orders are detected in the queue
+    if (antrianOrders.length > prevAntrianCount.current) {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(e => console.log('Audio play blocked by browser:', e));
+    }
+    prevAntrianCount.current = antrianOrders.length;
+  }, [antrianOrders.length]);
+
+  // Courier Selection State
+  const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
+  const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
+
+  // Detail Modal State
+  const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
+
   const currentOrders = activeTab === 'antrian' ? antrianOrders : selesaiOrders;
 
   const filteredOrders = currentOrders.filter((o) => {
@@ -75,17 +114,27 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
     return matchesSearch && matchesType;
   });
 
-  const nextStatusMap: Record<string, string> = {
-    PENDING: 'PREPARING',
-    PENDING_PAYMENT: 'PREPARING',
-    PREPARING: 'READY',
-    READY: 'COMPLETED',
-    ASSIGNED: 'PREPARING',
-    ON_DELIVERY: 'DELIVERED',
+  const getNextStatus = (status: string, orderType: string) => {
+    if (orderType === 'DELIVERY') {
+      const map: Record<string, string> = {
+        PENDING: 'PREPARING',
+        PENDING_PAYMENT: 'PREPARING',
+        PREPARING: 'READY',
+      };
+      return map[status];
+    } else {
+      const map: Record<string, string> = {
+        PENDING: 'PREPARING',
+        PENDING_PAYMENT: 'PREPARING',
+        PREPARING: 'READY',
+        READY: 'COMPLETED',
+      };
+      return map[status];
+    }
   };
 
-  const advanceStatus = async (orderId: string, currentStatus: string) => {
-    const nextStatus = nextStatusMap[currentStatus];
+  const advanceStatus = async (orderId: string, currentStatus: string, orderType: string) => {
+    const nextStatus = getNextStatus(currentStatus, orderType);
     if (!nextStatus) return;
     setIsUpdating(orderId);
     try {
@@ -100,6 +149,22 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
       alert('Error updating order');
     } finally {
       setIsUpdating(null);
+    }
+  };
+
+  const handleAssignDriver = async (driverId: string) => {
+    if (!selectedOrderIdForCourier) return;
+    try {
+      const res = await fetch(`/api/admin/orders/${selectedOrderIdForCourier}/assign`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId }),
+      });
+      if (!res.ok) throw new Error('Failed to assign driver');
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      alert('Gagal menugaskan kurir');
     }
   };
 
@@ -239,7 +304,7 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
                   </div>
 
                   {/* Customer + Items */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 cursor-pointer hover:bg-slate-50/50 p-2 -mx-2 rounded-xl transition-colors" onClick={() => setSelectedOrder(order)}>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-[13px] font-semibold text-foreground">{order.customerName}</p>
@@ -259,27 +324,48 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
                         </p>
                       )}
                     </div>
+                    <button className="text-[11px] font-medium text-amber-600 flex items-center gap-1 mt-1 hover:text-amber-700">
+                      <Eye className="w-3 h-3" />
+                      Lihat Detail Pesanan
+                    </button>
                   </div>
                 </div>
 
                 {/* Actions — only for active orders */}
-                {activeTab === 'antrian' && nextStatusMap[order.status] && (
+                {activeTab === 'antrian' && (
                   <div className="px-4 py-3 bg-muted/20 border-t border-border/30">
-                    <button
-                      onClick={() => advanceStatus(order.id, order.status)}
-                      disabled={isUpdating === order.id}
-                      className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
-                    >
-                      {isUpdating === order.id ? (
-                        'Mengupdate...'
-                      ) : (
-                        <>
-                          {order.status === 'PREPARING' && <ChefHat className="w-3.5 h-3.5" />}
-                          {order.status === 'READY' && <Check className="w-3.5 h-3.5" />}
-                          Ubah ke → {nextStatusMap[order.status]?.replace('_', ' ') || 'Done'}
-                        </>
-                      )}
-                    </button>
+                    {order.orderType === 'DELIVERY' && order.status === 'READY' ? (
+                      <button
+                        onClick={() => {
+                          setSelectedOrderIdForCourier(order.id);
+                          setIsCourierModalOpen(true);
+                        }}
+                        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        Tugaskan Kurir
+                      </button>
+                    ) : getNextStatus(order.status, order.orderType) ? (
+                      <button
+                        onClick={() => advanceStatus(order.id, order.status, order.orderType)}
+                        disabled={isUpdating === order.id}
+                        className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
+                      >
+                        {isUpdating === order.id ? (
+                          'Mengupdate...'
+                        ) : (
+                          <>
+                            {order.status === 'PREPARING' && <ChefHat className="w-3.5 h-3.5" />}
+                            {order.status === 'READY' && <Check className="w-3.5 h-3.5" />}
+                            Ubah ke → {getNextStatus(order.status, order.orderType)?.replace('_', ' ')}
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                       <div className="text-center text-xs text-muted-foreground py-1">
+                          Menunggu kurir...
+                       </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -287,6 +373,151 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
           })
         )}
       </div>
+
+      <CourierSelectModal
+        isOpen={isCourierModalOpen}
+        onClose={() => {
+          setIsCourierModalOpen(false);
+          setSelectedOrderIdForCourier(null);
+        }}
+        onSelectDriver={handleAssignDriver}
+        orderId={selectedOrderIdForCourier || ''}
+      />
+
+      {/* Detail Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 sm:p-6" onClick={() => setSelectedOrder(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-4 sm:p-5 border-b border-border/40 flex justify-between items-start bg-slate-50/50">
+              <div>
+                <h2 className="text-lg font-bold font-heading text-foreground">Detail Pesanan</h2>
+                <p className="text-sm font-mono text-amber-700 font-semibold mt-0.5">#{selectedOrder.id.toUpperCase()}</p>
+              </div>
+              <button onClick={() => setSelectedOrder(null)} className="p-2 text-muted-foreground hover:bg-slate-100 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-6">
+              {/* Customer Info */}
+              <div className="bg-slate-50 rounded-xl p-4 space-y-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Pelanggan</p>
+                    <p className="text-sm font-semibold text-foreground">{selectedOrder.customerName}</p>
+                    <p className="text-xs text-muted-foreground">{selectedOrder.customerPhone}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground mb-0.5">Tipe Pesanan</p>
+                    <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getTypeStyle(selectedOrder.orderType)}`}>
+                      {ORDER_TYPE_LABELS[selectedOrder.orderType] || selectedOrder.orderType}
+                    </span>
+                    {selectedOrder.tableNumber && (
+                      <p className="text-xs font-semibold text-foreground mt-1">Meja: {selectedOrder.tableNumber}</p>
+                    )}
+                  </div>
+                </div>
+
+                {selectedOrder.orderType === 'DELIVERY' && selectedOrder.address && (
+                  <div className="pt-2 border-t border-border/20">
+                    <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+                      <MapPin className="w-3 h-3" />
+                      Alamat Pengiriman
+                    </p>
+                    <p className="text-[13px] text-foreground leading-relaxed">
+                      {selectedOrder.address.split('(')[0].trim()}
+                    </p>
+                    {(() => {
+                      const match = selectedOrder.address.match(/\(([^,]+),\s*([^)]+)\)/);
+                      if (match) {
+                        const lat = match[1].trim();
+                        const lng = match[2].trim();
+                        return (
+                          <>
+                          <a
+                            href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-colors"
+                          >
+                            <MapPin className="w-3.5 h-3.5" />
+                            Buka di Google Maps
+                          </a>
+                          <div className="mt-3 w-full h-64 rounded-xl overflow-hidden border border-border/40 shadow-inner">
+                            <iframe
+                              width="100%"
+                              height="100%"
+                              style={{ border: 0 }}
+                              loading="lazy"
+                              allowFullScreen
+                              referrerPolicy="no-referrer-when-downgrade"
+                              src={`https://maps.google.com/maps?saddr=${storeLat},${storeLng}&daddr=${lat},${lng}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                            ></iframe>
+                          </div>
+                        </>
+                      );
+                    }
+                    return null;
+                  })()}
+                </div>
+              )}
+              </div>
+
+              {/* Order Items */}
+              <div>
+                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+                  <Package className="w-4 h-4 text-muted-foreground" />
+                  Daftar Pesanan
+                </h3>
+                <div className="space-y-3">
+                  {selectedOrder.items.map((item) => (
+                    <div key={item.id} className="flex justify-between items-center gap-4 pb-3 border-b border-border/40 last:border-0 last:pb-0">
+                      <div className="flex items-center gap-3">
+                        {/* Product Image */}
+                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100 border border-border/20 relative shrink-0">
+                          {item.product.image ? (
+                            <Image
+                              src={item.product.image}
+                              alt={item.product.name}
+                              fill
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package className="w-5 h-5 text-muted-foreground/30" />
+                            </div>
+                          )}
+                          <div className="absolute top-0 right-0 bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-bl-lg">
+                            {item.qty}x
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">{item.product.name}</p>
+                          <p className="text-[11px] text-muted-foreground">{formatRupiah(item.price)}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm font-bold text-foreground">{formatRupiah(item.price * item.qty)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 sm:p-5 border-t border-border/40 bg-slate-50/50">
+              <div className="flex justify-between items-center mb-4">
+                <p className="text-sm font-medium text-muted-foreground">Total Pembayaran</p>
+                <p className="text-lg font-bold text-foreground">{formatRupiah(selectedOrder.total)}</p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setSelectedOrder(null)} className="flex-1 py-2.5 rounded-xl border border-border/60 text-sm font-semibold hover:bg-slate-50 transition-colors">
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

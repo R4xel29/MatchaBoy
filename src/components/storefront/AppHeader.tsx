@@ -38,7 +38,7 @@ export function AppHeader({ onSearchClick }: AppHeaderProps) {
 
   return (
     <motion.header
-      className="fixed top-0 left-0 right-0 z-50 pt-safe"
+      className="hidden md:block fixed top-0 left-0 right-0 z-50 pt-safe"
       initial={false}
       animate={{
         backgroundColor: scrolled
@@ -50,7 +50,7 @@ export function AppHeader({ onSearchClick }: AppHeaderProps) {
     >
       {/* Subtle bottom border when scrolled */}
       <motion.div
-        className="absolute bottom-0 left-0 right-0 h-px bg-matcha-700/10"
+        className="absolute bottom-0 left-0 right-0 h-px bg-brand-700/10"
         initial={false}
         animate={{ opacity: scrolled ? 1 : 0 }}
         transition={{ duration: 0.2 }}
@@ -59,10 +59,10 @@ export function AppHeader({ onSearchClick }: AppHeaderProps) {
       <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3 max-w-7xl mx-auto w-full">
         {/* Logo */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-matcha-700/5 flex items-center justify-center shadow-sm overflow-hidden p-1.5 border border-matcha-700/10 backdrop-blur-sm">
+          <div className="w-10 h-10 rounded-xl bg-brand-700/5 flex items-center justify-center shadow-sm overflow-hidden p-1.5 border border-brand-700/10 backdrop-blur-sm">
             <Image 
-              src="/icons/matcha.webp" 
-              alt="Matchaboy Logo" 
+              src="/icons/arus.png" 
+              alt="Arus Logo" 
               width={32} 
               height={32} 
               className="object-contain"
@@ -70,35 +70,35 @@ export function AppHeader({ onSearchClick }: AppHeaderProps) {
           </div>
           <motion.span
             className="font-heading font-bold text-lg tracking-tight"
-            animate={{ color: scrolled ? '#1B4332' : '#FFFFFF' }}
+            animate={{ color: scrolled ? '#D4A574' : '#FFFFFF' }}
             transition={{ duration: 0.25 }}
           >
-            Matchaboy
+            Arus
           </motion.span>
         </div>
 
 
-        {/* Right Icons */}
-        <div className="flex items-center gap-1 shrink-0">
+        {/* Right Icons - Desktop only */}
+        <div className="hidden md:flex items-center gap-1 shrink-0">
           <button
             onClick={onSearchClick}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-matcha-100/50 transition-colors touch-target"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-brand-100/50 transition-colors touch-target"
             aria-label="Search"
           >
             <Search
               className={`w-5 h-5 transition-colors duration-250 ${
-                scrolled ? 'text-matcha-700' : 'text-white'
+                scrolled ? 'text-brand-700' : 'text-white'
               }`}
             />
           </button>
           <button
             onClick={handleProfileClick}
-            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-matcha-100/50 transition-colors touch-target"
+            className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-brand-100/50 transition-colors touch-target"
             aria-label="Profile"
           >
             <User
               className={`w-5 h-5 transition-colors duration-250 ${
-                scrolled ? 'text-matcha-700' : 'text-white'
+                scrolled ? 'text-brand-700' : 'text-white'
               }`}
             />
           </button>

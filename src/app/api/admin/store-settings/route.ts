@@ -12,6 +12,13 @@ export async function GET() {
         openTime: '08:00',
         closeTime: '21:00',
         pickupSlotInterval: 5,
+        cancellationTimeLimit: 15,
+        deliveryFeePerKm: 2000,
+        maxDeliveryDistance: 10,
+        storeName: 'Arus HQ',
+        storeAddress: 'Jl. Matcha No. 1, Jakarta Selatan',
+        storeLat: -6.2088,
+        storeLng: 106.8456,
       })
     }
 
@@ -20,12 +27,26 @@ export async function GET() {
       openTime: settings.openTime,
       closeTime: settings.closeTime,
       pickupSlotInterval: settings.pickupSlotInterval,
+      cancellationTimeLimit: settings.cancellationTimeLimit,
+      deliveryFeePerKm: settings.deliveryFeePerKm,
+      maxDeliveryDistance: settings.maxDeliveryDistance,
+      storeName: settings.storeName,
+      storeAddress: settings.storeAddress,
+      storeLat: settings.storeLat,
+      storeLng: settings.storeLng,
     })
   } catch {
     return NextResponse.json({
       openTime: '08:00',
       closeTime: '21:00',
       pickupSlotInterval: 5,
+      cancellationTimeLimit: 15,
+      deliveryFeePerKm: 2000,
+      maxDeliveryDistance: 10,
+      storeName: 'Arus HQ',
+      storeAddress: 'Jl. Matcha No. 1, Jakarta Selatan',
+      storeLat: -6.2088,
+      storeLng: 106.8456,
     })
   }
 }
@@ -56,6 +77,13 @@ export async function PUT(req: Request) {
           openTime: body.openTime || existing.openTime,
           closeTime: body.closeTime || existing.closeTime,
           pickupSlotInterval: body.pickupSlotInterval ?? existing.pickupSlotInterval,
+          cancellationTimeLimit: body.cancellationTimeLimit ?? existing.cancellationTimeLimit,
+          deliveryFeePerKm: body.deliveryFeePerKm ?? existing.deliveryFeePerKm,
+          maxDeliveryDistance: body.maxDeliveryDistance ?? existing.maxDeliveryDistance,
+          storeName: body.storeName ?? existing.storeName,
+          storeAddress: body.storeAddress ?? existing.storeAddress,
+          storeLat: body.storeLat !== undefined ? body.storeLat : existing.storeLat,
+          storeLng: body.storeLng !== undefined ? body.storeLng : existing.storeLng,
         },
       })
       return NextResponse.json(updated)
@@ -65,7 +93,15 @@ export async function PUT(req: Request) {
           openTime: body.openTime || '08:00',
           closeTime: body.closeTime || '21:00',
           pickupSlotInterval: body.pickupSlotInterval ?? 5,
+          cancellationTimeLimit: body.cancellationTimeLimit ?? 15,
+          deliveryFeePerKm: body.deliveryFeePerKm ?? 2000,
+          maxDeliveryDistance: body.maxDeliveryDistance ?? 10,
+          storeName: body.storeName || 'Arus HQ',
+          storeAddress: body.storeAddress || 'Jl. Matcha No. 1, Jakarta Selatan',
+          storeLat: body.storeLat ?? -6.2088,
+          storeLng: body.storeLng ?? 106.8456,
         },
+
       })
       return NextResponse.json(created)
     }

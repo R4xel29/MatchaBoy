@@ -53,7 +53,7 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-muted-foreground">{initialCategories.length} categories</p>
         <button onClick={() => openModal()}
-          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-matcha text-white hover:opacity-90 transition-all shadow-md shadow-matcha-700/15 active:scale-[0.98]">
+          className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md shadow-brand-700/15 active:scale-[0.98]">
           <Plus className="w-4 h-4" /> Add Category
         </button>
       </div>
@@ -63,8 +63,8 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
         {initialCategories.map(cat => (
           <div key={cat.id} className="group p-4 rounded-2xl bg-white border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-border/60 transition-all duration-300">
             <div className="flex items-start justify-between mb-3">
-              <div className="w-10 h-10 rounded-xl bg-matcha-500/10 flex items-center justify-center">
-                <FolderOpen className="w-5 h-5 text-matcha-600" />
+              <div className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center">
+                <FolderOpen className="w-5 h-5 text-brand-600" />
               </div>
               <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button onClick={() => openModal(cat)} className="p-1.5 hover:bg-blue-50 rounded-lg text-muted-foreground hover:text-blue-600 transition-colors">
@@ -101,12 +101,12 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
             <div className="p-6">
               <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Category Name *</label>
               <input value={name} onChange={e => setName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && handleSave()} placeholder="e.g. Seasonal Specials"
-                className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:bg-white transition-all" />
+                className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
             </div>
             <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10">
               <button onClick={closeModal} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
               <button onClick={handleSave} disabled={saving}
-                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-matcha text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-matcha-700/15">
+                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-700/15">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saving ? 'Saving...' : 'Save'}
               </button>

@@ -73,7 +73,7 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
                   placeholder="Cari matcha favorit..."
                   className="w-full pl-10 pr-10 py-2.5 rounded-xl border border-border 
                     bg-muted/50 text-sm text-foreground placeholder:text-muted-foreground
-                    focus:outline-none focus:ring-2 focus:ring-matcha-500/30 focus:border-matcha-500
+                    focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500
                     transition-all"
                 />
                 {query.length > 0 && (
@@ -120,8 +120,8 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
                     <button
                       key={tag}
                       onClick={() => setQuery(tag)}
-                      className="px-3.5 py-1.5 rounded-full bg-matcha-50 border border-matcha-200
-                        text-xs font-medium text-matcha-700 hover:bg-matcha-100 transition-colors"
+                      className="px-3.5 py-1.5 rounded-full bg-brand-50 border border-brand-200
+                        text-xs font-medium text-brand-700 hover:bg-brand-100 transition-colors"
                     >
                       {tag}
                     </button>
@@ -188,10 +188,10 @@ function SearchResultItem({
       className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl
         border border-border/50 bg-card
         text-left transition-all touch-target
-        ${isSoldOut ? 'opacity-50 cursor-not-allowed' : 'hover:border-matcha-300 hover:shadow-sm'}`}
+        ${isSoldOut ? 'opacity-50 cursor-not-allowed' : 'hover:border-brand-300 hover:shadow-sm'}`}
     >
       {/* Color dot */}
-      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-matcha-200 to-matcha-300 shrink-0 flex items-center justify-center">
+      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-200 to-brand-300 shrink-0 flex items-center justify-center">
         <span className="text-lg">🍵</span>
       </div>
       <div className="flex-1 min-w-0">
@@ -199,9 +199,9 @@ function SearchResultItem({
         <p className="text-[11px] text-muted-foreground truncate">{product.description}</p>
       </div>
       <div className="text-right shrink-0">
-        <p className="text-sm font-bold text-matcha-700">{formatRupiah(product.price)}</p>
+        <p className="text-sm font-bold text-brand-700">{formatRupiah(product.price)}</p>
         {product.badge && product.badge !== 'sold-out' && (
-          <p className="text-[9px] font-bold text-matcha-500 uppercase">{product.badge}</p>
+          <p className="text-[9px] font-bold text-brand-500 uppercase">{product.badge}</p>
         )}
         {isSoldOut && (
           <p className="text-[9px] font-bold text-red-400 uppercase">Habis</p>

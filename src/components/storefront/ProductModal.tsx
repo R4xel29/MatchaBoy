@@ -163,7 +163,7 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
             {/* Scrollable Content Area */}
             <div className="overflow-y-auto flex-1 w-full pb-safe">
               {/* Product Image */}
-              <div className="relative w-full aspect-[16/10] bg-matcha-50 mx-auto shrink-0">
+              <div className="relative w-full aspect-[16/10] bg-brand-50 mx-auto shrink-0">
               <Image
                 src={product.image}
                 alt={product.name}
@@ -185,7 +185,7 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                 <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
                   {product.description}
                 </p>
-                <p className="mt-2 font-bold text-lg text-matcha-700">
+                <p className="mt-2 font-bold text-lg text-brand-700">
                   {formatRupiah(product.price)}
                 </p>
               </div>
@@ -205,8 +205,8 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                           transition-all touch-target border
                           ${
                             iceLevel === level
-                              ? 'bg-matcha-700 text-white border-matcha-700 shadow-sm'
-                              : 'bg-card text-foreground border-border hover:border-matcha-400'
+                              ? 'bg-brand-700 text-white border-brand-700 shadow-sm'
+                              : 'bg-card text-foreground border-border hover:border-brand-400'
                           }`}
                       >
                         {level}
@@ -231,8 +231,8 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                           transition-all touch-target border
                           ${
                             sugarLevel === level
-                              ? 'bg-matcha-700 text-white border-matcha-700 shadow-sm'
-                              : 'bg-card text-foreground border-border hover:border-matcha-400'
+                              ? 'bg-brand-700 text-white border-brand-700 shadow-sm'
+                              : 'bg-card text-foreground border-border hover:border-brand-400'
                           }`}
                       >
                         {level}
@@ -261,8 +261,8 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                             px-4 py-3 rounded-xl border transition-all touch-target
                             ${
                               isSelected
-                                ? 'border-matcha-600 bg-matcha-50'
-                                : 'border-border bg-card hover:border-matcha-300'
+                                ? 'border-brand-600 bg-brand-50'
+                                : 'border-border bg-card hover:border-brand-300'
                             }`}
                         >
                           <div className="flex items-center gap-3">
@@ -271,7 +271,7 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                                 transition-colors border
                                 ${
                                   isSelected
-                                    ? 'bg-matcha-700 border-matcha-700'
+                                    ? 'bg-brand-700 border-brand-700'
                                     : 'bg-card border-border'
                                 }`}
                             >
@@ -283,7 +283,7 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                               {addOn.name}
                             </span>
                           </div>
-                          <span className="text-sm text-matcha-600 font-medium">
+                          <span className="text-sm text-brand-600 font-medium">
                             +{formatRupiah(addOn.price)}
                           </span>
                         </button>
@@ -302,7 +302,7 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
                     className="w-9 h-9 flex items-center justify-center rounded-lg 
                       bg-card shadow-sm text-foreground touch-target
-                      hover:bg-matcha-50 transition-colors"
+                      hover:bg-brand-50 transition-colors"
                     aria-label="Decrease quantity"
                   >
                     <Minus className="w-3.5 h-3.5" />
@@ -315,7 +315,7 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                     onClick={() => setQuantity(quantity + 1)}
                     className="w-9 h-9 flex items-center justify-center rounded-lg 
                       bg-card shadow-sm text-foreground touch-target
-                      hover:bg-matcha-50 transition-colors"
+                      hover:bg-brand-50 transition-colors"
                     aria-label="Increase quantity"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -327,9 +327,9 @@ export function ProductModal({ product, isOpen, onClose, editCartItemId, initial
                   whileTap={{ scale: 0.97 }}
                   onClick={handleAddToCart}
                   className="flex-1 py-3.5 px-6 rounded-xl 
-                    gradient-matcha text-white 
+                    gradient-brand text-white 
                     font-semibold text-sm
-                    shadow-lg shadow-matcha-700/20
+                    shadow-lg shadow-brand-700/20
                     active:shadow-md
                     transition-shadow"
                 >

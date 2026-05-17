@@ -13,13 +13,21 @@ export default async function AdminProductsPage() {
     orderBy: { name: 'asc' }
   });
 
+  const ingredients = await prisma.ingredient.findMany({
+    orderBy: { name: 'asc' }
+  });
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Products</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Manage menu items, pricing, and availability</p>
       </div>
-      <AdminProductsClient initialProducts={products} categories={categories} />
+      <AdminProductsClient 
+        initialProducts={products} 
+        categories={categories} 
+        ingredients={ingredients}
+      />
     </div>
   );
 }

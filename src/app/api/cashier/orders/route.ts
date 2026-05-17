@@ -77,7 +77,18 @@ export async function POST(req: Request) {
     }
 
     const deliveryFee = orderType === 'DELIVERY' ? (body.deliveryFee || 0) : 0
-    const secureTotal = secureSubtotal + deliveryFee
+
+    // Tumbler discount
+    const hasTumbler = body.hasTumbler === true
+    let tumblerDiscount = 0
+    if (hasTumbler) {
+      const loyaltySettings = await prisma.loyaltySettings.findFirst()
+      if (loyaltySettings?.tumblerBonusEnabled && loyaltySettings.tumblerDiscountPct > 0) {
+        tumblerDiscount = Math.round(secureSubtotal * loyaltySettings.tumblerDiscountPct / 100)
+      }
+    }
+
+    const secureTotal = secureSubtotal - tumblerDiscount + deliveryFee
 
     // Determine initial status based on order type
     // Walk-in POS orders → directly COMPLETED
@@ -104,6 +115,7 @@ export async function POST(req: Request) {
         total: secureTotal,
         paymentMethod: body.paymentMethod || 'CASH',
         status: initialStatus,
+        hasTumbler,
         items: {
           create: orderItemsToCreate
         }

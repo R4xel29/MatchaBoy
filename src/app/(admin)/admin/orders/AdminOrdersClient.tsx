@@ -3,7 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
-import { Search, MapPin, Package, Clock, ArrowUpRight, ShoppingBag, Truck } from 'lucide-react';
+import { Search, MapPin, Package, Clock, ArrowUpRight, ShoppingBag, Truck, UserPlus, Bell } from 'lucide-react';
+import { useEffect, useRef } from 'react';
+import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 
 interface OrderItem { id: string; qty: number; price: number; product: { name: string; image: string | null; }; }
 interface OrderData {
@@ -19,6 +21,29 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
+  // Auto-refresh and Notification Logic
+  const prevOrdersCount = useRef(initialOrders.length);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 15000); // Refresh every 15 seconds for general admin list
+
+    return () => clearInterval(interval);
+  }, [router]);
+
+  useEffect(() => {
+    // If new orders are detected
+    if (initialOrders.length > prevOrdersCount.current) {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.play().catch(e => console.log('Audio play blocked by browser:', e));
+    }
+    prevOrdersCount.current = initialOrders.length;
+  }, [initialOrders.length]);
+
+  const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
+  const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
+
   const filteredOrders = initialOrders.filter(o => {
     const matchesSearch = o.id.toLowerCase().includes(search.toLowerCase()) || o.customerName.toLowerCase().includes(search.toLowerCase()) || o.customerPhone.includes(search);
     const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
@@ -26,12 +51,25 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const nextStatusMap: Record<string, string> = {
-    'PENDING_PAYMENT': 'ASSIGNED', 'ASSIGNED': 'TO_STORE', 'TO_STORE': 'PICKED_UP', 'PICKED_UP': 'ON_DELIVERY', 'ON_DELIVERY': 'DELIVERED',
+  const getNextStatus = (status: string, orderType: string) => {
+    if (orderType === 'DELIVERY') {
+      const map: Record<string, string> = {
+        'PENDING_PAYMENT': 'PREPARING',
+        'PREPARING': 'READY',
+      };
+      return map[status];
+    } else {
+      const map: Record<string, string> = {
+        'PENDING_PAYMENT': 'PREPARING',
+        'PREPARING': 'READY',
+        'READY': 'COMPLETED',
+      };
+      return map[status];
+    }
   };
 
-  const advanceOrderStatus = async (orderId: string, currentStatus: string) => {
-    const nextStatus = nextStatusMap[currentStatus];
+  const advanceOrderStatus = async (orderId: string, currentStatus: string, orderType: string) => {
+    const nextStatus = getNextStatus(currentStatus, orderType);
     if (!nextStatus) return;
     setIsUpdating(orderId);
     try {
@@ -40,6 +78,17 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
       router.refresh();
     } catch { alert('Error updating order'); }
     finally { setIsUpdating(null); }
+  };
+
+  const handleAssignDriver = async (driverId: string) => {
+    if (!selectedOrderIdForCourier) return;
+    const res = await fetch(`/api/admin/orders/${selectedOrderIdForCourier}/assign`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ driverId }),
+    });
+    if (!res.ok) throw new Error('Failed to assign driver');
+    router.refresh();
   };
 
   const getStatusStyle = (status: string) => {
@@ -60,10 +109,10 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input type="text" placeholder="Search orders..." value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 focus:border-matcha-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
+            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
         </div>
         <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <option value="ALL">All Statuses</option>
           <option value="ASSIGNED">Assigned</option>
           <option value="TO_STORE">To Store</option>
@@ -72,7 +121,7 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
           <option value="DELIVERED">Delivered</option>
         </select>
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-matcha-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <option value="ALL">All Types</option>
           <option value="DELIVERY">Delivery</option>
           <option value="PICKUP">Pickup</option>
@@ -93,7 +142,7 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                 {/* Top Row */}
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <a href={`/admin/orders/${order.id}`} className="font-mono text-xs font-bold text-matcha-700 hover:underline underline-offset-2">
+                    <a href={`/admin/orders/${order.id}`} className="font-mono text-xs font-bold text-brand-700 hover:underline underline-offset-2">
                       #{order.id.slice(0, 8).toUpperCase()}
                     </a>
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getStatusStyle(order.status)}`}>
@@ -145,13 +194,27 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
 
               {/* Actions */}
               <div className="flex items-center gap-2 px-4 sm:px-5 py-3 bg-muted/20 border-t border-border/30">
-                {order.status !== 'DELIVERED' && (
-                  <button onClick={() => advanceOrderStatus(order.id, order.status)} disabled={isUpdating === order.id}
-                    className="flex-1 py-2 px-4 rounded-xl gradient-matcha text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98]">
-                    {isUpdating === order.id ? 'Updating...' : `Advance → ${nextStatusMap[order.status]?.replace('_', ' ') || 'Done'}`}
+                {order.orderType === 'DELIVERY' && order.status === 'READY' ? (
+                  <button
+                    onClick={() => {
+                      setSelectedOrderIdForCourier(order.id);
+                      setIsCourierModalOpen(true);
+                    }}
+                    className="flex-1 py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" /> Tugaskan Kurir
                   </button>
+                ) : getNextStatus(order.status, order.orderType) && order.status !== 'DELIVERED' ? (
+                  <button onClick={() => advanceOrderStatus(order.id, order.status, order.orderType)} disabled={isUpdating === order.id}
+                    className="flex-1 py-2 px-4 rounded-xl gradient-brand text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98]">
+                    {isUpdating === order.id ? 'Updating...' : `Advance → ${getNextStatus(order.status, order.orderType)?.replace('_', ' ')}`}
+                  </button>
+                ) : (
+                  <div className="flex-1 text-center text-xs text-muted-foreground font-medium">
+                    {order.status === 'DELIVERED' ? 'Selesai' : 'Menunggu kurir'}
+                  </div>
                 )}
-                <a href={`/admin/orders/${order.id}`} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-matcha-700 bg-matcha-50 hover:bg-matcha-100 transition-colors">
+                <a href={`/admin/orders/${order.id}`} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors">
                   Detail <ArrowUpRight className="w-3 h-3" />
                 </a>
               </div>
@@ -159,6 +222,16 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
           ))
         )}
       </div>
+
+      <CourierSelectModal
+        isOpen={isCourierModalOpen}
+        onClose={() => {
+          setIsCourierModalOpen(false);
+          setSelectedOrderIdForCourier(null);
+        }}
+        onSelectDriver={handleAssignDriver}
+        orderId={selectedOrderIdForCourier || ''}
+      />
     </>
   );
 }

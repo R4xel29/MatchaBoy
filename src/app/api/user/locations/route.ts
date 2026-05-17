@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { address, lat, lng, isDefault } = body;
+        const { address, lat, lng, isDefault, name, recipient, phone, notes } = body;
 
         if (!address) {
             return NextResponse.json({ error: "Address is required" }, { status: 400 });
@@ -49,6 +49,10 @@ export async function POST(req: NextRequest) {
                 lat: lat || null,
                 lng: lng || null,
                 isDefault: isDefault || false,
+                name: name || null,
+                recipient: recipient || null,
+                phone: phone || null,
+                notes: notes || null,
             },
         });
 

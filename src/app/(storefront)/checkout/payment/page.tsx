@@ -26,7 +26,16 @@ export default function PaymentPage() {
   const totalPrice = useCartStore((s) => s.totalPrice);
 
   const [state, setState] = useState<PaymentState>('processing');
+  const [adminWhatsApp, setAdminWhatsApp] = useState('');
   const price = totalPrice();
+
+  // Fetch admin WA number
+  useEffect(() => {
+    fetch('/api/payment-methods')
+      .then(r => r.json())
+      .then(d => { if (d.cod?.whatsapp) setAdminWhatsApp(d.cod.whatsapp); })
+      .catch(() => {});
+  }, []);
 
   // Simulate payment processing
   useEffect(() => {
@@ -106,7 +115,7 @@ export default function PaymentPage() {
               <p className="text-sm text-muted-foreground">
                 Mengonfirmasi pesanan COD...
               </p>
-              <Loader2 className="w-5 h-5 text-matcha-600 animate-spin" />
+              <Loader2 className="w-5 h-5 text-brand-600 animate-spin" />
             </div>
           )}
         </motion.div>
@@ -124,8 +133,8 @@ export default function PaymentPage() {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: 'spring', stiffness: 400, damping: 15 }}
-            className="w-20 h-20 rounded-full gradient-matcha flex items-center justify-center mb-5
-              shadow-lg shadow-matcha-700/30"
+            className="w-20 h-20 rounded-full gradient-brand flex items-center justify-center mb-5
+              shadow-lg shadow-brand-700/30"
           >
             <CheckCircle2 className="w-10 h-10 text-white" />
           </motion.div>
@@ -158,7 +167,7 @@ export default function PaymentPage() {
             className="w-full px-5 py-4 rounded-2xl bg-card border border-border/50 mb-6"
           >
             <p className="text-xs text-muted-foreground mb-1">Order ID</p>
-            <p className="font-mono font-bold text-lg text-matcha-700 tracking-wider">
+            <p className="font-mono font-bold text-lg text-brand-700 tracking-wider">
               {orderId}
             </p>
             <div className="flex items-center gap-2 mt-2">
@@ -188,7 +197,7 @@ export default function PaymentPage() {
                   <div
                     className={`w-3 h-3 rounded-full border-2 ${
                       step.active
-                        ? 'bg-matcha-600 border-matcha-600'
+                        ? 'bg-brand-600 border-brand-600'
                         : 'bg-card border-border'
                     }`}
                   />
@@ -218,9 +227,9 @@ export default function PaymentPage() {
           >
             <button
               onClick={() => router.push('/')}
-              className="w-full py-3.5 rounded-xl gradient-matcha text-white 
+              className="w-full py-3.5 rounded-xl gradient-brand text-white 
                 font-semibold text-sm flex items-center justify-center gap-2
-                shadow-lg shadow-matcha-700/20"
+                shadow-lg shadow-brand-700/20"
             >
               <Home className="w-4 h-4" />
               Kembali ke Menu
@@ -228,9 +237,9 @@ export default function PaymentPage() {
             <button
               onClick={() => {
                 const message = encodeURIComponent(
-                  `Halo Matchaboy! Saya mau tanya status pesanan ${orderId}.`
+                  `Halo Arus! Saya mau tanya status pesanan ${orderId}.`
                 );
-                window.open(`https://wa.me/6281234567890?text=${message}`, '_blank');
+                window.open(`https://wa.me/${adminWhatsApp}?text=${message}`, '_blank');
               }}
               className="w-full py-3.5 rounded-xl border border-border bg-card
                 font-semibold text-sm flex items-center justify-center gap-2

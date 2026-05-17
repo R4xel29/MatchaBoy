@@ -84,7 +84,7 @@ export default function AdminNotificationsPage() {
     <div className="p-4 lg:p-8 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-          <Bell className="w-6 h-6 text-matcha-600" /> Notifikasi
+          <Bell className="w-6 h-6 text-brand-600" /> Notifikasi
         </h1>
         <p className="text-sm text-muted-foreground mt-1">Kirim notifikasi dan kelola template pesan otomatis</p>
       </div>
@@ -112,7 +112,7 @@ export default function AdminNotificationsPage() {
               <div className="flex gap-2">
                 <button onClick={() => setTarget('all')}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all
-                    ${target === 'all' ? 'border-matcha-600 bg-matcha-50 text-matcha-700' : 'border-border bg-card text-muted-foreground'}`}>
+                    ${target === 'all' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-border bg-card text-muted-foreground'}`}>
                   <Users className="w-4 h-4" /> Semua Customer
                 </button>
               </div>
@@ -120,15 +120,15 @@ export default function AdminNotificationsPage() {
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Judul</label>
               <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Judul notifikasi..."
-                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-matcha-500" />
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-brand-500" />
             </div>
             <div>
               <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Pesan</label>
               <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} placeholder="Isi pesan notifikasi..."
-                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:border-matcha-500" />
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:border-brand-500" />
             </div>
             <button onClick={handleSend} disabled={sending || !title || !message}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl gradient-matcha text-white font-semibold text-sm disabled:opacity-50 hover:opacity-90 transition-all">
+              className="flex items-center gap-2 px-6 py-3 rounded-xl gradient-brand text-white font-semibold text-sm disabled:opacity-50 hover:opacity-90 transition-all">
               {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
               {sending ? 'Mengirim...' : 'Kirim Notifikasi'}
             </button>
@@ -145,20 +145,20 @@ export default function AdminNotificationsPage() {
       {tab === 'templates' && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
           <button onClick={() => setEditTpl({ trigger: '', title: '', message: '', isActive: true })}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-matcha-300 text-matcha-700 font-medium text-sm hover:bg-matcha-50 transition-colors">
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-brand-300 text-brand-700 font-medium text-sm hover:bg-brand-50 transition-colors">
             <Plus className="w-4 h-4" /> Tambah Template Baru
           </button>
 
           {/* Edit form */}
           {editTpl && (
-            <div className="bg-card rounded-2xl border border-matcha-200 p-6 space-y-4">
+            <div className="bg-card rounded-2xl border border-brand-200 p-6 space-y-4">
               <h3 className="font-bold text-foreground">
                 {editTpl.id ? 'Edit Template' : 'Template Baru'}
               </h3>
               <div>
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Trigger</label>
                 <select value={editTpl.trigger || ''} onChange={e => setEditTpl({ ...editTpl, trigger: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-matcha-500">
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-brand-500">
                   <option value="">Pilih trigger...</option>
                   {TRIGGER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
@@ -166,7 +166,7 @@ export default function AdminNotificationsPage() {
               <div>
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Judul</label>
                 <input value={editTpl.title || ''} onChange={e => setEditTpl({ ...editTpl, title: e.target.value })}
-                  placeholder="e.g. Pesanan Selesai! 🎉" className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-matcha-500" />
+                  placeholder="e.g. Pesanan Selesai! 🎉" className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-brand-500" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -174,11 +174,11 @@ export default function AdminNotificationsPage() {
                 </label>
                 <textarea value={editTpl.message || ''} onChange={e => setEditTpl({ ...editTpl, message: e.target.value })} rows={3}
                   placeholder="Halo {{name}}! Pesanan {{orderNo}} sudah selesai. Kamu dapat {{points}} poin!"
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:border-matcha-500" />
+                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:border-brand-500" />
               </div>
               <div className="flex gap-2">
                 <button onClick={handleSaveTemplate} disabled={savingTpl}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-matcha text-white font-semibold text-sm disabled:opacity-50">
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-brand text-white font-semibold text-sm disabled:opacity-50">
                   {savingTpl ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
                 </button>
                 <button onClick={() => setEditTpl(null)} className="px-5 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground">Batal</button>
@@ -188,7 +188,7 @@ export default function AdminNotificationsPage() {
 
           {/* Template list */}
           {loadingTpl ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-matcha-600" /></div>
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-brand-600" /></div>
           ) : templates.length === 0 ? (
             <div className="text-center py-12 bg-card rounded-2xl border border-border">
               <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
@@ -200,7 +200,7 @@ export default function AdminNotificationsPage() {
                 <div key={tpl.id} className="bg-card rounded-2xl border border-border p-5 flex items-start gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 rounded-full bg-matcha-50 text-matcha-700 text-[10px] font-bold uppercase tracking-wider">{tpl.trigger}</span>
+                      <span className="px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-bold uppercase tracking-wider">{tpl.trigger}</span>
                       {tpl.isActive ? (
                         <span className="text-[10px] text-green-600 font-bold">● Aktif</span>
                       ) : (

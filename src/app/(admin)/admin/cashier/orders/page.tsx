@@ -17,12 +17,15 @@ export default async function AdminCashierOrdersPage() {
     orderBy: { createdAt: 'desc' },
   });
 
+  const storeSettings = await prisma.storeSettings.findFirst();
+
   const mappedOrders = orders.map((o) => ({
     id: o.id,
     customerName: o.customerName,
     customerPhone: o.customerPhone,
     orderType: o.orderType,
     tableNumber: o.tableNumber,
+    address: o.address,
     paymentMethod: o.paymentMethod,
     total: o.total,
     status: o.status,
@@ -35,5 +38,9 @@ export default async function AdminCashierOrdersPage() {
     })),
   }));
 
-  return <CashierOrdersClient initialOrders={mappedOrders} />;
+  return <CashierOrdersClient 
+    initialOrders={mappedOrders} 
+    storeLat={storeSettings?.storeLat || -6.2088}
+    storeLng={storeSettings?.storeLng || 106.8456}
+  />;
 }

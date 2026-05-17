@@ -60,7 +60,7 @@ export function PhoneNumberModal({ onComplete }: PhoneNumberModalProps) {
         className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
       >
         {/* Icon */}
-        <div className="mx-auto mb-4 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#18442D] to-[#1a5c3a] flex items-center justify-center shadow-lg shadow-[#18442D]/20">
+        <div className="mx-auto mb-4 w-16 h-16 rounded-2xl bg-gradient-to-br from-[#B48A5E] to-[#946F48] flex items-center justify-center shadow-lg shadow-[#B48A5E]/20">
           {success ? (
             <CheckCircle className="w-8 h-8 text-white" />
           ) : (
@@ -93,7 +93,7 @@ export function PhoneNumberModal({ onComplete }: PhoneNumberModalProps) {
                   placeholder="08123456789"
                   autoFocus
                   className="w-full pl-11 pr-4 py-3.5 rounded-2xl border-2 border-gray-200 bg-gray-50/50 text-[15px] font-medium
-                    focus:outline-none focus:border-[#18442D] focus:bg-white transition-all placeholder:text-gray-300"
+                    focus:outline-none focus:border-[#B48A5E] focus:bg-white transition-all placeholder:text-gray-300"
                 />
               </div>
               {error && (
@@ -110,9 +110,9 @@ export function PhoneNumberModal({ onComplete }: PhoneNumberModalProps) {
             <button
               type="submit"
               disabled={saving || !phone.trim()}
-              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#18442D] to-[#1a5c3a] text-white font-bold text-[15px]
+              className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-[15px]
                 hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2 shadow-lg shadow-[#18442D]/20"
+                flex items-center justify-center gap-2 shadow-lg shadow-[#B48A5E]/20"
             >
               {saving && <Loader2 className="w-4 h-4 animate-spin" />}
               {saving ? 'Menyimpan...' : 'Simpan & Lanjutkan'}

@@ -41,7 +41,7 @@ export default async function AdminUsersPage() {
                 <tr key={user.id} className="group hover:bg-muted/20 transition-colors">
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-matcha-400 to-matcha-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
                         {(user.name || 'U')[0].toUpperCase()}
                       </div>
                       <span className="font-medium text-foreground text-[13px]">{user.name || 'Unknown'}</span>
@@ -77,7 +77,7 @@ export default async function AdminUsersPage() {
           users.map((user: any) => (
             <div key={user.id} className="bg-white rounded-2xl border border-border/40 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-matcha-400 to-matcha-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
                   {(user.name || 'U')[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">

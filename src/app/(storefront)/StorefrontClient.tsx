@@ -94,7 +94,7 @@ export default function StorefrontClient({
       />
 
       {/* Referral Popup */}
-      <ReferralPopup />
+      {/* <ReferralPopup /> */}
     </>
   );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Copy,
@@ -16,9 +16,14 @@ import {
   ChefHat,
   ShoppingBag,
   RefreshCw,
+  AlertTriangle,
+  X,
+  ChevronRight,
+  Leaf,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { formatRupiah } from '@/lib/utils';
+import { LeafletTracking } from '@/components/storefront/MapboxTracking';
 
 export type TrackingOrderShape = {
   id: string;
@@ -33,7 +38,11 @@ export type TrackingOrderShape = {
   deliveryFee: number;
   total: number;
   createdAt: string;
+  createdAtRaw?: string;
+  cancellationTimeLimit?: number;
   estimatedArrival: string;
+  hasTumbler?: boolean;
+  adminWhatsApp?: string;
 };
 
 type OrderStep = {
@@ -46,7 +55,7 @@ type OrderStep = {
 };
 
 const STATUS_ORDER_PICKUP = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'];
-const STATUS_ORDER_DELIVERY = ['PENDING', 'PENDING_PAYMENT', 'ASSIGNED', 'PREPARING', 'ON_DELIVERY', 'DELIVERED'];
+const STATUS_ORDER_DELIVERY = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED'];
 
 function getOrderSteps(orderType: string, currentStatus: string): OrderStep[] {
   if (orderType === 'PICKUP') {
@@ -67,13 +76,15 @@ function getOrderSteps(orderType: string, currentStatus: string): OrderStep[] {
   }
   // DELIVERY
   const steps: OrderStep[] = [
-    { key: 'ASSIGNED', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
+    { key: 'PENDING', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
     { key: 'PREPARING', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: false },
+    { key: 'READY', label: 'Siap Diambil', icon: ShoppingBag, active: false, completed: false },
+    { key: 'ASSIGNED', label: 'Kurir Ditugaskan', icon: Truck, active: false, completed: false },
     { key: 'ON_DELIVERY', label: 'Dalam Pengiriman', icon: Truck, active: false, completed: false },
     { key: 'DELIVERED', label: 'Tiba di Tujuan', icon: MapPin, active: false, completed: false },
   ];
   const currentIdx = STATUS_ORDER_DELIVERY.indexOf(currentStatus);
-  const effectiveIdx = currentStatus === 'PENDING_PAYMENT' ? 0 : currentIdx;
+  const effectiveIdx = currentStatus === 'PENDING_PAYMENT' ? 0 : currentStatus === 'PICKED_UP' ? 4 : currentIdx;
   steps.forEach((step, i) => {
     if (i < effectiveIdx) { step.completed = true; }
     else if (i === effectiveIdx) { step.active = true; step.completed = currentStatus === 'DELIVERED'; }
@@ -101,6 +112,16 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   const [copied, setCopied] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(order.status);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  // Cancel dialog states
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [showCancelSuccess, setShowCancelSuccess] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState('');
+
+  // Confirmation states
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState('');
 
   // Auto-poll status every 10 seconds
   const pollStatus = useCallback(async () => {
@@ -131,6 +152,44 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCancelOrder = async () => {
+    setIsCancelling(true);
+    setCancelError('');
+    try {
+      const res = await fetch(`/api/orders/${orderId}/cancel`, { method: 'POST' });
+      if (res.ok) {
+        setCurrentStatus('CANCELLED');
+        setShowCancelConfirm(false);
+        setShowCancelSuccess(true);
+      } else {
+        const data = await res.json();
+        setCancelError(data.error || 'Gagal membatalkan pesanan.');
+      }
+    } catch (e) {
+      setCancelError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleConfirmDelivery = async () => {
+    setIsConfirming(true);
+    setConfirmError('');
+    try {
+      const res = await fetch(`/api/orders/${orderId}/confirm`, { method: 'PUT' });
+      if (res.ok) {
+        setCurrentStatus('DELIVERED');
+      } else {
+        const data = await res.json();
+        setConfirmError(data.error || 'Gagal konfirmasi pesanan.');
+      }
+    } catch (e) {
+      setConfirmError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
   const OrderTypeIcon = getOrderTypeIcon(order.orderType);
   const steps = getOrderSteps(order.orderType, currentStatus);
   const isFinished = ['COMPLETED', 'DELIVERED'].includes(currentStatus);
@@ -152,7 +211,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
             <h1 className="font-heading font-bold text-base">Detail Pesanan</h1>
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1 text-xs text-matcha-600 hover:underline"
+              className="flex items-center gap-1 text-xs text-brand-600 hover:underline"
             >
               {orderId.slice(0, 8).toUpperCase()}
               {copied ? (
@@ -172,7 +231,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl gradient-matcha text-white p-5 relative overflow-hidden"
+          className="rounded-2xl gradient-brand text-white p-5 relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/5 -mr-10 -mt-10" />
           <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-white/5 -ml-8 -mb-8" />
@@ -182,7 +241,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               <OrderTypeIcon className="w-5 h-5" />
               <span className="text-sm font-bold uppercase">{currentStatus.replace('_', ' ')}</span>
             </div>
-            <p className="text-matcha-200 text-xs">
+            <p className="text-brand-200 text-xs">
               {getOrderTypeLabel(order.orderType)}
             </p>
 
@@ -193,11 +252,24 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold">{getOrderTypeLabel(order.orderType)}</p>
-                <p className="text-xs text-matcha-200">
+                <p className="text-xs text-brand-200">
                   {order.orderType === 'DELIVERY' ? 'Diantar ke alamat Anda' : 'Ambil di toko'}
                 </p>
               </div>
             </div>
+
+            {/* Eco Badge */}
+            {order.hasTumbler && (
+              <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-white/15">
+                <div className="w-8 h-8 rounded-full bg-emerald-400/20 flex items-center justify-center">
+                  <Leaf className="w-4 h-4 text-emerald-300" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-emerald-300">Eco Order 🌍</p>
+                  <p className="text-[10px] text-emerald-200/70">Menggunakan tumbler/wadah sendiri</p>
+                </div>
+              </div>
+            )}
           </div>
         </motion.div>
 
@@ -218,9 +290,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                     className={`w-8 h-8 rounded-full flex items-center justify-center border-2 
                       ${
                         step.completed
-                          ? 'bg-matcha-600 border-matcha-600'
+                          ? 'bg-brand-600 border-brand-600'
                           : step.active
-                          ? 'bg-matcha-100 border-matcha-600 animate-pulse'
+                          ? 'bg-brand-100 border-brand-600 animate-pulse'
                           : 'bg-card border-border'
                       }`}
                   >
@@ -229,7 +301,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                         step.completed
                           ? 'text-white'
                           : step.active
-                          ? 'text-matcha-700'
+                          ? 'text-brand-700'
                           : 'text-muted-foreground'
                       }`}
                     />
@@ -237,7 +309,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   {i < steps.length - 1 && (
                     <div
                       className={`w-0.5 h-8 ${
-                        step.completed ? 'bg-matcha-600' : 'bg-border'
+                        step.completed ? 'bg-brand-600' : 'bg-border'
                       }`}
                     />
                   )}
@@ -273,7 +345,36 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
             <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
               <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
               <p className="text-sm font-bold text-emerald-800">Pesanan Selesai!</p>
-              <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Matchaboy</p>
+              <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Arus</p>
+            </div>
+          )}
+
+          {/* Mapbox Live Tracking & Confirm Section */}
+          {order.orderType === 'DELIVERY' && currentStatus === 'ON_DELIVERY' && (
+            <div className="mt-8 space-y-4">
+               <h2 className="font-heading font-bold text-base flex items-center gap-2">
+                 <Truck className="w-5 h-5 text-brand-600" /> Live Tracking
+               </h2>
+               <LeafletTracking orderId={orderId} />
+
+               {/* Swipe to Confirm Button (Simulated with standard button for accessibility) */}
+               <div className="pt-4">
+                 <p className="text-xs text-center text-muted-foreground mb-3 font-medium">Pesanan sudah sampai?</p>
+                 <button
+                    onClick={handleConfirmDelivery}
+                    disabled={isConfirming}
+                    className="w-full relative overflow-hidden bg-white border-2 border-emerald-500 rounded-2xl p-1 h-14 group transition-all shadow-sm active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
+                 >
+                    <div className="absolute inset-0 bg-emerald-50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="relative z-10 flex items-center justify-between px-2 h-full">
+                       <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-sm shrink-0">
+                          {isConfirming ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ChevronRight className="w-6 h-6" />}
+                       </div>
+                       <span className="font-bold text-emerald-700 text-sm flex-1 text-center pr-10">Konfirmasi Pesanan Diterima</span>
+                    </div>
+                 </button>
+                 {confirmError && <p className="text-xs text-red-500 text-center mt-2">{confirmError}</p>}
+               </div>
             </div>
           )}
         </section>
@@ -315,7 +416,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               )}
               <div className="flex justify-between text-sm font-bold pt-1.5 border-t border-border/30">
                 <span>Total</span>
-                <span className="text-matcha-700">{formatRupiah(order.total)}</span>
+                <span className="text-brand-700">{formatRupiah(order.total)}</span>
               </div>
             </div>
           </div>
@@ -325,7 +426,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         {order.orderType === 'DELIVERY' && order.address && (
           <section className="rounded-2xl bg-card border border-border/50 px-4 py-3">
             <div className="flex items-start gap-3">
-              <MapPin className="w-4 h-4 text-matcha-600 mt-0.5 shrink-0" />
+              <MapPin className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                   Alamat Pengiriman
@@ -340,7 +441,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         <button
           onClick={() => {
             const msg = encodeURIComponent(`Halo admin, saya mau tanya soal pesanan ${orderId}`);
-            window.open(`https://wa.me/6281234567890?text=${msg}`, '_blank');
+            window.open(`https://wa.me/${order.adminWhatsApp || ''}?text=${msg}`, '_blank');
           }}
           className="w-full py-3.5 rounded-xl border border-border bg-card
             font-semibold text-sm flex items-center justify-center gap-2
@@ -349,8 +450,108 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           <MessageCircle className="w-4 h-4" />
           Hubungi Admin
         </button>
+
+        {/* Cancel Button */}
+        {order.paymentMethod === 'COD' && (currentStatus === 'PENDING' || currentStatus === 'PENDING_PAYMENT') && order.cancellationTimeLimit && order.cancellationTimeLimit > 0 && order.createdAtRaw && (
+          (() => {
+            const orderTime = new Date(order.createdAtRaw).getTime();
+            const now = new Date().getTime();
+            const diffMinutes = (now - orderTime) / (1000 * 60);
+            
+            if (diffMinutes <= order.cancellationTimeLimit) {
+              return (
+                <button
+                  onClick={() => setShowCancelConfirm(true)}
+                  className="w-full py-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600
+                    font-semibold text-sm flex items-center justify-center gap-2
+                    hover:bg-red-100 transition-colors touch-target"
+                >
+                  Batalkan Pesanan
+                </button>
+              );
+            }
+            return null;
+          })()
+        )}
         </div> {/* END RIGHT COLUMN */}
       </div>
+
+      {/* Confirmation Modal */}
+      <AnimatePresence>
+        {showCancelConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-card rounded-2xl shadow-xl overflow-hidden"
+            >
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <AlertTriangle className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-2">Batalkan Pesanan?</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Tindakan ini tidak dapat dibatalkan. Apakah Anda yakin ingin membatalkan pesanan ini?
+                </p>
+                
+                {cancelError && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600 text-left">
+                    {cancelError}
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowCancelConfirm(false)}
+                    disabled={isCancelling}
+                    className="flex-1 py-3 px-4 rounded-xl border border-border font-semibold text-sm hover:bg-muted transition-colors disabled:opacity-50"
+                  >
+                    Kembali
+                  </button>
+                  <button
+                    onClick={handleCancelOrder}
+                    disabled={isCancelling}
+                    className="flex-1 py-3 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+                  >
+                    {isCancelling ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Ya, Batalkan'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Success Modal */}
+      <AnimatePresence>
+        {showCancelSuccess && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-card rounded-2xl shadow-xl overflow-hidden"
+            >
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Check className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground mb-2">Pesanan Dibatalkan</h3>
+                <p className="text-sm text-muted-foreground mb-6">
+                  Pesanan Anda telah berhasil dibatalkan.
+                </p>
+                <button
+                  onClick={() => setShowCancelSuccess(false)}
+                  className="w-full py-3 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700 transition-colors"
+                >
+                  Tutup
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

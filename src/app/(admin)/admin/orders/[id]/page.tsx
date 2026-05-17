@@ -61,16 +61,16 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <div key={step} className="flex items-center flex-1">
                 <div className="flex flex-col items-center flex-1">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold border-2 transition-all
-                    ${done ? 'bg-matcha-600 border-matcha-600 text-white' : 'bg-muted/50 border-border text-muted-foreground'}
-                    ${current ? 'ring-[3px] ring-matcha-200 scale-110' : ''}`}>
+                    ${done ? 'bg-brand-600 border-brand-600 text-white' : 'bg-muted/50 border-border text-muted-foreground'}
+                    ${current ? 'ring-[3px] ring-brand-200 scale-110' : ''}`}>
                     {done ? <CheckCircle2 className="w-3.5 h-3.5" /> : i + 1}
                   </div>
-                  <p className={`text-[9px] mt-1.5 text-center font-semibold uppercase tracking-wider ${done ? 'text-matcha-700' : 'text-muted-foreground/50'}`}>
+                  <p className={`text-[9px] mt-1.5 text-center font-semibold uppercase tracking-wider ${done ? 'text-brand-700' : 'text-muted-foreground/50'}`}>
                     {STATUS_LABELS[step] || step}
                   </p>
                 </div>
                 {i < STATUS_STEPS.length - 1 && (
-                  <div className={`h-0.5 w-full -mt-5 mx-1 rounded-full ${i < currentStepIndex ? 'bg-matcha-500' : 'bg-border/50'}`} />
+                  <div className={`h-0.5 w-full -mt-5 mx-1 rounded-full ${i < currentStepIndex ? 'bg-brand-500' : 'bg-border/50'}`} />
                 )}
               </div>
             );
@@ -84,7 +84,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             return (
               <div key={step} className="flex items-center gap-3">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0
-                  ${done ? 'bg-matcha-600 text-white' : 'bg-muted/50 text-muted-foreground border border-border'}`}>
+                  ${done ? 'bg-brand-600 text-white' : 'bg-muted/50 text-muted-foreground border border-border'}`}>
                   {done ? <CheckCircle2 className="w-3 h-3" /> : i + 1}
                 </div>
                 <span className={`text-[11px] font-semibold ${done ? 'text-foreground' : 'text-muted-foreground/50'}`}>{STATUS_LABELS[step]}</span>
@@ -100,7 +100,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-3">Customer</p>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-matcha-400 to-matcha-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
                 {order.customerName[0].toUpperCase()}
               </div>
               <div>
@@ -145,7 +145,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             </div>
             <div className="flex justify-between text-sm font-bold pt-1.5 border-t border-border/30">
               <span>Total</span>
-              <span className="text-matcha-700">{formatRupiah(order.total)}</span>
+              <span className="text-brand-700">{formatRupiah(order.total)}</span>
             </div>
           </div>
         </div>

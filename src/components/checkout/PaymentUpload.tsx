@@ -64,9 +64,9 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
   };
 
   const handleWhatsAppCOD = () => {
-    const phone = config?.cod?.whatsapp || '6281234567890';
+    const phone = config?.cod?.whatsapp || '';
     const message = encodeURIComponent(
-      `Halo Matchaboy! 🍵\n\nSaya ingin memesan dengan COD:\n` +
+      `Halo Arus! 🍵\n\nSaya ingin memesan dengan COD:\n` +
       `Nama: ${customerName}\n` +
       `Total: ${formatRupiah(orderTotal)}\n` +
       `Metode: Bayar di Tempat (COD)\n\n` +
@@ -76,9 +76,9 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
   };
 
   const handleWhatsAppConfirm = () => {
-    const phone = config?.cod?.whatsapp || '6281234567890';
+    const phone = config?.cod?.whatsapp || '';
     const message = encodeURIComponent(
-      `Halo Matchaboy! 🍵\n\nSaya sudah melakukan pembayaran:\n` +
+      `Halo Arus! 🍵\n\nSaya sudah melakukan pembayaran:\n` +
       `Nama: ${customerName}\n` +
       `Total: ${formatRupiah(orderTotal)}\n` +
       `Metode: ${selectedMethod === 'QRIS' ? 'QRIS' : 'Transfer Bank'}\n\n` +
@@ -253,7 +253,7 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   className="w-full py-8 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center gap-2
-                    hover:border-[#18442D]/40 hover:bg-[#18442D]/5 transition-all active:scale-[0.98]"
+                    hover:border-[#B48A5E]/40 hover:bg-[#B48A5E]/5 transition-all active:scale-[0.98]"
                 >
                   <Upload className="w-8 h-8 text-gray-400" />
                   <p className="text-sm font-medium text-gray-500">Tap untuk upload bukti bayar</p>
@@ -310,11 +310,15 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
               </h4>
 
               {config?.qris?.image ? (
-                <div className="mx-auto w-64 h-64 rounded-2xl border-2 border-purple-200 bg-white p-2 mb-3">
-                  <img src={config.qris.image} alt="QRIS" className="w-full max-w-[200px] h-auto rounded-xl shadow-sm border border-gray-100" />
+                <div className="mx-auto w-full max-w-[280px] rounded-2xl border border-purple-200 bg-white p-2.5 mb-3 flex items-center justify-center shadow-sm">
+                  <img
+                    src={config.qris.image}
+                    alt="QRIS"
+                    className="w-full h-auto max-h-[350px] object-contain rounded-xl"
+                  />
                 </div>
               ) : (
-                <div className="mx-auto w-64 h-64 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50 flex flex-col items-center justify-center mb-3">
+                <div className="mx-auto w-full max-w-[280px] aspect-square rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50 flex flex-col items-center justify-center mb-3">
                   <QrCode className="w-16 h-16 text-purple-300 mb-2" />
                   <p className="text-xs text-purple-400">QRIS belum dikonfigurasi</p>
                 </div>

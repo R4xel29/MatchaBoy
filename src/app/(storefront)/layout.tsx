@@ -2,8 +2,11 @@
 
 import { useState, createContext, useContext, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
+import { useRouter } from 'next/navigation';
 import { AppHeader } from '@/components/storefront/AppHeader';
 import { FloatingCart } from '@/components/storefront/FloatingCart';
+import { BottomNav } from '@/components/storefront/BottomNav';
+import { QROverlay } from '@/components/storefront/QROverlay';
 import { PhoneNumberModal } from '@/components/storefront/PhoneNumberModal';
 
 // Context to pass search control down to page
@@ -11,12 +14,14 @@ interface StorefrontContextType {
   openSearch: () => void;
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
+  openQR: () => void;
 }
 
 const StorefrontContext = createContext<StorefrontContextType>({
   openSearch: () => {},
   searchOpen: false,
   setSearchOpen: () => {},
+  openQR: () => {},
 });
 
 export const useStorefrontContext = () => useContext(StorefrontContext);
@@ -26,7 +31,9 @@ export default function StorefrontLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const { data: session, status } = useSession();
   const [needsPhone, setNeedsPhone] = useState(false);
 
@@ -50,12 +57,25 @@ export default function StorefrontLayout({
         openSearch: () => setSearchOpen(true),
         searchOpen,
         setSearchOpen,
+        openQR: () => {
+          if (status === 'unauthenticated') {
+            router.push('/login');
+          } else {
+            setQrOpen(true);
+          }
+        },
       }}
     >
       <div className="min-h-dvh bg-background">
         <AppHeader onSearchClick={() => setSearchOpen(true)} />
-        <main>{children}</main>
+        <main className="pb-20 md:pb-0">{children}</main>
         <FloatingCart />
+        <BottomNav />
+        <QROverlay 
+          key={session?.user?.id ? `qr-${session.user.id}-${qrOpen}` : 'qr-guest'} 
+          isOpen={qrOpen} 
+          onClose={() => setQrOpen(false)} 
+        />
 
         {/* Blocking Phone Number Modal */}
         {needsPhone && (

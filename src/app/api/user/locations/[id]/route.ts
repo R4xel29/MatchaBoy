@@ -35,6 +35,10 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
                 lat: body.lat !== undefined ? body.lat : location.lat,
                 lng: body.lng !== undefined ? body.lng : location.lng,
                 isDefault: body.isDefault !== undefined ? body.isDefault : location.isDefault,
+                name: body.name !== undefined ? body.name : location.name,
+                recipient: body.recipient !== undefined ? body.recipient : location.recipient,
+                phone: body.phone !== undefined ? body.phone : location.phone,
+                notes: body.notes !== undefined ? body.notes : location.notes,
             },
         });
 

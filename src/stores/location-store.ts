@@ -18,7 +18,7 @@ export const useLocationStore = create<LocationState>()(
             clearAddress: () => set({ address: null }),
         }),
         {
-            name: 'Matchaboy-location-v1',
+            name: 'Arus-location-v1',
             storage: createJSONStorage(() => localStorage),
             version: 1,
         }

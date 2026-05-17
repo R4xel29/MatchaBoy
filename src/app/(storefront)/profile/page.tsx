@@ -13,9 +13,10 @@ export default async function ProfilePage() {
   }
 
   try {
-    const [user, orders, vouchers, loyaltySettings] = await Promise.all([
+    const [user, orders, vouchers, loyaltySettings, unreadCount] = await Promise.all([
       prisma.user.findUnique({
-        where: { id: session.user.id }
+        where: { id: session.user.id },
+        include: { accounts: true }
       }),
       prisma.order.findMany({
         where: { userId: session.user.id },
@@ -29,6 +30,9 @@ export default async function ProfilePage() {
         take: 10,
       }),
       prisma.loyaltySettings.findFirst(),
+      prisma.notification.count({
+        where: { userId: session.user.id, isRead: false }
+      })
     ])
 
     if (!user) {
@@ -52,11 +56,15 @@ export default async function ProfilePage() {
       <ProfileClient 
         user={{
           name: user.name || "Matcha Lover",
+          email: user.email || "",
           phone: user.phone || "-",
           points: user.points,
           totalOrders: orders.length,
           memberSince: new Date(user.createdAt).toLocaleString('id-ID', { month: 'long', year: 'numeric' }),
           referralCode: user.referralCode,
+          gender: user.gender || "SECRET",
+          birthDate: user.birthDate?.toISOString() || "",
+          isGoogleConnected: user.accounts.some((acc: any) => acc.provider === 'google'),
         }}
         orders={formattedOrders}
         vouchers={vouchers.map(v => ({
@@ -72,6 +80,7 @@ export default async function ProfilePage() {
           milestone2: { target: loyaltySettings.milestone2Points, reward: loyaltySettings.milestone2Desc, enabled: loyaltySettings.milestone2Enabled },
           milestone3: { target: loyaltySettings.milestone3Points, reward: loyaltySettings.milestone3Desc, enabled: loyaltySettings.milestone3Enabled },
         } : null}
+        initialUnreadCount={unreadCount}
       />
     )
   } catch (error) {
@@ -90,6 +99,7 @@ export default async function ProfilePage() {
         orders={[]}
         vouchers={[]}
         milestones={null}
+        initialUnreadCount={0}
       />
     )
   }

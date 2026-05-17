@@ -19,15 +19,15 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Matchaboy — New Culture Matcha",
+  title: "Arus — Arum Seduh",
   description:
-    "Premium matcha drinks & pastries delivered to your door. Order from Matchaboy, Jakarta's favorite matcha specialist.",
-  keywords: ["matcha", "matcha latte", "delivery", "Jakarta", "matcha drink"],
+    "Nikmati seduhan terbaik dari Arus. Premium drinks & pastries delivered to your door.",
+  keywords: ["arum seduh", "arus", "coffee", "matcha", "delivery", "Jakarta"],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Matchaboy",
+    title: "Arus",
   },
 };
 
@@ -36,7 +36,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#1B4332",
+  themeColor: "#D4A574",
   viewportFit: "cover",
 };
 

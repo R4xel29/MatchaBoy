@@ -1,10 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "leaflet/dist/leaflet.css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* ── Matchaboy Brand Design System ─────────────────────────── */
+/* ── Arus Brand Design System ────────────────────────────── */
 
 @theme inline {
   /* Shadcn color mappings */
@@ -28,16 +29,16 @@
   --color-ring: var(--ring);
 
   /* Brand tokens */
-  --color-matcha-50: #F0FDF4;
-  --color-matcha-100: #DCFCE7;
-  --color-matcha-200: #BBF7D0;
-  --color-matcha-300: #86EFAC;
-  --color-matcha-400: #4ADE80;
-  --color-matcha-500: #95D5B2;
-  --color-matcha-600: #2D6A4F;
-  --color-matcha-700: #1B4332;
-  --color-matcha-800: #143D2B;
-  --color-matcha-900: #0D2818;
+  --color-brand-50: #FCF9F1;
+  --color-brand-100: #F7EED3;
+  --color-brand-200: #EFDCA7;
+  --color-brand-300: #E7C97B;
+  --color-brand-400: #DFB64F;
+  --color-brand-500: #D4A574;
+  --color-brand-600: #B48A5E;
+  --color-brand-700: #946F48;
+  --color-brand-800: #745432;
+  --color-brand-900: #54391C;
   --color-cream: #FFFBF5;
   --color-cream-dark: #FFF5E6;
   --color-gold: #D4A574;
@@ -58,49 +59,49 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
-/* ── Light Theme (Matcha Cream) ─────────────────────────────── */
+/* ── Light Theme (Arus Gold) ─────────────────────────────── */
 :root {
   --radius: 0.75rem;
   --background: #FFFBF5;
-  --foreground: #1A1A1A;
+  --foreground: #2A1F16;
   --card: #FFFFFF;
-  --card-foreground: #1A1A1A;
+  --card-foreground: #2A1F16;
   --popover: #FFFFFF;
-  --popover-foreground: #1A1A1A;
-  --primary: #1B4332;
+  --popover-foreground: #2A1F16;
+  --primary: #D4A574;
   --primary-foreground: #FFFFFF;
-  --secondary: #F0FDF4;
-  --secondary-foreground: #1B4332;
+  --secondary: #FFF5E6;
+  --secondary-foreground: #745432;
   --muted: #F5F5F4;
-  --muted-foreground: #6B7280;
-  --accent: #95D5B2;
-  --accent-foreground: #0D2818;
+  --muted-foreground: #78716C;
+  --accent: #E8C9A0;
+  --accent-foreground: #54391C;
   --destructive: #EF4444;
-  --border: #E5E7EB;
-  --input: #E5E7EB;
-  --ring: #2D6A4F;
+  --border: #E5E2DD;
+  --input: #E5E2DD;
+  --ring: #D4A574;
 }
 
 /* ── Dark Theme ─────────────────────────────────────────────── */
 .dark {
-  --background: #0D1B14;
-  --foreground: #F0FDF4;
-  --card: #143D2B;
-  --card-foreground: #F0FDF4;
-  --popover: #143D2B;
-  --popover-foreground: #F0FDF4;
-  --primary: #95D5B2;
-  --primary-foreground: #0D2818;
-  --secondary: #1B4332;
-  --secondary-foreground: #F0FDF4;
-  --muted: #1B4332;
-  --muted-foreground: #86EFAC;
-  --accent: #2D6A4F;
-  --accent-foreground: #F0FDF4;
+  --background: #1C1610;
+  --foreground: #F7EED3;
+  --card: #2A1F16;
+  --card-foreground: #F7EED3;
+  --popover: #2A1F16;
+  --popover-foreground: #F7EED3;
+  --primary: #D4A574;
+  --primary-foreground: #1C1610;
+  --secondary: #2A1F16;
+  --secondary-foreground: #F7EED3;
+  --muted: #2A1F16;
+  --muted-foreground: #E7C97B;
+  --accent: #B48A5E;
+  --accent-foreground: #F7EED3;
   --destructive: #EF4444;
-  --border: rgba(149, 213, 178, 0.15);
-  --input: rgba(149, 213, 178, 0.2);
-  --ring: #95D5B2;
+  --border: rgba(212, 165, 116, 0.15);
+  --input: rgba(212, 165, 116, 0.2);
+  --ring: #D4A574;
 }
 
 /* ── Base Styles ────────────────────────────────────────────── */
@@ -158,9 +159,9 @@
   -webkit-backdrop-filter: blur(12px) saturate(180%);
 }
 
-/* Matcha gradient */
-.gradient-matcha {
-  background: linear-gradient(135deg, #1B4332 0%, #2D6A4F 50%, #40916C 100%);
+/* Brand gradient */
+.gradient-brand {
+  background: linear-gradient(135deg, #D4A574 0%, #B48A5E 50%, #946F48 100%);
 }
 
 /* Shimmer loading animation */

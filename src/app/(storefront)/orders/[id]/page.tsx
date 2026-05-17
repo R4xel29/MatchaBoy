@@ -28,14 +28,20 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     notFound() // Hide from unauthorized customers
   }
 
+  const settings = await prisma.storeSettings.findFirst()
+  const cancellationTimeLimit = settings?.cancellationTimeLimit ?? 15
+
+  const paymentSettings = await prisma.paymentSettings.findFirst()
+  const adminWhatsApp = paymentSettings?.codWhatsApp || ''
+
   // Map to the shape expected by the frontend
   const mappedOrder = {
     id: order.id,
-    status: order.status.toLowerCase(), // 'pending', 'preparing', 'picked_up', 'on_delivery', 'delivered'
+    status: order.status, // Keep UPPERCASE to match client-side comparisons
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     address: order.address,
-    paymentMethod: order.paymentMethod.toLowerCase(),
+    paymentMethod: order.paymentMethod,
     items: order.items.map((item: any) => ({
       name: item.product.name,
       qty: item.qty,
@@ -49,8 +55,12 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit'
     }),
+    createdAtRaw: order.createdAt.toISOString(),
+    cancellationTimeLimit,
     estimatedArrival: 'TBD', // In real life, calculate based on pickup time + distance
     orderType: (order as any).orderType || 'DELIVERY',
+    hasTumbler: order.hasTumbler || false,
+    adminWhatsApp,
   }
 
   return <OrderTrackingClient order={mappedOrder as any} />

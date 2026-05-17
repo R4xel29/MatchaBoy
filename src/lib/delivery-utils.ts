@@ -33,16 +33,15 @@ function toRad(deg: number): number {
  * Calculate delivery fee based on distance
  * Base fee + per-km fee
  */
-export function calculateDeliveryFee(distanceKm: number): number {
-    const { baseFee, perKmFee } = DELIVERY_CONFIG;
-    return Math.round(baseFee + distanceKm * perKmFee);
+export function calculateDeliveryFee(distanceKm: number, perKmFee: number = 2000): number {
+    return Math.round(distanceKm * perKmFee);
 }
 
 /**
  * Check if location is within delivery range
  */
-export function isWithinDeliveryRange(distanceKm: number): boolean {
-    return distanceKm <= DELIVERY_CONFIG.maxDistanceKm;
+export function isWithinDeliveryRange(distanceKm: number, maxDistanceKm: number = 10): boolean {
+    return distanceKm <= maxDistanceKm;
 }
 
 /**
