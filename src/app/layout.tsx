@@ -1,21 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Playfair_Display, DM_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AuthProvider } from "@/components/providers/AuthProvider";
 import { PermissionPrompt } from "@/components/ui/PermissionPrompt";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  variable: "--font-playfair",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700", "800", "900"],
-  display: "swap",
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-dm-sans",
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
   display: "swap",
 });
 
@@ -49,7 +41,7 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body
-        className={`${playfair.variable} ${dmSans.variable} antialiased`}
+        className={`${inter.variable} antialiased`}
       >
         <AuthProvider>
           <ToastProvider>

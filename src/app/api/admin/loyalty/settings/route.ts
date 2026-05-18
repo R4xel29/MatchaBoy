@@ -69,6 +69,10 @@ export async function PUT(request: Request) {
         referralRewardPoints: body.referralRewardPoints,
         referralRewardVoucher: body.referralRewardVoucher,
         referralRewardDesc: body.referralRewardDesc,
+        easterEggEnabled: body.easterEggEnabled,
+        easterEggVoucherCode: body.easterEggVoucherCode,
+        easterEggDiscount: body.easterEggDiscount,
+        easterEggQuota: body.easterEggQuota,
       },
     });
 

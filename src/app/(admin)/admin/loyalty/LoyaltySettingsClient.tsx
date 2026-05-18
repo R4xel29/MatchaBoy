@@ -34,6 +34,12 @@ interface LoyaltySettingsData {
   referralRewardPoints: number;
   referralRewardVoucher: string;
   referralRewardDesc: string;
+  
+  // Easter Egg fields
+  easterEggEnabled: boolean;
+  easterEggVoucherCode: string;
+  easterEggDiscount: number;
+  easterEggQuota: number;
 }
 
 interface Props {
@@ -357,6 +363,59 @@ export default function LoyaltySettingsClient({ initialSettings, stats }: Props)
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Easter Egg Settings */}
+          <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Pengaturan Easter Egg & Secret Discount</h3>
+                  <p className="text-[10px] text-muted-foreground">Klaim voucher rahasia ketika user menarik/menarik layar langit malam mobile</p>
+                </div>
+              </div>
+              <ToggleButton enabled={settings.easterEggEnabled} onChange={(v) => update('easterEggEnabled', v)} />
+            </div>
+            
+            {settings.easterEggEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fadeIn">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Kode Voucher Rahasia</label>
+                  <input 
+                    type="text" 
+                    value={settings.easterEggVoucherCode || ''} 
+                    onChange={(e) => update('easterEggVoucherCode', e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                    placeholder="EASTERSTELLAR"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Nilai Diskon (Rupiah)</label>
+                  <input 
+                    type="number" 
+                    value={settings.easterEggDiscount || 0} 
+                    onChange={(e) => update('easterEggDiscount', parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Kuota Klaim Maksimal (Orang)</label>
+                  <input 
+                    type="number" 
+                    value={settings.easterEggQuota || 0} 
+                    onChange={(e) => update('easterEggQuota', parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20" 
+                  />
+                </div>
+              </div>
+            )}
+            
+            <p className="text-[10px] text-muted-foreground mt-3">
+              💡 Ketika Easter Egg aktif, pengguna mobile yang menarik ke bawah (*pull down*) pada spanduk langit malam akan membuka pemandangan langit malam penuh dan dapat mengklaim voucher rahasia diskon Rp {(settings.easterEggDiscount || 15000).toLocaleString('id-ID')} (Terbatas hanya untuk {settings.easterEggQuota || 10} orang tercepat!).
+            </p>
           </div>
         </div>
       ) : (

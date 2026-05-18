@@ -45,9 +45,9 @@
   --color-gold-light: #E8C9A0;
 
   /* Typography */
-  --font-heading: var(--font-playfair);
-  --font-body: var(--font-dm-sans);
-  --font-sans: var(--font-dm-sans);
+  --font-heading: var(--font-inter);
+  --font-body: var(--font-inter);
+  --font-sans: var(--font-inter);
 
   /* Radius */
   --radius-sm: calc(var(--radius) - 4px);
@@ -115,9 +115,9 @@
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: var(--font-heading), serif;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-family: var(--font-heading), sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.022em;
   }
 }
 

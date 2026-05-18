@@ -43,6 +43,16 @@ export async function GET() {
       return new NextResponse('User not found', { status: 404 });
     }
 
+    const hasClaimedEasterEgg = loyaltySettings ? await prisma.voucher.findFirst({
+      where: { 
+        userId,
+        type: 'CUSTOM',
+        description: {
+          startsWith: 'Easter Egg'
+        }
+      }
+    }).then(v => !!v) : false;
+
     return NextResponse.json({
       points: user.points,
       referralCode: user.referralCode,
@@ -71,6 +81,14 @@ export async function GET() {
               points: loyaltySettings.tumblerBonusPoints,
               discountPct: loyaltySettings.tumblerDiscountPct,
             },
+          }
+        : null,
+      easterEgg: loyaltySettings
+        ? {
+            enabled: (loyaltySettings as any).easterEggEnabled !== false,
+            discount: (loyaltySettings as any).easterEggDiscount || 15000,
+            quota: (loyaltySettings as any).easterEggQuota || 10,
+            hasClaimed: hasClaimedEasterEgg
           }
         : null,
     });
