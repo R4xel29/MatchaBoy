@@ -14,9 +14,10 @@ export const authConfig = {
                 token.sub = user.id
                 token.role = (user as any).role || "CUSTOMER"
                 token.referralCode = (user as any).referralCode
+                token.phone = (user as any).phone
+                token.name = (user as any).name
+                token.email = (user as any).email
             }
-            // For OAuth sign-in, the role might not be on the user object from the provider
-            // so we need to check if it's set, if not it will default to CUSTOMER which is correct
             return token
         },
         async session({ session, token }) {
@@ -24,6 +25,9 @@ export const authConfig = {
                 session.user.role = token.role as string
                 session.user.id = token.sub as string
                 session.user.referralCode = token.referralCode as string
+                ;(session.user as any).phone = token.phone as string
+                session.user.name = token.name as string
+                session.user.email = token.email as string
             }
             return session
         }

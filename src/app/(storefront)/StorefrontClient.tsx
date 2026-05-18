@@ -22,7 +22,27 @@ export default function StorefrontClient({
   banners: any[];
 }) {
   const { data: session, status } = useSession();
-  const userName = session?.user?.name || 'Guest';
+  
+  const formatPhone = (phone?: string | null) => {
+    if (!phone) return '';
+    let cleaned = phone.replace(/[^0-9]/g, '');
+    if (cleaned.startsWith('62')) {
+      cleaned = '0' + cleaned.substring(2);
+    }
+    if (cleaned.length > 7) {
+      return `${cleaned.substring(0, 4)}-${cleaned.substring(4, 8)}-${cleaned.substring(8)}`;
+    }
+    return cleaned;
+  };
+
+  const userName = useMemo(() => {
+    if (status !== 'authenticated' || !session?.user) return 'Guest';
+    if (session.user.name && session.user.name.trim() !== '') return session.user.name;
+    if ((session.user as any).phone) return formatPhone((session.user as any).phone);
+    if (session.user.email) return session.user.email.split('@')[0];
+    return 'Matcha Lover';
+  }, [session, status]);
+
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -34,6 +54,7 @@ export default function StorefrontClient({
   const dragY = useMotionValue(0);
   const stretchHeight = useTransform(dragY, [0, 150], ["124px", "320px"]);
 
+  // Custom drag motion value
   const [easterEggConfig, setEasterEggConfig] = useState<{ enabled: boolean; discount: number; quota: number; hasClaimed: boolean } | null>(null);
   const [isEasterEggExpanded, setIsEasterEggExpanded] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
@@ -135,20 +156,13 @@ export default function StorefrontClient({
 
   return (
     <>
-      {/* Premium Warm Neutral background with beautiful soft radial glows for high contrast and extreme aesthetic */}
       <div className={`min-h-screen bg-[#FAF8F5] md:pt-20 relative overflow-hidden transition-all duration-300 ${status === 'unauthenticated' ? 'pb-36 md:pb-28' : 'pb-24'}`}>
         
-        {/* Soft Ambient Glows - Top Matcha Glow, Bottom Creamy Warmth */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(212,235,214,0.35)_0%,_rgba(250,248,245,0)_60%)] pointer-events-none z-0" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom,_rgba(247,238,211,0.25)_0%,_rgba(250,248,245,0)_50%)] pointer-events-none z-0" />
         
-        {/* Minimal Grid Overlay */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.01)_1px,_transparent_1px),_linear-gradient(90deg,_rgba(0,0,0,0.01)_1px,_transparent_1px)] bg-[size:32px_32px] pointer-events-none z-0 opacity-40" />
 
-        {/* ───────────────────────────────────────────────────────────────────────
-            1. PREMIUM DYNAMIC DAY/NIGHT GREETING HEADER (Spring Motion Animated)
-            ─────────────────────────────────────────────────────────────────────── */}
-        {/* 🌌 DYNAMIC STRETCHING BACKDROP (EASTER EGG TRACER) */}
         <motion.div 
           style={{ 
             height: stretchHeight,
@@ -158,23 +172,8 @@ export default function StorefrontClient({
             borderBottomLeftRadius: "2.5rem",
             borderBottomRightRadius: "2.5rem",
           }}
-          className={`md:hidden absolute top-0 left-0 right-0 z-20 border-b shadow-md pointer-events-none select-none overflow-hidden ${
-            isNight ? 'bg-[#0B0D19] border-indigo-950/40' : 'bg-[#E3F2FD] border-sky-100/60'
-          }`}
+          className="md:hidden absolute top-0 left-0 right-0 z-20 border-b shadow-md pointer-events-none select-none overflow-hidden bg-[#E3F2FD] border-sky-100/60"
         >
-          {/* Dynamic Sky Background Elements (Stretches smoothly inside backdrop) */}
-          {isNight ? (
-            <div className="absolute inset-0 opacity-60 z-0 select-none pointer-events-none">
-              <div className="absolute top-4 left-[20%] w-1.5 h-1.5 bg-yellow-100 rounded-full animate-ping" />
-              <div className="absolute top-8 left-[65%] w-2 h-2 bg-yellow-200 rounded-full animate-pulse" />
-              <div className="absolute top-12 left-[85%] w-1.5 h-1.5 bg-white rounded-full animate-ping duration-700" />
-              <div className="absolute top-5 left-[45%] w-2 h-2 bg-indigo-100 rounded-full animate-pulse duration-1000" />
-            </div>
-          ) : (
-            <div className="absolute inset-0 opacity-50 z-0 select-none pointer-events-none">
-              <div className="absolute -top-6 -right-6 w-36 h-36 bg-yellow-300/35 rounded-full blur-2xl animate-pulse" />
-            </div>
-          )}
         </motion.div>
 
         <motion.header 
@@ -192,18 +191,15 @@ export default function StorefrontClient({
             }
             animate(dragY, 0, { type: "spring", stiffness: 350, damping: 28 });
           }}
-          style={{ y: dragY }}
+          style={{ y: dragY, touchAction: 'pan-y' }}
           className={`md:hidden relative z-30 px-6 py-7 cursor-pointer transition-all duration-300 select-none bg-transparent shadow-none border-transparent ${
             isNight ? 'text-white' : 'text-[#2A1F16]'
           }`}
         >
-
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 relative z-10">
-            
-            {/* Left Column: Greeting with dynamic text colors */}
             <div className="space-y-0.5">
               <p className={`text-[10px] font-black uppercase tracking-[0.2em] select-none ${
-                isNight ? 'text-[#93C5FD]' : 'text-[#0369A1]'
+                isNight ? 'text-yellow-300' : 'text-[#0369A1]'
               }`}>
                 {isNight ? 'Selamat Malam 🌃' : 'Selamat Siang ☀️'}
               </p>
@@ -211,8 +207,6 @@ export default function StorefrontClient({
                 Hai, {userName} <span className="text-base md:text-xl animate-pulse">👋</span>
               </h1>
             </div>
-
-            {/* Right Column: Premium Brand Badge with dynamic glass filters */}
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex flex-col text-right">
                 <span className={`text-[10px] font-black uppercase tracking-widest leading-none ${
@@ -221,7 +215,7 @@ export default function StorefrontClient({
                   Arum Seduh
                 </span>
                 <span className={`text-[8px] font-bold leading-none mt-1 ${
-                  isNight ? 'text-[#A5B4FC]/70' : 'text-[#A69F94]'
+                  isNight ? 'text-[#A69F94]/85' : 'text-[#A69F94]'
                 }`}>
                   Premium Brews
                 </span>
@@ -234,30 +228,18 @@ export default function StorefrontClient({
                 <span className="text-xl">🍃</span>
               </div>
             </div>
-
           </div>
         </motion.header>
 
-        {/* Elegant Inline Greeting for Desktop viewports */}
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.05, duration: 0.5 }}
-          whileHover={{ scale: 1.025, x: 4 }}
-          whileTap={{ scale: 0.985 }}
-          className="hidden md:block max-w-7xl mx-auto px-12 mt-6 select-none cursor-pointer w-fit origin-left transition-all duration-200"
-        >
-          <p className="text-[10px] text-[#A69F94] font-black uppercase tracking-[0.2em]">
+        <div className="hidden md:block max-w-7xl mx-auto px-12 mt-6">
+          <p className="text-[10px] font-black uppercase text-[#A69F94] tracking-[0.2em] select-none">
             {isNight ? 'Selamat Malam 🌃' : 'Selamat Siang ☀️'}
           </p>
-          <h2 className="font-heading text-2xl font-black text-[#2A1F16] tracking-tight -mt-0.5">
-            Hai, {userName} 👋
+          <h2 className="font-heading text-xl md:text-2xl font-black text-[#2A1F16] tracking-tight mt-0.5 flex items-center gap-1.5">
+            Hai, {userName} <span className="text-base md:text-xl animate-pulse">👋</span>
           </h2>
-        </motion.div>
+        </div>
 
-        {/* ───────────────────────────────────────────────────────────────────────
-            2. MODERN WIDE ASPECT PROMOTION HERO SLIDER (Soft Slide In Motion)
-            ─────────────────────────────────────────────────────────────────────── */}
         <motion.div 
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -276,32 +258,20 @@ export default function StorefrontClient({
                 (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=1200';
               }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+            
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-5 md:p-8">
+              <span className="px-3 py-0.5 rounded-full bg-brand-500 text-white text-[8px] md:text-[9.5px] font-black uppercase tracking-widest w-fit shadow-md">
+                Promosi Unggulan
+              </span>
+              <h2 className="font-heading text-lg md:text-2xl font-black text-white mt-1.5 leading-tight tracking-tight">
+                {displayBanners[currentSlide].title}
+              </h2>
+              <p className="text-[11px] md:text-[12.5px] text-[#F3ECE0] mt-1 leading-snug font-medium max-w-xl">
+                {displayBanners[currentSlide].description}
+              </p>
+            </div>
 
-            {/* Top-Left Floating Favorite Button */}
-            <button 
-              onClick={() => showToast('Disimpan ke Favorit!', 'success')}
-              className="absolute top-4 left-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md flex items-center justify-center text-white hover:text-red-500 transition-all duration-300 active:scale-90 hover:scale-105 shadow-sm border border-white/10"
-              aria-label="Favorites"
-            >
-              <svg className="w-4 h-4 text-white hover:fill-current" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-              </svg>
-            </button>
-
-            {/* Top-Right Floating Voucher Button */}
-            <button 
-              onClick={() => router.push('/profile?section=loyalty&tab=vouchers')}
-              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/20 hover:bg-white/40 backdrop-blur-md flex items-center justify-center text-white transition-all duration-300 active:scale-90 hover:scale-105 shadow-sm border border-white/10"
-              aria-label="Vouchers"
-            >
-              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-              </svg>
-            </button>
-
-            {/* Bottom dot paginators */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10 select-none">
+            <div className="absolute bottom-4 right-4 flex items-center gap-1.5">
               {displayBanners.map((_, idx) => (
                 <button
                   key={idx}
@@ -316,9 +286,6 @@ export default function StorefrontClient({
           </div>
         </motion.div>
 
-        {/* ───────────────────────────────────────────────────────────────────────
-            3. HIGH-FIDELITY STOREFRONT SECTIONS (Stagger Slide In Motion)
-            ─────────────────────────────────────────────────────────────────────── */}
         <motion.div 
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -326,10 +293,8 @@ export default function StorefrontClient({
           className="max-w-7xl mx-auto px-4 md:px-12 mt-8 space-y-10 relative z-10"
         >
 
-          {/* Gilded Combo Hemat Section */}
           {hasBundles && (
             <section className="py-7 bg-gradient-to-br from-amber-500/[0.04] via-transparent to-transparent rounded-[2.5rem] border border-amber-500/10 shadow-[0_8px_40px_rgba(245,158,11,0.015)] p-5 md:p-8 relative overflow-hidden">
-              {/* Subtle Ambient Shimmer */}
               <div className="absolute top-0 -left-[100%] w-[50%] h-full bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12 animate-[shimmer_4s_infinite]" />
               
               <div className="flex items-center justify-between mb-5">
@@ -351,7 +316,7 @@ export default function StorefrontClient({
                   <div 
                     key={product.id}
                     onClick={() => handleProductClick(product)}
-                    className="bg-white rounded-3xl p-4.5 border border-amber-500/5 shadow-[0_6px_24px_rgba(0,0,0,0.01)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.06)] hover:border-amber-500/25 hover:-translate-y-1 transition-all duration-300 active:scale-[0.98] cursor-pointer flex gap-4 group relative overflow-hidden"
+                    className="bg-white rounded-3xl p-4.5 border border-brand-700/5 shadow-[0_6px_24px_rgba(0,0,0,0.01)] hover:shadow-[0_12px_36px_rgba(245,158,11,0.06)] hover:border-amber-500/25 hover:-translate-y-1 transition-all duration-300 active:scale-[0.98] cursor-pointer flex gap-4 group relative overflow-hidden"
                   >
                     <div className="absolute top-3.5 right-3.5 z-10 px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[8px] font-black uppercase tracking-wider shadow-sm">
                       Hemat
@@ -359,18 +324,18 @@ export default function StorefrontClient({
                     {product.image && (
                       <div className="relative w-20 h-20 rounded-2xl overflow-hidden bg-brand-50 shrink-0 border border-brand-700/5">
                         <Image
-                          src={product.image}
-                          alt={product.name}
-                          fill
-                          sizes="80px"
-                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                           src={product.image}
+                           alt={product.name}
+                           fill
+                           sizes="80px"
+                           className="object-cover group-hover:scale-105 transition-transform duration-500"
                         />
                       </div>
                     )}
                     <div className="flex-grow min-w-0 flex flex-col justify-between py-0.5">
                       <div>
-                        <h4 className="font-black text-[13px] md:text-[14px] text-[#2A1F16] leading-tight group-hover:text-brand-700 transition-colors line-clamp-1">{product.name}</h4>
-                        <p className="text-[10px] md:text-[11px] text-[#A69F94] mt-1 line-clamp-2 leading-tight font-medium">{product.description}</p>
+                        <h4 className="font-black text-[13px] md:text-[14px] leading-tight text-[#2A1F16] group-hover:text-brand-500 transition-colors line-clamp-1">{product.name}</h4>
+                        <p className="text-[10px] md:text-[11px] mt-1 text-[#A69F94] line-clamp-2 leading-tight font-medium">{product.description}</p>
                       </div>
                       <p className="font-black text-sm text-amber-700 leading-none mt-2">{formatRupiah(product.price)}</p>
                     </div>
@@ -380,7 +345,6 @@ export default function StorefrontClient({
             </section>
           )}
           
-          {/* 1. Spesial Hari Ini Section */}
           <section className="py-6 bg-white rounded-[2.5rem] border border-brand-700/5 shadow-[0_8px_30px_rgba(0,0,0,0.015)] p-5 md:p-8">
             <div className="flex items-center justify-between mb-5">
               <div className="space-y-1">
@@ -420,11 +384,11 @@ export default function StorefrontClient({
                   )}
 
                   <div className="flex-grow flex flex-col justify-between">
-                    <p className="text-[12px] md:text-[13px] font-black text-[#2A1F16] line-clamp-1 leading-snug group-hover:text-brand-700 transition-colors">
+                    <p className="text-[12px] md:text-[13px] font-black text-[#2A1F16] line-clamp-1 leading-snug group-hover:text-brand-500 transition-colors">
                       {p.name}
                     </p>
                     <div className="mt-2.5">
-                      <span className="px-3 py-1 rounded-xl bg-[#FFF5E6] border border-[#FFE8CC] text-[#B02A30] text-[10px] md:text-[11px] font-black tracking-tight">
+                      <span className="px-3 py-1 rounded-xl text-[10px] md:text-[11px] font-black tracking-tight border bg-[#FFF5E6] border-[#FFE8CC] text-[#B02A30]">
                         {formatRupiah(p.price)}
                       </span>
                     </div>
@@ -434,7 +398,6 @@ export default function StorefrontClient({
             </div>
           </section>
 
-          {/* 2. Diskon & Cashback Section */}
           <section className="py-6 bg-white rounded-[2.5rem] border border-brand-700/5 shadow-[0_8px_30px_rgba(0,0,0,0.015)] p-5 md:p-8">
             <div className="flex items-center gap-2 mb-5">
               <span className="text-lg">🉐</span>
@@ -444,36 +407,33 @@ export default function StorefrontClient({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-              {/* Promo Card: blu */}
-              <div className="bg-[#FAF8F5] border border-[#00B4D8]/10 hover:border-[#00B4D8]/30 shadow-sm hover:shadow-[0_8px_24px_rgba(0,180,216,0.06)] hover:-translate-y-0.5 rounded-3xl p-5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
+              <div className="bg-white border border-brand-700/5 hover:border-[#00B4D8]/30 shadow-sm hover:shadow-[0_8px_24px_rgba(0,180,216,0.06)] hover:-translate-y-0.5 rounded-3xl p-5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
                 <div className="absolute -top-6 -right-6 w-16 h-16 bg-[#00B4D8]/5 rounded-full" />
                 <div className="min-w-0 pr-2">
                   <p className="text-[15px] md:text-[17px] font-black text-[#0077B6] leading-none">40% OFF</p>
-                  <p className="text-[9.5px] md:text-[11.5px] text-[#A69F94] mt-2 leading-snug font-bold uppercase tracking-wider">blu by BCA Digital</p>
+                  <p className="text-[9.5px] md:text-[11.5px] mt-2 text-[#A69F94] leading-snug font-bold uppercase tracking-wider">blu by BCA Digital</p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-[#E0F7FA] border border-[#00B4D8]/20 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-300">
                   <span className="text-[10px] font-black text-[#0096C7]">blu</span>
                 </div>
               </div>
 
-              {/* Promo Card: OVO */}
-              <div className="bg-[#FAF8F5] border border-[#4C2A86]/10 hover:border-[#4C2A86]/30 shadow-sm hover:shadow-[0_8px_24px_rgba(76,42,134,0.06)] hover:-translate-y-0.5 rounded-3xl p-5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
+              <div className="bg-white border border-brand-700/5 hover:border-[#4C2A86]/30 shadow-sm hover:shadow-[0_8px_24px_rgba(76,42,134,0.06)] hover:-translate-y-0.5 rounded-3xl p-5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
                 <div className="absolute -top-6 -right-6 w-16 h-16 bg-[#4C2A86]/5 rounded-full" />
                 <div className="min-w-0 pr-2">
                   <p className="text-[15px] md:text-[17px] font-black text-[#4C2A86] leading-none">60% OFF</p>
-                  <p className="text-[9.5px] md:text-[11.5px] text-[#A69F94] mt-2 leading-snug font-bold uppercase tracking-wider">Bayar pakai OVO</p>
+                  <p className="text-[9.5px] md:text-[11.5px] mt-2 text-[#A69F94] leading-snug font-bold uppercase tracking-wider">Bayar pakai OVO</p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-[#F3E5F5] border border-[#7B1FA2]/20 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-300">
                   <span className="text-[10px] font-black text-[#4A148C]">OVO</span>
                 </div>
               </div>
 
-              {/* Promo Card: ShopeePay */}
-              <div className="bg-[#FAF8F5] border border-[#EE4D2D]/10 hover:border-[#EE4D2D]/30 shadow-sm hover:shadow-[0_8px_24px_rgba(238,77,45,0.06)] hover:-translate-y-0.5 rounded-3xl p-5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
+              <div className="bg-white border border-brand-700/5 hover:border-[#EE4D2D]/30 shadow-sm hover:shadow-[0_8px_24px_rgba(238,77,45,0.06)] hover:-translate-y-0.5 rounded-3xl p-5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
                 <div className="absolute -top-6 -right-6 w-16 h-16 bg-[#EE4D2D]/5 rounded-full" />
                 <div className="min-w-0 pr-2">
                   <p className="text-[15px] md:text-[17px] font-black text-[#D35400] leading-none">50% OFF</p>
-                  <p className="text-[9.5px] md:text-[11.5px] text-[#A69F94] mt-2 leading-snug font-bold uppercase tracking-wider">ShopeePay Cashback</p>
+                  <p className="text-[9.5px] md:text-[11.5px] mt-2 text-[#A69F94] leading-snug font-bold uppercase tracking-wider">ShopeePay Cashback</p>
                 </div>
                 <div className="w-10 h-10 rounded-2xl bg-[#FBE9E7] border border-[#FF5722]/20 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform duration-300">
                   <span className="text-[10px] font-black text-[#E64A19]">SPay</span>
@@ -482,7 +442,6 @@ export default function StorefrontClient({
             </div>
           </section>
 
-          {/* 3. Baru! Section */}
           <section className="py-6 bg-white rounded-[2.5rem] border border-brand-700/5 shadow-[0_8px_30px_rgba(0,0,0,0.015)] p-5 md:p-8">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-heading font-black text-base md:text-xl text-[#2A1F16] tracking-tight">
@@ -519,7 +478,7 @@ export default function StorefrontClient({
                   )}
 
                   <div className="flex-grow flex flex-col justify-between">
-                    <p className="text-[12px] md:text-[13px] font-black text-[#2A1F16] line-clamp-1 leading-snug group-hover:text-brand-700 transition-colors">
+                    <p className="text-[12px] md:text-[13px] font-black text-[#2A1F16] line-clamp-1 leading-snug group-hover:text-brand-500 transition-colors">
                       {p.name}
                     </p>
                     <p className="font-black text-[12px] md:text-[13px] text-[#B48A5E] leading-none mt-2.5">
@@ -531,7 +490,6 @@ export default function StorefrontClient({
             </div>
           </section>
 
-          {/* 4. Makanan Section Grid */}
           <section className="py-6 bg-white rounded-[2.5rem] border border-brand-700/5 shadow-[0_8px_30px_rgba(0,0,0,0.015)] p-5 md:p-8">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-heading font-black text-base md:text-xl text-[#2A1F16] tracking-tight">
@@ -547,7 +505,7 @@ export default function StorefrontClient({
                 <div 
                   key={p.id}
                   onClick={() => handleProductClick(p)}
-                  className="bg-white border border-brand-700/5 hover:border-brand-500/25 hover:shadow-[0_12px_36px_rgba(0,0,0,0.035)] hover:-translate-y-1 transition-all duration-350 cursor-pointer rounded-3xl p-4.5 relative group overflow-hidden"
+                  className="bg-white border border-brand-700/5 hover:border-brand-500/25 hover:shadow-[0_12px_36px_rgba(0,0,0,0.035)] hover:-translate-y-1 transition-all duration-300 cursor-pointer rounded-3xl p-4.5 relative group overflow-hidden"
                 >
                   {p.image && (
                     <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#FAF8F5] mb-3">
@@ -565,7 +523,7 @@ export default function StorefrontClient({
                   )}
 
                   <div className="flex-1 flex flex-col justify-between">
-                    <p className="text-[12px] md:text-[13.5px] font-black text-[#2A1F16] line-clamp-1 leading-snug group-hover:text-brand-700 transition-colors">
+                    <p className="text-[12px] md:text-[13.5px] font-black text-[#2A1F16] line-clamp-1 leading-snug group-hover:text-brand-500 transition-colors">
                       {p.name}
                     </p>
                     <p className="font-black text-[12px] md:text-[13px] text-gray-700 leading-none mt-2.5">
@@ -577,10 +535,8 @@ export default function StorefrontClient({
             </div>
           </section>
 
-          {/* 5. Emerald CS Whatsapp & Ditjen Advisory Footer */}
           <section className="px-6 py-8 bg-white border border-brand-700/5 rounded-[2.5rem] shadow-[0_8px_30px_rgba(0,0,0,0.01)] flex flex-col md:flex-row items-center justify-between gap-8 text-center md:text-left">
             
-            {/* WhatsApp Curhat Concierge Button */}
             <a 
               href="https://wa.me/628170756865"
               target="_blank"
@@ -602,8 +558,7 @@ export default function StorefrontClient({
               </div>
             </a>
 
-            {/* Advisory Disclaimer Framed Shield */}
-            <div className="text-[9.5px] md:text-[10.5px] text-left text-muted-foreground leading-relaxed max-w-xl border-l-2 border-brand-500/30 pl-5 space-y-1.5 py-1 select-none">
+            <div className="text-[9.5px] md:text-[10.5px] text-left text-[#A69F94] leading-relaxed max-w-xl border-l-2 border-brand-500/30 pl-5 space-y-1.5 py-1 select-none">
               <p className="font-black text-gray-500 flex items-center gap-2">
                 🛡️ Informasi Kontak Layanan Pengaduan Konsumen
               </p>
@@ -615,7 +570,6 @@ export default function StorefrontClient({
 
         </motion.div>
 
-        {/* 6. Guest Sticky Footer CTA */}
         {status === 'unauthenticated' && (
           <div className="fixed bottom-[56px] md:bottom-6 left-4 right-4 z-40 bg-[#FFFBF5]/95 backdrop-blur-md border border-brand-100/60 p-4.5 flex flex-col md:flex-row justify-between items-center max-w-7xl mx-auto rounded-3xl shadow-[0_12px_48px_rgba(0,0,0,0.08)] animate-in fade-in slide-in-from-bottom-5 duration-500">
             <div className="hidden md:block space-y-0.5">

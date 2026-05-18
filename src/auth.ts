@@ -273,13 +273,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return true;
         },
         ...authConfig.callbacks,
-        // Override jwt callback to fetch role from DB for OAuth users
         async jwt({ token, user, account, trigger }) {
             // On initial sign-in, user object is available
             if (user) {
                 token.sub = user.id
                 token.role = (user as any).role || "CUSTOMER"
                 token.referralCode = (user as any).referralCode
+                token.phone = (user as any).phone
+                token.name = (user as any).name
+                token.email = (user as any).email
             }
 
             // For every request (or session check), verify user still exists and isn't banned
@@ -287,7 +289,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 try {
                     const dbUser = await prisma.user.findUnique({
                         where: { id: token.sub as string },
-                        select: { role: true, referralCode: true, email: true, phone: true }
+                        select: { role: true, referralCode: true, email: true, phone: true, name: true }
                     })
 
                     // If user was deleted (Logout Paksa / Hapus Akun)
@@ -304,9 +306,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     })
                     if (banned) return null
 
-                    // Sync role and referralCode
+                    // Sync role, referralCode, and other profile details
                     token.role = dbUser.role
                     token.referralCode = dbUser.referralCode
+                    token.phone = dbUser.phone
+                    token.name = dbUser.name
+                    token.email = dbUser.email
                 } catch (e) {
                     console.error("[AUTH] Failed to verify user status:", e)
                 }

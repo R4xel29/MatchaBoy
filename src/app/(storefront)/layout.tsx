@@ -8,6 +8,7 @@ import { FloatingCart } from '@/components/storefront/FloatingCart';
 import { BottomNav } from '@/components/storefront/BottomNav';
 import { QROverlay } from '@/components/storefront/QROverlay';
 import { Loader2 } from 'lucide-react';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 
 // Context to pass search control down to page
 interface StorefrontContextType {
@@ -69,14 +70,7 @@ export default function StorefrontLayout({
   }, [status, session, router]);
 
   if (status === 'loading' || (status === 'authenticated' && !setupChecked)) {
-    return (
-      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-[#B48A5E] animate-spin" />
-          <p className="text-sm text-gray-500 font-medium font-serif">Memuat Arus...</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen isSplash={false} />;
   }
 
   return (
