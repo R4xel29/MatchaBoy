@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import { sendPushNotification } from './webpush'
 
 // ─── Core send function ─────────────────────────────────────────────
 export async function sendNotification({
@@ -18,6 +19,15 @@ export async function sendNotification({
   senderId?: string
   data?: Record<string, any>
 }) {
+  // Send Web Push Notification asynchronously (fire and forget)
+  sendPushNotification(userId, {
+    title,
+    body: message,
+    url: linkUrl || '/',
+  }).catch((err) => {
+    console.error('Failed to send web push notification:', err)
+  })
+
   return prisma.notification.create({
     data: {
       userId,
@@ -47,6 +57,17 @@ export async function sendBulkNotification({
   linkUrl?: string
   senderId?: string
 }) {
+  // Fire and forget push notifications for all users
+  Promise.allSettled(
+    userIds.map((userId) =>
+      sendPushNotification(userId, {
+        title,
+        body: message,
+        url: linkUrl || '/',
+      })
+    )
+  ).catch((err) => console.error('Bulk web push error:', err))
+
   return prisma.notification.createMany({
     data: userIds.map((userId) => ({
       userId,

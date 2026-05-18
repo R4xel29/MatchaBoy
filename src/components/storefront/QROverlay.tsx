@@ -24,6 +24,7 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<any>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [isStartingCamera, setIsStartingCamera] = useState(false);
   const [cameraError, setCameraError] = useState('');
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
 
@@ -90,10 +91,12 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
       html5QrCodeRef.current = null;
     }
     setCameraActive(false);
+    setIsStartingCamera(false);
   };
 
   const startCamera = async () => {
     setCameraError('');
+    setIsStartingCamera(true);
     try {
       const { Html5Qrcode } = await import('html5-qrcode');
       
@@ -124,19 +127,27 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
           html5QrCode.stop().catch(() => {});
           html5QrCodeRef.current = null;
           setCameraActive(false);
+          setIsStartingCamera(false);
           handleScanSuccess(decodedText);
         },
         () => {} // Ignore errors during scanning
       );
       
       setCameraActive(true);
+      setIsStartingCamera(false);
     } catch (err: any) {
       console.error('Camera error:', err);
-      setCameraError(
-        err?.message?.includes('Permission')
-          ? 'Izin kamera ditolak. Silakan izinkan akses kamera di browser.'
-          : 'Kamera tidak tersedia saat ini.'
-      );
+      setIsStartingCamera(false);
+      
+      let errorMsg = 'Kamera tidak tersedia saat ini.';
+      if (typeof window !== 'undefined' && !window.isSecureContext) {
+        errorMsg = 'Akses kamera membutuhkan HTTPS atau localhost. Anda tidak bisa menggunakan IP address di HP tanpa HTTPS.';
+      } else if (err?.message?.includes('Permission') || err?.name === 'NotAllowedError') {
+        errorMsg = 'Izin kamera ditolak. Silakan izinkan akses kamera di pengaturan browser HP Anda.';
+      } else if (err?.name === 'NotFoundError') {
+        errorMsg = 'Kamera tidak ditemukan di perangkat ini.';
+      }
+      setCameraError(errorMsg);
     }
   };
 
@@ -150,12 +161,14 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
 
   useEffect(() => {
     if (activeTab === 'scan' && isOpen) {
-      startCamera();
+      // Don't auto-start, wait for user to click button
+      setCameraError('');
+      setIsStartingCamera(false);
     } else {
       stopCamera();
     }
     return () => { stopCamera(); };
-  }, [activeTab, facingMode, isOpen]);
+  }, [activeTab, isOpen]);
 
   const handleScanSuccess = (decodedText: string) => {
     onClose();
@@ -275,35 +288,56 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
                       </div>
                     )}
 
-                    {!cameraActive && !cameraError && (
+                    {!cameraActive && !cameraError && !isStartingCamera && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                        <div className="text-center text-white px-4">
+                          <Camera className="w-12 h-12 mx-auto mb-4 text-white/40" />
+                          <p className="text-sm text-white/80 mb-6">Klik tombol di bawah untuk memberikan izin kamera</p>
+                          <button 
+                            onClick={startCamera}
+                            className="bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-lg active:scale-95"
+                          >
+                            Buka Kamera
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isStartingCamera && !cameraActive && !cameraError && (
                       <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
                         <div className="text-center text-white">
-                          <Camera className="w-8 h-8 mx-auto mb-2 animate-pulse" />
-                          <p className="text-sm">Membuka kamera...</p>
+                          <Camera className="w-8 h-8 mx-auto mb-4 animate-pulse text-brand-400" />
+                          <p className="text-sm font-medium">Meminta izin kamera...</p>
+                          <p className="text-xs text-white/60 mt-2">Pilih "Allow" / "Izinkan" pada pop-up browser</p>
                         </div>
                       </div>
                     )}
 
                     {cameraError && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900 p-6">
-                        <div className="text-center text-white">
-                          <CameraOff className="w-8 h-8 mx-auto mb-2 text-red-400" />
-                          <p className="text-xs text-red-300">{cameraError}</p>
-                        </div>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 p-6">
+                        <CameraOff className="w-10 h-10 mx-auto mb-4 text-red-400" />
+                        <p className="text-sm text-center text-red-300 mb-6">{cameraError}</p>
+                        <button 
+                          onClick={startCamera}
+                          className="bg-white/10 hover:bg-white/20 text-white py-2 px-6 rounded-xl text-sm transition-colors"
+                        >
+                          Coba Lagi
+                        </button>
                       </div>
                     )}
                   </div>
 
                   {/* Camera Controls */}
-                  <div className="mt-8 flex gap-4">
-                    <button 
-                      onClick={flipCamera}
-                      className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md"
-                    >
-                      <FlipHorizontal2 className="w-6 h-6" />
-                    </button>
-                    {/* Placeholder for flashlight if supported, usually html5-qrcode doesn't easily support torch toggle without deeper API */}
-                  </div>
+                  {cameraActive && (
+                    <div className="mt-8 flex gap-4">
+                      <button 
+                        onClick={flipCamera}
+                        className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20 transition-colors"
+                      >
+                        <FlipHorizontal2 className="w-6 h-6" />
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
