@@ -6,7 +6,7 @@ import { authConfig } from '@/auth.config'
 // Initialize NextAuth with only the Edge-compatible configuration
 const { auth } = NextAuth(authConfig)
 
-const protectedRoutes = ['/profile', '/admin', '/checkout', '/driver']
+const protectedRoutes = ['/admin', '/checkout', '/driver']
 const authRoutes = ['/login', '/register']
 
 export default auth((req) => {
@@ -33,8 +33,12 @@ export default auth((req) => {
     }
 
     // Protect sensitive routes
-    if (protectedRoutes.some(route => pathname.startsWith(route))) {
+    if (protectedRoutes.some(route => pathname.startsWith(route)) && !pathname.startsWith('/adminarus')) {
         if (!isLoggedIn) {
+            // For admin paths, rewrite to 404 so it looks like the page doesn't exist
+            if (pathname.startsWith('/admin')) {
+                return NextResponse.rewrite(new URL('/404', req.url))
+            }
             const loginUrl = new URL('/login', req.url)
             loginUrl.searchParams.set('callbackUrl', pathname)
             return NextResponse.redirect(loginUrl)
@@ -43,7 +47,8 @@ export default auth((req) => {
         // Admin routes: allow ADMIN and CASHIER roles
         if (pathname.startsWith('/admin')) {
             if (role !== 'ADMIN' && role !== 'CASHIER') {
-                return NextResponse.redirect(new URL('/profile', req.url))
+                // Rewrite to 404 even for logged-in customers to keep the admin portal hidden
+                return NextResponse.rewrite(new URL('/404', req.url))
             }
 
             // Cashier can only access specific pages
@@ -51,7 +56,7 @@ export default auth((req) => {
                 const cashierAllowed = ['/admin/cashier', '/admin/orders']
                 const isAllowed = cashierAllowed.some(route => pathname.startsWith(route)) || pathname === '/admin'
                 if (!isAllowed) {
-                    return NextResponse.redirect(new URL('/admin/cashier', req.url))
+                    return NextResponse.rewrite(new URL('/404', req.url))
                 }
             }
         }

@@ -49,6 +49,7 @@ import { formatRupiah } from '@/lib/utils';
 import Image from 'next/image';
 import { useCartStore } from '@/stores/cart-store';
 import { RegisterPasskeyButton } from '@/components/auth/PasskeyButtons';
+import { LoginBottomSheet } from '@/components/auth/LoginBottomSheet';
 
 // Data shapes
 type OrderShape = {
@@ -70,6 +71,7 @@ type UserShape = {
   gender: string;
   birthDate: string;
   isGoogleConnected: boolean;
+  isGuest?: boolean;
 };
 
 type VoucherShape = {
@@ -87,7 +89,7 @@ type MilestoneInfo = {
   milestone3: { target: number; reward: string; enabled: boolean };
 };
 
-type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty';
+type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers';
 
 export default function ProfileClient({
   user: initialUser,
@@ -109,22 +111,20 @@ export default function ProfileClient({
   const [user, setUser] = useState(initialUser);
   const [origin, setOrigin] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isLoginSheetOpen, setIsLoginSheetOpen] = useState(false);
 
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
 
   useEffect(() => {
-    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty'].includes(sectionParam)) {
+    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers'].includes(sectionParam)) {
       setActiveSection(sectionParam);
       
       // If it's loyalty and there's a tab, we might want to scroll
       const tab = searchParams.get('tab');
       if (sectionParam === 'loyalty' && tab === 'vouchers') {
-        setTimeout(() => {
-          const el = document.getElementById('vouchers-section');
-          if (el) el.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
+        setActiveSection('vouchers');
       }
     }
   }, [sectionParam, searchParams]);
@@ -155,7 +155,8 @@ export default function ProfileClient({
   const unreadCount = !notifsLoading ? notifs.filter(n => !n.isRead).length : initialUnreadCount;
 
   const menuItems = [
-    { icon: Gift, label: 'Poin & Voucher', id: 'loyalty', badge: null },
+    { icon: Coins, label: 'Poin Saya', id: 'loyalty', badge: null },
+    { icon: Ticket, label: 'Voucher Saya', id: 'vouchers', badge: vouchers.filter(v => !v.isUsed).length > 0 ? vouchers.filter(v => !v.isUsed).length.toString() : null },
     { icon: Package, label: 'Pesanan Saya', id: 'orders', badge: activeOrdersCount > 0 ? activeOrdersCount.toString() : null },
     { icon: Heart, label: 'Favorit', id: 'favorites', badge: null },
     { icon: MapPin, label: 'Alamat Tersimpan', id: 'addresses', badge: null },
@@ -178,7 +179,8 @@ export default function ProfileClient({
       case 'addresses': return 'Alamat Tersimpan';
       case 'notifications': return 'Notifikasi';
       case 'settings': return 'Pengaturan';
-      case 'loyalty': return 'Poin & Voucher';
+      case 'loyalty': return 'Poin Saya';
+      case 'vouchers': return 'Voucher Saya';
       default: return 'Profile';
     }
   };
@@ -208,11 +210,11 @@ export default function ProfileClient({
             
             {activeSection === 'menu' && (
               <button 
-                onClick={() => setIsEditingProfile(true)}
+                onClick={() => user.isGuest ? setIsLoginSheetOpen(true) : setIsEditingProfile(true)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white/80 backdrop-blur-sm rounded-full shadow-sm text-xs font-semibold text-gray-700 hover:bg-white transition-all active:scale-95"
               >
-                <span>Edit Profil</span>
-                <Settings className="w-3.5 h-3.5" />
+                <span>{user.isGuest ? 'Masuk' : 'Edit Profil'}</span>
+                {user.isGuest ? <ChevronRight className="w-3.5 h-3.5" /> : <Settings className="w-3.5 h-3.5" />}
               </button>
             )}
             
@@ -281,7 +283,7 @@ export default function ProfileClient({
                        <Coins className="w-4 h-4 text-amber-500" />
                     </div>
                     <div className="flex items-baseline gap-1">
-                      <p className="text-lg font-black text-gray-900 leading-none">{user.points}</p>
+                      <p className="text-lg font-black text-gray-900 leading-none">{user.isGuest ? '-' : user.points}</p>
                       <p className="text-[10px] text-gray-400 font-bold">pts</p>
                     </div>
                   </div>
@@ -308,11 +310,7 @@ export default function ProfileClient({
                   <button
                     key={item.id}
                     onClick={() => {
-                      if (item.id === 'loyalty') {
-                        router.push('/profile?section=loyalty&tab=points');
-                      } else {
-                        router.push(`/profile?section=${item.id}`);
-                      }
+                      router.push(`/profile?section=${item.id}`);
                     }}
                     className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-gray-50 rounded-2xl transition-all active:scale-[0.98] group"
                   >
@@ -332,23 +330,42 @@ export default function ProfileClient({
                 ))}
               </div>
 
+              {/* Keamanan Biometrik (Main Profile) */}
+              {!user.isGuest && (
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-[#FDFBF7] rounded-xl shadow-sm flex items-center justify-center border border-gray-100">
+                      <Fingerprint className="w-5 h-5 text-[#B48A5E]" />
+                    </div>
+                    <div>
+                      <h4 className="text-[15px] font-bold text-gray-800">Login Sidik Jari</h4>
+                      <p className="text-xs text-gray-500">Aktifkan untuk keamanan tambahan</p>
+                    </div>
+                  </div>
+                  <RegisterPasskeyButton />
+                </div>
+              )}
+
               {/* Logout */}
-              <button 
-                onClick={async () => {
-                   useCartStore.getState().clearCart();
-                   await signOut({ redirect: false });
-                   router.push('/');
-                   router.refresh();
-                }}
-                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-red-50 bg-white text-[15px] font-bold text-red-500 hover:bg-red-50 hover:border-red-100 transition-all active:scale-[0.98]">
-                <LogOut className="w-5 h-5" />
-                Keluar
-              </button>
+              {!user.isGuest && (
+                <button 
+                  onClick={async () => {
+                     useCartStore.getState().clearCart();
+                     await signOut({ redirect: false });
+                     router.push('/');
+                     router.refresh();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-red-50 bg-white text-[15px] font-bold text-red-500 hover:bg-red-50 hover:border-red-100 transition-all active:scale-[0.98]">
+                  <LogOut className="w-5 h-5" />
+                  Keluar
+                </button>
+              )}
             </motion.div>
           )}
 
           {/* Render Sections */}
-          {activeSection === 'loyalty' && <LoyaltySection user={user} vouchers={vouchers} milestones={milestones} />}
+          {activeSection === 'loyalty' && <LoyaltySection user={user} milestones={milestones} />}
+          {activeSection === 'vouchers' && <VouchersSection vouchers={vouchers} />}
           {activeSection === 'orders' && <OrdersSection orders={orders} router={router} />}
           {activeSection === 'favorites' && <FavoritesSection />}
           {activeSection === 'addresses' && <AddressesSection user={user} />}
@@ -364,6 +381,8 @@ export default function ProfileClient({
 
         </AnimatePresence>
       </div>
+
+      <LoginBottomSheet isOpen={isLoginSheetOpen} onClose={() => setIsLoginSheetOpen(false)} />
 
       {/* Edit Profile Overlay */}
       <AnimatePresence>
@@ -385,12 +404,21 @@ export default function ProfileClient({
 // Sub-components
 
 function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onClose: () => void, onUpdate: (user: Partial<UserShape>) => void }) {
+  const router = useRouter();
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone);
   const [gender, setGender] = useState(user.gender || 'SECRET');
   const [birthDate, setBirthDate] = useState(user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : '');
   const [saving, setSaving] = useState(false);
+  const [showGoogleConfirm, setShowGoogleConfirm] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeletePending, setIsDeletePending] = useState(false);
+  const [deleteCode, setDeleteCode] = useState('');
+  const [requestingDelete, setRequestingDelete] = useState(false);
+  const [deletionPollingInterval, setDeletionPollingInterval] = useState<any>(null);
 
   // Sync state if user prop changes (e.g. after connecting Google)
   useEffect(() => {
@@ -400,6 +428,57 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
     setGender(user.gender || 'SECRET');
     setBirthDate(user.birthDate ? new Date(user.birthDate).toISOString().split('T')[0] : '');
   }, [user]);
+
+  useEffect(() => {
+    return () => {
+      if (deletionPollingInterval) {
+        clearInterval(deletionPollingInterval);
+      }
+    };
+  }, [deletionPollingInterval]);
+
+  const handleRequestDelete = async () => {
+    setRequestingDelete(true);
+    try {
+      const res = await fetch('/api/user/delete-account/request', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setDeleteCode(data.code);
+        setIsDeletePending(true);
+        setShowDeleteConfirm(false);
+        
+        // Start polling for deletion status
+        const interval = setInterval(async () => {
+          try {
+            const statusRes = await fetch('/api/user/delete-account/status');
+            const statusData = await statusRes.json();
+            if (statusRes.ok && statusData.deleted) {
+              clearInterval(interval);
+              setIsDeletePending(false);
+              
+              // Clear local state and log out
+              useCartStore.getState().clearCart();
+              await signOut({ redirect: false });
+              router.push('/');
+              router.refresh();
+            }
+          } catch (pollErr) {
+            console.error("Error polling delete status:", pollErr);
+          }
+        }, 3000);
+        setDeletionPollingInterval(interval);
+      } else {
+        alert(data.error || "Gagal mengirim kode penghapusan akun.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Terjadi kesalahan jaringan.");
+    } finally {
+      setRequestingDelete(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -472,12 +551,7 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
               </div>
               {user.isGoogleConnected ? (
                 <button 
-                  onClick={async () => {
-                    if(confirm('Yakin ingin memutuskan koneksi Google?')) {
-                      const res = await fetch('/api/user/profile/google', { method: 'DELETE' });
-                      if(res.ok) window.location.reload();
-                    }
-                  }}
+                  onClick={() => setShowGoogleConfirm(true)}
                   className="px-4 py-2 bg-white border border-red-100 text-red-500 rounded-xl text-[12px] font-bold hover:bg-red-50 transition-colors"
                 >
                   Putuskan
@@ -533,23 +607,6 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
             Ganti PIN
           </button>
 
-          {/* Keamanan Biometrik */}
-          <div className="space-y-3">
-            <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Keamanan Biometrik</label>
-            <div className="p-4 bg-[#F9F9F9] rounded-2xl border border-gray-100 flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
-                  <Fingerprint className="w-5 h-5 text-brand-600" />
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold text-gray-900">Login Sidik Jari</h4>
-                  <p className="text-[11px] text-gray-500">Masuk lebih cepat & aman</p>
-                </div>
-              </div>
-              <RegisterPasskeyButton />
-            </div>
-          </div>
-
           {/* Gender Selector */}
           <div className="space-y-3">
             <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Jenis Kelamin</label>
@@ -600,6 +657,18 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
             />
             <p className="text-[10px] text-gray-400 font-medium px-1">Buat dirayain ulang tahunnya</p>
           </div>
+
+          {/* Action Hapus Akun */}
+          <div className="pt-6 border-t border-red-100 mt-4">
+            <button 
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="w-full py-4 border-2 border-red-100 hover:border-red-200 hover:bg-red-50 text-red-500 rounded-2xl text-[14px] font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <Trash2 className="w-5 h-5 text-red-500" />
+              Hapus Akun Saya
+            </button>
+          </div>
         </div>
 
         {/* Footer - Fixed at Bottom */}
@@ -615,6 +684,181 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
             </button>
           </div>
         </div>
+        {/* Custom Confirmation Modal for Google Disconnect */}
+        <AnimatePresence>
+          {showGoogleConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
+            >
+              <motion.div
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', duration: 0.4 }}
+                className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-xl border border-gray-100"
+              >
+                <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-red-500">
+                  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
+                    <line x1="12" y1="2" x2="12" y2="12" />
+                  </svg>
+                </div>
+
+                <h3 className="font-serif text-lg font-bold text-gray-900 mb-2">Putuskan Google?</h3>
+                <p className="text-xs text-gray-500 leading-relaxed mb-6">
+                  Apakah Anda yakin ingin memutuskan hubungan akun Google? Anda tidak akan bisa masuk menggunakan Google ini lagi kecuali menghubungkannya kembali.
+                </p>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowGoogleConfirm(false)}
+                    disabled={disconnecting}
+                    className="flex-1 py-3 bg-gray-50 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setDisconnecting(true);
+                      try {
+                        const res = await fetch('/api/user/profile/google', { method: 'DELETE' });
+                        if(res.ok) {
+                          window.location.reload();
+                        } else {
+                          setShowGoogleConfirm(false);
+                        }
+                      } catch (err) {
+                        console.error(err);
+                        setShowGoogleConfirm(false);
+                      } finally {
+                        setDisconnecting(false);
+                      }
+                    }}
+                    disabled={disconnecting}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-200/50 hover:bg-red-700 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {disconnecting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Ya, Putuskan'
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Custom Confirmation Modal for Permanent Account Deletion */}
+        <AnimatePresence>
+          {showDeleteConfirm && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
+            >
+              <motion.div
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', duration: 0.4 }}
+                className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-xl border border-gray-100"
+              >
+                <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-red-500">
+                  <Trash2 className="w-8 h-8" />
+                </div>
+
+                <h3 className="font-serif text-lg font-bold text-gray-900 mb-2">Hapus Akun Permanen?</h3>
+                <p className="text-xs text-gray-500 leading-relaxed mb-6">
+                  Apakah Anda yakin ingin menghapus akun Anda secara permanen? Seluruh poin, voucher belanja, dan riwayat pesanan Anda akan terhapus selamanya dan tidak dapat dikembalikan.
+                </p>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={requestingDelete}
+                    className="flex-1 py-3 bg-gray-50 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all active:scale-[0.98] disabled:opacity-50"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRequestDelete}
+                    disabled={requestingDelete}
+                    className="flex-1 py-3 bg-red-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-200/50 hover:bg-red-700 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"
+                  >
+                    {requestingDelete ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Kirim Kode WA'
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Custom Confirmation Modal for Delete Code Verification */}
+        <AnimatePresence>
+          {isDeletePending && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6"
+            >
+              <motion.div
+                initial={{ scale: 0.95, y: 20 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.95, y: 20 }}
+                transition={{ type: 'spring', duration: 0.4 }}
+                className="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-xl border border-gray-100"
+              >
+                <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4 text-amber-600 animate-pulse">
+                  <Smartphone className="w-8 h-8" />
+                </div>
+
+                <h3 className="font-serif text-lg font-bold text-gray-900 mb-2">Konfirmasi WhatsApp</h3>
+                <p className="text-xs text-gray-500 leading-relaxed mb-4">
+                  Kami telah mengirimkan kode konfirmasi ke nomor WhatsApp Anda (*{user.phone}*).
+                  Silakan balas pesan tersebut dengan mengetik:
+                </p>
+
+                <div className="bg-[#FFF9EE] rounded-2xl p-4 border border-brand-100/50 mb-6 flex flex-col items-center justify-center gap-1.5 select-all cursor-pointer group hover:bg-brand-50/30 transition-all">
+                  <p className="text-[10px] text-brand-600 font-bold uppercase tracking-wider">Salin & Kirim ke WA</p>
+                  <p className="text-xl font-mono font-black text-brand-800 tracking-wider">HAPUS-{deleteCode}</p>
+                </div>
+
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-center gap-2 text-xs text-gray-400 font-medium">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />
+                    <span>Menunggu konfirmasi Anda di WhatsApp...</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeletePending(false);
+                      if (deletionPollingInterval) {
+                        clearInterval(deletionPollingInterval);
+                      }
+                    }}
+                    className="w-full py-3 bg-gray-50 text-gray-500 rounded-xl text-xs font-bold hover:bg-gray-100 transition-all active:scale-[0.98]"
+                  >
+                    Batal
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
@@ -1888,7 +2132,7 @@ function SettingsSection({ user, onUpdate }: { user: UserShape, onUpdate: (user:
   );
 }
 
-function LoyaltySection({ user, vouchers, milestones }: { user: UserShape; vouchers: VoucherShape[]; milestones: MilestoneInfo | null }) {
+function LoyaltySection({ user, milestones }: { user: UserShape; milestones: MilestoneInfo | null }) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
@@ -1901,15 +2145,6 @@ function LoyaltySection({ user, vouchers, milestones }: { user: UserShape; vouch
 
   const maxPoints = milestones?.milestone3?.target || 15;
   const progressPercent = Math.min((user.points / maxPoints) * 100, 100);
-
-  const getVoucherIcon = (type: string) => {
-    switch (type) {
-      case 'FREE_TOPPING': return '🧋';
-      case 'UPGRADE_SIZE': return '📐';
-      case 'FREE_DRINK': return '🍵';
-      default: return '🎁';
-    }
-  };
 
   return (
     <motion.section
@@ -2040,41 +2275,156 @@ function LoyaltySection({ user, vouchers, milestones }: { user: UserShape; vouch
         </div>
       </div>
 
-      {/* Vouchers */}
-      <div id="vouchers-section">
+      {/* Cara Mendapatkan Poin */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-3">
+        <h4 className="font-serif text-sm font-bold text-gray-800 flex items-center gap-2">
+          🌱 Cara Mengumpulkan Poin & Voucher
+        </h4>
+        <div className="space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 font-bold text-sm shrink-0">
+              1
+            </div>
+            <div>
+              <h5 className="text-[13px] font-bold text-gray-800">Setiap Pembelian Transaksi</h5>
+              <p className="text-[11px] text-gray-500 mt-0.5">Dapatkan poin dari setiap cup minuman segar yang dipesan (online atau kasir).</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-teal-50 flex items-center justify-center text-teal-600 font-bold text-sm shrink-0">
+              2
+            </div>
+            <div>
+              <h5 className="text-[13px] font-bold text-gray-850 flex items-center gap-1.5">
+                Bawa Tumbler / Wadah Sendiri
+                <span className="px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[8px] font-extrabold uppercase">Eco Bonus</span>
+              </h5>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Kurangi penggunaan gelas plastik sekali pakai. Bawa tumbler sendiri untuk dapat **ekstra poin** & **voucher eco-reward langsung** sesuai pengaturan toko!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </motion.section>
+  );
+}
+
+function VouchersSection({ vouchers }: { vouchers: VoucherShape[] }) {
+  const getVoucherIcon = (type: string) => {
+    switch (type) {
+      case 'FREE_TOPPING': return '🧋';
+      case 'UPGRADE_SIZE': return '📐';
+      case 'FREE_DRINK': return '🍵';
+      case 'DISCOUNT_10':
+      case 'DISCOUNT_20': return '💸';
+      default: return '🎁';
+    }
+  };
+
+  const activeVouchers = vouchers.filter(v => !v.isUsed);
+
+  return (
+    <motion.section
+      key="vouchers"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="space-y-6"
+    >
+      {/* Welcome Showcase Banner */}
+      <div className="bg-gradient-to-r from-amber-50 to-orange-100/50 rounded-3xl p-5 border border-amber-100 flex items-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-white shadow-sm flex items-center justify-center text-3xl">
+          🎉
+        </div>
+        <div className="flex-1">
+          <h4 className="text-[15px] font-extrabold text-amber-900 leading-tight">Spesial Pengguna Baru</h4>
+          <p className="text-[12px] text-amber-700/80 mt-1 leading-relaxed">
+            Daftar sekarang dan nikmati voucher diskon belanja langsung yang otomatis ditambahkan ke akun Anda!
+          </p>
+        </div>
+      </div>
+
+      {/* Welcome Vouchers Showcase */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-5 space-y-4">
+        <h3 className="font-serif text-base font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-3">
+          ✨ Promo Voucher Pengguna Baru
+        </h3>
+        
+        <div className="grid grid-cols-1 gap-3">
+          <div className="relative overflow-hidden rounded-2xl border border-dashed border-amber-200 bg-amber-50/20 p-4 flex items-center gap-3">
+            <div className="text-3xl">💸</div>
+            <div className="flex-1">
+              <h5 className="text-[13px] font-bold text-gray-800">Diskon Potongan Rp 10.000</h5>
+              <p className="text-[11px] text-gray-500 mt-0.5">Potongan langsung tanpa minimum transaksi untuk pembelian pertama.</p>
+            </div>
+            <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/50 px-2 py-0.5 rounded-full uppercase">
+              Welcome Pack
+            </span>
+          </div>
+
+          <div className="relative overflow-hidden rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-4 flex items-center gap-3 opacity-75">
+            <div className="text-3xl">📐</div>
+            <div className="flex-1">
+              <h5 className="text-[13px] font-bold text-gray-800">Free Upgrade Size</h5>
+              <p className="text-[11px] text-gray-500 mt-0.5">Nikmati upgrade ukuran cup gratis untuk minuman pilihan.</p>
+            </div>
+            <span className="text-[10px] font-extrabold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full uppercase">
+              Milestone 2
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Vouchers List */}
+      <div>
         <h3 className="font-serif text-lg font-medium text-gray-800 mb-3 flex items-center gap-2">
           <Ticket className="w-5 h-5 text-[#B48A5E]" />
-          Voucher Aktif
+          Voucher Saya
         </h3>
-        {vouchers.length === 0 ? (
-          <div className="text-center py-8 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
-            <Gift className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-            <h4 className="font-serif text-base text-gray-800 mb-1">Belum Ada Voucher</h4>
-            <p className="text-[12px] text-gray-500">Kumpulkan poin dari setiap pembelian untuk mendapat voucher!</p>
+
+        {activeVouchers.length === 0 ? (
+          <div className="text-center py-10 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
+            <Gift className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <h4 className="font-serif text-base text-gray-800 mb-1">Belum Ada Voucher Aktif</h4>
+            <p className="text-[12px] text-gray-500 max-w-xs mx-auto leading-relaxed">
+              Kumpulkan poin pesanan Anda atau bawa tumbler sendiri untuk mendapatkan reward voucher eksklusif!
+            </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {vouchers.map((v, i) => (
+          <div className="space-y-3">
+            {activeVouchers.map((v, i) => (
               <motion.div
                 key={v.id}
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.05 }}
-                className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex items-center gap-3"
+                className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex items-stretch"
               >
-                <div className="text-2xl">{getVoucherIcon(v.type)}</div>
-                <div className="flex-1">
-                  <p className="text-[13px] font-bold text-gray-800">{v.description}</p>
-                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">Kode: {v.code.slice(0, 8).toUpperCase()}</p>
+                {/* Left Side Tab Decorator */}
+                <div className="w-12 bg-gradient-to-b from-[#B48A5E]/10 to-[#946F48]/10 flex flex-col items-center justify-center text-xl border-r border-dashed border-gray-100 relative">
+                  {/* Decorative Scissors Notch */}
+                  <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-[#FDFBF7] rounded-full border border-gray-100" />
+                  <div className="absolute -bottom-1.5 -right-1.5 w-3.5 h-3.5 bg-[#FDFBF7] rounded-full border border-gray-100" />
+                  {getVoucherIcon(v.type)}
+                </div>
+                
+                <div className="flex-1 p-4">
+                  <h4 className="text-[14px] font-bold text-gray-800 leading-snug">{v.description}</h4>
+                  <p className="text-[10px] text-gray-400 font-mono mt-1">Kode: {v.code.slice(0, 8).toUpperCase()}</p>
                   {v.expiresAt && (
-                    <p className="text-[10px] text-amber-600 mt-0.5">
-                      Berlaku sampai {new Date(v.expiresAt).toLocaleDateString('id-ID')}
+                    <p className="text-[10px] text-amber-600 font-medium mt-1">
+                      Berlaku sampai {new Date(v.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </p>
                   )}
                 </div>
-                <span className="px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 text-[9px] font-bold uppercase tracking-wider">
-                  Aktif
-                </span>
+
+                <div className="flex flex-col items-center justify-center px-4 border-l border-gray-50 bg-gray-50/50">
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
+                    Aktif
+                  </span>
+                </div>
               </motion.div>
             ))}
           </div>

@@ -9,7 +9,28 @@ export default async function ProfilePage() {
   const session = await auth()
   
   if (!session?.user?.id) {
-    redirect('/login')
+    // Return Guest profile
+    return (
+      <ProfileClient 
+        user={{
+          name: "Guest",
+          email: "",
+          phone: "-",
+          points: 0,
+          totalOrders: 0,
+          memberSince: "-",
+          referralCode: "",
+          gender: "SECRET",
+          birthDate: "",
+          isGoogleConnected: false,
+          isGuest: true, // We will add this to ProfileClient types
+        }}
+        orders={[]}
+        vouchers={[]}
+        milestones={null}
+        initialUnreadCount={0}
+      />
+    )
   }
 
   try {
@@ -65,6 +86,7 @@ export default async function ProfilePage() {
           gender: user.gender || "SECRET",
           birthDate: user.birthDate?.toISOString() || "",
           isGoogleConnected: user.accounts.some((acc: any) => acc.provider === 'google'),
+          isGuest: false,
         }}
         orders={formattedOrders}
         vouchers={vouchers.map(v => ({
@@ -90,11 +112,16 @@ export default async function ProfilePage() {
       <ProfileClient 
         user={{
           name: session.user.name || "Matcha Lover",
+          email: session.user.email || "",
           phone: "-",
           points: 0,
           totalOrders: 0,
           memberSince: "-",
           referralCode: "",
+          gender: "SECRET",
+          birthDate: "",
+          isGoogleConnected: false,
+          isGuest: false,
         }}
         orders={[]}
         vouchers={[]}

@@ -82,6 +82,7 @@ export default function StorefrontClient({
         onClose={() => {
           setIsModalOpen(false);
         }}
+        allProducts={products}
       />
 
       {/* Search Overlay */}

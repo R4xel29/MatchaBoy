@@ -47,6 +47,180 @@ export async function POST(req: Request) {
     const lowerText = text.toLowerCase();
     const isLoginRequest = lowerText.startsWith("login-") || 
                            lowerText.includes("request link untuk masuk / daftar");
+    const isDeleteRequest = lowerText.startsWith("hapus-");
+    const isVerificationRequest = lowerText.startsWith("verifikasi-");
+
+    if (isVerificationRequest) {
+      console.log(`[WHATSAPP_WEBHOOK] Mendeteksi VERIFICATION REQUEST`);
+      const code = text.substring(11).trim(); // Extract the 6-digit code after "verifikasi-" or "VERIFIKASI-"
+      
+      // Look up code in VerificationToken table
+      const dbToken = await prisma.verificationToken.findFirst({
+        where: {
+          token: code,
+          expires: { gte: new Date() }
+        }
+      });
+
+      if (!dbToken) {
+        console.warn(`[WHATSAPP_WEBHOOK] Token verifikasi tidak valid atau kadaluarsa: ${code}`);
+        await sendWhatsAppMessage(phone, "Verifikasi gagal ❌\n\nKode verifikasi tidak valid atau sudah kadaluarsa. Silakan ajukan kembali dari aplikasi.", jid);
+        return NextResponse.json({ success: false, error: "Invalid or expired token" });
+      }
+
+      // Check if it's indeed a phone verification token
+      if (!dbToken.identifier.startsWith("verify-phone:")) {
+        console.warn(`[WHATSAPP_WEBHOOK] Token bukan untuk verifikasi HP: ${dbToken.identifier}`);
+        await sendWhatsAppMessage(phone, "Verifikasi gagal ❌\n\nKode konfirmasi tersebut bukan untuk verifikasi WhatsApp.", jid);
+        return NextResponse.json({ success: false, error: "Invalid token type" });
+      }
+
+      const parts = dbToken.identifier.split(":");
+      const userId = parts[1];
+      const targetPhone = parts[2];
+
+      // Verify that the sender's phone number matches the target phone number
+      let standardizedSenderPhone = phone.replace(/[^0-9]/g, '');
+      if (standardizedSenderPhone.startsWith('08')) {
+        standardizedSenderPhone = '62' + standardizedSenderPhone.substring(1);
+      } else if (standardizedSenderPhone.startsWith('8')) {
+        standardizedSenderPhone = '62' + standardizedSenderPhone;
+      }
+
+      let standardizedTargetPhone = targetPhone.replace(/[^0-9]/g, '');
+      if (standardizedTargetPhone.startsWith('08')) {
+        standardizedTargetPhone = '62' + standardizedTargetPhone.substring(1);
+      } else if (standardizedTargetPhone.startsWith('8')) {
+        standardizedTargetPhone = '62' + standardizedTargetPhone;
+      }
+
+      if (standardizedSenderPhone !== standardizedTargetPhone) {
+        console.warn(`[WHATSAPP_WEBHOOK] Phone mismatch. Sender: ${standardizedSenderPhone}, Target: ${standardizedTargetPhone}`);
+        await sendWhatsAppMessage(phone, "Verifikasi gagal ❌\n\nNomor pengirim tidak cocok dengan nomor yang Anda masukkan di aplikasi.", jid);
+        return NextResponse.json({ success: false, error: "Phone number mismatch" });
+      }
+
+      console.log(`[WHATSAPP_WEBHOOK] Memulai verifikasi nomor HP user ID: ${userId} ke nomor: ${standardizedTargetPhone}`);
+
+      // Update the user
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          phone: standardizedTargetPhone,
+          phoneVerified: true
+        }
+      });
+
+      // Delete verification token
+      await prisma.verificationToken.delete({
+        where: { token: dbToken.token }
+      });
+
+      console.log(`[WHATSAPP_WEBHOOK] Nomor HP untuk user ${userId} berhasil diverifikasi.`);
+
+      // Send WhatsApp confirmation back to the user
+      await sendWhatsAppMessage(standardizedSenderPhone, `Verifikasi Berhasil! ✅\n\nNomor WhatsApp Anda telah berhasil diverifikasi untuk akun *Arum Seduh* Anda. Silakan kembali ke aplikasi untuk melanjutkan transaksi.`, jid);
+
+      return NextResponse.json({ success: true, message: "Phone verified and confirmed via WhatsApp" });
+    }
+
+    if (isDeleteRequest) {
+      console.log(`[WHATSAPP_WEBHOOK] Mendeteksi DELETE REQUEST`);
+      const code = text.substring(6).trim(); // Extract the 6-digit code after "hapus-" or "HAPUS-"
+      
+      // Look up code in VerificationToken table
+      const dbToken = await prisma.verificationToken.findFirst({
+        where: {
+          token: code,
+          expires: { gte: new Date() }
+        }
+      });
+
+      if (!dbToken) {
+        console.warn(`[WHATSAPP_WEBHOOK] Token delete tidak valid atau kadaluarsa: ${code}`);
+        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nKode konfirmasi penghapusan akun tidak valid atau sudah kadaluarsa. Silakan ajukan kembali dari menu Edit Profil di aplikasi.", jid);
+        return NextResponse.json({ success: false, error: "Invalid or expired token" });
+      }
+
+      // Check if it's indeed a delete token
+      if (!dbToken.identifier.startsWith("delete:")) {
+        console.warn(`[WHATSAPP_WEBHOOK] Token bukan untuk hapus akun: ${dbToken.identifier}`);
+        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nKode konfirmasi tersebut bukan untuk penghapusan akun.", jid);
+        return NextResponse.json({ success: false, error: "Invalid token type" });
+      }
+
+      const userId = dbToken.identifier.split(":")[1];
+
+      // Fetch user to confirm identity and phone
+      const user = await prisma.user.findUnique({
+        where: { id: userId }
+      });
+
+      if (!user) {
+        console.warn(`[WHATSAPP_WEBHOOK] User untuk delete tidak ditemukan: ${userId}`);
+        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nAkun Anda tidak ditemukan di sistem kami.", jid);
+        return NextResponse.json({ success: false, error: "User not found" });
+      }
+
+      // Verify that the sender's phone number matches the user's phone number in DB
+      let standardizedSenderPhone = phone.replace(/[^0-9]/g, '');
+      if (standardizedSenderPhone.startsWith('08')) {
+        standardizedSenderPhone = '62' + standardizedSenderPhone.substring(1);
+      } else if (standardizedSenderPhone.startsWith('8')) {
+        standardizedSenderPhone = '62' + standardizedSenderPhone;
+      }
+
+      let standardizedUserPhone = (user.phone || "").replace(/[^0-9]/g, '');
+      if (standardizedUserPhone.startsWith('08')) {
+        standardizedUserPhone = '62' + standardizedUserPhone.substring(1);
+      } else if (standardizedUserPhone.startsWith('8')) {
+        standardizedUserPhone = '62' + standardizedUserPhone;
+      }
+
+      if (standardizedSenderPhone !== standardizedUserPhone) {
+        console.warn(`[WHATSAPP_WEBHOOK] Phone mismatch. Sender: ${standardizedSenderPhone}, User DB: ${standardizedUserPhone}`);
+        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nNomor pengirim tidak cocok dengan nomor yang terdaftar di akun ini.", jid);
+        return NextResponse.json({ success: false, error: "Phone number mismatch" });
+      }
+
+      console.log(`[WHATSAPP_WEBHOOK] Memulai proses penghapusan akun user: ${user.name} (${user.id})`);
+
+      // Run transactional deletion to avoid constraint errors and preserve orders
+      await prisma.$transaction([
+        // Clear references on orders
+        prisma.order.updateMany({
+          where: { userId: user.id },
+          data: { userId: null }
+        }),
+        prisma.order.updateMany({
+          where: { cashierId: user.id },
+          data: { cashierId: null }
+        }),
+        prisma.order.updateMany({
+          where: { driverId: user.id },
+          data: { driverId: null }
+        }),
+        // Clean shifts
+        prisma.cashierShift.deleteMany({
+          where: { cashierId: user.id }
+        }),
+        // Delete verification token
+        prisma.verificationToken.delete({
+          where: { token: dbToken.token }
+        }),
+        // Delete user cascade will handle the rest
+        prisma.user.delete({
+          where: { id: user.id }
+        })
+      ]);
+
+      console.log(`[WHATSAPP_WEBHOOK] Akun user ${user.id} berhasil dihapus.`);
+
+      // Send WhatsApp confirmation back to the user
+      await sendWhatsAppMessage(standardizedSenderPhone, `Akun Anda dengan nama *${user.name || "Matcha Lover"}* telah berhasil dihapus secara permanen dari sistem *Arum Seduh*! ❌\n\nTerima kasih telah bersama kami. Semoga kita bisa bertemu kembali di lain kesempatan.`, jid);
+
+      return NextResponse.json({ success: true, message: "Account deleted and confirmed via WhatsApp" });
+    }
 
     if (isLoginRequest) {
       console.log(`[WHATSAPP_WEBHOOK] Mendeteksi LOGIN REQUEST`);
@@ -56,6 +230,27 @@ export async function POST(req: Request) {
         standardizedPhone = '62' + standardizedPhone.substring(1);
       } else if (standardizedPhone.startsWith('8')) {
         standardizedPhone = '62' + standardizedPhone;
+      }
+
+      // Pastikan nomor pengirim WA sesuai dengan nomor yang diinput di aplikasi jika ada
+      const targetPhoneMatch = text.match(/HP:\s*([0-9]+)/i);
+      if (targetPhoneMatch) {
+        const targetPhone = targetPhoneMatch[1];
+        let standardizedTarget = targetPhone.replace(/[^0-9]/g, '');
+        if (standardizedTarget.startsWith('08')) {
+          standardizedTarget = '62' + standardizedTarget.substring(1);
+        } else if (standardizedTarget.startsWith('8')) {
+          standardizedTarget = '62' + standardizedTarget;
+        }
+
+        if (standardizedPhone !== standardizedTarget) {
+          console.warn(`[WHATSAPP_WEBHOOK] Login phone mismatch. Sender: ${standardizedPhone}, Target: ${standardizedTarget}`);
+          
+          const errorMessage = `Login Gagal! ❌\n\nNomor pengirim WhatsApp ini (*${standardizedPhone}*) tidak cocok dengan nomor yang Anda masukkan di aplikasi (*${standardizedTarget}*).\n\nSilakan gunakan akun WhatsApp yang sesuai dengan nomor tersebut untuk mengirim pesan.`;
+          
+          await sendWhatsAppMessage(standardizedPhone, errorMessage, jid);
+          return NextResponse.json({ success: false, error: "Phone number mismatch" });
+        }
       }
 
       // ... (token creation)

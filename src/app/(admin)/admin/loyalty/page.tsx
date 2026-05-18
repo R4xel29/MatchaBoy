@@ -15,10 +15,11 @@ export default async function LoyaltySettingsPage() {
   }
 
   // Stats
-  const [totalPoints, totalVouchers, totalUsedVouchers] = await Promise.all([
+  const [totalPoints, totalVouchers, totalUsedVouchers, totalEcoOrders] = await Promise.all([
     prisma.pointHistory.aggregate({ _sum: { amount: true }, where: { amount: { gt: 0 } } }),
     prisma.voucher.count(),
     prisma.voucher.count({ where: { isUsed: true } }),
+    prisma.order.count({ where: { hasTumbler: true } }),
   ]);
 
   return (
@@ -28,6 +29,7 @@ export default async function LoyaltySettingsPage() {
         totalPointsDistributed: totalPoints._sum.amount || 0,
         totalVouchersIssued: totalVouchers,
         totalVouchersUsed: totalUsedVouchers,
+        totalEcoOrders: totalEcoOrders || 0,
       }}
     />
   );

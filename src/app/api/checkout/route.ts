@@ -44,6 +44,7 @@ export async function POST(req: Request) {
         })
 
         let secureSubtotal = 0
+        let hasFreeShippingBundle = false
         const orderItemsToCreate: Array<{
             productId: string;
             qty: number;
@@ -67,19 +68,38 @@ export async function POST(req: Request) {
                 }
             }
 
-            // Calculate Add-Ons total
-            let addOnsTotal = 0
-            if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
-                for (const addOnId of item.addOnIds) {
-                    const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
-                    if (validAddOn) {
-                        addOnsTotal += validAddOn.price
-                    }
-                }
+            if (dbModifiers.isBundle && dbModifiers.freeShipping === true) {
+                hasFreeShippingBundle = true
             }
 
-            // Secure item price calculation
-            const secureItemPrice = dbProduct.price + addOnsTotal
+            let secureItemPrice = dbProduct.price;
+
+            if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
+                let secureBundleAdjustments = 0;
+                for (const sel of item.bundleSelections) {
+                    const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId);
+                    if (group) {
+                        const option = group.options?.find((o: any) => o.productId === sel.productId);
+                        if (option) {
+                            secureBundleAdjustments += option.priceAdjustment || 0;
+                        }
+                    }
+                }
+                secureItemPrice += secureBundleAdjustments;
+            } else {
+                // Calculate Add-Ons total
+                let addOnsTotal = 0
+                if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+                    for (const addOnId of item.addOnIds) {
+                        const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                        if (validAddOn) {
+                            addOnsTotal += validAddOn.price
+                        }
+                    }
+                }
+                secureItemPrice += addOnsTotal;
+            }
+
             const secureItemTotal = secureItemPrice * item.quantity
             secureSubtotal += secureItemTotal
 
@@ -87,7 +107,9 @@ export async function POST(req: Request) {
                 productId: dbProduct.id,
                 qty: item.quantity,
                 price: secureItemPrice,
-                modifiers: item.modsString || null
+                modifiers: dbModifiers.isBundle 
+                    ? JSON.stringify({ isBundle: true, bundleSelections: item.bundleSelections }) 
+                    : (item.modsString || null)
             })
         }
 
@@ -120,6 +142,7 @@ export async function POST(req: Request) {
         // Handle voucher
         const voucherCode = body.voucherCode
         let voucherDiscount = 0
+        let ongkirDiscount = hasFreeShippingBundle ? deliveryFee : 0
         let validVoucherId = null
         if (voucherCode) {
             const voucher = await prisma.voucher.findUnique({ where: { code: voucherCode } })
@@ -129,6 +152,12 @@ export async function POST(req: Request) {
                 else if (voucher.type === 'FREE_TOPPING') voucherDiscount = 3000
                 else if (voucher.type === 'UPGRADE_SIZE') voucherDiscount = 5000
                 else if (voucher.type === 'REFERRAL_REWARD') voucherDiscount = 25000
+                else if (voucher.type === 'GRATIS_ONGKIR') {
+                    if (!hasFreeShippingBundle) ongkirDiscount = deliveryFee
+                }
+                else if (voucher.type === 'DISKON_ONGKIR') {
+                    if (!hasFreeShippingBundle) ongkirDiscount = Math.min(deliveryFee, 10000)
+                }
                 else voucherDiscount = 10000 // CUSTOM or fallback
             } else {
                 return NextResponse.json({ error: 'Voucher tidak valid' }, { status: 400 })
@@ -146,7 +175,7 @@ export async function POST(req: Request) {
             pointsDiscount = pointsUsed * 1000 // 1 point = Rp1.000
         }
 
-        let secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + deliveryFee
+        let secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, deliveryFee - ongkirDiscount)
 
         // Build address string
         const address = orderType === 'PICKUP'

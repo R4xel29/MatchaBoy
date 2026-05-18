@@ -32,7 +32,22 @@ function VerifyWABody() {
           }
         } else {
           setStatus("success");
-          router.push("/");
+          // Check setup status before redirecting to avoid flashing the home page
+          try {
+            const checkRes = await fetch('/api/user/check-phone');
+            const checkData = await checkRes.json();
+            if (!checkData.hasPin) {
+              router.push('/setup-pin');
+            } else if (!checkData.hasName) {
+              router.push('/setup-profile');
+            } else if (!checkData.phoneVerified) {
+              router.push('/setup-phone');
+            } else {
+              router.push('/');
+            }
+          } catch (e) {
+            router.push('/');
+          }
         }
       } catch (error) {
         setStatus("error");

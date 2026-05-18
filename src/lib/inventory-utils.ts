@@ -40,32 +40,86 @@ export async function deductStockForOrder(orderId: string) {
 
     // 3. Process each order item
     for (const item of order.items) {
-      const recipe = item.product.productIngredients;
-      if (!recipe || recipe.length === 0) continue;
+      let isBundle = false;
+      let bundleSelections: any[] = [];
+      if (item.modifiers) {
+        try {
+          const parsed = JSON.parse(item.modifiers);
+          if (parsed && parsed.isBundle && Array.isArray(parsed.bundleSelections)) {
+            isBundle = true;
+            bundleSelections = parsed.bundleSelections;
+          }
+        } catch {
+          // Ignore
+        }
+      }
 
-      for (const recipeItem of recipe) {
-        const totalQtyToDeduct = recipeItem.quantity * item.qty;
+      if (isBundle && bundleSelections.length > 0) {
+        // Fetch recipes for all products selected in the bundle
+        const selectProductIds = bundleSelections.map(s => s.productId);
+        const selectedProducts = await prisma.product.findMany({
+          where: { id: { in: selectProductIds } },
+          include: { productIngredients: true }
+        });
 
-        await prisma.$transaction([
-          // Deduct stock
-          prisma.ingredient.update({
-            where: { id: recipeItem.ingredientId },
-            data: {
-              stock: {
-                decrement: totalQtyToDeduct,
+        for (const sel of bundleSelections) {
+          const selProduct = selectedProducts.find(p => p.id === sel.productId);
+          const recipe = selProduct?.productIngredients;
+          if (!recipe || recipe.length === 0) continue;
+
+          for (const recipeItem of recipe) {
+            const totalQtyToDeduct = recipeItem.quantity * item.qty;
+
+            await prisma.$transaction([
+              // Deduct stock
+              prisma.ingredient.update({
+                where: { id: recipeItem.ingredientId },
+                data: {
+                  stock: {
+                    decrement: totalQtyToDeduct,
+                  },
+                },
+              }),
+              // Log movement
+              prisma.stockMovement.create({
+                data: {
+                  ingredientId: recipeItem.ingredientId,
+                  quantity: -totalQtyToDeduct,
+                  type: 'OUT',
+                  reason: `Order #${orderId.slice(-6).toUpperCase()} - Combo Selection: ${sel.productName} (Qty: ${item.qty})`,
+                },
+              }),
+            ]);
+          }
+        }
+      } else {
+        const recipe = item.product.productIngredients;
+        if (!recipe || recipe.length === 0) continue;
+
+        for (const recipeItem of recipe) {
+          const totalQtyToDeduct = recipeItem.quantity * item.qty;
+
+          await prisma.$transaction([
+            // Deduct stock
+            prisma.ingredient.update({
+              where: { id: recipeItem.ingredientId },
+              data: {
+                stock: {
+                  decrement: totalQtyToDeduct,
+                },
               },
-            },
-          }),
-          // Log movement
-          prisma.stockMovement.create({
-            data: {
-              ingredientId: recipeItem.ingredientId,
-              quantity: -totalQtyToDeduct,
-              type: 'OUT',
-              reason: `Order #${orderId.slice(-6).toUpperCase()} - ${item.product.name} (Qty: ${item.qty})`,
-            },
-          }),
-        ]);
+            }),
+            // Log movement
+            prisma.stockMovement.create({
+              data: {
+                ingredientId: recipeItem.ingredientId,
+                quantity: -totalQtyToDeduct,
+                type: 'OUT',
+                reason: `Order #${orderId.slice(-6).toUpperCase()} - ${item.product.name} (Qty: ${item.qty})`,
+              },
+            }),
+          ]);
+        }
       }
     }
 

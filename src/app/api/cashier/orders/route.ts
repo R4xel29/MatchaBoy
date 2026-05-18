@@ -53,18 +53,34 @@ export async function POST(req: Request) {
         }
       }
 
-      // Calculate Add-Ons total
-      let addOnsTotal = 0
-      if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
-        for (const addOnId of item.addOnIds) {
-          const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
-          if (validAddOn) {
-            addOnsTotal += validAddOn.price
+      let secureItemPrice = dbProduct.price;
+
+      if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
+        let secureBundleAdjustments = 0;
+        for (const sel of item.bundleSelections) {
+          const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId);
+          if (group) {
+            const option = group.options?.find((o: any) => o.productId === sel.productId);
+            if (option) {
+              secureBundleAdjustments += option.priceAdjustment || 0;
+            }
           }
         }
+        secureItemPrice += secureBundleAdjustments;
+      } else {
+        // Calculate Add-Ons total
+        let addOnsTotal = 0
+        if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+          for (const addOnId of item.addOnIds) {
+            const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+            if (validAddOn) {
+              addOnsTotal += validAddOn.price
+            }
+          }
+        }
+        secureItemPrice += addOnsTotal;
       }
 
-      const secureItemPrice = dbProduct.price + addOnsTotal
       const secureItemTotal = secureItemPrice * item.quantity
       secureSubtotal += secureItemTotal
 
@@ -72,7 +88,9 @@ export async function POST(req: Request) {
         productId: dbProduct.id,
         qty: item.quantity,
         price: secureItemPrice,
-        modifiers: item.modsString || null
+        modifiers: dbModifiers.isBundle 
+          ? JSON.stringify({ isBundle: true, bundleSelections: item.bundleSelections }) 
+          : (item.modsString || null)
       })
     }
 

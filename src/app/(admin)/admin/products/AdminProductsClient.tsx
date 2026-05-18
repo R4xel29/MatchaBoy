@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
 import {
@@ -23,6 +23,9 @@ interface ModifiersData {
   iceLevel?: string[];
   sugarLevel?: string[];
   addOns?: AddOnItem[];
+  isBundle?: boolean;
+  bundleGroups?: any[];
+  freeShipping?: boolean;
 }
 
 const ALL_ICE_LEVELS = ['Normal Ice', 'Less Ice', 'No Ice'];
@@ -61,6 +64,12 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [activeTab, setActiveTab] = useState<'products' | 'combos'>('products');
+
+  // Visual Product Selector Modal
+  const [activeGroupIdForPicker, setActiveGroupIdForPicker] = useState<string | null>(null);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerCategory, setPickerCategory] = useState('all');
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -81,6 +90,119 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
 
+  // Bundle / Combo state
+  const [isBundle, setIsBundle] = useState<boolean>(false);
+  const [bundleGroups, setBundleGroups] = useState<any[]>([]);
+  const [freeShipping, setFreeShipping] = useState<boolean>(false);
+
+  // Discount Pricing Calculator state
+  const [discountType, setDiscountType] = useState<'fixed' | 'nominal' | 'percent'>('fixed');
+  const [discountValue, setDiscountValue] = useState<string>('');
+
+  const getRegularTotalPrice = useCallback(() => {
+    let total = 0;
+    bundleGroups.forEach(group => {
+      if (group.options.length > 0) {
+        const firstOpt = group.options[0];
+        const prod = initialProducts.find(p => p.id === firstOpt.productId);
+        if (prod) {
+          total += prod.price * (group.selectCount || 1);
+        }
+      }
+    });
+    return total;
+  }, [bundleGroups, initialProducts]);
+
+  const handleDiscountTypeChange = (type: 'fixed' | 'nominal' | 'percent') => {
+    setDiscountType(type);
+    setDiscountValue('');
+    if (type === 'fixed') {
+      // Just keep current price
+    } else {
+      // Set to regular price initially
+      setFormData(prev => ({ ...prev, price: getRegularTotalPrice().toString() }));
+    }
+  };
+
+  const handleDiscountValueChange = (val: string) => {
+    setDiscountValue(val);
+    const regularTotal = getRegularTotalPrice();
+    if (discountType === 'percent') {
+      const pct = Number(val || 0);
+      const finalPrice = Math.max(0, regularTotal * (1 - pct / 100));
+      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
+    } else if (discountType === 'nominal') {
+      const nom = Number(val || 0);
+      const finalPrice = Math.max(0, regularTotal - nom);
+      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
+    }
+  };
+
+  // Automatically sync price if discount is active and regular total changes
+  useEffect(() => {
+    if (discountType === 'fixed') return;
+    const regularTotal = getRegularTotalPrice();
+    if (discountType === 'percent') {
+      const pct = Number(discountValue || 0);
+      const finalPrice = Math.max(0, regularTotal * (1 - pct / 100));
+      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
+    } else if (discountType === 'nominal') {
+      const nom = Number(discountValue || 0);
+      const finalPrice = Math.max(0, regularTotal - nom);
+      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
+    }
+  }, [bundleGroups, discountType, discountValue, getRegularTotalPrice]);
+
+  // Bundle helper functions
+  const addBundleGroup = () => {
+    const id = 'group_' + Math.random().toString(36).substr(2, 9);
+    setBundleGroups(prev => [...prev, { id, name: 'Group Pilihan Baru', selectCount: 1, options: [] }]);
+  };
+
+  const removeBundleGroup = (id: string) => {
+    setBundleGroups(prev => prev.filter(g => g.id !== id));
+  };
+
+  const updateGroupName = (id: string, name: string) => {
+    setBundleGroups(prev => prev.map(g => g.id === id ? { ...g, name } : g));
+  };
+
+  const addOptionToGroup = (groupId: string, productId: string) => {
+    if (!productId) return;
+    const prod = initialProducts.find(p => p.id === productId);
+    if (!prod) return;
+
+    setBundleGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      const alreadyHas = g.options.some((o: any) => o.productId === productId);
+      if (alreadyHas) return g;
+      return {
+        ...g,
+        options: [...g.options, { productId, name: prod.name, priceAdjustment: 0 }]
+      };
+    }));
+  };
+
+  const removeOptionFromGroup = (groupId: string, productId: string) => {
+    setBundleGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        options: g.options.filter((o: any) => o.productId !== productId)
+      };
+    }));
+  };
+
+  const updateOptionPrice = (groupId: string, productId: string, priceAdjustment: number) => {
+    setBundleGroups(prev => prev.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        options: g.options.map((o: any) => o.productId === productId ? { ...o, priceAdjustment } : o)
+      };
+    }));
+  };
+
   // Recipe state
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [recipeProduct, setRecipeProduct] = useState<ProductItem | null>(null);
@@ -88,8 +210,26 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [loadingRecipe, setLoadingRecipe] = useState(false);
   const [savingRecipe, setSavingRecipe] = useState(false);
 
+  const isProductBundle = (product: ProductItem): boolean => {
+    if (!product.modifiers) return false;
+    try {
+      const parsed = JSON.parse(product.modifiers);
+      return !!parsed.isBundle;
+    } catch {
+      return false;
+    }
+  };
+
   const filteredProducts = initialProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+    const isCombo = isProductBundle(p);
+
+    if (activeTab === 'combos') {
+      if (!isCombo) return false;
+    } else {
+      if (isCombo) return false;
+    }
+
     const matchesCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
     return matchesSearch && matchesCat;
   });
@@ -121,6 +261,11 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setModIce(mods.iceLevel || []);
       setModSugar(mods.sugarLevel || []);
       setModAddOns(mods.addOns || []);
+      setIsBundle(mods.isBundle || false);
+      setBundleGroups(mods.bundleGroups || []);
+      setFreeShipping(mods.freeShipping || false);
+      setDiscountType('fixed');
+      setDiscountValue('');
     } else {
       setEditingProduct(null);
       setFormData({ name: '', description: '', price: '', categoryId: categories[0]?.id || '', image: '' });
@@ -128,6 +273,11 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setModIce([]);
       setModSugar([]);
       setModAddOns([]);
+      setIsBundle(activeTab === 'combos');
+      setBundleGroups([]);
+      setFreeShipping(false);
+      setDiscountType('fixed');
+      setDiscountValue('');
     }
     setNewAddOnName('');
     setNewAddOnPrice('');
@@ -238,9 +388,15 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
     setSaving(true);
 
     const modifiers: ModifiersData = {};
-    if (modIce.length > 0) modifiers.iceLevel = modIce;
-    if (modSugar.length > 0) modifiers.sugarLevel = modSugar;
-    if (modAddOns.length > 0) modifiers.addOns = modAddOns;
+    if (isBundle) {
+      modifiers.isBundle = true;
+      modifiers.bundleGroups = bundleGroups;
+      modifiers.freeShipping = freeShipping;
+    } else {
+      if (modIce.length > 0) modifiers.iceLevel = modIce;
+      if (modSugar.length > 0) modifiers.sugarLevel = modSugar;
+      if (modAddOns.length > 0) modifiers.addOns = modAddOns;
+    }
 
     const hasModifiers = Object.keys(modifiers).length > 0;
 
@@ -284,22 +440,48 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
   return (
     <>
+      {/* Premium Tab Navigation */}
+      <div className="flex gap-2 border-b border-border/30 pb-3 mb-5">
+        <button
+          onClick={() => { setActiveTab('products'); setSelectedCategory('all'); }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+            activeTab === 'products'
+              ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
+              : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
+          }`}
+        >
+          🍔 Semua Produk ({initialProducts.filter(p => !isProductBundle(p)).length})
+        </button>
+        <button
+          onClick={() => { setActiveTab('combos'); setSelectedCategory('all'); }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+            activeTab === 'combos'
+              ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
+              : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
+          }`}
+        >
+          📦 Paket Combo & Promo ({initialProducts.filter(p => isProductBundle(p)).length})
+        </button>
+      </div>
+
       {/* Toolbar */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-          <input type="text" placeholder="Search products..." value={search} onChange={(e) => setSearch(e.target.value)}
+          <input type="text" placeholder={activeTab === 'combos' ? "Cari paket combo / promo..." : "Cari produk..."} value={search} onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
         </div>
         <div className="flex gap-2">
-          <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-            <option value="all">All Categories</option>
-            {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
-          </select>
+          {activeTab !== 'combos' && (
+            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+              <option value="all">All Categories</option>
+              {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+            </select>
+          )}
           <button onClick={() => openModal()}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md shadow-brand-700/15 active:scale-[0.98] whitespace-nowrap">
-            <Plus className="w-4 h-4" /> Add
+            <Plus className="w-4 h-4" /> {activeTab === 'combos' ? 'Tambah Combo' : 'Add'}
           </button>
         </div>
       </div>
@@ -417,7 +599,12 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 sticky top-0 bg-white z-10">
-              <h3 className="text-base font-bold font-heading">{editingProduct ? 'Edit Product' : 'New Product'}</h3>
+              <h3 className="text-base font-bold font-heading">
+                {editingProduct 
+                  ? (isBundle ? 'Edit Paket Combo / Bundle' : 'Edit Product') 
+                  : (activeTab === 'combos' ? 'Tambah Paket Combo / Bundle' : 'New Product')
+                }
+              </h3>
               <button onClick={closeModal} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></button>
             </div>
 
@@ -479,78 +666,322 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                 </div>
               </div>
 
-              {/* ── Modifiers Section ── */}
+              {/* ── Combo / Bundle Toggle ── */}
               <div className="pt-4 border-t border-border/30">
-                <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                  <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers
-                </h4>
-                <p className="text-[10px] text-muted-foreground mb-3">Select which customization options are available for this product</p>
-
-                {/* Ice Level */}
-                <div className="mb-3">
-                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">❄️ Ice Level</label>
-                  <div className="flex flex-wrap gap-2">
-                    {ALL_ICE_LEVELS.map(level => (
-                      <button key={level} type="button" onClick={() => toggleIce(level)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
-                          ${modIce.includes(level)
-                            ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                            : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
-                        {level}
-                      </button>
-                    ))}
+                <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/30 bg-muted/10 mb-4">
+                  <div>
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                      📦 Produk Combo / Bundle?
+                    </h4>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Tipe produk ini terdiri dari pilihan produk-produk lain (e.g. 3 Roti Discount 15%)</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsBundle(!isBundle)}
+                    className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${isBundle ? 'bg-brand-600' : 'bg-gray-200'}`}
+                  >
+                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${isBundle ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
                 </div>
+              </div>
 
-                {/* Sugar Level */}
-                <div className="mb-3">
-                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🍬 Sugar Level</label>
-                  <div className="flex flex-wrap gap-2">
-                    {ALL_SUGAR_LEVELS.map(level => (
-                      <button key={level} type="button" onClick={() => toggleSugar(level)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
-                          ${modSugar.includes(level)
-                            ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                            : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
-                        {level}
+              {isBundle ? (
+                /* ── Bundle Configurator ── */
+                <div className="space-y-4">
+                  {/* 💰 Premium Ringkasan Harga & Diskon Combo */}
+                  <div className="p-4 rounded-2xl border border-brand-100 bg-brand-50/30 space-y-3">
+                    <h5 className="text-[11px] font-bold text-brand-800 uppercase tracking-wider flex items-center gap-1.5">
+                      💰 Kalkulator Diskon & Harga Combo
+                    </h5>
+                    
+                    <div className="grid grid-cols-2 gap-3 text-xs bg-white p-3 rounded-xl border border-border/20 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                      <div>
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Total Harga Asli</p>
+                        <p className="text-base font-extrabold text-foreground mt-0.5">
+                          {formatRupiah(getRegularTotalPrice())}
+                        </p>
+                        <p className="text-[9px] text-muted-foreground/80 mt-1 leading-normal">Sum harga menu pertama di setiap kelompok pilihan</p>
+                      </div>
+                      <div className="border-l border-border/30 pl-3">
+                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Harga Paket Sekarang</p>
+                        <p className="text-base font-extrabold text-brand-600 mt-0.5">
+                          {formatRupiah(Number(formData.price || 0))}
+                        </p>
+                        {getRegularTotalPrice() > Number(formData.price || 0) && (
+                          <p className="text-[9px] font-bold text-emerald-600 mt-1 flex items-center gap-0.5">
+                            🎉 Hemat {formatRupiah(getRegularTotalPrice() - Number(formData.price || 0))} ({Math.round(((getRegularTotalPrice() - Number(formData.price || 0)) / getRegularTotalPrice()) * 100)}%)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Tipe input diskon */}
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold text-brand-700 uppercase tracking-wider block">Metode Penentuan Harga Paket</label>
+                      <div className="grid grid-cols-3 gap-1.5 bg-muted/20 p-1 rounded-xl border border-border/10">
+                        <button
+                          type="button"
+                          onClick={() => handleDiscountTypeChange('fixed')}
+                          className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                            discountType === 'fixed'
+                              ? 'bg-white text-brand-700 shadow-sm border border-border/10'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Manual (Input Harga)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDiscountTypeChange('nominal')}
+                          className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                            discountType === 'nominal'
+                              ? 'bg-white text-brand-700 shadow-sm border border-border/10'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Potongan Nominal (Rp)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDiscountTypeChange('percent')}
+                          className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                            discountType === 'percent'
+                              ? 'bg-white text-brand-700 shadow-sm border border-border/10'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Persentase (%)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Input Nilai Diskon */}
+                    {discountType !== 'fixed' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-brand-700 uppercase tracking-wider block">
+                          {discountType === 'percent' ? 'Masukkan Persen Diskon (%)' : 'Masukkan Nominal Potongan (Rp)'}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={discountValue}
+                            onChange={(e) => handleDiscountValueChange(e.target.value)}
+                            placeholder={discountType === 'percent' ? 'e.g. 15' : 'e.g. 5000'}
+                            className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
+                            {discountType === 'percent' ? '%' : 'Rp'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 🚚 Gratis Ongkir Toggle */}
+                    <div className="pt-3 border-t border-border/20 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold text-brand-700 uppercase tracking-wider flex items-center gap-1">
+                          🚚 Gratis Ongkir untuk Paket Ini?
+                        </p>
+                        <p className="text-[9px] text-muted-foreground leading-normal mt-0.5">
+                          Pelanggan mendapat gratis ongkir otomatis jika membeli paket combo ini
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFreeShipping(!freeShipping)}
+                        className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${freeShipping ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                      >
+                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${freeShipping ? 'left-[18px]' : 'left-0.5'}`} />
                       </button>
-                    ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Add-Ons */}
-                <div>
-                  <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🧁 Add-Ons</label>
-                  {modAddOns.length > 0 && (
-                    <div className="space-y-1.5 mb-2">
-                      {modAddOns.map(addon => (
-                        <div key={addon.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
-                          <span className="text-xs font-medium text-foreground">{addon.name}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-brand-600 font-medium">+{formatRupiah(addon.price)}</span>
-                            <button type="button" onClick={() => removeAddOn(addon.id)}
-                              className="p-0.5 hover:bg-rose-50 rounded text-muted-foreground hover:text-rose-500 transition-colors">
-                              <CircleMinus className="w-3.5 h-3.5" />
+                  <div className="flex justify-between items-center pt-2">
+                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+                      🛠️ Pengaturan Kelompok Pilihan (Groups)
+                    </h4>
+                    <button type="button" onClick={addBundleGroup}
+                      className="px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 text-[10px] font-bold transition-all">
+                      + Tambah Group
+                    </button>
+                  </div>
+
+                  {bundleGroups.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic text-center py-4 bg-muted/15 rounded-xl border border-dashed border-border/30">Belum ada kelompok pilihan. Klik "+ Tambah Group" di atas.</p>
+                  ) : (
+                    <div className="space-y-3.5">
+                      {bundleGroups.map((group) => (
+                        <div key={group.id} className="p-4 rounded-xl border border-border/40 bg-muted/5 relative">
+                          <div className="flex justify-between items-center gap-2 mb-3">
+                            <input
+                              type="text"
+                              value={group.name}
+                              onChange={(e) => updateGroupName(group.id, e.target.value)}
+                              placeholder="Nama Group (e.g., Food 1)"
+                              className="font-bold text-xs text-foreground bg-transparent border-b border-border/40 focus:border-brand-500 focus:outline-none flex-1 pb-0.5"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeBundleGroup(group.id)}
+                              className="p-1 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors"
+                              title="Hapus Group"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
+
+                           {/* Options in group (Visual with Thumbnail Images) */}
+                           <div className="space-y-1.5 mb-3">
+                             {group.options.map((opt: any) => {
+                               const optProd = initialProducts.find(p => p.id === opt.productId);
+                               return (
+                                 <div key={opt.productId} className="flex items-center justify-between p-2 rounded-xl bg-white border border-border/20 shadow-[0_1px_2px_rgba(0,0,0,0.02)] text-xs gap-3">
+                                   <div className="flex items-center gap-2.5 min-w-0">
+                                     <div className="w-8 h-8 rounded-lg bg-muted/50 overflow-hidden flex-shrink-0 border border-border/10">
+                                       {optProd?.image ? (
+                                         <img src={optProd.image} alt={opt.name} className="w-full h-full object-cover" />
+                                       ) : (
+                                         <div className="w-full h-full flex items-center justify-center bg-brand-50"><ImageIcon className="w-3.5 h-3.5 text-brand-300" /></div>
+                                       )}
+                                     </div>
+                                     <span className="font-semibold text-foreground truncate">{opt.name}</span>
+                                   </div>
+                                   <div className="flex items-center gap-2 shrink-0">
+                                     <span className="text-[10px] font-medium text-muted-foreground">Harga Extra:</span>
+                                     <div className="relative">
+                                       <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground">Rp</span>
+                                       <input
+                                         type="number"
+                                         value={opt.priceAdjustment || 0}
+                                         onChange={(e) => updateOptionPrice(group.id, opt.productId, Number(e.target.value))}
+                                         className="w-16 pl-5 pr-1.5 py-0.5 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-right font-semibold text-[11px]"
+                                       />
+                                     </div>
+                                     <button
+                                       type="button"
+                                       onClick={() => removeOptionFromGroup(group.id, opt.productId)}
+                                       className="p-1 text-muted-foreground hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
+                                     >
+                                       <CircleMinus className="w-4 h-4" />
+                                     </button>
+                                   </div>
+                                 </div>
+                               );
+                             })}
+                           </div>
+
+                           {/* Add option row (Visual Product Picker Modal Trigger & Quick select combo) */}
+                           <div className="flex flex-col sm:flex-row gap-2">
+                             <button
+                               type="button"
+                               onClick={() => {
+                                 setActiveGroupIdForPicker(group.id);
+                                 setPickerSearch('');
+                                 setPickerCategory('all');
+                               }}
+                               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-xl border border-brand-200/30 transition-all active:scale-[0.98]"
+                             >
+                               <Plus className="w-3.5 h-3.5" /> Pilih Makan / Minum (Visual)
+                             </button>
+                             <span className="text-[10px] text-muted-foreground self-center">atau</span>
+                             <select
+                               defaultValue=""
+                               onChange={(e) => {
+                                 if (e.target.value) {
+                                   addOptionToGroup(group.id, e.target.value);
+                                   e.target.value = ""; // Reset
+                                 }
+                               }}
+                               className="flex-1 max-w-[200px] px-2.5 py-2 text-[10px] font-semibold bg-white border border-border/30 rounded-xl focus:outline-none"
+                             >
+                               <option value="" disabled>Cepat Tambah...</option>
+                               {initialProducts
+                                 .filter(p => p.id !== editingProduct?.id) // Prevent self-referencing
+                                 .map(p => (
+                                   <option key={p.id} value={p.id}>{p.name} ({formatRupiah(p.price)})</option>
+                                 ))
+                               }
+                             </select>
+                           </div>
                         </div>
                       ))}
                     </div>
                   )}
-                  <div className="flex gap-2">
-                    <input value={newAddOnName} onChange={e => setNewAddOnName(e.target.value)} placeholder="Add-on name"
-                      onKeyDown={e => e.key === 'Enter' && addAddOn()}
-                      className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                    <input type="number" value={newAddOnPrice} onChange={e => setNewAddOnPrice(e.target.value)} placeholder="Price"
-                      onKeyDown={e => e.key === 'Enter' && addAddOn()}
-                      className="w-24 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                    <button type="button" onClick={addAddOn}
-                      className="p-2 rounded-lg bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors">
-                      <CirclePlus className="w-4 h-4" />
-                    </button>
+                </div>
+              ) : (
+                /* ── Standard Modifiers ── */
+                <div className="space-y-4">
+                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers
+                  </h4>
+                  <p className="text-[10px] text-muted-foreground mb-3">Select which customization options are available for this product</p>
+
+                  {/* Ice Level */}
+                  <div className="mb-3">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">❄️ Ice Level</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_ICE_LEVELS.map(level => (
+                        <button key={level} type="button" onClick={() => toggleIce(level)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
+                            ${modIce.includes(level)
+                              ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                              : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sugar Level */}
+                  <div className="mb-3">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🍬 Sugar Level</label>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_SUGAR_LEVELS.map(level => (
+                        <button key={level} type="button" onClick={() => toggleSugar(level)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
+                            ${modSugar.includes(level)
+                              ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                              : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Add-Ons */}
+                  <div>
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🧁 Add-Ons</label>
+                    {modAddOns.length > 0 && (
+                      <div className="space-y-1.5 mb-2">
+                        {modAddOns.map(addon => (
+                          <div key={addon.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
+                            <span className="text-xs font-medium text-foreground">{addon.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-brand-600 font-medium">+{formatRupiah(addon.price)}</span>
+                              <button type="button" onClick={() => removeAddOn(addon.id)}
+                                className="p-0.5 hover:bg-rose-50 rounded text-muted-foreground hover:text-rose-500 transition-colors">
+                                <CircleMinus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input value={newAddOnName} onChange={e => setNewAddOnName(e.target.value)} placeholder="Add-on name"
+                        onKeyDown={e => e.key === 'Enter' && addAddOn()}
+                        className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
+                      <input type="number" value={newAddOnPrice} onChange={e => setNewAddOnPrice(e.target.value)} placeholder="Price"
+                        onKeyDown={e => e.key === 'Enter' && addAddOn()}
+                        className="w-24 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
+                      <button type="button" onClick={addAddOn}
+                        className="p-2 rounded-lg bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors">
+                        <CirclePlus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -666,6 +1097,134 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
               <button onClick={handleSaveRecipe} disabled={savingRecipe || loadingRecipe}
                 className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
                 {savingRecipe ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Recipe
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ═══════ Searchable Visual Product Picker Modal ═══════ */}
+      {activeGroupIdForPicker && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setActiveGroupIdForPicker(null)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 bg-muted/5 sticky top-0 z-10">
+              <div>
+                <h3 className="text-sm font-bold font-heading text-foreground flex items-center gap-2">
+                  ✨ Pilih Pilihan Menu Combo
+                </h3>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Pilih produk makanan atau minuman yang ingin ditambahkan ke kelompok pilihan ini.</p>
+              </div>
+              <button onClick={() => setActiveGroupIdForPicker(null)} className="p-1.5 hover:bg-muted rounded-xl transition-all"><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+
+            {/* Content Filters & Toolbar */}
+            <div className="p-5 border-b border-border/20 bg-muted/5 space-y-3">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/45" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama makan / minum..."
+                    value={pickerSearch}
+                    onChange={(e) => setPickerSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                  />
+                </div>
+                <select
+                  value={pickerCategory}
+                  onChange={(e) => setPickerCategory(e.target.value)}
+                  className="px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
+                >
+                  <option value="all">Semua Kategori</option>
+                  {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                </select>
+              </div>
+            </div>
+
+            {/* Products Grid */}
+            <div className="p-5 max-h-[50vh] overflow-y-auto bg-gray-50/50">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                {initialProducts
+                  .filter(p => {
+                    if (p.id === editingProduct?.id) return false; // Prevent self-referencing
+                    const matchesSearch = p.name.toLowerCase().includes(pickerSearch.toLowerCase());
+                    const matchesCat = pickerCategory === 'all' || p.categoryId === pickerCategory;
+                    return matchesSearch && matchesCat;
+                  })
+                  .map((p) => {
+                    const group = bundleGroups.find(g => g.id === activeGroupIdForPicker);
+                    const isSelected = group?.options.some((o: any) => o.productId === p.id);
+
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          if (isSelected) {
+                            removeOptionFromGroup(activeGroupIdForPicker, p.id);
+                          } else {
+                            addOptionToGroup(activeGroupIdForPicker, p.id);
+                          }
+                        }}
+                        className={`flex flex-col text-left rounded-2xl border bg-white overflow-hidden transition-all duration-300 group shadow-sm active:scale-[0.98] ${
+                          isSelected
+                            ? 'border-brand-500 ring-2 ring-brand-500/20 hover:border-brand-600'
+                            : 'border-border/30 hover:border-brand-400 hover:shadow-md'
+                        }`}
+                      >
+                        {/* Product Image */}
+                        <div className="w-full aspect-[4/3] bg-muted/30 overflow-hidden relative border-b border-border/10 shrink-0">
+                          {p.image ? (
+                            <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-brand-50/50"><ImageIcon className="w-6 h-6 text-brand-200" /></div>
+                          )}
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 bg-brand-600 text-white rounded-full p-1 shadow-md">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Product Info */}
+                        <div className="p-3 flex-1 flex flex-col justify-between">
+                          <div>
+                            <p className="font-semibold text-foreground text-xs line-clamp-1 group-hover:text-brand-600 transition-colors">{p.name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">{p.category.name}</p>
+                          </div>
+                          <p className="text-[11px] font-bold text-brand-600 mt-2">{formatRupiah(p.price)}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+
+              {initialProducts.filter(p => {
+                if (p.id === editingProduct?.id) return false;
+                const matchesSearch = p.name.toLowerCase().includes(pickerSearch.toLowerCase());
+                const matchesCat = pickerCategory === 'all' || p.categoryId === pickerCategory;
+                return matchesSearch && matchesCat;
+              }).length === 0 && (
+                <div className="py-12 text-center text-muted-foreground/45">
+                  <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-xs">Tidak ada menu ditemukan</p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-border/20 flex justify-between items-center bg-muted/5 sticky bottom-0">
+              <span className="text-[10px] font-medium text-muted-foreground">
+                Terpilih: {bundleGroups.find(g => g.id === activeGroupIdForPicker)?.options.length || 0} menu
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveGroupIdForPicker(null)}
+                className="px-5 py-2 text-xs font-bold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md active:scale-[0.98]"
+              >
+                Selesai
               </button>
             </div>
           </div>

@@ -189,13 +189,42 @@ export async function awardTumblerBonus(userId: string, orderId?: string) {
     return null;
   }
 
-  return awardPoints({
+  // 1. Tambah poin
+  const pointsRes = await awardPoints({
     userId,
     pointsToAdd: settings.tumblerBonusPoints,
     type: 'EARN_TUMBLER',
     description: `Bonus tumbler/wadah sendiri (+${settings.tumblerBonusPoints} poin)`,
     orderId,
   });
+
+  // 2. Berikan voucher jika diaktifkan oleh admin
+  let voucherRes = null;
+  if ((settings as any).tumblerVoucherEnabled) {
+    const voucherType = (settings as any).tumblerVoucherType || 'UPGRADE_SIZE';
+    const voucherDesc = (settings as any).tumblerVoucherDesc || 'Eco-Reward: Free Upgrade Size (Bawa Tumbler)';
+
+    let discountAmount = 5000;
+    if (voucherType === 'FREE_DRINK') discountAmount = 25000;
+    else if (voucherType === 'FREE_TOPPING') discountAmount = 3000;
+    else if (voucherType === 'UPGRADE_SIZE') discountAmount = 5000;
+    else discountAmount = 10000;
+
+    const ecoCode = `ECO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    voucherRes = await prisma.voucher.create({
+      data: {
+        userId,
+        code: ecoCode,
+        type: voucherType,
+        description: voucherDesc,
+        discountAmount,
+        expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // Berlaku 14 hari
+      },
+    });
+  }
+
+  return { pointsRes, voucherRes };
 }
 
 /**

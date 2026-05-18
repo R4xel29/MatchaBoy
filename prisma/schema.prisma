@@ -46,6 +46,7 @@ model User {
 
   gender          String?   // WOMAN, MAN, SECRET
   birthDate       DateTime?
+  pin             String?   // 6-digit PIN for security
 
   pointHistory    PointHistory[]
   vouchers        Voucher[]
@@ -378,6 +379,9 @@ model LoyaltySettings {
   tumblerBonusEnabled   Boolean @default(true)
   tumblerBonusPoints    Int     @default(1)           // Extra poin per transaksi pakai tumbler
   tumblerDiscountPct    Int     @default(0)           // Diskon % untuk pengguna tumbler (0 = tidak ada diskon)
+  tumblerVoucherEnabled Boolean @default(true)
+  tumblerVoucherType    String  @default("UPGRADE_SIZE") // UPGRADE_SIZE, FREE_TOPPING, FREE_DRINK
+  tumblerVoucherDesc    String  @default("Eco-Reward: Free Upgrade Size (Bawa Tumbler)")
 
   // Pengaturan Referral
   referralEnabled       Boolean @default(true)

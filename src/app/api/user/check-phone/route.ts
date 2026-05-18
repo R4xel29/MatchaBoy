@@ -11,13 +11,19 @@ export async function GET() {
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { phone: true },
+      select: { phone: true, phoneVerified: true, pin: true, name: true },
     })
+
+    const name = user?.name?.trim() || '';
+    const hasRealName = name !== '' && !/^User \d+$/i.test(name);
 
     return NextResponse.json({
       hasPhone: !!(user?.phone && user.phone.trim() !== '' && user.phone !== '-'),
+      phoneVerified: !!user?.phoneVerified,
+      hasPin: !!(user?.pin && user.pin.trim() !== ''),
+      hasName: hasRealName,
     })
   } catch {
-    return NextResponse.json({ hasPhone: false })
+    return NextResponse.json({ hasPhone: false, phoneVerified: false })
   }
 }

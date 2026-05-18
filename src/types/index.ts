@@ -1,5 +1,18 @@
 // ── Product & Menu Types ────────────────────────────────────
 
+export interface BundleOption {
+    productId: string;
+    name: string;
+    priceAdjustment: number;
+}
+
+export interface BundleGroup {
+    id: string;
+    name: string;
+    selectCount: number;
+    options: BundleOption[];
+}
+
 export interface Product {
     id: string;
     name: string;
@@ -12,6 +25,9 @@ export interface Product {
         iceLevel?: IceLevel[];
         sugarLevel?: SugarLevel[];
         addOns?: AddOn[];
+        isBundle?: boolean;
+        bundleGroups?: BundleGroup[];
+        freeShipping?: boolean;
     };
 }
 
@@ -32,6 +48,16 @@ export interface Category {
 
 // ── Cart Types ──────────────────────────────────────────────
 
+export interface SelectedBundleItem {
+    groupId: string;
+    groupName: string;
+    productId: string;
+    productName: string;
+    priceAdjustment: number;
+    iceLevel?: IceLevel;
+    sugarLevel?: SugarLevel;
+}
+
 export interface CartItem {
     id: string;          // unique cart line ID
     productId: string;
@@ -43,6 +69,8 @@ export interface CartItem {
     sugarLevel: SugarLevel;
     addOns: AddOn[];
     totalPrice: number;  // (basePrice + addOns) * quantity
+    isBundle?: boolean;
+    bundleSelections?: SelectedBundleItem[];
 }
 
 // ── Location & Delivery Types ───────────────────────────────

@@ -46,8 +46,22 @@ export async function registerUser(formData: FormData) {
             }
         })
 
+        // Generate Welcome Discount Voucher (potongan Rp10.000)
+        const welcomeCode = `WELCOME-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+        await prisma.voucher.create({
+            data: {
+                userId: user.id,
+                code: welcomeCode,
+                type: "DISCOUNT_10",
+                description: "Promo Baru: Diskon Rp 10.000 untuk Pengguna Baru",
+                discountAmount: 10000,
+                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // Berlaku 30 hari
+            }
+        })
+
         return { success: true }
     } catch (error) {
+        console.error("Registration error:", error)
         return { error: "Terjadi kesalahan saat mendaftar" }
     }
 }

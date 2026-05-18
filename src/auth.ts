@@ -7,6 +7,7 @@ import { prisma } from "./lib/prisma"
 import bcrypt from "bcryptjs"
 import crypto from "crypto"
 import { authConfig } from "./auth.config"
+import { cookies, headers } from "next/headers"
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.AUTH_GOOGLE_SECRET
@@ -120,9 +121,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     user = await prisma.user.create({
                         data: {
                             phone,
+                            phoneVerified: true,
                             role: "CUSTOMER",
-                            name: `User ${phone.slice(-4)}`
+                            name: null
                         }
+                    });
+                } else if (!user.phoneVerified) {
+                    user = await prisma.user.update({
+                        where: { id: user.id },
+                        data: { phoneVerified: true }
                     });
                 }
 
@@ -131,9 +138,125 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         })
     ],
     callbacks: {
-        async signIn({ user }) {
+        async signIn({ user, account }) {
             if (!user.email && !(user as any).phone) return true;
+ 
+            // Handle Google OAuth custom pendaftaran guard
+            if (account?.provider === 'google') {
+                const dbUser = await prisma.user.findUnique({
+                    where: { email: user.email as string },
+                    select: { id: true, phone: true, phoneVerified: true, password: true }
+                });
 
+                if (dbUser && dbUser.phone && dbUser.phoneVerified) {
+                    // Check if banned
+                    const banned = await prisma.bannedContact.findFirst({
+                        where: {
+                            OR: [
+                                { type: 'EMAIL', value: user.email || '___' },
+                                { type: 'PHONE', value: dbUser.phone }
+                            ]
+                        }
+                    });
+                    if (banned) return false;
+                    return true;
+                }
+
+                // Read pending phone number from raw request headers (100% robust cross-platform)
+                const reqHeaders = await headers();
+                const cookieHeader = reqHeaders.get("cookie") || "";
+                let pendingPhone: string | undefined = undefined;
+                const match = cookieHeader.match(/pending_oauth_phone=([^;]+)/);
+                if (match) {
+                    pendingPhone = decodeURIComponent(match[1]);
+                }
+
+                if (pendingPhone) {
+                    let standardizedPhone = pendingPhone.replace(/[^0-9]/g, '');
+                    if (standardizedPhone.startsWith('08')) {
+                        standardizedPhone = '62' + standardizedPhone.substring(1);
+                    } else if (standardizedPhone.startsWith('8')) {
+                        standardizedPhone = '62' + standardizedPhone;
+                    }
+
+                    // Check for phone conflict
+                    const phoneConflict = await prisma.user.findFirst({
+                        where: {
+                            phone: standardizedPhone,
+                            phoneVerified: true,
+                            NOT: { email: user.email as string }
+                        }
+                    });
+
+                    if (phoneConflict) {
+                        console.warn(`[AUTH] Phone conflict for Google sign-up. Phone ${standardizedPhone} already verified by another account.`);
+                        // Only delete newly created Google accounts, never delete existing credential accounts
+                        if (dbUser && !dbUser.password) {
+                            try {
+                                await prisma.user.delete({
+                                    where: { id: dbUser.id }
+                                });
+                            } catch (e) {}
+                        }
+                        return `/login?error=PhoneConflict`;
+                    }
+
+                    // Update newly created user with phone
+                    await prisma.user.update({
+                        where: { id: user.id },
+                        data: {
+                            phone: standardizedPhone,
+                            phoneVerified: false
+                        }
+                    });
+
+                    // Clear cookie using next cookies store if possible
+                    try {
+                        const cookieStore = await cookies();
+                        cookieStore.delete("pending_oauth_phone");
+                    } catch (e) {}
+
+                    // Check if banned
+                    const banned = await prisma.bannedContact.findFirst({
+                        where: {
+                            OR: [
+                                { type: 'EMAIL', value: user.email || '___' },
+                                { type: 'PHONE', value: standardizedPhone }
+                            ]
+                        }
+                    });
+                    if (banned) {
+                        if (dbUser && !dbUser.password) {
+                            try {
+                                await prisma.user.delete({
+                                    where: { id: dbUser.id }
+                                });
+                            } catch (e) {}
+                        }
+                        return false;
+                    }
+
+                    return true;
+                } else {
+                    // Cookie not present -> Cancelled or Bypassed
+                    console.log(`[AUTH] Google login without pending_oauth_phone cookie. Deleting user ${user.id} if newly created.`);
+                    
+                    // Only delete newly created Google accounts, never delete existing credential accounts
+                    if (dbUser && !dbUser.password) {
+                        try {
+                            await prisma.user.delete({
+                                where: { id: dbUser.id }
+                            });
+                        } catch (e) {
+                            console.error("[AUTH] Failed to clean up user record:", e);
+                        }
+                    }
+                    
+                    // Redirect to login page with custom error instead of throwing AccessDenied (suspended account) error
+                    return `/login?error=PhoneRequired`;
+                }
+            }
+ 
             const banned = await prisma.bannedContact.findFirst({
                 where: {
                     OR: [
@@ -142,11 +265,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                     ]
                 }
             });
-
+ 
             if (banned) {
                 return false; // Prevents sign-in
             }
-
+ 
             return true;
         },
         ...authConfig.callbacks,

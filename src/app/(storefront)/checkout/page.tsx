@@ -86,7 +86,14 @@ export default function CheckoutPage() {
 
   const [deliveryAddress, setDeliveryAddress] = useState<{ label: string, detail: string, lat: number, lng: number, distance: number, deliveryFee: number } | null>(null);
 
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+
   useEffect(() => {
+    fetch('/api/products')
+      .then(r => r.json())
+      .then(d => { if (d.products) setAllProducts(d.products); })
+      .catch(() => {});
+
     fetch('/api/admin/store-settings')
       .then(r => r.json())
       .then(d => { if (d.openTime) setStoreSettings({ ...storeSettings, ...d }); })
@@ -137,14 +144,40 @@ export default function CheckoutPage() {
 
   const subtotal = totalPrice();
   const tumblerDiscount = hasTumbler && tumblerDiscountPct > 0 ? Math.round(subtotal * tumblerDiscountPct / 100) : 0;
+  
+  const shippingFee = orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0;
+  
+  const hasFreeShippingBundle = useMemo(() => {
+    return items.some(item => {
+      if (item.isBundle) {
+        const prod = allProducts.find(p => p.id === item.productId);
+        if (prod?.modifiers) {
+          return (prod.modifiers as any).freeShipping === true;
+        }
+      }
+      return false;
+    });
+  }, [items, allProducts]);
+
+  const ongkirDiscount = hasFreeShippingBundle
+    ? shippingFee
+    : appliedVoucher
+      ? appliedVoucher.type === 'GRATIS_ONGKIR' ? shippingFee
+      : appliedVoucher.type === 'DISKON_ONGKIR' ? Math.min(shippingFee, 10000)
+      : 0
+      : 0;
+
   const voucherDiscount = appliedVoucher
     ? appliedVoucher.type === 'FREE_DRINK' ? 25000
     : appliedVoucher.type === 'FREE_TOPPING' ? 3000
     : appliedVoucher.type === 'UPGRADE_SIZE' ? 5000
-    : appliedVoucher.type === 'REFERRAL_REWARD' ? 25000 : 10000
+    : appliedVoucher.type === 'REFERRAL_REWARD' ? 25000
+    : appliedVoucher.type === 'GRATIS_ONGKIR' || appliedVoucher.type === 'DISKON_ONGKIR' ? 0
+    : 10000
     : 0;
+
   const pointsDiscount = usePoints ? pointsToUse * 1000 : 0;
-  const grandTotal = Math.max(0, subtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + (orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0);
+  const grandTotal = Math.max(0, subtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, shippingFee - ongkirDiscount);
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
 
   const handleApplyVoucher = async () => {
@@ -198,8 +231,12 @@ export default function CheckoutPage() {
           quantity: item.quantity,
           price: item.basePrice,
           totalPrice: item.totalPrice,
-          modsString: `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map(a => a.name).join(', +') : ''}`,
-          addOnIds: item.addOns.map(a => a.id),
+          modsString: item.isBundle && item.bundleSelections
+            ? item.bundleSelections.map(s => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
+            : `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map(a => a.name).join(', +') : ''}`,
+          addOnIds: item.isBundle ? [] : item.addOns.map(a => a.id),
+          isBundle: item.isBundle || false,
+          bundleSelections: item.isBundle ? item.bundleSelections : undefined
         })),
         address: deliveryAddress ? { ...deliveryAddress } : undefined,
         deliveryFee: orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0,
@@ -536,7 +573,12 @@ export default function CheckoutPage() {
                       
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{item.name}</p>
-                        <p className="text-[11px] text-gray-500 line-clamp-1">{item.iceLevel} · {item.sugarLevel}{item.addOns.length > 0 && ` · +${item.addOns.map(a => a.name).join(', ')}`}</p>
+                        <p className="text-[11px] text-gray-500 line-clamp-1">
+                          {item.isBundle && item.bundleSelections
+                            ? item.bundleSelections.map((s: any) => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
+                            : `${item.iceLevel} · ${item.sugarLevel}${item.addOns.length > 0 ? ` · +${item.addOns.map(a => a.name).join(', ')}` : ''}`
+                          }
+                        </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <p className="text-xs font-bold text-[#B48A5E]">{formatRupiah(item.totalPrice)}</p>
                           <button 
@@ -715,6 +757,15 @@ export default function CheckoutPage() {
                 <span className="font-medium text-purple-600">-{formatRupiah(voucherDiscount)}</span>
               </div>
             )}
+            {(hasFreeShippingBundle || (appliedVoucher && (appliedVoucher.type === 'GRATIS_ONGKIR' || appliedVoucher.type === 'DISKON_ONGKIR') && ongkirDiscount > 0)) && (
+              <div className="flex justify-between text-sm">
+                <span className="text-emerald-600 flex items-center gap-1.5">
+                  <Truck className="w-3.5 h-3.5" />
+                  Diskon Ongkir {hasFreeShippingBundle && <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full font-bold">Promo Combo</span>}
+                </span>
+                <span className="font-medium text-emerald-600">-{formatRupiah(ongkirDiscount)}</span>
+              </div>
+            )}
             {usePoints && pointsDiscount > 0 && (
               <div className="flex justify-between text-sm">
                 <span className="text-amber-600 flex items-center gap-1.5"><Coins className="w-3.5 h-3.5" />Poin ({pointsToUse})</span>
@@ -763,6 +814,7 @@ export default function CheckoutPage() {
         onClose={() => setIsProductModalOpen(false)}
         editCartItemId={editingCartItem?.id || undefined}
         initialData={editingCartItem || undefined}
+        allProducts={allProducts}
       />
 
       {/* Toast Notification */}

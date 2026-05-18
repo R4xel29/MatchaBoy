@@ -7,7 +7,7 @@ import { AppHeader } from '@/components/storefront/AppHeader';
 import { FloatingCart } from '@/components/storefront/FloatingCart';
 import { BottomNav } from '@/components/storefront/BottomNav';
 import { QROverlay } from '@/components/storefront/QROverlay';
-import { PhoneNumberModal } from '@/components/storefront/PhoneNumberModal';
+import { Loader2 } from 'lucide-react';
 
 // Context to pass search control down to page
 interface StorefrontContextType {
@@ -35,21 +35,49 @@ export default function StorefrontLayout({
   const [searchOpen, setSearchOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const { data: session, status } = useSession();
-  const [needsPhone, setNeedsPhone] = useState(false);
+  const [setupChecked, setSetupChecked] = useState(false);
 
-  // Check if logged-in user has phone number
+  // Check if logged-in user has pin and name
   useEffect(() => {
     if (status === 'authenticated' && session?.user) {
       fetch('/api/user/check-phone')
         .then((res) => res.json())
         .then((data) => {
-          if (!data.hasPhone) {
-            setNeedsPhone(true);
+          // If we are already on a setup page, don't redirect
+          const path = window.location.pathname;
+          if (path.startsWith('/setup-')) {
+            setSetupChecked(true);
+            return;
+          }
+
+          if (!data.hasPin) {
+            router.push('/setup-pin');
+          } else if (!data.hasName) {
+            router.push('/setup-profile');
+          } else if (!data.phoneVerified) {
+            router.push('/setup-phone');
+          } else {
+            setSetupChecked(true);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          setSetupChecked(true);
+        });
+    } else if (status === 'unauthenticated') {
+      setSetupChecked(true);
     }
-  }, [status, session]);
+  }, [status, session, router]);
+
+  if (status === 'loading' || (status === 'authenticated' && !setupChecked)) {
+    return (
+      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="w-8 h-8 text-[#B48A5E] animate-spin" />
+          <p className="text-sm text-gray-500 font-medium font-serif">Memuat Arus...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <StorefrontContext.Provider
@@ -78,11 +106,6 @@ export default function StorefrontLayout({
           isOpen={qrOpen} 
           onClose={() => setQrOpen(false)} 
         />
-
-        {/* Blocking Phone Number Modal */}
-        {needsPhone && (
-          <PhoneNumberModal onComplete={() => setNeedsPhone(false)} />
-        )}
       </div>
     </StorefrontContext.Provider>
   );
