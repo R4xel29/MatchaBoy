@@ -27,6 +27,10 @@ function LoginContent() {
     
     let waMessage = `Hi Arus, request link untuk Masuk / Daftar ke aplikasi Arus dengan nomor WhatsApp ini dong ${formattedToken}. OTP ${otp}.`;
     
+    if (typeof window !== 'undefined') {
+      waMessage += ` Domain: ${window.location.origin}.`;
+    }
+
     if (targetPhone) {
       let stdPhone = targetPhone.replace(/[^0-9]/g, '');
       if (stdPhone.startsWith('08')) {

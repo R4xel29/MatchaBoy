@@ -65,15 +65,21 @@ export async function POST(req: Request) {
 
       if (!dbToken) {
         console.warn(`[WHATSAPP_WEBHOOK] Token verifikasi tidak valid atau kadaluarsa: ${code}`);
-        await sendWhatsAppMessage(phone, "Verifikasi gagal ❌\n\nKode verifikasi tidak valid atau sudah kadaluarsa. Silakan ajukan kembali dari aplikasi.", jid);
-        return NextResponse.json({ success: false, error: "Invalid or expired token" });
+        const reply = "Verifikasi gagal ❌\n\nKode verifikasi tidak valid atau sudah kadaluarsa. Silakan ajukan kembali dari aplikasi.";
+        try {
+          await sendWhatsAppMessage(phone, reply, jid);
+        } catch {}
+        return NextResponse.json({ success: false, error: "Invalid or expired token", replyMessage: reply });
       }
 
       // Check if it's indeed a phone verification token
       if (!dbToken.identifier.startsWith("verify-phone:")) {
         console.warn(`[WHATSAPP_WEBHOOK] Token bukan untuk verifikasi HP: ${dbToken.identifier}`);
-        await sendWhatsAppMessage(phone, "Verifikasi gagal ❌\n\nKode konfirmasi tersebut bukan untuk verifikasi WhatsApp.", jid);
-        return NextResponse.json({ success: false, error: "Invalid token type" });
+        const reply = "Verifikasi gagal ❌\n\nKode konfirmasi tersebut bukan untuk verifikasi WhatsApp.";
+        try {
+          await sendWhatsAppMessage(phone, reply, jid);
+        } catch {}
+        return NextResponse.json({ success: false, error: "Invalid token type", replyMessage: reply });
       }
 
       const parts = dbToken.identifier.split(":");
@@ -97,8 +103,11 @@ export async function POST(req: Request) {
 
       if (standardizedSenderPhone !== standardizedTargetPhone) {
         console.warn(`[WHATSAPP_WEBHOOK] Phone mismatch. Sender: ${standardizedSenderPhone}, Target: ${standardizedTargetPhone}`);
-        await sendWhatsAppMessage(phone, "Verifikasi gagal ❌\n\nNomor pengirim tidak cocok dengan nomor yang Anda masukkan di aplikasi.", jid);
-        return NextResponse.json({ success: false, error: "Phone number mismatch" });
+        const reply = "Verifikasi gagal ❌\n\nNomor pengirim tidak cocok dengan nomor yang Anda masukkan di aplikasi.";
+        try {
+          await sendWhatsAppMessage(phone, reply, jid);
+        } catch {}
+        return NextResponse.json({ success: false, error: "Phone number mismatch", replyMessage: reply });
       }
 
       console.log(`[WHATSAPP_WEBHOOK] Memulai verifikasi nomor HP user ID: ${userId} ke nomor: ${standardizedTargetPhone}`);
@@ -120,9 +129,12 @@ export async function POST(req: Request) {
       console.log(`[WHATSAPP_WEBHOOK] Nomor HP untuk user ${userId} berhasil diverifikasi.`);
 
       // Send WhatsApp confirmation back to the user
-      await sendWhatsAppMessage(standardizedSenderPhone, `Verifikasi Berhasil! ✅\n\nNomor WhatsApp Anda telah berhasil diverifikasi untuk akun *Arum Seduh* Anda. Silakan kembali ke aplikasi untuk melanjutkan transaksi.`, jid);
+      const reply = `Verifikasi Berhasil! ✅\n\nNomor WhatsApp Anda telah berhasil diverifikasi untuk akun *Arum Seduh* Anda. Silakan kembali ke aplikasi untuk melanjutkan transaksi.`;
+      try {
+        await sendWhatsAppMessage(standardizedSenderPhone, reply, jid);
+      } catch {}
 
-      return NextResponse.json({ success: true, message: "Phone verified and confirmed via WhatsApp" });
+      return NextResponse.json({ success: true, message: "Phone verified and confirmed via WhatsApp", replyMessage: reply });
     }
 
     if (isDeleteRequest) {
@@ -139,15 +151,21 @@ export async function POST(req: Request) {
 
       if (!dbToken) {
         console.warn(`[WHATSAPP_WEBHOOK] Token delete tidak valid atau kadaluarsa: ${code}`);
-        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nKode konfirmasi penghapusan akun tidak valid atau sudah kadaluarsa. Silakan ajukan kembali dari menu Edit Profil di aplikasi.", jid);
-        return NextResponse.json({ success: false, error: "Invalid or expired token" });
+        const reply = "Gagal memproses permintaan ❌\n\nKode konfirmasi penghapusan akun tidak valid atau sudah kadaluarsa. Silakan ajukan kembali dari menu Edit Profil di aplikasi.";
+        try {
+          await sendWhatsAppMessage(phone, reply, jid);
+        } catch {}
+        return NextResponse.json({ success: false, error: "Invalid or expired token", replyMessage: reply });
       }
 
       // Check if it's indeed a delete token
       if (!dbToken.identifier.startsWith("delete:")) {
         console.warn(`[WHATSAPP_WEBHOOK] Token bukan untuk hapus akun: ${dbToken.identifier}`);
-        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nKode konfirmasi tersebut bukan untuk penghapusan akun.", jid);
-        return NextResponse.json({ success: false, error: "Invalid token type" });
+        const reply = "Gagal memproses permintaan ❌\n\nKode konfirmasi tersebut bukan untuk penghapusan akun.";
+        try {
+          await sendWhatsAppMessage(phone, reply, jid);
+        } catch {}
+        return NextResponse.json({ success: false, error: "Invalid token type", replyMessage: reply });
       }
 
       const userId = dbToken.identifier.split(":")[1];
@@ -159,8 +177,11 @@ export async function POST(req: Request) {
 
       if (!user) {
         console.warn(`[WHATSAPP_WEBHOOK] User untuk delete tidak ditemukan: ${userId}`);
-        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nAkun Anda tidak ditemukan di sistem kami.", jid);
-        return NextResponse.json({ success: false, error: "User not found" });
+        const reply = "Gagal memproses permintaan ❌\n\nAkun Anda tidak ditemukan di sistem kami.";
+        try {
+          await sendWhatsAppMessage(phone, reply, jid);
+        } catch {}
+        return NextResponse.json({ success: false, error: "User not found", replyMessage: reply });
       }
 
       // Verify that the sender's phone number matches the user's phone number in DB
@@ -180,8 +201,11 @@ export async function POST(req: Request) {
 
       if (standardizedSenderPhone !== standardizedUserPhone) {
         console.warn(`[WHATSAPP_WEBHOOK] Phone mismatch. Sender: ${standardizedSenderPhone}, User DB: ${standardizedUserPhone}`);
-        await sendWhatsAppMessage(phone, "Gagal memproses permintaan ❌\n\nNomor pengirim tidak cocok dengan nomor yang terdaftar di akun ini.", jid);
-        return NextResponse.json({ success: false, error: "Phone number mismatch" });
+        const reply = "Gagal memproses permintaan ❌\n\nNomor pengirim tidak cocok dengan nomor yang terdaftar di akun ini.";
+        try {
+          await sendWhatsAppMessage(phone, reply, jid);
+        } catch {}
+        return NextResponse.json({ success: false, error: "Phone number mismatch", replyMessage: reply });
       }
 
       console.log(`[WHATSAPP_WEBHOOK] Memulai proses penghapusan akun user: ${user.name} (${user.id})`);
@@ -218,9 +242,12 @@ export async function POST(req: Request) {
       console.log(`[WHATSAPP_WEBHOOK] Akun user ${user.id} berhasil dihapus.`);
 
       // Send WhatsApp confirmation back to the user
-      await sendWhatsAppMessage(standardizedSenderPhone, `Akun Anda dengan nama *${user.name || "Matcha Lover"}* telah berhasil dihapus secara permanen dari sistem *Arum Seduh*! ❌\n\nTerima kasih telah bersama kami. Semoga kita bisa bertemu kembali di lain kesempatan.`, jid);
+      const deleteMessage = `Akun Anda dengan nama *${user.name || "Matcha Lover"}* telah berhasil dihapus secara permanen dari sistem *Arum Seduh*! ❌\n\nTerima kasih telah bersama kami. Semoga kita bisa bertemu kembali di lain kesempatan.`;
+      try {
+        await sendWhatsAppMessage(standardizedSenderPhone, deleteMessage, jid);
+      } catch {}
 
-      return NextResponse.json({ success: true, message: "Account deleted and confirmed via WhatsApp" });
+      return NextResponse.json({ success: true, message: "Account deleted and confirmed via WhatsApp", replyMessage: deleteMessage });
     }
 
     if (isLoginRequest) {
@@ -249,8 +276,10 @@ export async function POST(req: Request) {
           
           const errorMessage = `Login Gagal! ❌\n\nNomor pengirim WhatsApp ini (*${standardizedPhone}*) tidak cocok dengan nomor yang Anda masukkan di aplikasi (*${standardizedTarget}*).\n\nSilakan gunakan akun WhatsApp yang sesuai dengan nomor tersebut untuk mengirim pesan.`;
           
-          await sendWhatsAppMessage(standardizedPhone, errorMessage, jid);
-          return NextResponse.json({ success: false, error: "Phone number mismatch" });
+          try {
+            await sendWhatsAppMessage(standardizedPhone, errorMessage, jid);
+          } catch {}
+          return NextResponse.json({ success: false, error: "Phone number mismatch", replyMessage: errorMessage });
         }
       }
 
@@ -273,10 +302,12 @@ export async function POST(req: Request) {
       // Pesan balasan ke user
       const replyMessage = `Login Berhasil Dikonfirmasi! ✅\n\nSilakan klik link berikut untuk kembali ke aplikasi dan masuk ke akun Anda:\n${magicLink}\n\n(Link berlaku selama 15 menit)`;
 
-      // Kirim pesan ke WhatsApp user via API provider
-      await sendWhatsAppMessage(standardizedPhone, replyMessage, jid);
+      // Kirim pesan ke WhatsApp user via API provider (asynchronous callback)
+      try {
+        await sendWhatsAppMessage(standardizedPhone, replyMessage, jid);
+      } catch {}
 
-      return NextResponse.json({ success: true, message: "Magic link sent" });
+      return NextResponse.json({ success: true, message: "Magic link sent", magicLink, replyMessage });
     }
 
     return NextResponse.json({ success: true, message: "Ignored" });
