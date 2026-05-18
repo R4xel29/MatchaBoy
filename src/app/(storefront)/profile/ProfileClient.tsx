@@ -40,7 +40,8 @@ import {
   Search,
   Star,
   Map,
-  LocateFixed
+  LocateFixed,
+  Fingerprint
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import 'leaflet/dist/leaflet.css';
@@ -531,6 +532,23 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
             <Shield className="w-4 h-4" />
             Ganti PIN
           </button>
+
+          {/* Keamanan Biometrik */}
+          <div className="space-y-3">
+            <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Keamanan Biometrik</label>
+            <div className="p-4 bg-[#F9F9F9] rounded-2xl border border-gray-100 flex flex-col gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
+                  <Fingerprint className="w-5 h-5 text-brand-600" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">Login Sidik Jari</h4>
+                  <p className="text-[11px] text-gray-500">Masuk lebih cepat & aman</p>
+                </div>
+              </div>
+              <RegisterPasskeyButton />
+            </div>
+          </div>
 
           {/* Gender Selector */}
           <div className="space-y-3">

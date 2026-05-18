@@ -68,13 +68,7 @@ export function AppHeader({ onSearchClick }: AppHeaderProps) {
               className="object-contain"
             />
           </div>
-          <motion.span
-            className="font-heading font-bold text-lg tracking-tight"
-            animate={{ color: scrolled ? '#D4A574' : '#FFFFFF' }}
-            transition={{ duration: 0.25 }}
-          >
-            Arus
-          </motion.span>
+
         </div>
 
 

@@ -1,7 +1,7 @@
 {
-    "name": "Matchaboy",
-    "short_name": "Matchaboy",
-    "description": "New Culture Matcha — Order matcha favoritmu langsung dari HP",
+    "name": "Arum Seduh",
+    "short_name": "Arum Seduh",
+    "description": "Nikmati seduhan terbaik dari Arus. Premium drinks & pastries delivered to your door.",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#FFFBF5",
