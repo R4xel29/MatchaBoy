@@ -16,8 +16,13 @@ export function ProductGrid({
   onProductClick,
 }: ProductGridProps) {
   const filtered = useMemo(() => {
-    if (activeCategory === 'all') return products;
-    return products.filter((p) => p.category === activeCategory);
+    if (activeCategory === 'bundle') {
+      return products.filter((p) => p.modifiers?.isBundle === true);
+    }
+    if (activeCategory === 'all') {
+      return products.filter((p) => p.modifiers?.isBundle !== true);
+    }
+    return products.filter((p) => p.category === activeCategory && p.modifiers?.isBundle !== true);
   }, [products, activeCategory]);
 
   if (filtered.length === 0) {
