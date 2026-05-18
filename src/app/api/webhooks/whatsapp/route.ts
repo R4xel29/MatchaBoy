@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
 
-// URL dasar aplikasi untuk mengarahkan kembali user setelah klik magic link
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+// URL dasar aplikasi akan ditentukan secara dinamis dari origin request jika env tidak diatur
 
 // Fungsi untuk mengirim pesan balasan WhatsApp
 async function sendWhatsAppMessage(phone: string, text: string, jid?: string) {
@@ -29,6 +28,8 @@ async function sendWhatsAppMessage(phone: string, text: string, jid?: string) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const requestUrl = new URL(req.url);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin;
 
     // Struktur body mungkin berbeda tergantung provider WA yang dipakai.
     // Asumsi kita menggunakan format generik: { phone: "628...", text: "LOGIN-123456" }
@@ -267,7 +268,7 @@ export async function POST(req: Request) {
       });
 
       // Siapkan URL Magic Link
-      const magicLink = `${APP_URL}/verify-wa?token=${magicToken}`;
+      const magicLink = `${appUrl}/verify-wa?token=${magicToken}`;
 
       // Pesan balasan ke user
       const replyMessage = `Login Berhasil Dikonfirmasi! ✅\n\nSilakan klik link berikut untuk kembali ke aplikasi dan masuk ke akun Anda:\n${magicLink}\n\n(Link berlaku selama 15 menit)`;
