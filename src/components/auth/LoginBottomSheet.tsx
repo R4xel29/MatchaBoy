@@ -15,19 +15,39 @@ export function LoginBottomSheet({ isOpen, onClose }: { isOpen: boolean, onClose
     const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const formattedToken = `${token.substring(0,8)}-${token.substring(8,12)}-${token.substring(12,16)}-${token.substring(16,20)}-${token.substring(20,32)}`;
     const otp = Math.floor(10000 + Math.random() * 90000);
-    const waMessage = `Hi Arus, request link untuk Masuk / Daftar ke aplikasi Arus dengan nomor WhatsApp ini dong ${formattedToken}. OTP ${otp}.`;
+    
+    let waMessage = `Hi Arus, request link untuk Masuk / Daftar ke aplikasi Arus dengan nomor WhatsApp ini dong ${formattedToken}. OTP ${otp}.`;
+    
+    if (typeof window !== 'undefined') {
+      waMessage += ` Domain: ${window.location.origin}.`;
+    }
     
     window.open(`https://wa.me/${process.env.NEXT_PUBLIC_WA_BOT_NUMBER || "6289525672990"}?text=${encodeURIComponent(waMessage)}`, '_blank');
     setLoading(false);
   };
 
-  const handleWALogin = () => {
+  const handleWALogin = (targetPhone?: string) => {
     setLoading(true);
     // Standard WA login flow from login page
     const token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
     const formattedToken = `${token.substring(0,8)}-${token.substring(8,12)}-${token.substring(12,16)}-${token.substring(16,20)}-${token.substring(20,32)}`;
     const otp = Math.floor(10000 + Math.random() * 90000);
-    const waMessage = `Hi Arus, request link untuk Masuk / Daftar ke aplikasi Arus dengan nomor WhatsApp ini dong ${formattedToken}. OTP ${otp}.`;
+    
+    let waMessage = `Hi Arus, request link untuk Masuk / Daftar ke aplikasi Arus dengan nomor WhatsApp ini dong ${formattedToken}. OTP ${otp}.`;
+    
+    if (typeof window !== 'undefined') {
+      waMessage += ` Domain: ${window.location.origin}.`;
+    }
+
+    if (targetPhone) {
+      let stdPhone = targetPhone.replace(/[^0-9]/g, '');
+      if (stdPhone.startsWith('08')) {
+        stdPhone = '62' + stdPhone.substring(1);
+      } else if (stdPhone.startsWith('8')) {
+        stdPhone = '62' + stdPhone;
+      }
+      waMessage += ` HP: ${stdPhone}.`;
+    }
     
     window.open(`https://wa.me/${process.env.NEXT_PUBLIC_WA_BOT_NUMBER || "6289525672990"}?text=${encodeURIComponent(waMessage)}`, '_blank');
     setLoading(false);
@@ -121,7 +141,7 @@ export function LoginBottomSheet({ isOpen, onClose }: { isOpen: boolean, onClose
                     </div>
 
                     <button
-                      onClick={handleWALogin}
+                      onClick={() => handleWALogin(phone)}
                       disabled={!phone || loading}
                       className="w-full py-4 bg-gray-200 text-gray-500 rounded-xl font-bold hover:bg-[#B48A5E] hover:text-white transition-all disabled:opacity-50 disabled:hover:bg-gray-200 disabled:hover:text-gray-500 flex items-center justify-center"
                     >

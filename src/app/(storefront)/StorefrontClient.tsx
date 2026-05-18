@@ -48,7 +48,7 @@ export default function StorefrontClient({
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { searchOpen, setSearchOpen } = useStorefrontContext();
+  const { searchOpen, setSearchOpen, openLogin } = useStorefrontContext();
 
   const [isNight, setIsNight] = useState(false);
   const dragY = useMotionValue(0);
@@ -577,7 +577,7 @@ export default function StorefrontClient({
               <p className="text-[11.5px] text-[#A69F94] font-medium">Dapatkan poin cashback, diskon spesial, dan kemudahan pemesanan.</p>
             </div>
             <button 
-              onClick={() => router.push('/login')}
+              onClick={openLogin}
               className="w-full md:w-[230px] py-4 bg-gradient-to-r from-[#B02A30] to-[#901E23] hover:from-[#901E23] hover:to-[#701015] text-white text-[13px] font-black rounded-2xl shadow-[0_8px_24px_rgba(176,42,48,0.25)] hover:shadow-[0_8px_32px_rgba(176,42,48,0.4)] transition-all duration-350 tracking-wide active:scale-[0.98]"
             >
               Daftar atau Masuk

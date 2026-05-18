@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useStorefrontContext } from '@/app/(storefront)/layout';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -37,6 +38,7 @@ type OrderType = 'PICKUP' | 'DELIVERY';
 export default function CheckoutPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { openLogin } = useStorefrontContext();
 
   const items = useCartStore((s) => s.items);
   const totalPrice = useCartStore((s) => s.totalPrice);
@@ -314,7 +316,7 @@ export default function CheckoutPage() {
           </p>
           <button
             type="button"
-            onClick={() => router.push('/login?callbackUrl=/checkout')}
+            onClick={openLogin}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-[15px] hover:opacity-90 transition-opacity shadow-lg shadow-[#B48A5E]/20"
           >
             Masuk / Daftar

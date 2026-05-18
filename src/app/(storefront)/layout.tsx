@@ -9,6 +9,7 @@ import { BottomNav } from '@/components/storefront/BottomNav';
 import { QROverlay } from '@/components/storefront/QROverlay';
 import { Loader2 } from 'lucide-react';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { LoginBottomSheet } from '@/components/auth/LoginBottomSheet';
 
 // Context to pass search control down to page
 interface StorefrontContextType {
@@ -16,6 +17,7 @@ interface StorefrontContextType {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
   openQR: () => void;
+  openLogin: () => void;
 }
 
 const StorefrontContext = createContext<StorefrontContextType>({
@@ -23,6 +25,7 @@ const StorefrontContext = createContext<StorefrontContextType>({
   searchOpen: false,
   setSearchOpen: () => {},
   openQR: () => {},
+  openLogin: () => {},
 });
 
 export const useStorefrontContext = () => useContext(StorefrontContext);
@@ -35,6 +38,7 @@ export default function StorefrontLayout({
   const router = useRouter();
   const [searchOpen, setSearchOpen] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const { data: session, status } = useSession();
   const [setupChecked, setSetupChecked] = useState(false);
 
@@ -81,11 +85,12 @@ export default function StorefrontLayout({
         setSearchOpen,
         openQR: () => {
           if (status === 'unauthenticated') {
-            router.push('/login');
+            setLoginOpen(true);
           } else {
             setQrOpen(true);
           }
         },
+        openLogin: () => setLoginOpen(true),
       }}
     >
       <div className="min-h-dvh bg-background">
@@ -99,6 +104,10 @@ export default function StorefrontLayout({
           key={session?.user?.id ? `qr-${session.user.id}-${qrOpen}` : 'qr-guest'} 
           isOpen={qrOpen} 
           onClose={() => setQrOpen(false)} 
+        />
+        <LoginBottomSheet 
+          isOpen={loginOpen} 
+          onClose={() => setLoginOpen(false)} 
         />
       </div>
     </StorefrontContext.Provider>
