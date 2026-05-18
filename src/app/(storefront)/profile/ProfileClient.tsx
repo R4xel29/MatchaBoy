@@ -239,52 +239,45 @@ export default function ProfileClient({
               exit={{ opacity: 0, y: 10 }}
               className="px-4 pb-4 max-w-4xl mx-auto relative z-20"
             >
-              <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-4 border border-gray-100 flex items-stretch">
-                {/* User Info Section */}
-                <div className="flex flex-col flex-1 gap-2 pr-4">
-                  <div className="relative w-16 h-16 mb-1">
-                    <div className="absolute inset-0 rounded-full border-2 border-gray-100 p-0.5">
+              <div className="bg-white rounded-2xl shadow-xl shadow-gray-200/50 p-5 border border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Left: User Info */}
+                <div className="flex items-center gap-4">
+                  <div className="relative w-14 h-14 shrink-0">
+                    <div className="absolute inset-0 rounded-full border-2 border-brand-100 p-0.5 shadow-sm">
                       <div className="w-full h-full rounded-full bg-brand-50 flex items-center justify-center overflow-hidden">
-                        <User className="w-8 h-8 text-brand-600" />
+                        <User className="w-7 h-7 text-[#B48A5E]" />
                       </div>
                     </div>
                   </div>
-                  <div className="space-y-0.5">
-                    <p className="text-[11px] text-gray-400 font-medium">Hai,</p>
-                    <h2 className="text-base font-bold text-gray-900 leading-tight truncate">{user.name}</h2>
+                  <div className="space-y-1">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider leading-none">Hai,</p>
+                    <h2 className="text-base font-black text-gray-900 leading-none truncate max-w-[180px]">{user.name}</h2>
                   </div>
                 </div>
 
-                {/* Vertical Divider */}
-                <div className="w-px bg-gray-100 my-2" />
-
-                {/* Level Section */}
-                <div className="flex flex-col items-center justify-center px-4 w-28 text-center">
-                  <p className="text-[10px] text-brand-500 font-bold uppercase tracking-wider mb-2">Level</p>
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center">
-                       <Heart className="w-4 h-4 text-gray-300" />
+                {/* Right: Metrics Grid */}
+                <div className="flex items-center gap-3 shrink-0">
+                  {/* Level Badge */}
+                  <div className="flex-1 sm:flex-initial min-w-[100px] bg-gray-50/60 border border-gray-100/80 rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-white shadow-sm flex items-center justify-center shrink-0 border border-gray-50">
+                      <Heart className="w-4 h-4 text-gray-400" />
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-700">Silver</p>
-                      <p className="text-[9px] text-gray-400 font-medium">0%</p>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider leading-none">Level</p>
+                      <p className="text-[11px] font-black text-gray-700 leading-none">Silver (0%)</p>
                     </div>
                   </div>
-                </div>
 
-                {/* Vertical Divider */}
-                <div className="w-px bg-gray-100 my-2" />
-
-                {/* Points Section */}
-                <div className="flex flex-col items-center justify-center pl-4 w-32 text-center">
-                  <p className="text-[10px] text-brand-500 font-bold uppercase tracking-wider mb-2">Arus Points</p>
-                  <div className="flex flex-col items-center gap-1">
-                    <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
-                       <Coins className="w-4 h-4 text-amber-500" />
+                  {/* Points Badge */}
+                  <div className="flex-1 sm:flex-initial min-w-[115px] bg-amber-50/20 border border-amber-100/30 rounded-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 shadow-sm flex items-center justify-center shrink-0 border border-amber-100/50">
+                      <Coins className="w-4 h-4 text-amber-500" />
                     </div>
-                    <div className="flex items-baseline gap-1">
-                      <p className="text-lg font-black text-gray-900 leading-none">{user.isGuest ? '-' : user.points}</p>
-                      <p className="text-[10px] text-gray-400 font-bold">pts</p>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] text-amber-600/80 font-bold uppercase tracking-wider leading-none">Arus Poin</p>
+                      <p className="text-[11px] font-black text-gray-800 leading-none">
+                        {user.isGuest ? '-' : user.points} <span className="text-[8px] text-gray-400 font-bold">pts</span>
+                      </p>
                     </div>
                   </div>
                 </div>
