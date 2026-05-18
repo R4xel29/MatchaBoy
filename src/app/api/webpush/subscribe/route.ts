@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { db } from "@/lib/db";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     }
 
     // Save or update subscription
-    await db.pushSubscription.upsert({
+    await prisma.pushSubscription.upsert({
       where: { endpoint: subscription.endpoint },
       update: {
         userId: session.user.id,

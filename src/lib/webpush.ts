@@ -1,5 +1,5 @@
 import webpush from 'web-push';
-import { db } from './db';
+import { prisma } from './prisma';
 
 // Ensure you have these environment variables set
 const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -24,7 +24,7 @@ export async function sendPushNotification(userId: string, options: SendPushOpti
   }
 
   try {
-    const subscriptions = await db.pushSubscription.findMany({
+    const subscriptions = await prisma.pushSubscription.findMany({
       where: { userId },
     });
 
@@ -52,7 +52,7 @@ export async function sendPushNotification(userId: string, options: SendPushOpti
         if (error.statusCode === 404 || error.statusCode === 410) {
           // Subscription has expired or is no longer valid, delete it
           console.log('Subscription expired. Deleting endpoint:', sub.endpoint);
-          await db.pushSubscription.delete({ where: { id: sub.id } });
+          await prisma.pushSubscription.delete({ where: { id: sub.id } });
         } else {
           console.error('Error sending push notification:', error);
         }
@@ -72,7 +72,7 @@ export async function sendBlastNotification(options: SendPushOptions) {
   }
 
   try {
-    const subscriptions = await db.pushSubscription.findMany();
+    const subscriptions = await prisma.pushSubscription.findMany();
 
     if (subscriptions.length === 0) return;
 
@@ -96,7 +96,7 @@ export async function sendBlastNotification(options: SendPushOptions) {
         await webpush.sendNotification(pushSubscription, payload);
       } catch (error: any) {
         if (error.statusCode === 404 || error.statusCode === 410) {
-          await db.pushSubscription.delete({ where: { id: sub.id } });
+          await prisma.pushSubscription.delete({ where: { id: sub.id } });
         }
       }
     });
