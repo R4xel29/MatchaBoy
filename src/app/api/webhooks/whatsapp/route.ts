@@ -29,7 +29,12 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const requestUrl = new URL(req.url);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin;
+    let appUrl = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin;
+    
+    // SAFETY OVERRIDE: Cegah link localhost di Vercel akibat salah setting Environment Variables
+    if (appUrl.includes("localhost") && !requestUrl.origin.includes("localhost")) {
+      appUrl = requestUrl.origin;
+    }
 
     // Struktur body mungkin berbeda tergantung provider WA yang dipakai.
     // Asumsi kita menggunakan format generik: { phone: "628...", text: "LOGIN-123456" }
