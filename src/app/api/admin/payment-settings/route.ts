@@ -37,6 +37,10 @@ export async function PUT(req: NextRequest) {
           qrisLogo: body.qrisLogo,
           qrisLabel: body.qrisLabel,
           transferEnabled: body.transferEnabled,
+          dokuEnabled: body.dokuEnabled,
+          dokuClientId: body.dokuClientId,
+          dokuSharedKey: body.dokuSharedKey,
+          dokuSandbox: body.dokuSandbox,
         },
       });
     }

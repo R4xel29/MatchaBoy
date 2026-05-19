@@ -204,6 +204,7 @@ model Order {
 
   // Payment proof (for QRIS/Transfer)
   paymentProofUrl String?
+  paymentUrl      String?
 
   // Financials
   subtotal    Int
@@ -449,6 +450,12 @@ model PaymentSettings {
 
   // Bank Transfer
   transferEnabled Boolean  @default(true)
+
+  // DOKU
+  dokuEnabled     Boolean  @default(false)
+  dokuClientId    String   @default("")
+  dokuSharedKey   String   @default("")
+  dokuSandbox     Boolean  @default(true)
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

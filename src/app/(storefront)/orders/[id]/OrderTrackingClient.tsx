@@ -20,6 +20,7 @@ import {
   X,
   ChevronRight,
   Leaf,
+  CreditCard,
 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { formatRupiah } from '@/lib/utils';
@@ -43,6 +44,7 @@ export type TrackingOrderShape = {
   estimatedArrival: string;
   hasTumbler?: boolean;
   adminWhatsApp?: string;
+  paymentUrl?: string;
 };
 
 type OrderStep = {
@@ -435,6 +437,30 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               </div>
             </div>
           </section>
+        )}
+
+        {/* DOKU Pay Now Button */}
+        {order.paymentMethod === 'DOKU' && currentStatus === 'PENDING_PAYMENT' && order.paymentUrl && (
+          <div className="p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50 space-y-3 shadow-sm">
+            <div className="flex items-start gap-2.5">
+              <CreditCard className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-0.5">
+                  Menunggu Pembayaran
+                </p>
+                <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
+                  Segera selesaikan pembayaran via DOKU agar pesanan Anda langsung diproses secara otomatis.
+                </p>
+              </div>
+            </div>
+            <a
+              href={order.paymentUrl}
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
+            >
+              <CreditCard className="w-4 h-4" />
+              Bayar Sekarang ({formatRupiah(order.total)})
+            </a>
+          </div>
         )}
 
         {/* Contact Admin */}

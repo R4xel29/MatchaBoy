@@ -38,5 +38,10 @@ export async function GET() {
       enabled: settings.transferEnabled,
       banks,
     },
+    doku: {
+      enabled: settings.dokuEnabled,
+      clientId: settings.dokuClientId,
+      sandbox: settings.dokuSandbox,
+    },
   });
 }

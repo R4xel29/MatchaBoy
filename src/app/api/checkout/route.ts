@@ -175,7 +175,15 @@ export async function POST(req: Request) {
             pointsDiscount = pointsUsed * 1000 // 1 point = Rp1.000
         }
 
-        let secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, deliveryFee - ongkirDiscount)
+        const secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, deliveryFee - ongkirDiscount)
+
+        const paymentSettings = await prisma.paymentSettings.findFirst()
+        const isDoku = body.paymentMethod?.toUpperCase() === 'DOKU'
+        if (isDoku) {
+            if (!paymentSettings || !paymentSettings.dokuEnabled || !paymentSettings.dokuClientId || !paymentSettings.dokuSharedKey) {
+                return NextResponse.json({ error: 'Metode pembayaran DOKU sedang tidak aktif.' }, { status: 400 })
+            }
+        }
 
         // Build address string
         const address = orderType === 'PICKUP'
@@ -216,7 +224,7 @@ export async function POST(req: Request) {
                     deliveryFee,
                     total: secureTotal,
                     paymentMethod: body.paymentMethod?.toUpperCase() || 'TRANSFER',
-                    status: 'PENDING',
+                    status: isDoku ? 'PENDING_PAYMENT' : 'PENDING',
                     hasTumbler,
                     notes: body.notes || null,
                     items: {
@@ -253,6 +261,48 @@ export async function POST(req: Request) {
             return newOrder
         })
 
+        // Call DOKU Hosted Checkout API outside the database transaction
+        let paymentUrl: string | undefined
+        if (isDoku && paymentSettings) {
+            try {
+                const { createDokuCheckoutSession } = await import('@/lib/doku')
+                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
+                
+                const dokuResult = await createDokuCheckoutSession({
+                    clientId: paymentSettings.dokuClientId,
+                    sharedKey: paymentSettings.dokuSharedKey,
+                    isSandbox: paymentSettings.dokuSandbox,
+                }, {
+                    invoiceNumber: order.id,
+                    amount: secureTotal,
+                    customerName: body.name,
+                    customerPhone: body.phone,
+                    customerEmail: session.user.email || 'customer@matchaboy.com',
+                    callbackUrl,
+                })
+
+                if (dokuResult.error) {
+                    throw new Error(`DOKU Error: ${dokuResult.error}`)
+                }
+
+                paymentUrl = dokuResult.url
+
+                // Save the payment URL back to the order
+                await prisma.order.update({
+                    where: { id: order.id },
+                    data: { paymentUrl }
+                })
+            } catch (dokuError: any) {
+                console.error('[DOKU INITIALIZATION ERROR]', dokuError)
+                // Set order status to CANCELLED since DOKU generation failed
+                await prisma.order.update({
+                    where: { id: order.id },
+                    data: { status: 'CANCELLED', notes: `DOKU Failure: ${dokuError.message}` }
+                })
+                return NextResponse.json({ error: `Gagal memproses pembayaran DOKU: ${dokuError.message}` }, { status: 500 })
+            }
+        }
+
         // Send order notification to user
         try {
             const { sendNotification } = await import('@/lib/notification-service')
@@ -268,7 +318,7 @@ export async function POST(req: Request) {
             console.error('[CHECKOUT] Notification error:', e)
         }
 
-        return NextResponse.json({ success: true, orderId: order.id, total: secureTotal })
+        return NextResponse.json({ success: true, orderId: order.id, total: secureTotal, paymentUrl })
     } catch (error) {
         console.error('Checkout error:', error)
         // Forward validation errors from transaction as 400 (not generic 500)

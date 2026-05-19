@@ -61,6 +61,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     orderType: (order as any).orderType || 'DELIVERY',
     hasTumbler: order.hasTumbler || false,
     adminWhatsApp,
+    paymentUrl: order.paymentUrl || undefined,
   }
 
   return <OrderTrackingClient order={mappedOrder as any} />

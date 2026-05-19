@@ -254,7 +254,11 @@ export default function CheckoutPage() {
       if (!res.ok) throw new Error(responseData.error || 'Gagal membuat pesanan');
 
       clearCart();
-      router.push(`/orders/${responseData.orderId}`);
+      if (responseData.paymentUrl) {
+        window.location.href = responseData.paymentUrl;
+      } else {
+        router.push(`/orders/${responseData.orderId}`);
+      }
     } catch (error: any) {
       setToast({ message: error.message, type: 'error' });
       setIsSubmitting(false);

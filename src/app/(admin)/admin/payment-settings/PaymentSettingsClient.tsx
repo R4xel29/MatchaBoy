@@ -16,6 +16,10 @@ interface PaymentConfig {
   qrisLogo: string | null;
   qrisLabel: string;
   transferEnabled: boolean;
+  dokuEnabled: boolean;
+  dokuClientId: string;
+  dokuSharedKey: string;
+  dokuSandbox: boolean;
 }
 
 interface BankAccount {
@@ -254,6 +258,73 @@ export default function PaymentSettingsClient() {
                   </label>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* DOKU Settings */}
+        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                <CreditCard className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">DOKU Payment Gateway</h3>
+                <p className="text-[10px] text-muted-foreground">E-Wallet, QRIS, Virtual Account, & Kartu Kredit otomatis</p>
+              </div>
+            </div>
+            <button onClick={() => update('dokuEnabled', !settings?.dokuEnabled)}>
+              {settings?.dokuEnabled
+                ? <ToggleRight className="w-7 h-7 text-emerald-500" />
+                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
+              }
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Client ID
+                </label>
+                <input
+                  type="text"
+                  value={settings?.dokuClientId || ''}
+                  onChange={(e) => update('dokuClientId', e.target.value)}
+                  placeholder="MALL-XXXXXXXX"
+                  className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Shared Key (Secret Key)
+                </label>
+                <input
+                  type="password"
+                  value={settings?.dokuSharedKey || ''}
+                  onChange={(e) => update('dokuSharedKey', e.target.value)}
+                  placeholder="SK-XXXXXXXXXXXXXXXXXXXX"
+                  className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-indigo-50/50 border border-indigo-100">
+              <input
+                type="checkbox"
+                id="dokuSandbox"
+                checked={settings?.dokuSandbox ?? true}
+                onChange={(e) => update('dokuSandbox', e.target.checked)}
+                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+              />
+              <label htmlFor="dokuSandbox" className="text-xs font-semibold text-indigo-900 cursor-pointer select-none">
+                Gunakan Mode Sandbox (Uji Coba / Development)
+              </label>
+            </div>
+            <div className="text-[10px] text-muted-foreground leading-relaxed">
+              💡 <b>Informasi Integrasi Webhook:</b> Konfigurasikan URL Pemberitahuan (Webhook / Notify URL) Anda di DOKU Dashboard ke:<br />
+              <code className="bg-gray-100 px-1 py-0.5 rounded font-mono text-[9px] select-all">
+                {typeof window !== 'undefined' ? `${window.location.origin}/api/payment/doku-webhook` : 'https://[domain-anda]/api/payment/doku-webhook'}
+              </code>
             </div>
           </div>
         </div>

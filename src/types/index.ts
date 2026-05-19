@@ -93,7 +93,7 @@ export interface StoreLocation {
 
 // ── Order Types ─────────────────────────────────────────────
 
-export type PaymentMethod = 'midtrans' | 'cod' | 'cash' | 'qris';
+export type PaymentMethod = 'midtrans' | 'cod' | 'cash' | 'qris' | 'doku';
 export type OrderType = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
 export type OrderStatus =
     | 'pending'
@@ -121,4 +121,5 @@ export interface Order {
     tableNumber?: string;
     notes?: string;
     snapToken?: string;
+    paymentUrl?: string;
 }

@@ -19,6 +19,7 @@ interface PaymentConfig {
   cod: { enabled: boolean; whatsapp: string };
   qris: { enabled: boolean; image: string | null; label: string };
   transfer: { enabled: boolean; banks: BankAccount[] };
+  doku: { enabled: boolean; clientId: string; sandbox: boolean };
 }
 
 interface PaymentUploadProps {
@@ -48,7 +49,8 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
         setConfig(data);
         // Auto-select first available method
         if (!selectedMethod) {
-          if (data.transfer?.enabled) onPaymentMethodChange('TRANSFER');
+          if (data.doku?.enabled) onPaymentMethodChange('DOKU');
+          else if (data.transfer?.enabled) onPaymentMethodChange('TRANSFER');
           else if (data.qris?.enabled) onPaymentMethodChange('QRIS');
           else if (data.cod?.enabled) onPaymentMethodChange('COD');
         }
@@ -128,6 +130,7 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
   }
 
   const methods = [
+    ...(config?.doku?.enabled ? [{ key: 'DOKU', label: 'E-Wallet/VA/CC', icon: CreditCard, color: 'indigo' }] : []),
     ...(config?.transfer?.enabled ? [{ key: 'TRANSFER', label: 'Transfer Bank', icon: Building2, color: 'blue' }] : []),
     ...(config?.qris?.enabled ? [{ key: 'QRIS', label: config?.qris?.label || 'QRIS', icon: QrCode, color: 'purple' }] : []),
     ...(config?.cod?.enabled ? [{ key: 'COD', label: 'Bayar di Tempat', icon: Banknote, color: 'green' }] : []),
@@ -136,10 +139,11 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
   return (
     <div className="space-y-4">
       {/* Method Selection Tabs */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid ${methods.length > 3 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} gap-2`}>
         {methods.map((m) => {
           const isActive = selectedMethod === m.key;
           const colorMap: Record<string, string> = {
+            indigo: isActive ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : '',
             blue: isActive ? 'border-blue-500 bg-blue-50 text-blue-700' : '',
             purple: isActive ? 'border-purple-500 bg-purple-50 text-purple-700' : '',
             green: isActive ? 'border-green-500 bg-green-50 text-green-700' : '',
@@ -164,6 +168,36 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
 
       {/* COD Panel */}
       <AnimatePresence mode="wait">
+        {selectedMethod === 'DOKU' && (
+          <motion.div
+            key="doku"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="space-y-3 overflow-hidden"
+          >
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200 shadow-sm">
+              <h4 className="text-sm font-bold text-indigo-800 mb-2 flex items-center gap-1.5">
+                <CreditCard className="w-4 h-4 text-indigo-600" /> DOKU Payment Gateway
+              </h4>
+              <p className="text-[12px] text-indigo-700 leading-relaxed mb-3">
+                Bayar aman dan otomatis menggunakan **GoPay, ShopeePay, QRIS, Virtual Account (BCA, Mandiri, BRI, dll)**, atau **Kartu Kredit**.
+              </p>
+              <div className="flex items-center gap-2 p-2 rounded-xl bg-white/80 border border-indigo-100/50 mb-3">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+                  Otomatis
+                </span>
+                <span className="text-[11px] text-indigo-700 font-semibold">
+                  Tanpa upload bukti transfer, langsung terverifikasi!
+                </span>
+              </div>
+              <p className="font-bold text-indigo-900 text-base">
+                Total Pembayaran: {formatRupiah(orderTotal)}
+              </p>
+            </div>
+          </motion.div>
+        )}
+
         {selectedMethod === 'COD' && (
           <motion.div
             key="cod"
