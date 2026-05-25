@@ -76,8 +76,10 @@ export function MapPicker({
   const [isReversing, setIsReversing] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
 
-  // Grab/Gojek-style detailed address states & UX collapse state
-  const [isFormCollapsed, setIsFormCollapsed] = useState(false);
+  // Two-step wizard: 'MAP' (full screen map pin selection) -> 'DETAILS' (big detailed address form)
+  const [pickerStep, setPickerStep] = useState<'MAP' | 'DETAILS'>('MAP');
+
+  // Grab/Gojek-style detailed address states
   const [streetNo, setStreetNo] = useState('');
   const [complexName, setComplexName] = useState('');
   const [patokan, setPatokan] = useState('');
@@ -359,7 +361,7 @@ export function MapPicker({
   return (
     <div className="fixed inset-0 z-[9999] bg-white flex flex-col md:max-w-md md:mx-auto md:shadow-2xl md:border-x md:border-gray-100">
       
-      {/* ── 2. Leaflet Map Viewport ────────────────────────────────── */}
+      {/* ── 2. Leaflet Map Viewport (Visible for Map Selection) ────────────────────────────────── */}
       <div className="absolute inset-0 bg-gray-50 z-10">
         {!mapLoaded && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-[1000] gap-3">
@@ -369,160 +371,212 @@ export function MapPicker({
         )}
         <div ref={mapContainer} className="w-full h-full" />
 
-        {/* ── Fixed Center Pin (Gojek / Grab style) ────────────────────────────────── */}
-        {mapLoaded && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-[999]">
-            <div className="relative pointer-events-none flex flex-col items-center select-none">
+        {/* ── Fixed Center Pin (Traditional Sharp Map Pin style) ────────────────────────────────── */}
+        {mapLoaded && pickerStep === 'MAP' && (
+          <div className="absolute top-1/2 left-1/2 pointer-events-none z-[999]" style={{ width: '48px', height: '60px', marginLeft: '-24px', marginTop: '-60px' }}>
+            <div className="relative w-full h-full flex flex-col items-center">
               {/* Visual representation of the pin floating/bouncing */}
               <div className={`transition-transform duration-300 ease-out transform ${
-                isMapMoving ? '-translate-y-7 scale-110' : '-translate-y-5 scale-100'
-              }`}>
-                <div className="relative">
-                  {/* Outer glow blur */}
-                  <div className="absolute -inset-2 bg-red-500/20 rounded-full blur-sm"></div>
-                  {/* Main Pin Icon container */}
-                  <div className="relative w-11 h-11 bg-gradient-to-tr from-red-600 to-red-400 rounded-full border-3 border-white shadow-2xl flex items-center justify-center">
-                    <MapPin className="w-5.5 h-5.5 text-white" />
-                  </div>
-                </div>
+                isMapMoving ? '-translate-y-4 scale-105' : 'translate-y-0 scale-100'
+              }`} style={{ transformOrigin: 'bottom center' }}>
+                <svg width="48" height="60" viewBox="0 0 48 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_10px_12px_rgba(0,0,0,0.35)]">
+                  <path d="M24 0C10.7452 0 0 10.7452 0 24C0 39 24 60 24 60C24 60 48 39 48 24C48 10.7452 37.2548 0 24 0ZM24 33C19.0294 33 15 28.9706 15 24C15 19.0294 19.0294 15 24 15C28.9706 15 33 19.0294 33 24C33 28.9706 28.9706 33 24 33Z" fill="url(#pin-gradient)" />
+                  <circle cx="24" cy="24" r="9" fill="#FFFFFF" />
+                  <circle cx="24" cy="24" r="5" fill="#1E3F20" />
+                  <defs>
+                    <linearGradient id="pin-gradient" x1="24" y1="0" x2="24" y2="60" gradientUnits="userSpaceOnUse">
+                      <stop stopColor="#B48A5E" />
+                      <stop offset="1" stopColor="#946F48" />
+                    </linearGradient>
+                  </defs>
+                </svg>
               </div>
-              {/* Pin shadow on the map */}
-              <div className={`w-3.5 h-1.5 bg-black/35 rounded-full blur-[2px] transition-all duration-300 ease-out mt-0.5 ${
-                isMapMoving ? 'scale-[0.3] opacity-30 blur-[3px]' : 'scale-100 opacity-80'
-              }`}></div>
+              {/* Shadow at the exact bottom center (which is the pin tip location when resting) */}
+              <div 
+                className="absolute bottom-0 left-1/2 w-5 h-1.5 bg-black/30 rounded-full blur-[1.5px] transition-all duration-300 ease-out" 
+                style={{ 
+                  bottom: '-3px', 
+                  transform: `translateX(-50%) ${isMapMoving ? 'scale(0.3)' : 'scale(1)'}`,
+                  opacity: isMapMoving ? 0.25 : 0.8
+                }}
+              />
             </div>
           </div>
         )}
 
         {/* Floating Quick GPS Locate Button */}
-        <button
-          type="button"
-          onClick={handleDetectLocation}
-          disabled={isDetecting}
-          className={`absolute right-4 z-[1001] w-12 h-12 bg-white rounded-full shadow-2xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-50 active:scale-95 transition-all duration-300 disabled:opacity-50 ${
-            isFormCollapsed ? 'bottom-[155px]' : 'bottom-[27.5rem]'
-          }`}
-        >
-          {isDetecting ? (
-            <Loader2 className="w-5 h-5 animate-spin text-[#B48A5E]" />
-          ) : (
-            <LocateFixed className="w-5 h-5 text-gray-700" />
-          )}
-        </button>
+        {pickerStep === 'MAP' && (
+          <button
+            type="button"
+            onClick={handleDetectLocation}
+            disabled={isDetecting}
+            className="absolute right-4 z-[1001] w-12 h-12 bg-white rounded-full shadow-2xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-50 active:scale-95 transition-all duration-300 disabled:opacity-50 bottom-[180px]"
+          >
+            {isDetecting ? (
+              <Loader2 className="w-5 h-5 animate-spin text-[#B48A5E]" />
+            ) : (
+              <LocateFixed className="w-5 h-5 text-gray-700" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* ── 1. Floating Header & Search Bar ────────────────────────────────── */}
-      <div className="absolute top-4 left-4 right-4 z-[1001] flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          {/* Back button */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-11 h-11 bg-white rounded-full shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all text-gray-700 shrink-0"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-
-          {/* Search box wrapper */}
-          <div className="flex-1 relative flex items-center bg-white rounded-full shadow-lg border border-gray-100 px-4 py-2.5 gap-2.5">
-            <Search className="w-4 h-4 text-gray-400 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              onFocus={() => searchResults.length > 0 && setShowResults(true)}
-              placeholder="Cari lokasi atau jalan..."
-              className="w-full text-sm font-medium focus:outline-none placeholder:text-gray-400 bg-transparent text-gray-800"
-            />
-            {(isSearching || isReversing) && (
-              <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
-            )}
-            {searchQuery && !isSearching && !isReversing && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  setShowResults(false);
-                }}
-                className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100 shrink-0"
-              >
-                <X className="w-3.5 h-3.5 text-gray-400" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Search Results Dropdown */}
-        <AnimatePresence>
-          {showResults && searchResults.length > 0 && (
-            <motion.div 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-h-60 overflow-y-auto divide-y divide-gray-50 mt-1"
+      {pickerStep === 'MAP' && (
+        <div className="absolute top-4 left-4 right-4 z-[1001] flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            {/* Back button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-11 h-11 bg-white rounded-full shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all text-gray-700 shrink-0 cursor-pointer"
             >
-              {searchResults.map((r, i) => (
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+
+            {/* Search box wrapper */}
+            <div className="flex-1 relative flex items-center bg-white rounded-full shadow-lg border border-gray-100 px-4 py-2.5 gap-2.5">
+              <Search className="w-4 h-4 text-gray-400 shrink-0" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onFocus={() => searchResults.length > 0 && setShowResults(true)}
+                placeholder="Cari lokasi atau jalan..."
+                className="w-full text-sm font-medium focus:outline-none placeholder:text-gray-400 bg-transparent text-gray-800"
+              />
+              {(isSearching || isReversing) && (
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
+              )}
+              {searchQuery && !isSearching && !isReversing && (
                 <button
                   type="button"
-                  key={`${r.lat}-${r.lon}-${i}`}
-                  onClick={() => handleSelectResult(r)}
-                  className="w-full flex items-start gap-3.5 px-4 py-3 hover:bg-brand-50/50 transition-colors text-left border-b border-border/10 last:border-0"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setShowResults(false);
+                  }}
+                  className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100 shrink-0"
                 >
-                  <MapPin className="w-4.5 h-4.5 text-[#B48A5E] mt-0.5 shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-800 truncate">
-                      {r.address?.road || r.display_name.split(',')[0]}
-                    </p>
-                    <p className="text-[11px] text-gray-400 line-clamp-2 mt-0.5">{r.display_name}</p>
-                  </div>
+                  <X className="w-3.5 h-3.5 text-gray-400" />
                 </button>
-              ))}
-            </motion.div>
+              )}
+            </div>
+          </div>
+
+          {/* Search Results Dropdown */}
+          <AnimatePresence>
+            {showResults && searchResults.length > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-h-60 overflow-y-auto divide-y divide-gray-50 mt-1"
+              >
+                {searchResults.map((r, i) => (
+                  <button
+                    type="button"
+                    key={`${r.lat}-${r.lon}-${i}`}
+                    onClick={() => handleSelectResult(r)}
+                    className="w-full flex items-start gap-3.5 px-4 py-3 hover:bg-[#B48A5E]/5 transition-colors text-left border-b border-border/10 last:border-0 cursor-pointer"
+                  >
+                    <MapPin className="w-4.5 h-4.5 text-[#B48A5E] mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">
+                        {r.address?.road || r.display_name.split(',')[0]}
+                      </p>
+                      <p className="text-[11px] text-gray-400 line-clamp-2 mt-0.5">{r.display_name}</p>
+                    </div>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* ── 3. Bottom Address Display & Confirm Button (Gojek / Grab style Map step bottom sheet) ── */}
+      {pickerStep === 'MAP' && (
+        <div className="absolute bottom-0 left-0 right-0 z-[1001] bg-white rounded-t-[2.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] border-t border-gray-55 p-6 flex flex-col gap-4 select-none">
+          {/* Location Info Banner */}
+          <div className="flex items-start gap-3.5 pb-2.5 border-b border-gray-100 shrink-0">
+            <div className="w-9 h-9 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E] shrink-0 mt-0.5">
+              <MapPin className="w-4.5 h-4.5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] font-bold text-[#B48A5E] uppercase tracking-wider">Lokasi Terpilih</span>
+              <h3 className="text-sm font-bold text-gray-900 truncate">
+                {selectedAddress || (isReversing ? 'Mengambil alamat...' : 'Pilih Lokasi')}
+              </h3>
+              <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">
+                {addressDetail || (isReversing ? 'Mengambil detail alamat dari peta...' : 'Geser peta untuk memilih lokasi')}
+              </p>
+            </div>
+          </div>
+
+          {/* Out of Range warning */}
+          {!withinRange && selectedAddress && (
+            <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-150 shrink-0">
+              <AlertTriangle className="w-4.5 h-4.5 text-red-500 mt-0.5 shrink-0" />
+              <p className="text-[10.5px] font-bold text-red-700 leading-tight">
+                Maaf, lokasi terpilih berada di luar jangkauan pengiriman kami (maksimal {maxDeliveryDistance} km).
+              </p>
+            </div>
           )}
-        </AnimatePresence>
-      </div>
 
-      {/* ── 3. Grab/Gojek-Style Detailed Address Bottom Sheet ────────────────────────────────── */}
-      <div className={`absolute bottom-0 left-0 right-0 z-[1001] bg-white rounded-t-[2.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] border-t border-gray-50 p-6 flex flex-col gap-4 transition-all duration-300 select-none ${
-        isFormCollapsed ? 'max-h-[135px] overflow-hidden' : 'max-h-[75vh] overflow-y-auto'
-      }`}>
-        {/* Drag handle / collapse toggle header */}
-        <div 
-          onClick={() => setIsFormCollapsed(!isFormCollapsed)}
-          className="w-full flex flex-col items-center cursor-pointer shrink-0 -mt-2 group pb-1"
-        >
-          <div className="w-12 h-1.5 bg-gray-150 rounded-full group-hover:bg-gray-200 transition-colors mb-1.5" />
-          <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#946F48] hover:underline flex items-center gap-1 select-none">
-            {isFormCollapsed ? '🔼 Tampilkan Form Detail Alamat' : '🔽 Sembunyikan Form (Lihat Peta)'}
-          </span>
+          {/* Confirm Button to switch to Step 2 (DETAILS FORM) */}
+          <button
+            type="button"
+            onClick={() => setPickerStep('DETAILS')}
+            disabled={!selectedAddress || !withinRange || isReversing}
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-sm shadow-xl shadow-[#B48A5E]/15 hover:shadow-[#B48A5E]/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+          >
+            Pilih Lokasi Ini
+          </button>
         </div>
+      )}
 
-        {/* Location Info Banner */}
-        <div className="flex items-start gap-3.5 pb-3 border-b border-gray-100 shrink-0">
-          <div className="w-9 h-9 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E] shrink-0 mt-0.5">
-            <MapPin className="w-4.5 h-4.5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <span className="text-[10px] font-bold text-[#B48A5E] uppercase tracking-wider">Lokasi Terpilih</span>
-            <h3 className="text-sm font-bold text-gray-900 truncate">
-              {selectedAddress || (isReversing ? 'Mengambil alamat...' : 'Pilih Lokasi')}
-            </h3>
-            <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">
-              {addressDetail || (isReversing ? 'Mengambil detail alamat dari peta...' : 'Geser peta untuk memilih lokasi')}
-            </p>
-          </div>
-        </div>
+      {/* ── 4. Full-screen Detailed Address Form Wizard Overlay ── */}
+      <AnimatePresence>
+        {pickerStep === 'DETAILS' && (
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="absolute inset-0 z-[1002] bg-[#FDFBF7] flex flex-col pt-safe pb-safe"
+          >
+            {/* Header */}
+            <div className="px-6 py-4 flex items-center gap-4 bg-white sticky top-0 z-10 border-b border-gray-100/50 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setPickerStep('MAP')}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all active:scale-90 cursor-pointer"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h2 className="font-serif text-base font-bold text-gray-900 flex-1">Detail Alamat Pengiriman</h2>
+            </div>
 
-        {/* Form Content - Only visible if not collapsed */}
-        {!isFormCollapsed && (
-          <div className="space-y-4 flex-grow">
-            {/* Detailed Address Inputs Form */}
-            <div className="space-y-3.5">
-              <div className="grid grid-cols-1 gap-3.5">
-                {/* House / Unit Number Field */}
+            {/* Scrollable Form Content */}
+            <div className="flex-grow overflow-y-auto p-6 space-y-6 pb-28 scrollbar-hide">
+              {/* Selected Location Card */}
+              <div className="bg-white rounded-3xl p-5 border border-[#D4A574]/20 flex items-start gap-4 shadow-sm">
+                <div className="w-10 h-10 rounded-2xl bg-[#1E3F20]/5 border border-[#1E3F20]/15 flex items-center justify-center shrink-0 text-[#1E3F20]">
+                  <MapPin className="w-5 h-5 fill-[#1E3F20]/10" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold text-[#B48A5E] uppercase tracking-wider">Lokasi Dipilih</span>
+                  <h4 className="text-sm font-black text-gray-900 truncate leading-snug">{selectedAddress}</h4>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{addressDetail}</p>
+                </div>
+              </div>
+
+              {/* Form Input fields */}
+              <div className="space-y-4">
+                {/* No. Rumah / Unit */}
                 <div className="space-y-1">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 pl-1">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
                     <span>No. Rumah / Unit / Lantai / Blok</span>
                     <span className="text-red-500 font-bold">*</span>
                   </label>
@@ -534,7 +588,7 @@ export function MapPicker({
                       if (e.target.value.trim()) setDetailError('');
                     }}
                     placeholder="Contoh: No. 12B, Lantai 3, Blok C4"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F9F8F6] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
                   />
                   {detailError && (
                     <p className="text-[10px] text-red-500 font-bold pl-1 flex items-center gap-1">
@@ -543,9 +597,9 @@ export function MapPicker({
                   )}
                 </div>
 
-                {/* Complex / Building Name Field */}
+                {/* Complex Name */}
                 <div className="space-y-1">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 pl-1">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
                     <Building2 className="w-3.5 h-3.5 text-gray-400" />
                     <span>Nama Komplek / Perumahan / Gedung (Opsional)</span>
                   </label>
@@ -554,13 +608,13 @@ export function MapPicker({
                     value={complexName}
                     onChange={(e) => setComplexName(e.target.value)}
                     placeholder="Contoh: Perumahan Kebon Asri, Gedung Graha Pena"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F9F8F6] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
                   />
                 </div>
 
-                {/* Courier Note / Landmark Field */}
+                {/* Courier Note / Landmark */}
                 <div className="space-y-1">
-                  <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 pl-1">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
                     <ClipboardList className="w-3.5 h-3.5 text-gray-400" />
                     <span>Patokan Khusus / Catatan Kurir (Opsional)</span>
                   </label>
@@ -569,15 +623,13 @@ export function MapPicker({
                     value={patokan}
                     onChange={(e) => setPatokan(e.target.value)}
                     placeholder="Contoh: Depan pagar hitam, sebelah warung Madura"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-[#F9F8F6] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
                   />
                 </div>
               </div>
-            </div>
 
-            {/* Distance & Delivery Fee Info */}
-            {selectedAddress && (
-              <div className="flex items-center justify-between p-3.5 bg-gray-50 rounded-2xl border border-gray-100 shrink-0">
+              {/* Distance & Delivery Fee Info */}
+              <div className="flex items-center justify-between p-4 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/20 shadow-sm">
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Jarak Antar</p>
                   <p className="text-xs font-extrabold text-gray-800">{distance.toFixed(1)} km</p>
@@ -589,41 +641,22 @@ export function MapPicker({
                   </p>
                 </div>
               </div>
-            )}
+            </div>
 
-            {/* Out of Range warning */}
-            {!withinRange && selectedAddress && (
-              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-150 shrink-0">
-                <AlertTriangle className="w-4.5 h-4.5 text-red-500 mt-0.5 shrink-0" />
-                <p className="text-[10.5px] font-bold text-red-700 leading-tight">
-                  Maaf, lokasi terpilih berada di luar jangkauan pengiriman kami (maksimal {maxDeliveryDistance} km).
-                </p>
-              </div>
-            )}
-
-            {/* Confirm Button */}
-            <button
-              type="button"
-              onClick={handleConfirm}
-              disabled={!selectedAddress || !withinRange || isReversing}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-sm shadow-xl shadow-brand-500/10 hover:shadow-brand-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none shrink-0"
-            >
-              <Check className="w-4 h-4" /> Konfirmasi Alamat Pengiriman
-            </button>
-          </div>
+            {/* Bottom floating confirmation button */}
+            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-50 p-6 z-20">
+              <button
+                type="button"
+                onClick={handleConfirm}
+                disabled={!selectedAddress || !withinRange || isReversing}
+                className="w-full py-4.5 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-sm shadow-xl shadow-[#B48A5E]/15 hover:shadow-[#B48A5E]/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+              >
+                <Check className="w-4 h-4" /> Konfirmasi Alamat Pengiriman
+              </button>
+            </div>
+          </motion.div>
         )}
-
-        {/* Collapsed view button */}
-        {isFormCollapsed && (
-          <button
-            type="button"
-            onClick={() => setIsFormCollapsed(false)}
-            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-xs shadow-md transition-all active:scale-[0.98] shrink-0"
-          >
-            Lengkapi Detail Alamat & Konfirmasi
-          </button>
-        )}
-      </div>
+      </AnimatePresence>
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signIn, signOut } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useToast } from '@/components/ui/Toast';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import {
   ArrowLeft,
   User,
@@ -41,11 +43,15 @@ import {
   Star,
   Map,
   LocateFixed,
-  Fingerprint
+  Fingerprint,
+  AlertTriangle,
+  Building2,
+  ClipboardList
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import 'leaflet/dist/leaflet.css';
 import { formatRupiah } from '@/lib/utils';
+import { calculateDistance, calculateDeliveryFee, isWithinDeliveryRange } from '@/lib/delivery-utils';
 import Image from 'next/image';
 import { useCartStore } from '@/stores/cart-store';
 import { RegisterPasskeyButton } from '@/components/auth/PasskeyButtons';
@@ -104,10 +110,23 @@ export default function ProfileClient({
   milestones?: MilestoneInfo | null;
   initialUnreadCount?: number;
 }) {
+  const { showToast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
   const sectionParam = searchParams.get('section') as SectionType;
   const [activeSection, setActiveSection] = useState<SectionType>(sectionParam || 'menu');
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
   const [user, setUser] = useState(initialUser);
   const [origin, setOrigin] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -389,6 +408,14 @@ export default function ProfileClient({
           />
         )}
       </AnimatePresence>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }
@@ -397,6 +424,7 @@ export default function ProfileClient({
 
 function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onClose: () => void, onUpdate: (user: Partial<UserShape>) => void }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email || '');
   const [phone, setPhone] = useState(user.phone);
@@ -467,11 +495,11 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
         }, 3000);
         setDeletionPollingInterval(interval);
       } else {
-        alert(data.error || "Gagal mengirim kode penghapusan akun.");
+        showToast(data.error || "Gagal mengirim kode penghapusan akun.", 'error');
       }
     } catch (err) {
       console.error(err);
-      alert("Terjadi kesalahan jaringan.");
+      showToast("Terjadi kesalahan jaringan.", 'error');
     } finally {
       setRequestingDelete(false);
     }
@@ -1085,6 +1113,19 @@ const getPlaceCategoryBadge = (className: string, typeName: string) => {
 
 // Premium Saved Addresses Section with Optimized Background Preloaded Leaflet Map
 function AddressesSection({ user }: { user: UserShape }) {
+  const { showToast } = useToast();
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
   const [addresses, setAddresses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [step, setStep] = useState<'LIST' | 'MAP' | 'DETAIL'>('LIST');
@@ -1106,6 +1147,8 @@ function AddressesSection({ user }: { user: UserShape }) {
   const [mapLat, setMapLat] = useState(-7.756928);
   const [mapLng, setMapLng] = useState(113.211502);
   const [reverseGeocoding, setReverseGeocoding] = useState(false);
+  const [isMapMoving, setIsMapMoving] = useState(false);
+  const [isDetecting, setIsDetecting] = useState(false);
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -1115,11 +1158,14 @@ function AddressesSection({ user }: { user: UserShape }) {
   
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const mapRef = useRef<any>(null);
+  const storeMarkerRef = useRef<any>(null);
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const ignoreMoveEndRef = useRef(true);
 
-  const storeLat = -7.756928;
-  const storeLng = 113.211502;
+  const [storeLat, setStoreLat] = useState(-7.756928);
+  const [storeLng, setStoreLng] = useState(113.211502);
+  const [maxDeliveryDistance, setMaxDeliveryDistance] = useState(10);
+  const [deliveryFeePerKm, setDeliveryFeePerKm] = useState(2000);
 
   useEffect(() => {
     fetch('/api/user/locations')
@@ -1132,12 +1178,27 @@ function AddressesSection({ user }: { user: UserShape }) {
       .then(r => r.json())
       .then(d => {
         if (d.storeLat && d.storeLng) {
+          setStoreLat(d.storeLat);
+          setStoreLng(d.storeLng);
+          if (d.maxDeliveryDistance !== undefined) {
+            setMaxDeliveryDistance(d.maxDeliveryDistance);
+          }
+          if (d.deliveryFeePerKm !== undefined) {
+            setDeliveryFeePerKm(d.deliveryFeePerKm);
+          }
           setMapLat(d.storeLat);
           setMapLng(d.storeLng);
         }
       })
       .catch(() => {});
   }, []);
+
+  // Update store marker when store location changes
+  useEffect(() => {
+    if (storeMarkerRef.current) {
+      storeMarkerRef.current.setLatLng([storeLat, storeLng]);
+    }
+  }, [storeLat, storeLng]);
 
   // Fetch address display name from coordinates
   const triggerReverseGeocode = async (lat: number, lng: number) => {
@@ -1176,9 +1237,8 @@ function AddressesSection({ user }: { user: UserShape }) {
     const initMap = (L: any) => {
       const container = mapContainerRef.current;
       if (!container) return false;
-      if (mapRef.current) return true; // already initialized
+      if (mapRef.current) return true;
 
-      // Fix marker icons
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
         iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -1200,7 +1260,17 @@ function AddressesSection({ user }: { user: UserShape }) {
         maxZoom: 19,
       }).addTo(map);
 
-      // Force layout after animation
+      const storeIcon = L.divIcon({
+        html: '<div class="relative flex items-center justify-center"><div class="absolute w-10 h-10 bg-[#D4A574]/20 rounded-full animate-pulse"></div><div class="w-7 h-7 bg-[#B48A5E] rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10 text-white font-bold text-[10px]">🏪</div></div>',
+        className: '',
+        iconSize: [40, 40],
+        iconAnchor: [20, 20],
+      });
+
+      storeMarkerRef.current = L.marker([storeLat, storeLng], { icon: storeIcon })
+        .bindPopup('<b>Matchaboy Store</b>')
+        .addTo(map);
+
       setTimeout(() => {
         map.invalidateSize();
         setTimeout(() => {
@@ -1211,15 +1281,25 @@ function AddressesSection({ user }: { user: UserShape }) {
       triggerReverseGeocode(mapLat, mapLng);
       setMapLoaded(true);
 
-      const handleUserMapChange = () => {
+      map.on('movestart', () => {
+        if (ignoreMoveEndRef.current) return;
+        setIsMapMoving(true);
+        setMapAddress('');
+        setMapAddressTitle('');
+      });
+
+      map.on('moveend', () => {
+        if (ignoreMoveEndRef.current) {
+          ignoreMoveEndRef.current = false;
+          setIsMapMoving(false);
+          return;
+        }
+        setIsMapMoving(false);
         const center = map.getCenter();
         setMapLat(center.lat);
         setMapLng(center.lng);
         triggerReverseGeocode(center.lat, center.lng);
-      };
-
-      map.on('dragend', handleUserMapChange);
-      map.on('zoomend', handleUserMapChange);
+      });
 
       return true;
     };
@@ -1282,29 +1362,42 @@ function AddressesSection({ user }: { user: UserShape }) {
   const handleSelectSearchResult = (result: any) => {
     const lat = parseFloat(result.lat);
     const lng = parseFloat(result.lon);
+    
+    ignoreMoveEndRef.current = true;
+    
     setMapLat(lat);
     setMapLng(lng);
-    setMapAddress(result.display_name);
 
-    const title = result.display_name.split(',')[0];
+    const addr = result.address;
+    const title = addr?.road
+      ? `${addr.road}${addr.suburb ? `, ${addr.suburb}` : ''}`
+      : result.display_name.split(',').slice(0, 3).join(',');
+    const detail = result.display_name;
+
     setMapAddressTitle(title);
-
-    setSearchQuery('');
+    setMapAddress(detail);
+    
+    if (step === 'MAP') {
+      setSearchQuery(title);
+    } else {
+      setSearchQuery('');
+    }
     setSearchResults([]);
     setShowSearchResults(false);
 
     // Center map view on the selected coordinates immediately
     if (mapRef.current) {
-      ignoreMoveEndRef.current = true;
-      mapRef.current.setView([lat, lng], 16);
-      setTimeout(() => {
-        ignoreMoveEndRef.current = false;
-      }, 300);
+      mapRef.current.flyTo([lat, lng], 17, { duration: 1.5 });
     }
 
-    // Go to Map Pin alignment step
-    setMapCameFrom('LIST');
-    setStep('MAP');
+    setTimeout(() => {
+      ignoreMoveEndRef.current = false;
+    }, 1600);
+
+    if (step !== 'MAP') {
+      setMapCameFrom('LIST');
+      setStep('MAP');
+    }
   };
 
   // Detect GPS location
@@ -1362,6 +1455,7 @@ function AddressesSection({ user }: { user: UserShape }) {
   // GPS target locate while inside map view
   const handleGPSInMap = () => {
     if (!('geolocation' in navigator)) return;
+    setIsDetecting(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude;
@@ -1372,8 +1466,11 @@ function AddressesSection({ user }: { user: UserShape }) {
         if (mapRef.current) {
           mapRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
         }
+        setIsDetecting(false);
       },
-      () => {},
+      () => {
+        setIsDetecting(false);
+      },
       { enableHighAccuracy: true }
     );
   };
@@ -1393,6 +1490,10 @@ function AddressesSection({ user }: { user: UserShape }) {
     setMapLng(storeLng);
     setMapAddress('');
     setMapAddressTitle('');
+
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
 
     // Advance directly to map pin positioning screen
     setMapCameFrom('LIST');
@@ -1415,6 +1516,10 @@ function AddressesSection({ user }: { user: UserShape }) {
     const firstPart = addr.address.split(',')[0];
     setMapAddressTitle(addr.name || firstPart);
 
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchResults(false);
+
     // Go to Map Pin selection screen first so they can see/adjust the location
     setMapCameFrom('LIST');
     setStep('MAP');
@@ -1427,15 +1532,15 @@ function AddressesSection({ user }: { user: UserShape }) {
   // Save changes to db
   const handleSaveAddress = async () => {
     if (!name.trim()) {
-      alert('Nama Alamat wajib diisi');
+      showToast('Nama Alamat wajib diisi', 'error');
       return;
     }
     if (!recipient.trim()) {
-      alert('Penerima wajib diisi');
+      showToast('Penerima wajib diisi', 'error');
       return;
     }
     if (!phone.trim()) {
-      alert('Nomor Telepon wajib diisi');
+      showToast('Nomor Telepon wajib diisi', 'error');
       return;
     }
 
@@ -1479,11 +1584,11 @@ function AddressesSection({ user }: { user: UserShape }) {
         setEditingId(null);
       } else {
         const data = await res.json();
-        alert(data.error || 'Gagal menyimpan alamat');
+        showToast(data.error || 'Gagal menyimpan alamat', 'error');
       }
     } catch (err) {
       console.error(err);
-      alert('Terjadi kesalahan koneksi');
+      showToast('Terjadi kesalahan koneksi', 'error');
     } finally {
       setSaving(false);
     }
@@ -1492,26 +1597,41 @@ function AddressesSection({ user }: { user: UserShape }) {
   // Delete address
   const handleDeleteAddress = async () => {
     if (!editingId) return;
-    if (!confirm('Apakah Anda yakin ingin menghapus alamat ini?')) return;
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Alamat',
+      message: 'Apakah Anda yakin ingin menghapus alamat ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        setSaving(true);
+        try {
+          const res = await fetch(`/api/user/locations/${editingId}`, {
+            method: 'DELETE'
+          });
 
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/user/locations/${editingId}`, {
-        method: 'DELETE'
-      });
-
-      if (res.ok) {
-        setAddresses(prev => prev.filter(a => a.id !== editingId));
-        setStep('LIST');
-        setEditingId(null);
-      } else {
-        alert('Gagal menghapus alamat');
+          if (res.ok) {
+            const data = await res.json();
+            setAddresses(prev => {
+              const filtered = prev.filter(a => a.id !== editingId);
+              if (data.newDefaultId) {
+                return filtered.map(a => a.id === data.newDefaultId ? { ...a, isDefault: true } : a);
+              }
+              return filtered;
+            });
+            setStep('LIST');
+            setEditingId(null);
+            showToast('Alamat berhasil dihapus', 'success');
+          } else {
+            showToast('Gagal menghapus alamat', 'error');
+          }
+        } catch {
+          showToast('Terjadi kesalahan koneksi', 'error');
+        } finally {
+          setSaving(false);
+        }
       }
-    } catch {
-      alert('Terjadi kesalahan koneksi');
-    } finally {
-      setSaving(false);
-    }
+    });
   };
 
   if (loading) {
@@ -1699,9 +1819,7 @@ function AddressesSection({ user }: { user: UserShape }) {
               </div>
             )}
           </motion.section>
-        )}
-
-        {/* ==================== SCREEN 2: MAP VIEW SELECT PIN ==================== */}
+        )}        {/* ==================== SCREEN 2: MAP VIEW SELECT PIN ==================== */}
         {step === 'MAP' && (
           <motion.div
             key="map-step"
@@ -1710,84 +1828,180 @@ function AddressesSection({ user }: { user: UserShape }) {
             exit={{ opacity: 0, y: 30 }}
             className="fixed inset-0 z-[100] bg-white flex flex-col pt-safe pb-safe"
           >
-            {/* Header */}
-            <div className="px-4 py-4 flex items-center gap-4 bg-white sticky top-0 z-10 border-b border-gray-50">
-              <button
-                onClick={() => setStep(mapCameFrom === 'DETAIL' ? 'DETAIL' : 'LIST')}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all active:scale-90"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h2 className="font-serif text-base font-bold text-gray-900 flex-1">Pilih Lokasi</h2>
-            </div>
-
-            {/* Interactive Leaflet Map picker */}
-            <div className="flex-1 relative bg-gray-100 overflow-hidden" style={{ minHeight: '300px' }}>
-              <div
-                id="leaflet-picker-map"
-                ref={mapContainerRef}
-                className="absolute inset-0 z-0"
-                style={{ width: '100%', height: '100%' }}
-              ></div>
+            {/* ── Leaflet Map Viewport (Visible for Map Selection) ────────────────────────────────── */}
+            <div className="absolute inset-0 bg-gray-50 z-10">
               {!mapLoaded && (
-                <div className="absolute inset-0 bg-gray-50 flex flex-col items-center justify-center gap-3 z-[1001]">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-[1000] gap-3">
                   <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E]" />
-                  <span className="text-[13px] text-gray-500 font-medium">Memuat Peta...</span>
+                  <p className="text-xs font-semibold text-gray-500">Menyiapkan peta...</p>
+                </div>
+              )}
+              <div ref={mapContainerRef} className="w-full h-full" />
+
+              {/* ── Fixed Center Pin (Traditional Sharp Map Pin style) ────────────────────────────────── */}
+              {mapLoaded && (
+                <div className="absolute top-1/2 left-1/2 pointer-events-none z-[999]" style={{ width: '48px', height: '60px', marginLeft: '-24px', marginTop: '-60px' }}>
+                  <div className="relative w-full h-full flex flex-col items-center">
+                    {/* Visual representation of the pin floating/bouncing */}
+                    <div className={`transition-transform duration-300 ease-out transform ${
+                      isMapMoving ? '-translate-y-4 scale-105' : 'translate-y-0 scale-100'
+                    }`} style={{ transformOrigin: 'bottom center' }}>
+                      <svg width="48" height="60" viewBox="0 0 48 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_10px_12px_rgba(0,0,0,0.35)]">
+                        <path d="M24 0C10.7452 0 0 10.7452 0 24C0 39 24 60 24 60C24 60 48 39 48 24C48 10.7452 37.2548 0 24 0ZM24 33C19.0294 33 15 28.9706 15 24C15 19.0294 19.0294 15 24 15C28.9706 15 33 19.0294 33 24C33 28.9706 28.9706 33 24 33Z" fill="url(#pin-gradient-profile)" />
+                        <circle cx="24" cy="24" r="9" fill="#FFFFFF" />
+                        <circle cx="24" cy="24" r="5" fill="#1E3F20" />
+                        <defs>
+                          <linearGradient id="pin-gradient-profile" x1="24" y1="0" x2="24" y2="60" gradientUnits="userSpaceOnUse">
+                            <stop stopColor="#B48A5E" />
+                            <stop offset="1" stopColor="#946F48" />
+                          </linearGradient>
+                        </defs>
+                      </svg>
+                    </div>
+                    {/* Shadow at the exact bottom center (which is the pin tip location when resting) */}
+                    <div 
+                      className="absolute bottom-0 left-1/2 w-5 h-1.5 bg-black/30 rounded-full blur-[1.5px] transition-all duration-300 ease-out" 
+                      style={{ 
+                        bottom: '-3px', 
+                        transform: `translateX(-50%) ${isMapMoving ? 'scale(0.3)' : 'scale(1)'}`,
+                        opacity: isMapMoving ? 0.25 : 0.8
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
-              {/* Fixed bounce center pin indicator */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[38px] pointer-events-none z-[1000] flex flex-col items-center">
-                <div className="relative flex items-center justify-center">
-                  <div className="w-12 h-12 bg-[#1E3F20] rounded-full border-3 border-[#D4A574] shadow-2xl flex items-center justify-center z-10 animate-bounce text-[#D4A574]">
-                    <MapPin className="w-6 h-6 fill-[#D4A574]/20" />
-                  </div>
-                  <div className="absolute top-[40px] w-4 h-1.5 bg-black/20 rounded-full blur-[1px] scale-x-150" />
-                </div>
-              </div>
-
-              {/* Geser untuk pindah lokasi overlay tag (Screen 2) */}
-              <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
-                <div className="bg-[#1E3F20]/95 backdrop-blur-sm text-white px-5 py-2 rounded-full text-[11px] font-bold shadow-md flex items-center gap-2 border border-[#D4A574]/20 whitespace-nowrap">
-                  <span>Geser untuk pindah lokasi</span>
-                </div>
-              </div>
-
-              {/* GPS locate button */}
+              {/* Floating Quick GPS Locate Button */}
               <button
+                type="button"
                 onClick={handleGPSInMap}
-                className="absolute bottom-32 right-4 z-[1000] w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all text-gray-700 border border-gray-100"
+                disabled={isDetecting}
+                className="absolute right-4 z-[1001] w-12 h-12 bg-white rounded-full shadow-2xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-50 active:scale-95 transition-all duration-300 disabled:opacity-50 bottom-[180px]"
               >
-                <LocateFixed className="w-5 h-5 text-[#B48A5E]" />
+                {isDetecting ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-[#B48A5E]" />
+                ) : (
+                  <LocateFixed className="w-5 h-5 text-gray-700" />
+                )}
               </button>
+            </div>
 
-              {/* Reverse Geocode display banner & Select location button */}
-              <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4.5 rounded-t-3xl shadow-[0_-8px_30px_rgb(0,0,0,0.08)] z-[1000] space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center shrink-0 mt-0.5 border border-emerald-100">
-                    <MapPin className="w-4 h-4 text-emerald-600 fill-emerald-600/10" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {reverseGeocoding ? (
-                      <div className="space-y-1.5 py-1">
-                        <div className="h-3.5 bg-gray-100 rounded animate-pulse w-3/4" />
-                        <div className="h-3 bg-gray-100 rounded animate-pulse w-5/6" />
-                      </div>
-                    ) : (
-                      <p className="text-[13px] font-semibold text-gray-700 leading-snug">
-                        {mapAddress || 'Mencari lokasi pin...'}
-                      </p>
-                    )}
-                  </div>
-                </div>
+            {/* ── Floating Header & Search Bar ────────────────────────────────── */}
+            <div className="absolute top-4 left-4 right-4 z-[1001] flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                {/* Back button */}
                 <button
-                  onClick={handleConfirmMapLocation}
-                  disabled={reverseGeocoding || !mapAddress}
-                  className="w-full py-4.5 bg-gradient-to-r from-[#B48A5E] to-[#946F48] hover:opacity-95 text-white font-black rounded-2xl shadow-lg shadow-[#B48A5E]/20 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm"
+                  type="button"
+                  onClick={() => setStep('LIST')}
+                  className="w-11 h-11 bg-white rounded-full shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all text-gray-700 shrink-0 cursor-pointer"
                 >
-                  Pilih Lokasi Ini
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
+
+                {/* Search box wrapper */}
+                <div className="flex-1 relative flex items-center bg-white rounded-full shadow-lg border border-gray-100 px-4 py-2.5 gap-2.5">
+                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
+                    placeholder="Cari lokasi atau jalan..."
+                    className="w-full text-sm font-medium focus:outline-none placeholder:text-gray-400 bg-transparent text-gray-800"
+                  />
+                  {(isSearching || reverseGeocoding) && (
+                    <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
+                  )}
+                  {searchQuery && !isSearching && !reverseGeocoding && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setSearchResults([]);
+                        setShowSearchResults(false);
+                      }}
+                      className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100 shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Search Results Dropdown */}
+              <AnimatePresence>
+                {showSearchResults && searchResults.length > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-h-60 overflow-y-auto divide-y divide-gray-50 mt-1"
+                  >
+                    {searchResults.map((r, i) => (
+                      <button
+                        type="button"
+                        key={`${r.lat}-${r.lon}-${i}`}
+                        onClick={() => handleSelectSearchResult(r)}
+                        className="w-full flex items-start gap-3.5 px-4 py-3 hover:bg-[#B48A5E]/5 transition-colors text-left border-b border-border/10 last:border-0 cursor-pointer"
+                      >
+                        <MapPin className="w-4.5 h-4.5 text-[#B48A5E] mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">
+                            {r.address?.road || r.display_name.split(',')[0]}
+                          </p>
+                          <p className="text-[11px] text-gray-400 line-clamp-2 mt-0.5">{r.display_name}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* ── Bottom Address Display & Confirm Button ── */}
+            <div className="absolute bottom-0 left-0 right-0 z-[1001] bg-white rounded-t-[2.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] border-t border-gray-100 p-6 flex flex-col gap-4 select-none">
+              {/* Location Info Banner */}
+              <div className="flex items-start gap-3.5 pb-2.5 border-b border-gray-100 shrink-0">
+                <div className="w-9 h-9 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E] shrink-0 mt-0.5">
+                  <MapPin className="w-4.5 h-4.5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold text-[#B48A5E] uppercase tracking-wider">Lokasi Terpilih</span>
+                  <h3 className="text-sm font-bold text-gray-900 truncate">
+                    {mapAddressTitle || (reverseGeocoding ? 'Mengambil alamat...' : 'Pilih Lokasi')}
+                  </h3>
+                  <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">
+                    {mapAddress || (reverseGeocoding ? 'Mengambil detail alamat dari peta...' : 'Geser peta untuk memilih lokasi')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Out of Range warning */}
+              {(() => {
+                const dist = calculateDistance(storeLat, storeLng, mapLat, mapLng);
+                const isOk = isWithinDeliveryRange(dist, maxDeliveryDistance);
+                if (!isOk && mapAddress) {
+                  return (
+                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-150 shrink-0">
+                      <AlertTriangle className="w-4.5 h-4.5 text-red-500 mt-0.5 shrink-0" />
+                      <p className="text-[10.5px] font-bold text-red-700 leading-tight">
+                        Maaf, lokasi terpilih berada di luar jangkauan pengiriman kami (maksimal {maxDeliveryDistance} km).
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Confirm Button */}
+              <button
+                type="button"
+                onClick={handleConfirmMapLocation}
+                disabled={!mapAddress || !isWithinDeliveryRange(calculateDistance(storeLat, storeLng, mapLat, mapLng), maxDeliveryDistance) || reverseGeocoding}
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-sm shadow-xl shadow-[#B48A5E]/15 hover:shadow-[#B48A5E]/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+              >
+                Pilih Lokasi Ini
+              </button>
             </div>
           </motion.div>
         )}
@@ -1802,94 +2016,109 @@ function AddressesSection({ user }: { user: UserShape }) {
             className="fixed inset-0 z-[100] bg-[#FDFBF7] flex flex-col pt-safe pb-safe"
           >
             {/* Header */}
-            <div className="px-4 py-4 flex items-center gap-4 bg-white sticky top-0 z-10 border-b border-gray-55 shadow-sm">
+            <div className="px-6 py-4 flex items-center gap-4 bg-white sticky top-0 z-10 border-b border-gray-100/50 shadow-sm">
               <button
+                type="button"
                 onClick={() => {
                   setMapCameFrom('DETAIL');
                   setStep('MAP');
                 }}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all active:scale-90"
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all active:scale-90 cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
-              <h2 className="font-serif text-base font-bold text-gray-900 flex-1">Detail Alamat</h2>
+              <h2 className="font-serif text-base font-bold text-gray-900 flex-1">Detail Alamat Pengiriman</h2>
               {/* Map Layout Icon on top right (Screen 3) */}
               <button
+                type="button"
                 onClick={() => {
                   setMapCameFrom('DETAIL');
                   setStep('MAP');
                 }}
-                className="w-10 h-10 flex items-center justify-center rounded-full text-[#B48A5E] hover:bg-[#B48A5E]/5 active:scale-95 transition-all"
+                className="w-10 h-10 flex items-center justify-center rounded-full text-[#B48A5E] hover:bg-[#B48A5E]/5 active:scale-95 transition-all cursor-pointer"
               >
                 <Map className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Content Form Form */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6 pb-24 scrollbar-hide">
-              
-              {/* Selected coordinates details display */}
-              <div className="space-y-1.5">
-                <h3 className="font-black text-gray-800 text-[15px] leading-tight">
-                  {mapAddressTitle || 'Lokasi Dipilih'}
-                </h3>
-                <p className="text-[13px] text-gray-500 leading-relaxed font-semibold">
-                  {mapAddress}
-                </p>
+            {/* Scrollable Form Content */}
+            <div className="flex-grow overflow-y-auto p-6 space-y-6 pb-28 scrollbar-hide">
+              {/* Selected Location Card */}
+              <div className="bg-white rounded-3xl p-5 border border-[#D4A574]/20 flex items-start gap-4 shadow-sm">
+                <div className="w-10 h-10 rounded-2xl bg-[#1E3F20]/5 border border-[#1E3F20]/15 flex items-center justify-center shrink-0 text-[#1E3F20]">
+                  <MapPin className="w-5 h-5 fill-[#1E3F20]/10" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold text-[#B48A5E] uppercase tracking-wider">Lokasi Dipilih</span>
+                  <h4 className="text-sm font-black text-gray-900 truncate leading-snug">{mapAddressTitle || 'Lokasi Dipilih'}</h4>
+                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{mapAddress}</p>
+                </div>
               </div>
 
-              {/* Special Notes (Catatan Spesial - optional textarea) */}
-              <div className="space-y-1">
-                <label className="text-[12px] font-bold text-gray-500">Catatan Spesial</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="rumah pink"
-                  rows={2}
-                  className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E] focus:ring-1 focus:ring-[#B48A5E]/20 transition-all outline-none text-[15px] font-medium text-gray-900 resize-none shadow-inner"
-                />
-              </div>
+              {/* Form Input fields */}
+              <div className="space-y-4">
+                {/* Special Notes (Catatan Spesial - e.g. Patokan) */}
+                <div className="space-y-1">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
+                    <ClipboardList className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Catatan Spesial / Patokan (Opsional)</span>
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Contoh: Depan pagar hitam, rumah cat pink"
+                    rows={2}
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner resize-none"
+                  />
+                </div>
 
-              {/* Address Label (Nama Alamat - e.g. sekolah) */}
-              <div className="space-y-1">
-                <label className="text-[12px] font-bold text-gray-500">
-                  Nama Alamat <span className="text-red-550">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="sekolah"
-                  className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E] focus:ring-1 focus:ring-[#B48A5E]/20 transition-all outline-none text-[15px] font-medium text-gray-900 shadow-inner"
-                />
-              </div>
+                {/* Address Label (Nama Alamat - e.g. Rumah / Kantor) */}
+                <div className="space-y-1">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
+                    <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Nama Alamat / Label</span>
+                    <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Contoh: Rumah, Kantor, Sekolah"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
+                  />
+                </div>
 
-              {/* Recipient Name (Penerima - e.g. Axelino Manibuy) */}
-              <div className="space-y-1">
-                <label className="text-[12px] font-bold text-gray-500">
-                  Penerima <span className="text-red-550">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={recipient}
-                  onChange={(e) => setRecipient(e.target.value)}
-                  placeholder="Axelino Manibuy"
-                  className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E] focus:ring-1 focus:ring-[#B48A5E]/20 transition-all outline-none text-[15px] font-medium text-gray-900 shadow-inner"
-                />
-              </div>
+                {/* Recipient Name */}
+                <div className="space-y-1">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
+                    <User className="w-3.5 h-3.5 text-gray-400" />
+                    <span>Nama Penerima</span>
+                    <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                    placeholder="Masukkan nama penerima"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
+                  />
+                </div>
 
-              {/* Phone number (No. Telepon - e.g. 081344446442) */}
-              <div className="space-y-1">
-                <label className="text-[12px] font-bold text-gray-500">
-                  No. Telepon <span className="text-red-555">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="081344446442"
-                  className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E] focus:ring-1 focus:ring-[#B48A5E]/20 transition-all outline-none text-[15px] font-medium text-gray-900 shadow-inner"
-                />
+                {/* Phone number */}
+                <div className="space-y-1">
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
+                    <Smartphone className="w-3.5 h-3.5 text-gray-400" />
+                    <span>No. Telepon Penerima</span>
+                    <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="Contoh: 0812xxxxxxxx"
+                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
+                  />
+                </div>
               </div>
 
               {/* Main Address Star toggle (Alamat Utama) */}
@@ -1906,18 +2135,39 @@ function AddressesSection({ user }: { user: UserShape }) {
                 <input
                   type="checkbox"
                   checked={isDefault}
-                  disabled={addresses.length === 0} // First address is always default
+                  disabled={isDefault && (addresses.length <= 1 || (editingId !== null && addresses.find(a => a.id === editingId)?.isDefault))}
                   onChange={(e) => setIsDefault(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-[#B48A5E] focus:ring-[#B48A5E] accent-[#B48A5E] cursor-pointer"
+                  className="w-5 h-5 rounded border-gray-300 text-[#B48A5E] focus:ring-[#B48A5E] accent-[#B48A5E] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 />
               </div>
+
+              {/* Distance & Delivery Fee Info */}
+              {(() => {
+                const dist = calculateDistance(storeLat, storeLng, mapLat, mapLng);
+                const fee = calculateDeliveryFee(dist, deliveryFeePerKm);
+                const isOk = isWithinDeliveryRange(dist, maxDeliveryDistance);
+                return (
+                  <div className="flex items-center justify-between p-4 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/20 shadow-sm">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Jarak Antar</p>
+                      <p className="text-xs font-extrabold text-gray-800">{dist.toFixed(1)} km</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Biaya Pengiriman</p>
+                      <p className="text-xs font-extrabold text-[#B48A5E]">
+                        {isOk ? formatRupiah(fee) : 'Di luar jangkauan'}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Delete Address (Only visible if editing existing) */}
               {editingId && (
                 <button
                   type="button"
                   onClick={handleDeleteAddress}
-                  className="w-full flex items-center justify-center gap-2 py-4 text-red-500 font-bold bg-red-50/30 rounded-2xl hover:bg-red-50 active:scale-95 transition-all border border-red-100/50 mt-4"
+                  className="w-full flex items-center justify-center gap-2 py-4 text-red-500 font-bold bg-red-50/30 rounded-2xl hover:bg-red-50 active:scale-95 transition-all border border-red-100/50 mt-4 cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4 text-red-500" />
                   Hapus Alamat
@@ -1926,20 +2176,38 @@ function AddressesSection({ user }: { user: UserShape }) {
             </div>
 
             {/* Bottom continuous floating confirmation button */}
-            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-50 p-5 z-20">
+            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-55 p-6 z-20 shadow-[0_-8px_30px_rgba(0,0,0,0.035)]">
               <button
+                type="button"
                 onClick={handleSaveAddress}
                 disabled={saving || !name.trim() || !recipient.trim() || !phone.trim()}
-                className="w-full py-4.5 bg-gradient-to-br from-[#B48A5E] to-[#946F48] hover:opacity-95 text-white font-black rounded-2xl shadow-xl shadow-[#B48A5E]/15 transition-all active:scale-[0.98] flex items-center justify-center text-sm gap-2"
+                className="w-full py-4.5 bg-gradient-to-r from-[#B48A5E] to-[#946F48] hover:opacity-95 text-white font-black rounded-2xl shadow-xl shadow-[#B48A5E]/15 hover:shadow-[#B48A5E]/25 active:scale-[0.98] transition-all flex items-center justify-center text-sm gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
               >
-                {saving && <Loader2 className="w-5 h-5 animate-spin" />}
-                Lanjutkan
+                {saving ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Menyimpan...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>Konfirmasi Alamat Pengiriman</span>
+                  </>
+                )}
               </button>
             </div>
           </motion.div>
         )}
 
       </AnimatePresence>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

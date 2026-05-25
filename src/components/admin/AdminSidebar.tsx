@@ -32,7 +32,8 @@ import {
   Archive,
   BarChart4,
   UserX,
-  Ticket
+  Ticket,
+  Megaphone
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
@@ -48,6 +49,7 @@ const PRODUCT_ITEMS = [
   { label: 'Kategori', href: '/admin/categories', icon: FolderOpen },
   { label: 'Inventory', href: '/admin/inventory', icon: Archive },
   { label: 'Promo Banners', href: '/admin/hero-banners', icon: ImageIcon },
+  { label: 'Promo Popup', href: '/admin/promo-popups', icon: Megaphone },
 ];
 
 const FINANCE_ITEMS = [

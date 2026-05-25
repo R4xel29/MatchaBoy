@@ -8,6 +8,8 @@ import {
   ShoppingBag, MessageCircle, ArrowRight, Copy, Check, Upload, CheckCircle, X, Loader2
 } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
+import { useToast } from '@/components/ui/Toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 interface BankAccount {
   id: string;
@@ -34,6 +36,7 @@ export default function PaymentClient({
   bankAccounts?: BankAccount[];
   qrisConfig?: QrisConfig | null;
 }) {
+  const { showToast } = useToast()
   const router = useRouter()
   const [timeLeft, setTimeLeft] = useState('')
   const [percentLeft, setPercentLeft] = useState(100)
@@ -48,6 +51,18 @@ export default function PaymentClient({
   const [copiedAccount, setCopiedAccount] = useState<string | null>(null)
   const [submittingProof, setSubmittingProof] = useState(false)
   const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  })
 
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -85,6 +100,27 @@ export default function PaymentClient({
     const timer = setInterval(updateTimer, 1000)
     return () => clearInterval(timer)
   }, [order.paymentExpiredAt, order.createdAt, order.id, router])
+
+  // Poll order status to redirect when payment is verified
+  useEffect(() => {
+    const checkPaymentStatus = async () => {
+      try {
+        const res = await fetch(`/api/orders/${order.id}/status`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.status !== 'PENDING_PAYMENT') {
+            showToast('Pembayaran berhasil diverifikasi!', 'success')
+            router.push(`/orders/${order.id}`)
+          }
+        }
+      } catch (err) {
+        console.error('Error polling payment status:', err)
+      }
+    }
+
+    const interval = setInterval(checkPaymentStatus, 5000)
+    return () => clearInterval(interval)
+  }, [order.id, router, showToast])
 
   // Copy helper
   const handleCopy = (text: string, id: string) => {
@@ -145,31 +181,38 @@ export default function PaymentClient({
           router.push(`/orders/${order.id}`);
         }, 3000);
       } else {
-        alert('Gagal memverifikasi bukti pembayaran. Silakan coba lagi.');
+        showToast('Gagal memverifikasi bukti pembayaran. Silakan coba lagi.', 'error');
       }
     } catch {
-      alert('Terjadi kesalahan jaringan.');
+      showToast('Terjadi kesalahan jaringan.', 'error');
     } finally {
       setSubmittingProof(false);
     }
   };
 
   const handleCancelOrder = async () => {
-    if (confirm("Apakah Anda yakin ingin membatalkan pesanan ini?")) {
-      setSubmittingProof(true)
-      try {
-        const res = await fetch(`/api/orders/${order.id}/expire`, { method: 'POST' })
-        if (res.ok) {
-          router.push(`/orders/${order.id}/payment-failed?reason=cancelled`)
-        } else {
-          alert("Gagal membatalkan pesanan.")
+    setConfirmModal({
+      isOpen: true,
+      title: 'Batalkan Pesanan',
+      message: 'Apakah Anda yakin ingin membatalkan pesanan ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        setSubmittingProof(true)
+        try {
+          const res = await fetch(`/api/orders/${order.id}/expire`, { method: 'POST' })
+          if (res.ok) {
+            router.push(`/orders/${order.id}/payment-failed?reason=cancelled`)
+          } else {
+            showToast("Gagal membatalkan pesanan.", 'error')
+          }
+        } catch (e) {
+          showToast("Terjadi kesalahan koneksi.", 'error')
+        } finally {
+          setSubmittingProof(false)
         }
-      } catch (e) {
-        alert("Terjadi kesalahan koneksi.")
-      } finally {
-        setSubmittingProof(false)
       }
-    }
+    });
   }
 
   const getBankColor = (bankName: string) => {
@@ -185,7 +228,7 @@ export default function PaymentClient({
       {/* Header */}
       <header className="px-6 py-4 flex items-center justify-between bg-[#FFFBF5]/90 backdrop-blur-md sticky top-0 z-40 border-b border-gray-100">
         <button
-          onClick={handleCancelOrder}
+          onClick={() => router.push(`/orders/${order.id}`)}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white text-gray-650 hover:bg-gray-100 border border-gray-100 shadow-sm transition-all active:scale-95 touch-target"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -532,6 +575,14 @@ export default function PaymentClient({
           </div>
         )}
       </AnimatePresence>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

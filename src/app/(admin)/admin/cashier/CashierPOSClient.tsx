@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
+import { useToast } from '@/components/ui/Toast';
 
 type POSProduct = {
   id: string;
@@ -60,6 +61,7 @@ interface Props {
 }
 
 export default function CashierPOSClient({ products, categories }: Props) {
+  const { showToast } = useToast();
   const router = useRouter();
 
   // State
@@ -305,7 +307,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setQrError('');
       setPointsAwarded(false);
     } catch (error: any) {
-      alert(error.message);
+      showToast(error.message, 'error');
     } finally {
       setIsSubmitting(false);
     }

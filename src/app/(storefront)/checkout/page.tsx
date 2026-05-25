@@ -22,6 +22,7 @@ import { ProductRecommendations } from '@/components/checkout/ProductRecommendat
 import { ProductModal } from '@/components/storefront/ProductModal';
 import Image from 'next/image';
 import type { Product, CartItem } from '@/types';
+import { calculateDistance, calculateDeliveryFee, isWithinDeliveryRange } from '@/lib/delivery-utils';
 
 // ── Zod Schema ──────────────────────────────────────────────
 const checkoutSchema = z.object({
@@ -65,7 +66,19 @@ export default function CheckoutPage() {
 
   // Voucher state
   const [voucherCode, setVoucherCode] = useState('');
-  const [appliedVoucher, setAppliedVoucher] = useState<{ id: string; code: string; type: string; description: string; discountAmount?: number; minPurchase?: number } | null>(null);
+  const [appliedVoucher, setAppliedVoucher] = useState<{
+    id: string;
+    code: string;
+    type: string;
+    description: string;
+    discountAmount?: number;
+    minPurchase?: number;
+    maxDiscount?: number | null;
+    template?: {
+      maxDiscount?: number | null;
+      minPurchase?: number;
+    } | null;
+  } | null>(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError] = useState('');
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
@@ -93,7 +106,8 @@ export default function CheckoutPage() {
   // Store settings
   const [storeSettings, setStoreSettings] = useState({
     openTime: '08:00', closeTime: '21:00', pickupSlotInterval: 5,
-    deliveryFeePerKm: 2000, maxDeliveryDistance: 10
+    deliveryFeePerKm: 2000, maxDeliveryDistance: 10,
+    storeLat: -7.756928, storeLng: 113.211502
   });
 
   // Automatically reset tumbler option when shipping method changes to DELIVERY
@@ -106,6 +120,15 @@ export default function CheckoutPage() {
   const [deliveryAddress, setDeliveryAddress] = useState<{ label: string, detail: string, streetDetail: string, lat: number, lng: number, distance: number, deliveryFee: number } | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+
+  // Saved locations/addresses from profile
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<string>('');
+  const [profileName, setProfileName] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+
+
 
   // Payment Config State
   const [paymentConfig, setPaymentConfig] = useState<any>(null);
@@ -151,27 +174,123 @@ export default function CheckoutPage() {
       .finally(() => setPaymentConfigLoading(false));
   }, []);
 
-  // Auto-fill from session
   const {
-    register, handleSubmit, setValue,
+    register, handleSubmit, setValue, getValues,
     formState: { errors },
   } = useForm<CheckoutFormData>({
     resolver: zodResolver(checkoutSchema),
   });
 
+  // Fetch user profile and locations on mount/auth
   useEffect(() => {
-    if (session?.user) {
-      if (session.user.name) setValue('name', session.user.name);
-      // Phone + points from profile API
-      fetch('/api/user/profile')
-        .then(r => r.json())
-        .then(d => {
-          if (d.phone) setValue('phone', d.phone);
-          if (d.points !== undefined) setUserPoints(d.points);
-        })
-        .catch(() => {});
+    if (session?.user && storeSettings.storeLat) {
+      setLoadingAddresses(true);
+      
+      // Load profile and locations concurrently
+      Promise.all([
+        fetch('/api/user/profile').then(r => r.json()).catch(() => null),
+        fetch('/api/user/locations').then(r => r.json()).catch(() => null)
+      ])
+      .then(([profileData, locs]) => {
+        let pName = session.user.name || '';
+        let pPhone = '';
+        if (profileData) {
+          if (profileData.name) pName = profileData.name;
+          if (profileData.phone) pPhone = profileData.phone;
+          if (profileData.points !== undefined) setUserPoints(profileData.points);
+        }
+        setProfileName(pName);
+        setProfilePhone(pPhone);
+
+        if (Array.isArray(locs)) {
+          setSavedAddresses(locs);
+          const defaultLoc = locs.find((l: any) => l.isDefault);
+          if (defaultLoc) {
+            setSelectedSavedAddressId(defaultLoc.id);
+            const sLat = storeSettings.storeLat ?? -7.756928;
+            const sLng = storeSettings.storeLng ?? 113.211502;
+            const distance = calculateDistance(sLat, sLng, defaultLoc.lat, defaultLoc.lng);
+            const fee = calculateDeliveryFee(distance, storeSettings.deliveryFeePerKm);
+            const withinRange = isWithinDeliveryRange(distance, storeSettings.maxDeliveryDistance);
+
+            const detailsArray = [];
+            if (defaultLoc.notes) detailsArray.push(`Catatan: ${defaultLoc.notes}`);
+            if (defaultLoc.recipient) detailsArray.push(`Penerima: ${defaultLoc.recipient}`);
+            if (defaultLoc.phone) detailsArray.push(`No. Telp: ${defaultLoc.phone}`);
+            const streetDetail = detailsArray.length > 0 ? detailsArray.join(', ') : 'Tidak ada detail tambahan';
+
+            setDeliveryAddress({
+              label: defaultLoc.name || defaultLoc.address.split(',')[0],
+              detail: defaultLoc.address,
+              streetDetail,
+              lat: defaultLoc.lat,
+              lng: defaultLoc.lng,
+              distance,
+              deliveryFee: withinRange ? fee : 0
+            });
+
+            if (!withinRange) {
+              setToast({ message: `Alamat utama "${defaultLoc.name}" di luar jangkauan (${distance.toFixed(1)} km)`, type: 'error' });
+            }
+
+            // Set initial form inputs to address custom recipient details, with fallback to profile
+            setValue('name', defaultLoc.recipient || pName);
+            setValue('phone', defaultLoc.phone || pPhone);
+          } else {
+            // No default location, so set name and phone to profile values
+            setValue('name', pName);
+            setValue('phone', pPhone);
+          }
+        } else {
+          // Fallback to profile values
+          setValue('name', pName);
+          setValue('phone', pPhone);
+        }
+      })
+      .catch(e => {
+        console.error("Error loading checkout profile/locations:", e);
+        if (session.user.name) setValue('name', session.user.name);
+      })
+      .finally(() => setLoadingAddresses(false));
     }
-  }, [session?.user?.id, setValue]);
+  }, [session?.user?.id, storeSettings.storeLat, storeSettings.storeLng, storeSettings.deliveryFeePerKm, storeSettings.maxDeliveryDistance, setValue]);
+
+  const handleSelectSavedAddress = (addrId: string) => {
+    const addr = savedAddresses.find((a: any) => a.id === addrId);
+    if (!addr) return;
+    
+    setSelectedSavedAddressId(addrId);
+
+    const sLat = storeSettings.storeLat ?? -7.756928;
+    const sLng = storeSettings.storeLng ?? 113.211502;
+    const distance = calculateDistance(sLat, sLng, addr.lat, addr.lng);
+    const fee = calculateDeliveryFee(distance, storeSettings.deliveryFeePerKm);
+    const withinRange = isWithinDeliveryRange(distance, storeSettings.maxDeliveryDistance);
+
+    const detailsArray = [];
+    if (addr.notes) detailsArray.push(`Catatan: ${addr.notes}`);
+    if (addr.recipient) detailsArray.push(`Penerima: ${addr.recipient}`);
+    if (addr.phone) detailsArray.push(`No. Telp: ${addr.phone}`);
+    const streetDetail = detailsArray.length > 0 ? detailsArray.join(', ') : 'Tidak ada detail tambahan';
+
+    setDeliveryAddress({
+      label: addr.name || addr.address.split(',')[0],
+      detail: addr.address,
+      streetDetail,
+      lat: addr.lat,
+      lng: addr.lng,
+      distance,
+      deliveryFee: withinRange ? fee : 0,
+    });
+
+    if (!withinRange) {
+      setToast({ message: `Alamat "${addr.name || 'Pilihan'}" berada di luar jangkauan pengiriman (${distance.toFixed(1)} km)`, type: 'error' });
+    }
+
+    // Set form recipient details
+    setValue('name', addr.recipient || profileName);
+    setValue('phone', addr.phone || profilePhone);
+  };
 
   const fetchVouchers = async () => {
     setLoadingVouchers(true);
@@ -268,7 +387,12 @@ export default function CheckoutPage() {
     if (appliedVoucher.type === 'GRATIS_ONGKIR' || appliedVoucher.type === 'DISKON_ONGKIR') return 0;
     if (appliedVoucher.discountAmount !== undefined && appliedVoucher.discountAmount !== null) {
       if (appliedVoucher.type === 'DISCOUNT_PCT') {
-        return Math.round((subtotal * appliedVoucher.discountAmount) / 100);
+        const rawDiscount = Math.round((subtotal * appliedVoucher.discountAmount) / 100);
+        const maxDiscount = appliedVoucher.maxDiscount ?? appliedVoucher.template?.maxDiscount;
+        if (maxDiscount && maxDiscount > 0) {
+          return Math.min(rawDiscount, maxDiscount);
+        }
+        return rawDiscount;
       }
       return appliedVoucher.discountAmount;
     }
@@ -634,6 +758,42 @@ export default function CheckoutPage() {
                 <MapPin className="w-4.5 h-4.5 text-[#B48A5E]" /> Alamat Pengiriman
               </h2>
 
+              {loadingAddresses ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#B48A5E]" />
+                  <span className="text-xs font-semibold text-gray-400 ml-2">Memuat alamat tersimpan...</span>
+                </div>
+              ) : savedAddresses.length > 0 ? (
+                <div className="space-y-2 select-none">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 pl-1">Pilih Alamat Tersimpan</label>
+                  <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
+                    {savedAddresses.map((addr) => {
+                      const isSelected = selectedSavedAddressId === addr.id;
+                      return (
+                        <button
+                          key={addr.id}
+                          type="button"
+                          onClick={() => handleSelectSavedAddress(addr.id)}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
+                            isSelected
+                              ? 'border-[#B48A5E] text-[#B48A5E] bg-[#FFF8F0] shadow-sm'
+                              : 'border-gray-200 text-gray-500 bg-white hover:bg-gray-50'
+                          }`}
+                        >
+                          <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
+                          <span>{addr.name || 'Alamat'}</span>
+                          {addr.isDefault && (
+                            <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100 px-1.5 py-0.2 rounded-full ml-1">
+                              Utama
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               {!deliveryAddress ? (
                 <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-[2rem] p-8 bg-gray-50 text-center gap-4">
                   <div className="w-14 h-14 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E]">
@@ -646,7 +806,7 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     onClick={() => setIsMapOpen(true)}
-                    className="px-6 py-3 rounded-full bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-xs shadow-md shadow-[#B48A5E]/10 hover:shadow-[#B48A5E]/20 active:scale-95 transition-all flex items-center gap-2"
+                    className="px-6 py-3 rounded-full bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-xs shadow-md shadow-[#B48A5E]/10 hover:shadow-[#B48A5E]/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
                   >
                     Pilih Alamat di Peta (Buka Map)
                   </button>
@@ -666,9 +826,9 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={() => setIsMapOpen(true)}
-                      className="text-xs font-bold text-[#B48A5E] hover:underline shrink-0"
+                      className="text-xs font-bold text-[#B48A5E] hover:underline shrink-0 cursor-pointer"
                     >
-                      Ubah Alamat
+                      Ubah Alamat / Lihat Peta
                     </button>
                   </div>
 
@@ -1466,7 +1626,17 @@ export default function CheckoutPage() {
                                       {v.type}
                                     </span>
                                     <h4 className="font-serif font-black text-base text-gray-900 leading-snug">{v.description}</h4>
-                                    <p className="text-[11px] text-gray-400">Kode: {v.code}</p>
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                      <span className="text-[10px] font-bold text-gray-500">
+                                        Min. Belanja: {formatRupiah(v.template?.minPurchase || v.minPurchase || 0)}
+                                      </span>
+                                      {(v.type === 'DISCOUNT_PCT' || v.template?.type === 'DISCOUNT_PCT') && (v.maxDiscount || v.template?.maxDiscount) && (
+                                        <span className="text-[10px] font-bold text-[#D97706]">
+                                          Maks. Potongan: {formatRupiah(v.maxDiscount || v.template?.maxDiscount || 0)}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-gray-400 mt-1">Kode: {v.code}</p>
                                   </div>
                                   <button
                                     type="button"
@@ -1512,6 +1682,11 @@ export default function CheckoutPage() {
                                     </span>
                                     <h4 className="font-serif font-black text-base text-gray-700 leading-snug">{v.description}</h4>
                                     <p className="text-[11px] text-red-500 font-bold">Min. Belanja {formatRupiah(v.template?.minPurchase || v.minPurchase || 0)}</p>
+                                    {(v.type === 'DISCOUNT_PCT' || v.template?.type === 'DISCOUNT_PCT') && (v.maxDiscount || v.template?.maxDiscount) && (
+                                      <p className="text-[10px] font-bold text-gray-400">
+                                        Maks. Potongan: {formatRupiah(v.maxDiscount || v.template?.maxDiscount || 0)}
+                                      </p>
+                                    )}
                                     <p className="text-[11px] text-gray-400">Kode: {v.code}</p>
                                   </div>
                                   <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-150 flex items-center justify-center text-gray-400 shrink-0">
@@ -1605,6 +1780,7 @@ export default function CheckoutPage() {
             onClose={() => setIsMapOpen(false)}
             onLocationSelect={(data) => {
               setDeliveryAddress(data);
+              setSelectedSavedAddressId('');
               setIsMapOpen(false);
             }}
             initialLat={deliveryAddress?.lat}

@@ -309,6 +309,16 @@ model HeroBanner {
   updatedAt   DateTime @updatedAt
 }
 
+model PromoPopup {
+  id        String   @id @default(cuid())
+  title     String
+  image     String   // Image URL
+  linkUrl   String?  // Optional redirect URL when clicked
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model CashierShift {
   id           String    @id @default(cuid())
   cashierId    String

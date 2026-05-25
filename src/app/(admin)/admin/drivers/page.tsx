@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Truck, Plus, X, UserPlus, Phone, Mail, Bike,
-  Hash, Loader2, Check, AlertTriangle, Power, Edit, Ban, Trash2, CheckCircle2, XCircle
+  Hash, Loader2, Check, AlertTriangle, Power, Edit, Ban, Trash2, CheckCircle2, XCircle, Lock, Eye, EyeOff, KeyRound
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 interface Driver {
   id: string;
@@ -13,6 +14,7 @@ interface Driver {
   email: string | null;
   phone: string | null;
   image: string | null;
+  hasPassword: boolean;
   createdAt: string;
   driverProfile: {
     isOnline: boolean;
@@ -26,12 +28,14 @@ interface Driver {
 }
 
 export default function AdminDriversPage() {
+  const { showToast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Modals state
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState<Driver | null>(null);
+  const [showPasswordModal, setShowPasswordModal] = useState<Driver | null>(null);
   
   // Tabs: 'APPROVED', 'PENDING', 'SUSPENDED'
   const [activeTab, setActiveTab] = useState('APPROVED');
@@ -58,8 +62,13 @@ export default function AdminDriversPage() {
 
   // Form state
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', vehicleType: 'Motor', plateNumber: ''
+    name: '', email: '', phone: '', vehicleType: 'Motor', plateNumber: '', password: ''
   });
+
+  // Password modal state
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
 
   const fetchDrivers = async () => {
     setLoading(true);
@@ -88,6 +97,12 @@ export default function AdminDriversPage() {
     setError('');
     setSuccess('');
 
+    if (form.password && form.password.length < 6) {
+      setError('Password minimal 6 karakter');
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/admin/drivers/manage', {
         method: 'POST',
@@ -99,7 +114,7 @@ export default function AdminDriversPage() {
       if (!res.ok) throw new Error(data.error || 'Gagal menambahkan kurir');
 
       setSuccess('Kurir berhasil ditambahkan!');
-      setForm({ name: '', email: '', phone: '', vehicleType: 'Motor', plateNumber: '' });
+      setForm({ name: '', email: '', phone: '', vehicleType: 'Motor', plateNumber: '', password: '' });
       fetchDrivers();
       setTimeout(() => {
         setShowAddModal(false);
@@ -123,7 +138,12 @@ export default function AdminDriversPage() {
       const res = await fetch(`/api/admin/drivers/manage/${showEditModal.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          name: form.name,
+          phone: form.phone,
+          vehicleType: form.vehicleType,
+          plateNumber: form.plateNumber,
+        }),
       });
 
       const data = await res.json();
@@ -139,6 +159,38 @@ export default function AdminDriversPage() {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPasswordModal) return;
+    
+    if (newPassword.length < 6) {
+      showToast('Password minimal 6 karakter', 'error');
+      return;
+    }
+
+    setPasswordSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/drivers/manage/${showPasswordModal.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newPassword }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal mengubah password');
+
+      showToast('Password kurir berhasil diubah!', 'success');
+      setShowPasswordModal(null);
+      setNewPassword('');
+      setShowNewPassword(false);
+      fetchDrivers();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setPasswordSubmitting(false);
     }
   };
 
@@ -167,7 +219,7 @@ export default function AdminDriversPage() {
         fetchDrivers();
         setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: () => {}, variant: 'info' });
       } catch (err: any) {
-        alert(err.message);
+        showToast(err.message, 'error');
         setConfirmModal(prev => ({ ...prev, isLoading: false }));
       }
     };
@@ -210,7 +262,8 @@ export default function AdminDriversPage() {
       email: driver.email || '',
       phone: driver.phone || '',
       vehicleType: driver.driverProfile?.vehicleType || 'Motor',
-      plateNumber: driver.driverProfile?.plateNumber || ''
+      plateNumber: driver.driverProfile?.plateNumber || '',
+      password: ''
     });
     setShowEditModal(driver);
   };
@@ -248,7 +301,7 @@ export default function AdminDriversPage() {
         </div>
         <button
           onClick={() => {
-            setForm({ name: '', email: '', phone: '', vehicleType: 'Motor', plateNumber: '' });
+            setForm({ name: '', email: '', phone: '', vehicleType: 'Motor', plateNumber: '', password: '' });
             setShowAddModal(true);
           }}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-sky-600 to-sky-500 text-white text-sm font-semibold shadow-md shadow-sky-600/20 hover:shadow-lg hover:shadow-sky-600/30 transition-all active:scale-[0.97]"
@@ -349,6 +402,13 @@ export default function AdminDriversPage() {
                       </span>
                     </div>
                   )}
+                  {/* Password status indicator */}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Lock className="w-3.5 h-3.5 shrink-0" />
+                    <span className={`${driver.hasPassword ? 'text-emerald-600' : 'text-amber-600'}`}>
+                      {driver.hasPassword ? 'Password sudah diatur' : 'Belum ada password'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -368,6 +428,9 @@ export default function AdminDriversPage() {
                   <>
                     <button onClick={() => openEditModal(driver)} className="p-1.5 text-gray-500 hover:text-sky-600 hover:bg-sky-50 rounded-lg transition-colors" title="Edit">
                       <Edit className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => { setShowPasswordModal(driver); setNewPassword(''); setShowNewPassword(false); }} className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Ubah Password">
+                      <KeyRound className="w-4 h-4" />
                     </button>
                     {driver.driverProfile?.isOnline && (
                       <button onClick={() => handleAction(driver.id, 'FORCE_OFFLINE')} className="p-1.5 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Force Offline">
@@ -453,8 +516,27 @@ export default function AdminDriversPage() {
                     placeholder="kurir@email.com"
                     className={`w-full px-4 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 ${showEditModal ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'bg-card'}`}
                   />
-                  {!showEditModal && <p className="text-[10px] text-muted-foreground mt-1">Kurir bisa login Google pakai email ini</p>}
+                  {!showEditModal && <p className="text-[10px] text-muted-foreground mt-1">Kurir akan login menggunakan email ini</p>}
                 </div>
+
+                {/* Password (Only on Add) */}
+                {showAddModal && (
+                  <div>
+                    <label className="text-xs font-semibold text-foreground mb-1.5 block">
+                      <span className="flex items-center gap-1"><Lock className="w-3 h-3" /> Password *</span>
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={form.password}
+                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      placeholder="Minimal 6 karakter"
+                      minLength={6}
+                      className="w-full px-4 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Password untuk kurir login di Portal Kurir</p>
+                  </div>
+                )}
 
                 {/* Phone */}
                 <div>
@@ -520,6 +602,85 @@ export default function AdminDriversPage() {
                     <><Check className="w-4 h-4" /> Simpan Data</>
                   )}
                 </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Password Change Modal */}
+      <AnimatePresence>
+        {showPasswordModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-white rounded-2xl shadow-xl overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border/40">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center">
+                    <KeyRound className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-foreground text-sm">Ubah Password</h3>
+                    <p className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                      {showPasswordModal.name || showPasswordModal.email}
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => { setShowPasswordModal(null); setNewPassword(''); setShowNewPassword(false); }}
+                  className="p-1.5 rounded-lg hover:bg-muted transition-colors">
+                  <X className="w-5 h-5 text-muted-foreground" />
+                </button>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handlePasswordChange} className="p-6 space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-foreground mb-1.5 block">Password Baru</label>
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimal 6 karakter"
+                      minLength={6}
+                      className="w-full px-4 py-2.5 pr-11 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">
+                    Password lama akan diganti sepenuhnya. Pastikan kurir mengetahui password baru.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowPasswordModal(null); setNewPassword(''); setShowNewPassword(false); }}
+                    className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-700 text-sm font-semibold hover:bg-gray-200 transition-colors"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={passwordSubmitting || newPassword.length < 6}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white text-sm font-bold shadow-md shadow-amber-500/20 hover:shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {passwordSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                    Simpan
+                  </button>
+                </div>
               </form>
             </motion.div>
           </div>

@@ -15,6 +15,9 @@ export async function GET() {
                 id: true, name: true, email: true, phone: true,
                 gender: true, birthDate: true,
                 referralCode: true, points: true, role: true,
+                accounts: {
+                    select: { provider: true }
+                },
                 driverProfile: {
                     select: {
                         isOnline: true,
@@ -28,7 +31,25 @@ export async function GET() {
             },
         });
 
-        return NextResponse.json(user);
+        if (!user) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        const isGoogleConnected = user.accounts.some((acc: any) => acc.provider === 'google');
+
+        return NextResponse.json({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            gender: user.gender,
+            birthDate: user.birthDate,
+            referralCode: user.referralCode,
+            points: user.points,
+            role: user.role,
+            isGoogleConnected,
+            driverProfile: user.driverProfile
+        });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
@@ -42,7 +63,7 @@ export async function PUT(req: NextRequest) {
         }
 
         const body = await req.json();
-        const { name, email, phone, gender, birthDate } = body;
+        const { name, email, phone, gender, birthDate, vehicleType, plateNumber, driverImageUrl } = body;
 
         const data: any = {};
         if (name !== undefined) data.name = name;
@@ -54,10 +75,40 @@ export async function PUT(req: NextRequest) {
         if (gender !== undefined) data.gender = gender;
         if (birthDate !== undefined) data.birthDate = birthDate ? new Date(birthDate) : null;
 
+        // Update driver profile details if the logged in user is a driver
+        if (session.user.role === 'DRIVER') {
+            const driverData: any = {};
+            if (vehicleType !== undefined) driverData.vehicleType = vehicleType;
+            if (plateNumber !== undefined) driverData.plateNumber = plateNumber;
+            if (driverImageUrl !== undefined) driverData.driverImageUrl = driverImageUrl;
+
+            if (Object.keys(driverData).length > 0) {
+                data.driverProfile = {
+                    upsert: {
+                        create: {
+                            vehicleType: vehicleType || 'Motor',
+                            plateNumber: plateNumber || '',
+                            driverImageUrl: driverImageUrl || null,
+                            status: 'APPROVED',
+                        },
+                        update: driverData
+                    }
+                };
+            }
+        }
+
         const user = await prisma.user.update({
             where: { id: session.user.id },
             data,
+            include: {
+                driverProfile: true,
+                accounts: {
+                    select: { provider: true }
+                }
+            }
         });
+
+        const isGoogleConnected = user.accounts.some((acc: any) => acc.provider === 'google');
 
         return NextResponse.json({
             id: user.id,
@@ -65,7 +116,9 @@ export async function PUT(req: NextRequest) {
             email: user.email,
             phone: user.phone,
             gender: user.gender,
-            birthDate: user.birthDate
+            birthDate: user.birthDate,
+            isGoogleConnected,
+            driverProfile: user.driverProfile
         });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

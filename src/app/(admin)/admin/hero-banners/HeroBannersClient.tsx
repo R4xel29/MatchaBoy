@@ -1,16 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Image as ImageIcon, Trash2, Edit2, Loader2, Save, X, Eye, EyeOff } from 'lucide-react';
+import { Plus, Image as ImageIcon, Trash2, Edit2, Loader2, Save, X, Eye, EyeOff, Monitor, Smartphone } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 
-export default function HeroBannersClient({ initialBanners }: { initialBanners: any[] }) {
+interface HeroBanner {
+  id?: string;
+  image: string;
+  alt: string;
+  headline: string;
+  subheadline: string;
+  isActive: boolean;
+  isCover: boolean;
+  order: number;
+}
+
+export default function HeroBannersClient({ initialBanners }: { initialBanners: HeroBanner[] }) {
+  const { showToast } = useToast();
   const [banners, setBanners] = useState(initialBanners);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBanner, setEditingBanner] = useState<any>(null);
+  const [editingBanner, setEditingBanner] = useState<HeroBanner | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   
@@ -18,6 +31,23 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [bannerToDelete, setBannerToDelete] = useState<{id: string, name: string} | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Preview Modal State
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewBanner, setPreviewBanner] = useState<HeroBanner | null>(null);
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+
+  // Crop Modal State
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
+  const [sourceImageSrc, setSourceImageSrc] = useState<string | null>(null);
+  const [cropAspectRatio, setCropAspectRatio] = useState<3.6 | 2.1>(3.6);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [zoom, setZoom] = useState(1);
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
 
   const [formData, setFormData] = useState({
     image: '',
@@ -31,7 +61,116 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
 
   const router = useRouter();
 
-  const handleOpenModal = (banner?: any) => {
+  const handleOpenPreview = (banner: HeroBanner) => {
+    setPreviewBanner(banner);
+    setPreviewMode('desktop');
+    setIsPreviewOpen(true);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - position.x, y: e.clientY - position.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setPosition({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true);
+    const touch = e.touches[0];
+    setDragStart({ x: touch.clientX - position.x, y: touch.clientY - position.y });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    setPosition({ x: touch.clientX - dragStart.x, y: touch.clientY - dragStart.y });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleCropAndUpload = async () => {
+    if (!viewportRef.current || !imageRef.current) return;
+    
+    setUploadingImage(true);
+    try {
+      const rectV = viewportRef.current.getBoundingClientRect();
+      const rectI = imageRef.current.getBoundingClientRect();
+      
+      const naturalWidth = imageRef.current.naturalWidth;
+      const naturalHeight = imageRef.current.naturalHeight;
+      
+      const scaleX = naturalWidth / rectI.width;
+      const scaleY = naturalHeight / rectI.height;
+      
+      const cropX = (rectV.left - rectI.left) * scaleX;
+      const cropY = (rectV.top - rectI.top) * scaleY;
+      const cropW = rectV.width * scaleX;
+      const cropH = rectV.height * scaleY;
+      
+      const targetW = cropAspectRatio === 3.6 ? 1440 : 1050;
+      const targetH = cropAspectRatio === 3.6 ? 400 : 500;
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) throw new Error('Could not get canvas context');
+      
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, targetW, targetH);
+      
+      ctx.drawImage(
+        imageRef.current,
+        cropX,
+        cropY,
+        cropW,
+        cropH,
+        0,
+        0,
+        targetW,
+        targetH
+      );
+      
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          showToast('Gagal memproses potongan gambar', 'error');
+          setUploadingImage(false);
+          return;
+        }
+        
+        const file = new File([blob], 'cropped_banner.jpg', { type: 'image/jpeg' });
+        const form = new FormData();
+        form.append('file', file);
+        
+        const res = await fetch('/api/admin/upload/banner', {
+          method: 'POST',
+          body: form
+        });
+        
+        if (!res.ok) throw new Error('Upload failed');
+        
+        const data = await res.json();
+        setFormData(prev => ({ ...prev, image: data.url }));
+        setIsCropModalOpen(false);
+        setSourceImageSrc(null);
+        showToast('Gambar berhasil dipangkas dan diunggah', 'success');
+        setUploadingImage(false);
+      }, 'image/jpeg', 0.9);
+      
+    } catch {
+      showToast('Gagal memproses gambar', 'error');
+      setUploadingImage(false);
+    }
+  };
+
+  const handleOpenModal = (banner?: HeroBanner) => {
     if (banner) {
       setEditingBanner(banner);
       setFormData({
@@ -60,7 +199,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
 
   const handleSave = async () => {
     if (!formData.image || !formData.headline || !formData.subheadline) {
-      alert("Harap isi URL Gambar, Judul, dan Sub-judul");
+      showToast("Harap isi URL Gambar, Judul, dan Sub-judul", "error");
       return;
     }
 
@@ -89,7 +228,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert('Gagal menyimpan banner.');
+      showToast('Gagal menyimpan banner.', 'error');
     } finally {
       setLoading(false);
     }
@@ -108,7 +247,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
       router.refresh();
     } catch (err) {
       console.error(err);
-      alert('Gagal menghapus banner.');
+      showToast('Gagal menghapus banner.', 'error');
     } finally {
       setIsDeleting(false);
     }
@@ -119,7 +258,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
     setIsDeleteModalOpen(true);
   };
 
-  const toggleStatus = async (banner: any) => {
+  const toggleStatus = async (banner: HeroBanner) => {
     try {
       const res = await fetch(`/api/admin/banners/${banner.id}`, {
         method: 'PATCH',
@@ -129,42 +268,29 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
       if (!res.ok) throw new Error();
       const saved = await res.json();
       setBanners(banners.map(b => b.id === banner.id ? saved : b));
-    } catch (err) {
-      alert("Gagal merubah status");
+    } catch {
+      showToast("Gagal merubah status", "error");
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (!file.type.includes('image/')) {
-      alert('File harus berupa gambar');
+      showToast('File harus berupa gambar', 'error');
       return;
     }
 
-    setUploadingImage(true);
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      
-      const res = await fetch('/api/admin/upload/banner', {
-        method: 'POST',
-        body: form
-      });
-      
-      if (!res.ok) {
-         throw new Error('Upload failed');
-      }
-      
-      const data = await res.json();
-      setFormData({ ...formData, image: data.url });
-    } catch(err) {
-      alert('Gagal mengupload gambar');
-      console.error(err);
-    } finally {
-      setUploadingImage(false);
-    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setSourceImageSrc(reader.result as string);
+      setPosition({ x: 0, y: 0 });
+      setZoom(1);
+      setIsCropModalOpen(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   return (
@@ -226,6 +352,13 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                     {banner.isActive ? 'AKTIF' : 'TIDAK AKTIF'}
                 </span>
                 <div className="flex gap-1">
+                   <button 
+                      onClick={() => handleOpenPreview(banner)} 
+                      title="Pratinjau Banner"
+                      className="p-2 text-muted-foreground hover:text-brand-600 hover:bg-brand-50 bg-white rounded-lg transition-colors border shadow-sm"
+                   >
+                      <Eye className="w-4 h-4" />
+                   </button>
                    <button onClick={() => handleOpenModal(banner)} className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 bg-white rounded-lg transition-colors border shadow-sm">
                       <Edit2 className="w-4 h-4" />
                    </button>
@@ -254,7 +387,10 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
 
                <div className="space-y-4 max-h-[60vh] overflow-y-auto px-2 pb-6 -mx-2 hide-scrollbar">
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Gambar Banner</label>
+                    <div className="flex justify-between items-baseline mb-1.5">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">Gambar Banner</label>
+                      <span className="text-[10px] text-brand-600 font-medium">Rasio Rekomendasi: 3.6:1 (Desktop) / 2.1:1 (Mobile)</span>
+                    </div>
                     <div className="flex gap-2 items-center">
                        <input value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} placeholder="https://... atau klik Upload" className="flex-1 text-sm px-3 py-2.5 bg-muted/40 border border-border/80 rounded-xl focus:border-brand-500 focus:ring-1 focus:ring-brand-500 transition-all" />
                        <label className="relative cursor-pointer shrink-0 px-4 py-2.5 bg-brand-100 text-brand-700 font-medium text-sm rounded-xl hover:bg-brand-200 transition-colors flex items-center justify-center min-w-[100px]">
@@ -262,6 +398,33 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-0 h-0 opacity-0 cursor-pointer" disabled={uploadingImage} />
                        </label>
                     </div>
+                    {formData.image && (
+                      <div className="mt-2.5 relative group/preview">
+                        <div className="relative aspect-[3/1] rounded-xl overflow-hidden bg-muted border border-border/60">
+                          <Image 
+                            src={formData.image} 
+                            alt="Miniatur Pratinjau" 
+                            fill 
+                            className={formData.isCover ? "object-cover" : "object-contain"}
+                            unoptimized
+                            onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x200/18442D/FFF?text=Gambar+tidak+dapat+dimuat'; }}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSourceImageSrc(formData.image);
+                            setPosition({ x: 0, y: 0 });
+                            setZoom(1);
+                            setIsCropModalOpen(true);
+                          }}
+                          className="absolute bottom-2 right-2 px-2.5 py-1.5 bg-black/60 hover:bg-[#18442D] text-white font-bold text-[10px] rounded-lg transition-colors flex items-center gap-1 backdrop-blur-sm shadow-sm"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                          Pangkas Ulang
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 block">Judul Besar (Headline)</label>
@@ -294,12 +457,23 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                   </div>
                </div>
 
-               <div className="flex justify-end gap-3 pt-4 border-t border-border/40 mt-2 bg-white sticky bottom-0">
-                 <button disabled={loading} onClick={() => setIsModalOpen(false)} className="px-4 py-2 font-medium text-sm text-foreground hover:bg-muted rounded-xl transition-colors">Batal</button>
-                 <button disabled={loading} onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white font-medium text-sm rounded-xl hover:bg-brand-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed">
-                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                    Simpan
+               <div className="flex justify-between items-center pt-4 border-t border-border/40 mt-2 bg-white sticky bottom-0">
+                 <button 
+                   type="button"
+                   onClick={() => handleOpenPreview({ ...formData, id: 'temp' })}
+                   disabled={!formData.image}
+                   className="flex items-center gap-1.5 px-3 py-2 text-brand-700 hover:bg-brand-50 border border-brand-200/60 font-semibold text-xs rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                 >
+                   <Eye className="w-3.5 h-3.5" />
+                   Pratinjau Live
                  </button>
+                 <div className="flex gap-2">
+                   <button disabled={loading} onClick={() => setIsModalOpen(false)} className="px-4 py-2 font-medium text-sm text-foreground hover:bg-muted rounded-xl transition-colors">Batal</button>
+                   <button disabled={loading} onClick={handleSave} className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white font-medium text-sm rounded-xl hover:bg-brand-700 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed">
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                      Simpan
+                   </button>
+                 </div>
                </div>
             </motion.div>
           </div>
@@ -317,6 +491,295 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
         onConfirm={confirmDelete}
         onCancel={() => setIsDeleteModalOpen(false)}
       />
+
+      {/* Preview Modal */}
+      <AnimatePresence>
+        {isPreviewOpen && previewBanner && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm" 
+              onClick={() => setIsPreviewOpen(false)} 
+            />
+            
+            <motion.div 
+               initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+               animate={{ opacity: 1, scale: 1, y: 0 }} 
+               exit={{ opacity: 0, scale: 0.95, y: 10 }}
+               className="relative w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden z-10 p-5 sm:p-6"
+             >
+               <div className="flex justify-between items-center mb-5 border-b pb-3 border-border/40">
+                  <div>
+                    <h2 className="text-lg font-bold font-heading text-foreground">Pratinjau Banner Promosi</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Mensimulasikan tampilan banner di storefront (halaman depan)</p>
+                  </div>
+                  <button onClick={() => setIsPreviewOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-xl transition-colors">
+                    <X className="w-5 h-5"/>
+                  </button>
+               </div>
+
+               {/* Toggles for Desktop / Mobile */}
+               <div className="flex gap-2 mb-6 justify-center">
+                  <button 
+                    onClick={() => setPreviewMode('desktop')} 
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                      previewMode === 'desktop' 
+                        ? 'bg-brand-600 border-brand-600 text-white shadow-sm' 
+                        : 'bg-white border-border text-muted-foreground hover:bg-muted/40'
+                    }`}
+                  >
+                    <Monitor className="w-4 h-4" />
+                    Tampilan Desktop (3.6:1)
+                  </button>
+                  <button 
+                    onClick={() => setPreviewMode('mobile')} 
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                      previewMode === 'mobile' 
+                        ? 'bg-brand-600 border-brand-600 text-white shadow-sm' 
+                        : 'bg-white border-border text-muted-foreground hover:bg-muted/40'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    Tampilan Mobile (2.1:1)
+                  </button>
+               </div>
+
+               {/* Simulated Banner Container */}
+               <div className="w-full flex justify-center items-center bg-gray-100/80 rounded-2xl p-4 md:p-8 border border-border/30">
+                  <div 
+                    className={`relative w-full overflow-hidden rounded-[2rem] bg-white shadow-lg border border-[#EADFC9]/30 transition-all duration-300 ${
+                      previewMode === 'desktop' 
+                        ? 'aspect-[3.6/1] max-w-3xl' 
+                        : 'aspect-[2.1/1] max-w-sm'
+                    }`}
+                  >
+                    <Image
+                      src={previewBanner.image}
+                      alt={previewBanner.alt || 'Promo Image'}
+                      fill
+                      className={`${previewBanner.isCover === false ? 'object-contain' : 'object-cover'} transition-all`}
+                      unoptimized
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=1200';
+                      }}
+                    />
+                    
+                    {/* Simulated Storefront Overlays */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/5 flex flex-col justify-end p-4 md:p-6 text-left">
+                      <span className="px-2 py-0.5 rounded-full bg-[#D4A574] text-white text-[7px] md:text-[8px] font-black uppercase tracking-widest w-fit shadow-md mb-1.5">
+                        Promo Spesial
+                      </span>
+                      <h2 className={`font-serif font-black text-white leading-tight tracking-tight drop-shadow-md whitespace-pre-line ${
+                        previewMode === 'desktop' ? 'text-lg md:text-xl' : 'text-sm'
+                      }`}>
+                        {previewBanner.headline || previewBanner.alt || 'Judul Banner Promosi'}
+                      </h2>
+                      <p className={`text-neutral-200 mt-1 leading-snug font-semibold max-w-xl opacity-90 ${
+                        previewMode === 'desktop' ? 'text-[10px] md:text-[12px]' : 'text-[9px]'
+                      }`}>
+                        {previewBanner.subheadline || 'Sub-judul banner promosi yang menjelaskan promo lebih detail.'}
+                      </p>
+                    </div>
+
+                    {/* Dot indicators mock */}
+                    <div className="absolute bottom-4 right-4 flex items-center gap-1">
+                      <span className="h-1 bg-[#D4A574] w-4 rounded-full" />
+                      <span className="h-1 bg-white/40 w-1 rounded-full" />
+                      <span className="h-1 bg-white/40 w-1 rounded-full" />
+                    </div>
+                  </div>
+               </div>
+
+               {/* Advice text */}
+               <div className="mt-5 bg-brand-50/50 border border-brand-100 rounded-2xl p-4 text-xs text-brand-900 leading-relaxed">
+                  <p className="font-bold flex items-center gap-1.5 mb-1 text-brand-900">
+                    💡 Tips Optimalisasi Gambar Banner:
+                  </p>
+                  {previewMode === 'desktop' ? (
+                    <p>
+                      Pada <strong>Tampilan Desktop</strong>, banner menggunakan rasio lebar <strong>3.6:1</strong>. Gunakan resolusi <strong>1440 x 400 piksel</strong>. 
+                      Pastikan objek utama berada di tengah agar tidak terpotong saat diakses dari layar yang lebih lebar atau lebih sempit.
+                    </p>
+                  ) : (
+                    <p>
+                      Pada <strong>Tampilan Mobile</strong>, banner menggunakan rasio lebar <strong>2.1:1</strong>. Gunakan resolusi <strong>840 x 400 piksel</strong>.
+                      Teks headline & subheadline akan ditumpuk di atas gambar secara responsif.
+                    </p>
+                  )}
+               </div>
+
+               <div className="flex justify-end pt-4 border-t border-border/40 mt-5">
+                  <button 
+                    onClick={() => setIsPreviewOpen(false)} 
+                    className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 font-semibold text-sm text-foreground rounded-xl transition-all"
+                  >
+                    Tutup Pratinjau
+                  </button>
+               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Crop Modal */}
+      <AnimatePresence>
+        {isCropModalOpen && sourceImageSrc && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm" 
+              onClick={() => !uploadingImage && setIsCropModalOpen(false)} 
+            />
+            
+            <motion.div 
+               initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+               animate={{ opacity: 1, scale: 1, y: 0 }} 
+               exit={{ opacity: 0, scale: 0.95, y: 10 }}
+               className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden z-10 p-5 sm:p-6"
+             >
+               <div className="flex justify-between items-center mb-4 border-b pb-3 border-border/40">
+                  <div>
+                    <h2 className="text-lg font-bold font-heading text-foreground">Sesuaikan Gambar Banner</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Geser dan atur perbesaran gambar sesuai bingkai banner.</p>
+                  </div>
+                  <button disabled={uploadingImage} onClick={() => setIsCropModalOpen(false)} className="p-2 text-muted-foreground hover:bg-muted rounded-xl transition-colors">
+                    <X className="w-5 h-5"/>
+                  </button>
+               </div>
+
+               {/* Target Format Selector */}
+               <div className="mb-4">
+                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Format Rasio Bingkai</label>
+                 <div className="flex gap-2">
+                   <button
+                     type="button"
+                     onClick={() => { setCropAspectRatio(3.6); setPosition({ x: 0, y: 0 }); setZoom(1); }}
+                     className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                       cropAspectRatio === 3.6 
+                         ? 'bg-brand-50 border-brand-500 text-brand-700' 
+                         : 'bg-white border-border text-muted-foreground hover:bg-muted/40'
+                     }`}
+                   >
+                     Desktop (3.6:1)
+                   </button>
+                   <button
+                     type="button"
+                     onClick={() => { setCropAspectRatio(2.1); setPosition({ x: 0, y: 0 }); setZoom(1); }}
+                     className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                       cropAspectRatio === 2.1 
+                         ? 'bg-brand-50 border-brand-500 text-brand-700' 
+                         : 'bg-white border-border text-muted-foreground hover:bg-muted/40'
+                     }`}
+                   >
+                     Mobile (2.1:1)
+                   </button>
+                 </div>
+               </div>
+
+               {/* Viewport Area */}
+               <div 
+                 ref={viewportRef}
+                 className="relative overflow-hidden bg-neutral-900 border-2 border-brand-500/30 rounded-2xl mx-auto w-full select-none flex items-center justify-center cursor-grab active:cursor-grabbing"
+                 style={{
+                   aspectRatio: cropAspectRatio === 3.6 ? '3.6 / 1' : '2.1 / 1',
+                   maxWidth: '100%',
+                 }}
+                 onMouseDown={handleMouseDown}
+                 onMouseMove={handleMouseMove}
+                 onMouseUp={handleMouseUp}
+                 onMouseLeave={handleMouseUp}
+                 onTouchStart={handleTouchStart}
+                 onTouchMove={handleTouchMove}
+                 onTouchEnd={handleMouseUp}
+               >
+                 {/* Visual grid overlay (rule of thirds) */}
+                 <div className="absolute inset-0 border border-white/20 pointer-events-none z-10 grid grid-cols-3 grid-rows-3">
+                   <div className="border-r border-b border-white/10" />
+                   <div className="border-r border-b border-white/10" />
+                   <div className="border-b border-white/10" />
+                   <div className="border-r border-b border-white/10" />
+                   <div className="border-r border-b border-white/10" />
+                   <div className="border-b border-white/10" />
+                   <div className="border-r border-white/10" />
+                   <div className="border-r border-white/10" />
+                   <div />
+                 </div>
+                 
+                 {/* eslint-disable-next-line @next/next/no-img-element */}
+                 <img
+                   ref={imageRef}
+                   src={sourceImageSrc}
+                   crossOrigin="anonymous"
+                   alt="Source Editor"
+                   className="absolute pointer-events-none select-none max-w-none max-h-none"
+                   style={{
+                     left: '50%',
+                     top: '50%',
+                     transform: `translate(calc(-50% + ${position.x}px), calc(-50% + ${position.y}px)) scale(${zoom})`,
+                     width: '100%',
+                     height: 'auto',
+                     minWidth: '100%',
+                     minHeight: '100%',
+                     objectFit: 'cover',
+                   }}
+                 />
+               </div>
+
+               {/* Zoom Control Slider */}
+               <div className="mt-5 space-y-2">
+                 <div className="flex justify-between items-center text-xs font-semibold text-muted-foreground">
+                   <span>ZOOM</span>
+                   <span>{zoom.toFixed(1)}x</span>
+                 </div>
+                 <input 
+                   type="range" 
+                   min="1" 
+                   max="3" 
+                   step="0.01" 
+                   value={zoom} 
+                   onChange={(e) => setZoom(parseFloat(e.target.value))}
+                   className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-600 focus:outline-none"
+                 />
+               </div>
+
+               <p className="text-[10px] text-center text-muted-foreground mt-3 font-medium">
+                 💡 Seret gambar di atas untuk menggeser. Gunakan slider untuk memperbesar.
+               </p>
+
+               {/* Buttons Footer */}
+               <div className="flex justify-end gap-3 pt-4 border-t border-border/40 mt-5">
+                 <button 
+                   type="button"
+                   disabled={uploadingImage} 
+                   onClick={() => setIsCropModalOpen(false)} 
+                   className="px-4 py-2 font-medium text-sm text-foreground hover:bg-muted rounded-xl transition-colors disabled:opacity-50"
+                 >
+                   Batal
+                 </button>
+                 <button 
+                   type="button"
+                   disabled={uploadingImage} 
+                   onClick={handleCropAndUpload} 
+                   className="flex items-center gap-2 px-6 py-2 bg-brand-600 text-white font-medium text-sm rounded-xl hover:bg-brand-700 transition-colors shadow-sm disabled:opacity-75 disabled:cursor-not-allowed"
+                 >
+                   {uploadingImage ? (
+                     <>
+                       <Loader2 className="w-4 h-4 animate-spin" />
+                       Memproses...
+                     </>
+                   ) : (
+                     'Pangkas & Unggah'
+                   )}
+                 </button>
+               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

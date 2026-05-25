@@ -6,6 +6,7 @@ import { X, QrCode, Flashlight, ArrowLeft, Camera, CameraOff, FlipHorizontal2 } 
 import { cn } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/ui/Toast';
 
 interface QROverlayProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface QROverlayProps {
 }
 
 export function QROverlay({ isOpen, onClose }: QROverlayProps) {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'my-qr' | 'scan'>('my-qr');
   const { data: session, status } = useSession();
   const [referralCode, setReferralCode] = useState<string>('');
@@ -176,7 +178,7 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
     if (decodedText.startsWith('http://') || decodedText.startsWith('https://')) {
       window.location.href = decodedText;
     } else {
-      alert(`Kode QR berhasil dipindai: ${decodedText}`);
+      showToast(`Kode QR berhasil dipindai: ${decodedText}`, 'info');
     }
   };
 

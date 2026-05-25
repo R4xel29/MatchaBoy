@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -21,12 +22,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { id } = await params // This is the user id of the driver
 
     // Extract fields
-    const { name, phone, vehicleType, plateNumber, status, isOnline } = data
+    const { name, phone, vehicleType, plateNumber, status, isOnline, password } = data
 
     // Handle user fields
     const updateUserData: any = {}
     if (name !== undefined) updateUserData.name = name
     if (phone !== undefined) updateUserData.phone = phone
+
+    // Handle password change
+    if (password && password.length >= 6) {
+      updateUserData.password = await bcrypt.hash(password, 10)
+    }
 
     if (Object.keys(updateUserData).length > 0) {
       await prisma.user.update({

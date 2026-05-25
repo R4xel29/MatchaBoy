@@ -7,11 +7,14 @@ import dynamic from 'next/dynamic';
 import { AppHeader } from '@/components/storefront/AppHeader';
 import { BottomNav } from '@/components/storefront/BottomNav';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { PromoPopup } from '@/components/storefront/PromoPopup';
+
 
 // Lazy-load heavy components that are only visible on user interaction
 const FloatingCart = dynamic(() => import('@/components/storefront/FloatingCart').then(m => ({ default: m.FloatingCart })), { ssr: false });
 const QROverlay = dynamic(() => import('@/components/storefront/QROverlay').then(m => ({ default: m.QROverlay })), { ssr: false });
 const LoginBottomSheet = dynamic(() => import('@/components/auth/LoginBottomSheet').then(m => ({ default: m.LoginBottomSheet })), { ssr: false });
+const ActiveOrderPopup = dynamic(() => import('@/components/storefront/ActiveOrderPopup').then(m => ({ default: m.ActiveOrderPopup })), { ssr: false });
 
 // Context to pass search control down to page
 interface StorefrontContextType {
@@ -101,6 +104,9 @@ export default function StorefrontLayout({
         <AppHeader onSearchClick={() => setSearchOpen(true)} />
         <main className="pb-20 md:pb-0">{children}</main>
         <FloatingCart />
+        <ActiveOrderPopup />
+        <PromoPopup />
+
         <Suspense fallback={null}>
           <BottomNav />
         </Suspense>

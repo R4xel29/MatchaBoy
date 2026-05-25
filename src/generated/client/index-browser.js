@@ -324,6 +324,16 @@ exports.Prisma.HeroBannerScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.PromoPopupScalarFieldEnum = {
+  id: 'id',
+  title: 'title',
+  image: 'image',
+  linkUrl: 'linkUrl',
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.CashierShiftScalarFieldEnum = {
   id: 'id',
   cashierId: 'cashierId',
@@ -610,6 +620,7 @@ exports.Prisma.ModelName = {
   Notification: 'Notification',
   ActivityLog: 'ActivityLog',
   HeroBanner: 'HeroBanner',
+  PromoPopup: 'PromoPopup',
   CashierShift: 'CashierShift',
   PointHistory: 'PointHistory',
   Voucher: 'Voucher',

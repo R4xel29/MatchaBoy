@@ -6,6 +6,8 @@ import {
   Target, Gift, Calendar, Award, ToggleLeft, ToggleRight,
   Sparkles, Trophy
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 interface ReferralTier {
   id?: string;
@@ -40,6 +42,7 @@ const REWARD_TYPES = [
 ];
 
 export default function ReferralSettingsClient() {
+  const { showToast } = useToast();
   const [tiers, setTiers] = useState<ReferralTier[]>([]);
   const [events, setEvents] = useState<ReferralEvent[]>([]);
   const [referralEnabled, setReferralEnabled] = useState(true);
@@ -47,6 +50,19 @@ export default function ReferralSettingsClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   // New tier/event forms
   const [showNewTier, setShowNewTier] = useState(false);
@@ -96,8 +112,9 @@ export default function ReferralSettingsClient() {
         setNewTier({ tierNumber: tiers.length + 2, targetInvites: 5, rewardType: 'FREE_DRINK', rewardValue: 'FREE_DRINK', rewardDesc: 'Minuman Gratis', isActive: true });
       }
       setSaved(true);
+      showToast('Tier referral berhasil disimpan', 'success');
       setTimeout(() => setSaved(false), 2000);
-    } catch { alert('Gagal menyimpan'); }
+    } catch { showToast('Gagal menyimpan tier', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -117,25 +134,44 @@ export default function ReferralSettingsClient() {
         setShowNewEvent(false);
       }
       setSaved(true);
+      showToast('Event referral berhasil disimpan', 'success');
       setTimeout(() => setSaved(false), 2000);
-    } catch { alert('Gagal menyimpan'); }
+    } catch { showToast('Gagal menyimpan event', 'error'); }
     finally { setSaving(false); }
   };
 
   const deleteTier = async (id: string) => {
-    if (!confirm('Hapus tier ini?')) return;
-    try {
-      await fetch(`/api/admin/referral-settings?id=${id}&type=tier`, { method: 'DELETE' });
-      setTiers(tiers.filter(t => t.id !== id));
-    } catch { alert('Gagal menghapus'); }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Tier',
+      message: 'Apakah Anda yakin ingin menghapus tier referral ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        try {
+          await fetch(`/api/admin/referral-settings?id=${id}&type=tier`, { method: 'DELETE' });
+          setTiers(tiers.filter(t => t.id !== id));
+          showToast('Tier referral berhasil dihapus', 'success');
+        } catch { showToast('Gagal menghapus tier', 'error'); }
+      }
+    });
   };
 
   const deleteEvent = async (id: string) => {
-    if (!confirm('Hapus event ini?')) return;
-    try {
-      await fetch(`/api/admin/referral-settings?id=${id}&type=event`, { method: 'DELETE' });
-      setEvents(events.filter(e => (e as any).id !== id));
-    } catch { alert('Gagal menghapus'); }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Event',
+      message: 'Apakah Anda yakin ingin menghapus event referral ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        try {
+          await fetch(`/api/admin/referral-settings?id=${id}&type=event`, { method: 'DELETE' });
+          setEvents(events.filter(e => (e as any).id !== id));
+          showToast('Event referral berhasil dihapus', 'success');
+        } catch { showToast('Gagal menghapus event', 'error'); }
+      }
+    });
   };
 
   const toggleEnabled = async () => {
@@ -399,6 +435,14 @@ export default function ReferralSettingsClient() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

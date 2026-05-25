@@ -4,11 +4,15 @@ import { useState, useTransition, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Ticket, Plus, Edit, Trash2, Search, Calendar, DollarSign, Percent, 
-  ShoppingBag, Check, X, Upload, Loader2, Info, Eye, Tag, AlertCircle, FileText
+  ShoppingBag, Check, X, Upload, Loader2, Info, Eye, Tag, AlertCircle, FileText,
+  Copy, Download, Printer, Share2, FileSpreadsheet
 } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 import Image from 'next/image'
 import { LoadingScreen } from '@/components/ui/LoadingScreen'
+import { useToast } from '@/components/ui/Toast'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import * as XLSX from 'xlsx'
 
 interface ProductSelectOption {
   id: string
@@ -43,7 +47,20 @@ export default function VoucherAdminClient({
   initialTemplates: VoucherTemplateShape[]
   products: ProductSelectOption[]
 }) {
+  const { showToast } = useToast()
   const [templates, setTemplates] = useState<VoucherTemplateShape[]>(initialTemplates)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
   const [isOpenForm, setIsOpenForm] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<VoucherTemplateShape | null>(null)
   
@@ -72,6 +89,199 @@ export default function VoucherAdminClient({
   const [productSearch, setProductSearch] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [isSaving, setIsSaving] = useState(false)
+
+  // Detail Modal States
+  const [selectedTemplateIdForDetail, setSelectedTemplateIdForDetail] = useState<string | null>(null)
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [detailData, setDetailData] = useState<any | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [historySearchQuery, setHistorySearchQuery] = useState('')
+  const [detailTab, setDetailTab] = useState<'info' | 'history'>('info')
+  const [copied, setCopied] = useState(false)
+  const [detailsCache, setDetailsCache] = useState<Record<string, any>>({})
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  const claimUrl = useMemo(() => {
+    if (typeof window === 'undefined' || !detailData?.code) return ''
+    return `${window.location.origin}/vouchers/claim?code=${detailData.code}`
+  }, [detailData?.code])
+
+  const qrImageSrc = useMemo(() => {
+    if (!claimUrl) return ''
+    return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(claimUrl)}`
+  }, [claimUrl])
+
+  const handleOpenDetail = async (id: string) => {
+    setSelectedTemplateIdForDetail(id)
+    setDetailModalOpen(true)
+    setDetailTab('info')
+    setHistorySearchQuery('')
+
+    // Check cache first to avoid repeated fetches
+    if (detailsCache[id]) {
+      setDetailData(detailsCache[id])
+      setLoadingDetail(false)
+      return
+    }
+
+    setLoadingDetail(true)
+    setDetailData(null)
+    try {
+      const res = await fetch(`/api/admin/vouchers?id=${id}`)
+      if (!res.ok) throw new Error('Gagal mengambil detail voucher')
+      const data = await res.json()
+      setDetailData(data)
+      // Save to cache
+      setDetailsCache(prev => ({ ...prev, [id]: data }))
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mengambil detail voucher', 'error')
+      setDetailModalOpen(false)
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  const handleCopyLink = (code: string) => {
+    if (typeof window === 'undefined') return
+    const claimUrl = `${window.location.origin}/vouchers/claim?code=${code}`
+    navigator.clipboard.writeText(claimUrl)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+    showToast('Link klaim voucher berhasil disalin!', 'success')
+  }
+
+  const handleDownloadQR = async (code: string) => {
+    if (typeof window === 'undefined') return
+    const claimUrl = `${window.location.origin}/vouchers/claim?code=${code}`
+    try {
+      const response = await fetch(`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(claimUrl)}`)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `QR_Voucher_${code}.png`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      showToast('Gagal mengunduh QR Code', 'error')
+      console.error(error)
+    }
+  }
+
+  const handlePrintFlyer = (templateData: any) => {
+    if (typeof window === 'undefined') return
+    const claimUrl = `${window.location.origin}/vouchers/claim?code=${templateData.code}`
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      showToast('Pop-up terblokir oleh browser Anda. Izinkan pop-up untuk mencetak.', 'error')
+      return
+    }
+    
+    // Parse valid products description
+    let validProductsText = 'Semua Menu Matchaboy'
+    if (templateData.validProductIds) {
+      try {
+        const parsed = JSON.parse(templateData.validProductIds)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          validProductsText = `${parsed.length} Produk Pilihan`
+        }
+      } catch {}
+    }
+
+    const discountText = templateData.type === 'DISCOUNT_PCT' 
+      ? `Potongan ${templateData.discountValue}%`
+      : `Potongan ${formatRupiah(templateData.discountValue)}`
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Print Flyer Voucher - ${templateData.code}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800;900&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+            body { font-family: 'Outfit', sans-serif; text-align: center; padding: 40px; color: #2C2C2C; background-color: #FAF8F5; }
+            .container { border: 4px dashed #B48A5E; padding: 50px 40px; border-radius: 40px; max-width: 500px; margin: 0 auto; background: #FFFFFF; box-shadow: 0 10px 30px rgba(180, 138, 94, 0.05); }
+            .logo { font-family: 'Playfair Display', serif; font-size: 32px; font-weight: bold; color: #B48A5E; margin-bottom: 25px; letter-spacing: 0.5px; }
+            .badge { font-size: 11px; font-weight: 800; background: #B48A5E; color: white; display: inline-block; padding: 8px 18px; border-radius: 30px; margin-bottom: 25px; text-transform: uppercase; letter-spacing: 1px; }
+            .title { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: 900; margin-bottom: 12px; color: #1F1F1F; line-height: 1.3; }
+            .desc { font-size: 14px; color: #6E6E6E; margin-bottom: 30px; line-height: 1.6; max-width: 380px; margin-left: auto; margin-right: auto; }
+            .qr { margin: 25px auto; display: block; width: 220px; height: 220px; border: 1px solid #ECECEC; padding: 10px; border-radius: 20px; background: white; }
+            .instruction { font-size: 13px; font-weight: 600; color: #4E4E4E; margin-top: 15px; }
+            .code-box { font-size: 28px; font-weight: 900; background: #FAF5F0; border: 2px solid #EADCC9; display: inline-block; padding: 12px 28px; border-radius: 18px; margin: 25px 0; letter-spacing: 1px; color: #8F6236; font-family: monospace; }
+            .footer-info { font-size: 11px; color: #9A9A9A; margin-top: 35px; border-top: 1px dashed #E5E5E5; padding-top: 20px; text-align: left; }
+            .footer-info h4 { margin: 0 0 8px 0; color: #4E4E4E; font-size: 12px; }
+            .footer-info ul { margin: 0; padding-left: 15px; }
+            .footer-info li { margin-bottom: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="logo">Matchaboy.</div>
+            <div class="badge">${discountText}</div>
+            <div class="title">${templateData.title}</div>
+            <div class="desc">${templateData.description}</div>
+            <img class="qr" src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(claimUrl)}" alt="QR Code" />
+            <div class="instruction">Pindai QR Code di atas untuk klaim voucher</div>
+            <div class="code-box">${templateData.code}</div>
+            <div class="footer-info">
+              <h4>Syarat & Ketentuan:</h4>
+              <ul>
+                ${templateData.terms.split('\n').filter((t: string) => t.trim().length > 0).map((term: string) => `<li>${term}</li>`).join('')}
+                <li>Berlaku untuk: ${validProductsText}</li>
+                <li>Minimal belanja: ${formatRupiah(templateData.minPurchase)}</li>
+                ${templateData.type === 'DISCOUNT_PCT' && templateData.maxDiscount ? `<li>Maksimal potongan: ${formatRupiah(templateData.maxDiscount)}</li>` : ''}
+              </ul>
+            </div>
+          </div>
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+                window.onafterprint = function() { window.close(); };
+              }, 500);
+            }
+          </script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+  }
+
+  const handleExportExcel = (templateData: any) => {
+    if (!templateData || !templateData.vouchers) return
+    
+    const exportData = templateData.vouchers.map((v: any) => ({
+      'Nama Pelanggan': v.user?.name || 'Guest',
+      'No. WhatsApp': v.user?.phone || '-',
+      'Email': v.user?.email || '-',
+      'Kode Voucher': v.code,
+      'Status': v.isUsed ? 'Terpakai' : 'Belum Dipakai',
+      'Tanggal Klaim': new Date(v.createdAt).toLocaleString('id-ID'),
+      'Tanggal Pakai': v.usedAt ? new Date(v.usedAt).toLocaleString('id-ID') : '-'
+    }))
+
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Riwayat Klaim')
+    
+    ws['!cols'] = [
+      { wch: 25 }, // Nama Pelanggan
+      { wch: 18 }, // No. WhatsApp
+      { wch: 25 }, // Email
+      { wch: 22 }, // Kode Voucher
+      { wch: 15 }, // Status
+      { wch: 20 }, // Tanggal Klaim
+      { wch: 20 }  // Tanggal Pakai
+    ]
+    
+    XLSX.writeFile(wb, `Riwayat_Voucher_${templateData.code}.xlsx`)
+    showToast('Berhasil mengekspor data ke Excel', 'success')
+  }
 
   // Reset errors when modal is opened or closed
   useEffect(() => {
@@ -224,21 +434,29 @@ export default function VoucherAdminClient({
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm("Apakah Anda yakin ingin menghapus template voucher ini? Seluruh voucher personal pengguna yang aktif dari template ini juga akan terhapus.")) {
-      try {
-        const res = await fetch(`/api/admin/vouchers?id=${id}`, {
-          method: 'DELETE'
-        })
-        if (res.ok) {
-          setTemplates(templates.filter(t => t.id !== id))
-        } else {
-          const data = await res.json()
-          alert(data.error || "Gagal menghapus template")
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Template Voucher',
+      message: 'Apakah Anda yakin ingin menghapus template voucher ini? Seluruh voucher personal pengguna yang aktif dari template ini juga akan terhapus.',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        try {
+          const res = await fetch(`/api/admin/vouchers?id=${id}`, {
+            method: 'DELETE'
+          })
+          if (res.ok) {
+            setTemplates(templates.filter(t => t.id !== id))
+            showToast('Template voucher berhasil dihapus', 'success')
+          } else {
+            const data = await res.json()
+            showToast(data.error || "Gagal menghapus template", 'error')
+          }
+        } catch (err) {
+          showToast("Koneksi gagal", 'error')
         }
-      } catch (err) {
-        alert("Koneksi gagal")
       }
-    }
+    });
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -329,8 +547,9 @@ export default function VoucherAdminClient({
         setTemplates([data.template, ...templates])
       }
       setIsOpenForm(false)
+      showToast(editingTemplate ? 'Voucher berhasil diperbarui' : 'Voucher berhasil dibuat', 'success')
     } catch (err: any) {
-      alert(err.message || "Gagal menyimpan voucher")
+      showToast(err.message || "Gagal menyimpan voucher", 'error')
     } finally {
       setIsSaving(false)
     }
@@ -486,6 +705,14 @@ export default function VoucherAdminClient({
                     <span>Min. Belanja:</span>
                     <span className="font-bold text-gray-700">{formatRupiah(t.minPurchase)}</span>
                   </div>
+                  {t.type === 'DISCOUNT_PCT' && (
+                    <div className="flex justify-between">
+                      <span>Maks. Diskon:</span>
+                      <span className="font-bold text-red-600">
+                        {t.maxDiscount ? formatRupiah(t.maxDiscount) : 'Tanpa Batas'}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span>Produk Valid:</span>
                     <span className="font-bold text-gray-700">
@@ -505,6 +732,13 @@ export default function VoucherAdminClient({
                 </div>
 
                 <div className="flex items-center gap-2 pt-1.5 shrink-0">
+                  <button
+                    onClick={() => handleOpenDetail(t.id)}
+                    className="p-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-650 hover:text-gray-900 transition-colors shadow-sm cursor-pointer"
+                    title="Lihat Detail & QR"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => handleOpenEdit(t)}
                     className="flex-1 py-2.5 rounded-xl border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
@@ -535,6 +769,374 @@ export default function VoucherAdminClient({
           </div>
         </div>
       )}
+
+      {/* Detail Voucher Modal */}
+      <AnimatePresence>
+        {detailModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="px-6 py-4 flex flex-col md:flex-row md:items-center justify-between border-b border-gray-100 shrink-0 gap-4 bg-gray-50/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-50 flex items-center justify-center">
+                    <Ticket className="w-5 h-5 text-[#B48A5E]" />
+                  </div>
+                  <div>
+                    <h2 className="font-serif font-black text-lg text-gray-900 leading-tight">
+                      Detail Voucher: {detailData ? detailData.code : 'Loading...'}
+                    </h2>
+                    {detailData && (
+                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mt-0.5">
+                        Dibuat pada {new Date(detailData.createdAt).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Tab switches */}
+                  <div className="flex bg-gray-100 p-1 rounded-xl">
+                    <button
+                      onClick={() => setDetailTab('info')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        detailTab === 'info' 
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Informasi & QR Code
+                    </button>
+                    <button
+                      onClick={() => setDetailTab('history')}
+                      className={`px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                        detailTab === 'history' 
+                          ? 'bg-white text-gray-900 shadow-sm' 
+                          : 'text-gray-500 hover:text-gray-900'
+                      }`}
+                    >
+                      Riwayat Klaim ({detailData?.vouchers?.length || 0})
+                    </button>
+                  </div>
+
+                  <button
+                    onClick={() => setDetailModalOpen(false)}
+                    className="w-10 h-10 rounded-full hover:bg-gray-200 flex items-center justify-center transition-colors shrink-0 ml-2 cursor-pointer"
+                  >
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-1 overflow-y-auto p-6 min-h-0 bg-gray-50/20">
+                {loadingDetail ? (
+                  <div className="h-full flex flex-col items-center justify-center gap-3 py-20">
+                    <Loader2 className="w-10 h-10 animate-spin text-[#B48A5E]" />
+                    <p className="text-xs text-gray-550 font-bold uppercase tracking-widest">Memuat detail data...</p>
+                  </div>
+                ) : detailData ? (
+                  <>
+                    {/* TAB 1: INFO & QR */}
+                    {detailTab === 'info' && (
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+                        {/* Left column: template details */}
+                        <div className="lg:col-span-7 space-y-6">
+                          {/* Banner image or fallback */}
+                          <div className="relative h-44 bg-gray-150 rounded-3xl overflow-hidden border border-gray-100 shadow-inner shrink-0 flex items-center justify-center">
+                            {detailData.bannerImage ? (
+                              <Image 
+                                src={detailData.bannerImage} 
+                                alt={detailData.title} 
+                                fill 
+                                className="object-cover" 
+                                sizes="(max-width: 768px) 100vw, 40vw"
+                              />
+                            ) : (
+                              <div className="flex flex-col items-center gap-1.5 text-gray-400">
+                                <Ticket className="w-10 h-10 stroke-1" />
+                                <span className="text-[10px] font-bold uppercase tracking-wider">No Banner Image</span>
+                              </div>
+                            )}
+                            <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-md text-white font-extrabold text-[10px] tracking-wide uppercase">
+                              {detailData.type === 'DISCOUNT_PCT' 
+                                ? `Potongan ${detailData.discountValue}%` 
+                                : `Potongan ${formatRupiah(detailData.discountValue)}`}
+                            </div>
+                          </div>
+
+                          {/* Text info */}
+                          <div className="space-y-4">
+                            <div>
+                              <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Judul Voucher</h3>
+                              <p className="text-base font-black text-gray-900 leading-tight mt-1">{detailData.title}</p>
+                            </div>
+                            
+                            <div>
+                              <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Deskripsi / Peraturan</h3>
+                              <p className="text-xs text-gray-550 leading-relaxed mt-1.5">{detailData.description}</p>
+                            </div>
+
+                            {/* Terms and Conditions list */}
+                            <div className="bg-white rounded-2xl p-4 border border-gray-100 space-y-2">
+                              <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Syarat & Ketentuan</h3>
+                              <ul className="list-disc pl-4 space-y-1 text-xs text-gray-500 font-medium leading-relaxed">
+                                {detailData.terms.split('\n').filter((t: string) => t.trim().length > 0).map((term: string, idx: number) => (
+                                  <li key={idx}>{term}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+
+                          {/* Limits & Stats table */}
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Batas Kuota Penggunaan</span>
+                              <p className="text-sm font-extrabold text-gray-800 mt-1">
+                                {detailData.usageLimit > 0 ? `${detailData.usageLimit} Klaim` : 'Tanpa Batas (∞)'}
+                              </p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Voucher Yang Telah Diklaim</span>
+                              <p className="text-sm font-extrabold text-[#B48A5E] mt-1">
+                                {detailData.usageCount} Klaim {detailData.usageLimit > 0 ? `(${Math.round((detailData.usageCount / detailData.usageLimit) * 100)}%)` : ''}
+                              </p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Minimal Belanja</span>
+                              <p className="text-sm font-extrabold text-gray-800 mt-1">{formatRupiah(detailData.minPurchase)}</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Maksimal Diskon</span>
+                              <p className="text-sm font-extrabold text-gray-800 mt-1">
+                                {detailData.type === 'DISCOUNT_PCT' 
+                                  ? (detailData.maxDiscount ? formatRupiah(detailData.maxDiscount) : 'Tanpa Batas')
+                                  : 'N/A (Bukan Persentase)'}
+                              </p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Masa Berlaku Klaim</span>
+                              <p className="text-sm font-extrabold text-gray-800 mt-1">
+                                {detailData.expiresAt 
+                                  ? new Date(detailData.expiresAt).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'}) 
+                                  : 'Selamanya'}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Applicable Products */}
+                          <div className="bg-white p-4 rounded-2xl border border-gray-100 space-y-2">
+                            <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                              Berlaku Untuk Produk
+                            </h3>
+                            <div className="text-xs text-gray-600 font-medium">
+                              {(() => {
+                                const parsed = detailData.validProductIds ? JSON.parse(detailData.validProductIds) : []
+                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                  // Map IDs to product names if available in products list
+                                  const names = parsed.map(id => products.find(p => p.id === id)?.name || id)
+                                  return (
+                                    <div className="flex flex-wrap gap-1.5 mt-1">
+                                      {names.map((name, i) => (
+                                        <span key={i} className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-100 rounded-lg text-[10px] font-bold">
+                                          {name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )
+                                }
+                                return <p className="text-gray-500 mt-0.5">Semua produk menu Matchaboy</p>
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Right column: QR Code Claim Card */}
+                        <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-0">
+                          <div className="bg-white border border-gray-100 shadow-sm p-6 rounded-3xl flex flex-col items-center text-center space-y-5">
+                            <div className="space-y-1">
+                              <h3 className="font-bold text-gray-850 text-xs">QR Code Klaim Otomatis</h3>
+                              <p className="text-[10px] text-gray-450 font-medium leading-relaxed max-w-[220px] mx-auto">
+                                Pelanggan dapat memindai kode QR ini menggunakan kamera HP untuk mengklaim voucher secara instan.
+                              </p>
+                            </div>
+
+                            {/* QR Image */}
+                            <div className="relative w-48 h-48 border border-gray-100 p-2.5 rounded-2xl bg-white shadow-inner flex items-center justify-center">
+                              {isMounted && qrImageSrc ? (
+                                <img 
+                                  src={qrImageSrc}
+                                  alt="Claim QR Code" 
+                                  className="w-full h-full object-contain"
+                                />
+                              ) : (
+                                <div className="flex flex-col items-center justify-center gap-1">
+                                  <Loader2 className="w-5 h-5 animate-spin text-[#B48A5E]" />
+                                  <span className="text-[9px] text-gray-450">Memuat QR...</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="bg-amber-500/[0.03] border border-amber-500/10 p-3 rounded-2xl text-[10px] text-amber-900 text-left font-medium leading-normal flex items-start gap-2">
+                              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                              <p>
+                                💡 <strong>Tips:</strong> Anda dapat mengunduh QR Code atau mencetak flyer fisik voucher untuk ditempel di kasir atau dibagikan ke pelanggan.
+                              </p>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="w-full space-y-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => handleCopyLink(detailData.code)}
+                                className="w-full py-3 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
+                              >
+                                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                <span>{copied ? 'Link Disalin!' : 'Salin Link Klaim'}</span>
+                              </button>
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDownloadQR(detailData.code)}
+                                  className="py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Unduh QR</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handlePrintFlyer(detailData)}
+                                  className="py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 font-bold rounded-xl text-[11px] flex items-center justify-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  <span>Cetak Flyer</span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB 2: CLAIM & USAGE HISTORY */}
+                    {detailTab === 'history' && (
+                      <div className="space-y-4">
+                        {/* Table Header / Action Tools */}
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-gray-100">
+                          <div className="relative w-full md:w-72">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                              type="text"
+                              value={historySearchQuery}
+                              onChange={(e) => setHistorySearchQuery(e.target.value)}
+                              placeholder="Cari pelanggan / kode voucher..."
+                              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-[#B48A5E]"
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleExportExcel(detailData)}
+                            disabled={!detailData.vouchers || detailData.vouchers.length === 0}
+                            className="py-2.5 px-4 bg-emerald-650 hover:bg-emerald-750 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-md shadow-emerald-600/5 cursor-pointer"
+                          >
+                            <FileSpreadsheet className="w-4 h-4" />
+                            <span>Ekspor Excel (.xlsx)</span>
+                          </button>
+                        </div>
+
+                        {/* Usage list Table */}
+                        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm">
+                          <div className="overflow-x-auto">
+                            <table className="w-full border-collapse text-left text-xs text-gray-500">
+                              <thead className="bg-gray-50 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                                <tr>
+                                  <th className="px-6 py-4">Pelanggan</th>
+                                  <th className="px-6 py-4">No. WhatsApp</th>
+                                  <th className="px-6 py-4">Kode Voucher Unik</th>
+                                  <th className="px-6 py-4">Status</th>
+                                  <th className="px-6 py-4">Tanggal Klaim</th>
+                                  <th className="px-6 py-4">Tanggal Pakai</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100 font-medium">
+                                {(() => {
+                                  const filtered = (detailData.vouchers || []).filter((v: any) => {
+                                    const matchesName = (v.user?.name || '').toLowerCase().includes(historySearchQuery.toLowerCase())
+                                    const matchesPhone = (v.user?.phone || '').toLowerCase().includes(historySearchQuery.toLowerCase())
+                                    const matchesCode = (v.code || '').toLowerCase().includes(historySearchQuery.toLowerCase())
+                                    return matchesName || matchesPhone || matchesCode
+                                  })
+
+                                  if (filtered.length === 0) {
+                                    return (
+                                      <tr>
+                                        <td colSpan={6} className="px-6 py-12 text-center text-gray-400 font-medium">
+                                          {historySearchQuery ? 'Tidak ada data yang cocok dengan pencarian.' : 'Belum ada pengguna yang mengklaim voucher ini.'}
+                                        </td>
+                                      </tr>
+                                    )
+                                  }
+
+                                  return filtered.map((v: any) => (
+                                    <tr key={v.id} className="hover:bg-gray-50/50">
+                                      <td className="px-6 py-4 font-bold text-gray-900">{v.user?.name || 'Guest'}</td>
+                                      <td className="px-6 py-4 font-mono">{v.user?.phone || '-'}</td>
+                                      <td className="px-6 py-4 font-mono text-amber-900">{v.code}</td>
+                                      <td className="px-6 py-4">
+                                        {v.isUsed ? (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-600 rounded-full text-[10px] font-bold">
+                                            Terpakai
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold">
+                                            Belum Dipakai
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td className="px-6 py-4 text-gray-400">
+                                        {new Date(v.createdAt).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'})}
+                                      </td>
+                                      <td className="px-6 py-4">
+                                        {v.usedAt ? (
+                                          <span className="text-gray-700 font-bold">
+                                            {new Date(v.usedAt).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric'})}
+                                          </span>
+                                        ) : (
+                                          <span className="text-gray-300">-</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))
+                                })()}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center gap-3 py-20 text-center">
+                    <AlertCircle className="w-10 h-10 text-red-500" />
+                    <p className="text-xs text-gray-550 font-bold uppercase tracking-widest">Detail data tidak tersedia.</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Form Modal (Create / Edit) */}
       <AnimatePresence>
@@ -945,6 +1547,14 @@ export default function VoucherAdminClient({
           />
         )}
       </AnimatePresence>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

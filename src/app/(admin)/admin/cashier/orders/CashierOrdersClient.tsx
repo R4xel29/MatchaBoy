@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
+import { useToast } from '@/components/ui/Toast';
 
 interface OrderItem {
   id: string;
@@ -107,6 +108,7 @@ Jika ada pertanyaan atau perubahan, silakan kabari kami ya. Terima kasih! 🍵`;
 };
 
 export default function CashierOrdersClient({ initialOrders, storeLat, storeLng }: Props) {
+  const { showToast } = useToast();
   const router = useRouter();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('antrian');
@@ -250,7 +252,10 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
     return matchesSearch && matchesType;
   });
 
-  const getNextStatus = (status: string, orderType: string) => {
+  const getNextStatus = (status: string, orderType: string, paymentMethod?: string, paymentProofUrl?: string | null) => {
+    if (status === 'PENDING_PAYMENT' && ['QRIS', 'TRANSFER'].includes(paymentMethod || '') && !paymentProofUrl) {
+      return 'PENDING';
+    }
     if (orderType === 'DELIVERY') {
       const map: Record<string, string> = {
         PENDING: 'PREPARING',
@@ -269,8 +274,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
     }
   };
 
-  const advanceStatus = async (orderId: string, currentStatus: string, orderType: string) => {
-    const nextStatus = getNextStatus(currentStatus, orderType);
+  const advanceStatus = async (orderId: string, nextStatus: string) => {
     if (!nextStatus) return;
     setIsUpdating(orderId);
     try {
@@ -281,8 +285,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
       });
       if (!res.ok) throw new Error('Failed');
       router.refresh();
+      showToast('Status pesanan berhasil diperbarui', 'success');
     } catch {
-      alert('Error updating order');
+      showToast('Error updating order', 'error');
     } finally {
       setIsUpdating(null);
     }
@@ -302,8 +307,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
       }
       setSelectedOrder(null);
       router.refresh();
+      showToast('Pesanan berhasil dibatalkan', 'success');
     } catch (err: any) {
-      alert(err.message || 'Gagal membatalkan pesanan');
+      showToast(err.message || 'Gagal membatalkan pesanan', 'error');
     } finally {
       setIsUpdating(null);
     }
@@ -319,9 +325,10 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
       });
       if (!res.ok) throw new Error('Failed to assign driver');
       router.refresh();
+      showToast('Kurir berhasil ditugaskan', 'success');
     } catch (err) {
       console.error(err);
-      alert('Gagal menugaskan kurir');
+      showToast('Gagal menugaskan kurir', 'error');
     }
   };
 
@@ -556,22 +563,32 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
                         <UserPlus className="w-3.5 h-3.5" />
                         Tugaskan Kurir
                       </button>
-                    ) : getNextStatus(order.status, order.orderType) ? (
-                      <button
-                        onClick={() => advanceStatus(order.id, order.status, order.orderType)}
-                        disabled={isUpdating === order.id}
-                        className="flex-[2] py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
-                      >
-                        {isUpdating === order.id ? (
-                          'Mengupdate...'
-                        ) : (
-                          <>
-                            {order.status === 'PREPARING' && <ChefHat className="w-3.5 h-3.5" />}
-                            {order.status === 'READY' && <Check className="w-3.5 h-3.5" />}
-                            Ubah ke → {getNextStatus(order.status, order.orderType)?.replace('_', ' ')}
-                          </>
-                        )}
-                      </button>
+                    ) : getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl) ? (
+                      (() => {
+                        const nextStatus = getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl)!;
+                        const isAcceptPayment = nextStatus === 'PENDING';
+                        return (
+                          <button
+                            onClick={() => advanceStatus(order.id, nextStatus)}
+                            disabled={isUpdating === order.id}
+                            className={`flex-[2] py-2.5 px-4 rounded-xl bg-gradient-to-r ${
+                              isAcceptPayment 
+                                ? 'from-emerald-600 to-emerald-500' 
+                                : 'from-amber-600 to-amber-500'
+                            } text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5`}
+                          >
+                            {isUpdating === order.id ? (
+                              'Mengupdate...'
+                            ) : (
+                              <>
+                                {order.status === 'PREPARING' && <ChefHat className="w-3.5 h-3.5" />}
+                                {order.status === 'READY' && <Check className="w-3.5 h-3.5" />}
+                                {isAcceptPayment ? 'Terima Pembayaran' : `Ubah ke → ${nextStatus.replace('_', ' ')}`}
+                              </>
+                            )}
+                          </button>
+                        );
+                      })()
                     ) : (
                        <div className="flex-1 text-center text-xs text-muted-foreground py-1">
                           Menunggu kurir...
@@ -804,23 +821,25 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
                 <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-150 space-y-3">
                   <h3 className="text-sm font-bold text-emerald-950 flex items-center gap-1.5">
                     <ImageIcon className="w-4 h-4 text-emerald-700" />
-                    Bukti Pembayaran (Sudah Diunggah)
+                    {selectedOrder.paymentProofUrl === '/verified-cashier.svg' ? 'Status Pembayaran' : 'Bukti Pembayaran (Sudah Diunggah)'}
                   </h3>
                   <div className="relative w-full aspect-[4/3] max-w-[280px] mx-auto rounded-xl overflow-hidden border border-emerald-200 bg-white group shadow-sm">
                     <img 
                       src={selectedOrder.paymentProofUrl} 
                       alt="Bukti Pembayaran" 
-                      className="w-full h-full object-cover group-hover:scale-[1.02] transition-all duration-300"
+                      className={`w-full h-full ${selectedOrder.paymentProofUrl === '/verified-cashier.svg' ? 'object-contain p-2' : 'object-cover group-hover:scale-[1.02]'} transition-all duration-300`}
                     />
-                    <a 
-                      href={selectedOrder.paymentProofUrl} 
-                      target="_blank" 
-                      rel="noreferrer" 
-                      className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-xs font-bold transition-opacity gap-1 cursor-pointer"
-                    >
-                      <ImageIcon className="w-5 h-5 text-white" />
-                      <span>Buka Ukuran Penuh</span>
-                    </a>
+                    {selectedOrder.paymentProofUrl !== '/verified-cashier.svg' && (
+                      <a 
+                        href={selectedOrder.paymentProofUrl} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-xs font-bold transition-opacity gap-1 cursor-pointer"
+                      >
+                        <ImageIcon className="w-5 h-5 text-white" />
+                        <span>Buka Ukuran Penuh</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               )}
@@ -872,6 +891,18 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng 
                 <p className="text-lg font-bold text-foreground">{formatRupiah(selectedOrder.total)}</p>
               </div>
               <div className="flex gap-3">
+                {selectedOrder.status === 'PENDING_PAYMENT' && ['QRIS', 'TRANSFER'].includes(selectedOrder.paymentMethod) && !selectedOrder.paymentProofUrl && (
+                  <button
+                    onClick={async () => {
+                      await advanceStatus(selectedOrder.id, 'PENDING');
+                      setSelectedOrder(null);
+                    }}
+                    disabled={isUpdating === selectedOrder.id}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-50"
+                  >
+                    {isUpdating === selectedOrder.id ? 'Memproses...' : 'Terima Pembayaran'}
+                  </button>
+                )}
                 {ACTIVE_STATUSES.includes(selectedOrder.status) && (
                   <button
                     onClick={() => {

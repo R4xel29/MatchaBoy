@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Bell, Send, FileText, Plus, Trash2, Loader2, Users, User, ToggleLeft, ToggleRight, Save } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 type Tab = 'send' | 'templates';
 type Template = { id: string; trigger: string; title: string; message: string; isActive: boolean };
@@ -28,6 +29,18 @@ export default function AdminNotificationsPage() {
   const [loadingTpl, setLoadingTpl] = useState(false);
   const [editTpl, setEditTpl] = useState<Partial<Template> | null>(null);
   const [savingTpl, setSavingTpl] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => { if (tab === 'templates') fetchTemplates(); }, [tab]);
 
@@ -75,9 +88,17 @@ export default function AdminNotificationsPage() {
   };
 
   const handleDeleteTemplate = async (id: string) => {
-    if (!confirm('Hapus template ini?')) return;
-    await fetch(`/api/admin/notifications/templates?id=${id}`, { method: 'DELETE' });
-    fetchTemplates();
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Template',
+      message: 'Apakah Anda yakin ingin menghapus template notifikasi ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        await fetch(`/api/admin/notifications/templates?id=${id}`, { method: 'DELETE' });
+        fetchTemplates();
+      }
+    });
   };
 
   return (
@@ -224,6 +245,14 @@ export default function AdminNotificationsPage() {
           )}
         </motion.div>
       )}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

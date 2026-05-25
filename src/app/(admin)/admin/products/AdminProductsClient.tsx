@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
 import {
   Search, Plus, Edit2, Trash2, Power, PowerOff, X, Save, Loader2,
   ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus, History
@@ -61,6 +62,7 @@ function compressToWebP(file: File, maxSize = 800, quality = 0.8): Promise<Blob>
 
 export default function AdminProductsClient({ initialProducts, categories, ingredients }: Props) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isUpdating, setIsUpdating] = useState(false);
@@ -242,7 +244,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
         body: JSON.stringify({ badge: currentBadge === 'sold-out' ? null : 'sold-out' })
       });
       router.refresh();
-    } catch { alert('Error updating product'); }
+    } catch { showToast('Gagal memperbarui produk', 'error'); }
     finally { setIsUpdating(false); }
   };
 
@@ -309,7 +311,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       const { url } = await res.json();
       setFormData(p => ({ ...p, image: url }));
     } catch (err: any) {
-      alert('Image upload failed: ' + err.message);
+      showToast('Gagal mengupload gambar: ' + err.message, 'error');
       setImagePreview(null);
     } finally {
       setUploading(false);
@@ -376,7 +378,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setShowRecipeModal(false);
       router.refresh();
     } catch (err) {
-      alert('Error saving recipe');
+      showToast('Gagal menyimpan resep', 'error');
     } finally {
       setSavingRecipe(false);
     }
@@ -384,7 +386,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
   // ── Save ──
   const handleSave = async () => {
-    if (!formData.name || !formData.description || !formData.price || !formData.categoryId) { alert('Fill all required fields'); return; }
+    if (!formData.name || !formData.description || !formData.price || !formData.categoryId) { showToast('Harap isi semua kolom wajib', 'error'); return; }
     setSaving(true);
 
     const modifiers: ModifiersData = {};
@@ -413,7 +415,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       });
       if (!res.ok) throw new Error('Failed');
       closeModal(); router.refresh();
-    } catch { alert('Error saving product'); }
+    } catch { showToast('Gagal menyimpan produk', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -423,7 +425,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       const res = await fetch(`/api/admin/products/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed');
       setDeleteTarget(null); router.refresh();
-    } catch { alert('Error deleting product'); }
+    } catch { showToast('Gagal menghapus produk', 'error'); }
   };
 
   const getModifierSummary = (modStr: string | null): string => {

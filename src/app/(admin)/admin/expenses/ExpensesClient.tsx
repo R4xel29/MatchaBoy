@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
 import {
   Search, Plus, Edit2, Trash2, X, Save, Loader2,
   Receipt, Calendar, Tag, FileText
@@ -32,6 +33,7 @@ const CATEGORIES = [
 
 export default function ExpensesClient({ initialExpenses }: Props) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -76,7 +78,7 @@ export default function ExpensesClient({ initialExpenses }: Props) {
 
   const handleSave = async () => {
     if (!formData.name || !formData.amount) {
-      alert('Name and Amount are required');
+      showToast('Nama dan Jumlah pengeluaran wajib diisi', 'error');
       return;
     }
     setSaving(true);
@@ -91,7 +93,7 @@ export default function ExpensesClient({ initialExpenses }: Props) {
       setShowModal(false);
       router.refresh();
     } catch (err) {
-      alert('Error saving expense');
+      showToast('Gagal menyimpan pengeluaran', 'error');
     } finally {
       setSaving(false);
     }
@@ -105,7 +107,7 @@ export default function ExpensesClient({ initialExpenses }: Props) {
       setDeleteTarget(null);
       router.refresh();
     } catch (err) {
-      alert('Error deleting expense');
+      showToast('Gagal menghapus pengeluaran', 'error');
     }
   };
 

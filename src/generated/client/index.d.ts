@@ -89,6 +89,11 @@ export type ActivityLog = $Result.DefaultSelection<Prisma.$ActivityLogPayload>
  */
 export type HeroBanner = $Result.DefaultSelection<Prisma.$HeroBannerPayload>
 /**
+ * Model PromoPopup
+ * 
+ */
+export type PromoPopup = $Result.DefaultSelection<Prisma.$PromoPopupPayload>
+/**
  * Model CashierShift
  * 
  */
@@ -451,6 +456,16 @@ export class PrismaClient<
     * ```
     */
   get heroBanner(): Prisma.HeroBannerDelegate<ExtArgs>;
+
+  /**
+   * `prisma.promoPopup`: Exposes CRUD operations for the **PromoPopup** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more PromoPopups
+    * const promoPopups = await prisma.promoPopup.findMany()
+    * ```
+    */
+  get promoPopup(): Prisma.PromoPopupDelegate<ExtArgs>;
 
   /**
    * `prisma.cashierShift`: Exposes CRUD operations for the **CashierShift** model.
@@ -1087,6 +1102,7 @@ export namespace Prisma {
     Notification: 'Notification',
     ActivityLog: 'ActivityLog',
     HeroBanner: 'HeroBanner',
+    PromoPopup: 'PromoPopup',
     CashierShift: 'CashierShift',
     PointHistory: 'PointHistory',
     Voucher: 'Voucher',
@@ -1120,7 +1136,7 @@ export namespace Prisma {
 
   export type TypeMap<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, ClientOptions = {}> = {
     meta: {
-      modelProps: "user" | "pushSubscription" | "authenticator" | "account" | "session" | "verificationToken" | "location" | "category" | "product" | "order" | "orderItem" | "favorite" | "notification" | "activityLog" | "heroBanner" | "cashierShift" | "pointHistory" | "voucher" | "voucherTemplate" | "loyaltySettings" | "notificationTemplate" | "storeSettings" | "paymentSettings" | "bankAccount" | "referralTier" | "referralEvent" | "reportSettings" | "driverProfile" | "bannedContact" | "ingredient" | "productIngredient" | "stockMovement" | "expense"
+      modelProps: "user" | "pushSubscription" | "authenticator" | "account" | "session" | "verificationToken" | "location" | "category" | "product" | "order" | "orderItem" | "favorite" | "notification" | "activityLog" | "heroBanner" | "promoPopup" | "cashierShift" | "pointHistory" | "voucher" | "voucherTemplate" | "loyaltySettings" | "notificationTemplate" | "storeSettings" | "paymentSettings" | "bankAccount" | "referralTier" | "referralEvent" | "reportSettings" | "driverProfile" | "bannedContact" | "ingredient" | "productIngredient" | "stockMovement" | "expense"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -2171,6 +2187,76 @@ export namespace Prisma {
           count: {
             args: Prisma.HeroBannerCountArgs<ExtArgs>
             result: $Utils.Optional<HeroBannerCountAggregateOutputType> | number
+          }
+        }
+      }
+      PromoPopup: {
+        payload: Prisma.$PromoPopupPayload<ExtArgs>
+        fields: Prisma.PromoPopupFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PromoPopupFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PromoPopupFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>
+          }
+          findFirst: {
+            args: Prisma.PromoPopupFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PromoPopupFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>
+          }
+          findMany: {
+            args: Prisma.PromoPopupFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>[]
+          }
+          create: {
+            args: Prisma.PromoPopupCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>
+          }
+          createMany: {
+            args: Prisma.PromoPopupCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PromoPopupCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>[]
+          }
+          delete: {
+            args: Prisma.PromoPopupDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>
+          }
+          update: {
+            args: Prisma.PromoPopupUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>
+          }
+          deleteMany: {
+            args: Prisma.PromoPopupDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PromoPopupUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          upsert: {
+            args: Prisma.PromoPopupUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PromoPopupPayload>
+          }
+          aggregate: {
+            args: Prisma.PromoPopupAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePromoPopup>
+          }
+          groupBy: {
+            args: Prisma.PromoPopupGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PromoPopupGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PromoPopupCountArgs<ExtArgs>
+            result: $Utils.Optional<PromoPopupCountAggregateOutputType> | number
           }
         }
       }
@@ -19675,6 +19761,908 @@ export namespace Prisma {
      * Select specific fields to fetch from the HeroBanner
      */
     select?: HeroBannerSelect<ExtArgs> | null
+  }
+
+
+  /**
+   * Model PromoPopup
+   */
+
+  export type AggregatePromoPopup = {
+    _count: PromoPopupCountAggregateOutputType | null
+    _min: PromoPopupMinAggregateOutputType | null
+    _max: PromoPopupMaxAggregateOutputType | null
+  }
+
+  export type PromoPopupMinAggregateOutputType = {
+    id: string | null
+    title: string | null
+    image: string | null
+    linkUrl: string | null
+    isActive: boolean | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PromoPopupMaxAggregateOutputType = {
+    id: string | null
+    title: string | null
+    image: string | null
+    linkUrl: string | null
+    isActive: boolean | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PromoPopupCountAggregateOutputType = {
+    id: number
+    title: number
+    image: number
+    linkUrl: number
+    isActive: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PromoPopupMinAggregateInputType = {
+    id?: true
+    title?: true
+    image?: true
+    linkUrl?: true
+    isActive?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PromoPopupMaxAggregateInputType = {
+    id?: true
+    title?: true
+    image?: true
+    linkUrl?: true
+    isActive?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PromoPopupCountAggregateInputType = {
+    id?: true
+    title?: true
+    image?: true
+    linkUrl?: true
+    isActive?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PromoPopupAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PromoPopup to aggregate.
+     */
+    where?: PromoPopupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PromoPopups to fetch.
+     */
+    orderBy?: PromoPopupOrderByWithRelationInput | PromoPopupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PromoPopupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PromoPopups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PromoPopups.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned PromoPopups
+    **/
+    _count?: true | PromoPopupCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PromoPopupMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PromoPopupMaxAggregateInputType
+  }
+
+  export type GetPromoPopupAggregateType<T extends PromoPopupAggregateArgs> = {
+        [P in keyof T & keyof AggregatePromoPopup]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePromoPopup[P]>
+      : GetScalarType<T[P], AggregatePromoPopup[P]>
+  }
+
+
+
+
+  export type PromoPopupGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PromoPopupWhereInput
+    orderBy?: PromoPopupOrderByWithAggregationInput | PromoPopupOrderByWithAggregationInput[]
+    by: PromoPopupScalarFieldEnum[] | PromoPopupScalarFieldEnum
+    having?: PromoPopupScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PromoPopupCountAggregateInputType | true
+    _min?: PromoPopupMinAggregateInputType
+    _max?: PromoPopupMaxAggregateInputType
+  }
+
+  export type PromoPopupGroupByOutputType = {
+    id: string
+    title: string
+    image: string
+    linkUrl: string | null
+    isActive: boolean
+    createdAt: Date
+    updatedAt: Date
+    _count: PromoPopupCountAggregateOutputType | null
+    _min: PromoPopupMinAggregateOutputType | null
+    _max: PromoPopupMaxAggregateOutputType | null
+  }
+
+  type GetPromoPopupGroupByPayload<T extends PromoPopupGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PromoPopupGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PromoPopupGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PromoPopupGroupByOutputType[P]>
+            : GetScalarType<T[P], PromoPopupGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PromoPopupSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    image?: boolean
+    linkUrl?: boolean
+    isActive?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["promoPopup"]>
+
+  export type PromoPopupSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    title?: boolean
+    image?: boolean
+    linkUrl?: boolean
+    isActive?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }, ExtArgs["result"]["promoPopup"]>
+
+  export type PromoPopupSelectScalar = {
+    id?: boolean
+    title?: boolean
+    image?: boolean
+    linkUrl?: boolean
+    isActive?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+
+  export type $PromoPopupPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "PromoPopup"
+    objects: {}
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      title: string
+      image: string
+      linkUrl: string | null
+      isActive: boolean
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["promoPopup"]>
+    composites: {}
+  }
+
+  type PromoPopupGetPayload<S extends boolean | null | undefined | PromoPopupDefaultArgs> = $Result.GetResult<Prisma.$PromoPopupPayload, S>
+
+  type PromoPopupCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = 
+    Omit<PromoPopupFindManyArgs, 'select' | 'include' | 'distinct'> & {
+      select?: PromoPopupCountAggregateInputType | true
+    }
+
+  export interface PromoPopupDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['PromoPopup'], meta: { name: 'PromoPopup' } }
+    /**
+     * Find zero or one PromoPopup that matches the filter.
+     * @param {PromoPopupFindUniqueArgs} args - Arguments to find a PromoPopup
+     * @example
+     * // Get one PromoPopup
+     * const promoPopup = await prisma.promoPopup.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PromoPopupFindUniqueArgs>(args: SelectSubset<T, PromoPopupFindUniqueArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "findUnique"> | null, null, ExtArgs>
+
+    /**
+     * Find one PromoPopup that matches the filter or throw an error with `error.code='P2025'` 
+     * if no matches were found.
+     * @param {PromoPopupFindUniqueOrThrowArgs} args - Arguments to find a PromoPopup
+     * @example
+     * // Get one PromoPopup
+     * const promoPopup = await prisma.promoPopup.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PromoPopupFindUniqueOrThrowArgs>(args: SelectSubset<T, PromoPopupFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "findUniqueOrThrow">, never, ExtArgs>
+
+    /**
+     * Find the first PromoPopup that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PromoPopupFindFirstArgs} args - Arguments to find a PromoPopup
+     * @example
+     * // Get one PromoPopup
+     * const promoPopup = await prisma.promoPopup.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PromoPopupFindFirstArgs>(args?: SelectSubset<T, PromoPopupFindFirstArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "findFirst"> | null, null, ExtArgs>
+
+    /**
+     * Find the first PromoPopup that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PromoPopupFindFirstOrThrowArgs} args - Arguments to find a PromoPopup
+     * @example
+     * // Get one PromoPopup
+     * const promoPopup = await prisma.promoPopup.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PromoPopupFindFirstOrThrowArgs>(args?: SelectSubset<T, PromoPopupFindFirstOrThrowArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "findFirstOrThrow">, never, ExtArgs>
+
+    /**
+     * Find zero or more PromoPopups that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PromoPopupFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all PromoPopups
+     * const promoPopups = await prisma.promoPopup.findMany()
+     * 
+     * // Get first 10 PromoPopups
+     * const promoPopups = await prisma.promoPopup.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const promoPopupWithIdOnly = await prisma.promoPopup.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PromoPopupFindManyArgs>(args?: SelectSubset<T, PromoPopupFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "findMany">>
+
+    /**
+     * Create a PromoPopup.
+     * @param {PromoPopupCreateArgs} args - Arguments to create a PromoPopup.
+     * @example
+     * // Create one PromoPopup
+     * const PromoPopup = await prisma.promoPopup.create({
+     *   data: {
+     *     // ... data to create a PromoPopup
+     *   }
+     * })
+     * 
+     */
+    create<T extends PromoPopupCreateArgs>(args: SelectSubset<T, PromoPopupCreateArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "create">, never, ExtArgs>
+
+    /**
+     * Create many PromoPopups.
+     * @param {PromoPopupCreateManyArgs} args - Arguments to create many PromoPopups.
+     * @example
+     * // Create many PromoPopups
+     * const promoPopup = await prisma.promoPopup.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PromoPopupCreateManyArgs>(args?: SelectSubset<T, PromoPopupCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many PromoPopups and returns the data saved in the database.
+     * @param {PromoPopupCreateManyAndReturnArgs} args - Arguments to create many PromoPopups.
+     * @example
+     * // Create many PromoPopups
+     * const promoPopup = await prisma.promoPopup.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many PromoPopups and only return the `id`
+     * const promoPopupWithIdOnly = await prisma.promoPopup.createManyAndReturn({ 
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PromoPopupCreateManyAndReturnArgs>(args?: SelectSubset<T, PromoPopupCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "createManyAndReturn">>
+
+    /**
+     * Delete a PromoPopup.
+     * @param {PromoPopupDeleteArgs} args - Arguments to delete one PromoPopup.
+     * @example
+     * // Delete one PromoPopup
+     * const PromoPopup = await prisma.promoPopup.delete({
+     *   where: {
+     *     // ... filter to delete one PromoPopup
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PromoPopupDeleteArgs>(args: SelectSubset<T, PromoPopupDeleteArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "delete">, never, ExtArgs>
+
+    /**
+     * Update one PromoPopup.
+     * @param {PromoPopupUpdateArgs} args - Arguments to update one PromoPopup.
+     * @example
+     * // Update one PromoPopup
+     * const promoPopup = await prisma.promoPopup.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PromoPopupUpdateArgs>(args: SelectSubset<T, PromoPopupUpdateArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "update">, never, ExtArgs>
+
+    /**
+     * Delete zero or more PromoPopups.
+     * @param {PromoPopupDeleteManyArgs} args - Arguments to filter PromoPopups to delete.
+     * @example
+     * // Delete a few PromoPopups
+     * const { count } = await prisma.promoPopup.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PromoPopupDeleteManyArgs>(args?: SelectSubset<T, PromoPopupDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more PromoPopups.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PromoPopupUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many PromoPopups
+     * const promoPopup = await prisma.promoPopup.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PromoPopupUpdateManyArgs>(args: SelectSubset<T, PromoPopupUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create or update one PromoPopup.
+     * @param {PromoPopupUpsertArgs} args - Arguments to update or create a PromoPopup.
+     * @example
+     * // Update or create a PromoPopup
+     * const promoPopup = await prisma.promoPopup.upsert({
+     *   create: {
+     *     // ... data to create a PromoPopup
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the PromoPopup we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PromoPopupUpsertArgs>(args: SelectSubset<T, PromoPopupUpsertArgs<ExtArgs>>): Prisma__PromoPopupClient<$Result.GetResult<Prisma.$PromoPopupPayload<ExtArgs>, T, "upsert">, never, ExtArgs>
+
+
+    /**
+     * Count the number of PromoPopups.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PromoPopupCountArgs} args - Arguments to filter PromoPopups to count.
+     * @example
+     * // Count the number of PromoPopups
+     * const count = await prisma.promoPopup.count({
+     *   where: {
+     *     // ... the filter for the PromoPopups we want to count
+     *   }
+     * })
+    **/
+    count<T extends PromoPopupCountArgs>(
+      args?: Subset<T, PromoPopupCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PromoPopupCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a PromoPopup.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PromoPopupAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PromoPopupAggregateArgs>(args: Subset<T, PromoPopupAggregateArgs>): Prisma.PrismaPromise<GetPromoPopupAggregateType<T>>
+
+    /**
+     * Group by PromoPopup.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PromoPopupGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PromoPopupGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PromoPopupGroupByArgs['orderBy'] }
+        : { orderBy?: PromoPopupGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PromoPopupGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPromoPopupGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the PromoPopup model
+   */
+  readonly fields: PromoPopupFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for PromoPopup.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PromoPopupClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the PromoPopup model
+   */ 
+  interface PromoPopupFieldRefs {
+    readonly id: FieldRef<"PromoPopup", 'String'>
+    readonly title: FieldRef<"PromoPopup", 'String'>
+    readonly image: FieldRef<"PromoPopup", 'String'>
+    readonly linkUrl: FieldRef<"PromoPopup", 'String'>
+    readonly isActive: FieldRef<"PromoPopup", 'Boolean'>
+    readonly createdAt: FieldRef<"PromoPopup", 'DateTime'>
+    readonly updatedAt: FieldRef<"PromoPopup", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * PromoPopup findUnique
+   */
+  export type PromoPopupFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * Filter, which PromoPopup to fetch.
+     */
+    where: PromoPopupWhereUniqueInput
+  }
+
+  /**
+   * PromoPopup findUniqueOrThrow
+   */
+  export type PromoPopupFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * Filter, which PromoPopup to fetch.
+     */
+    where: PromoPopupWhereUniqueInput
+  }
+
+  /**
+   * PromoPopup findFirst
+   */
+  export type PromoPopupFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * Filter, which PromoPopup to fetch.
+     */
+    where?: PromoPopupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PromoPopups to fetch.
+     */
+    orderBy?: PromoPopupOrderByWithRelationInput | PromoPopupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PromoPopups.
+     */
+    cursor?: PromoPopupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PromoPopups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PromoPopups.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PromoPopups.
+     */
+    distinct?: PromoPopupScalarFieldEnum | PromoPopupScalarFieldEnum[]
+  }
+
+  /**
+   * PromoPopup findFirstOrThrow
+   */
+  export type PromoPopupFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * Filter, which PromoPopup to fetch.
+     */
+    where?: PromoPopupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PromoPopups to fetch.
+     */
+    orderBy?: PromoPopupOrderByWithRelationInput | PromoPopupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for PromoPopups.
+     */
+    cursor?: PromoPopupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PromoPopups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PromoPopups.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of PromoPopups.
+     */
+    distinct?: PromoPopupScalarFieldEnum | PromoPopupScalarFieldEnum[]
+  }
+
+  /**
+   * PromoPopup findMany
+   */
+  export type PromoPopupFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * Filter, which PromoPopups to fetch.
+     */
+    where?: PromoPopupWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of PromoPopups to fetch.
+     */
+    orderBy?: PromoPopupOrderByWithRelationInput | PromoPopupOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing PromoPopups.
+     */
+    cursor?: PromoPopupWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` PromoPopups from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` PromoPopups.
+     */
+    skip?: number
+    distinct?: PromoPopupScalarFieldEnum | PromoPopupScalarFieldEnum[]
+  }
+
+  /**
+   * PromoPopup create
+   */
+  export type PromoPopupCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * The data needed to create a PromoPopup.
+     */
+    data: XOR<PromoPopupCreateInput, PromoPopupUncheckedCreateInput>
+  }
+
+  /**
+   * PromoPopup createMany
+   */
+  export type PromoPopupCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many PromoPopups.
+     */
+    data: PromoPopupCreateManyInput | PromoPopupCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PromoPopup createManyAndReturn
+   */
+  export type PromoPopupCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * The data used to create many PromoPopups.
+     */
+    data: PromoPopupCreateManyInput | PromoPopupCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * PromoPopup update
+   */
+  export type PromoPopupUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * The data needed to update a PromoPopup.
+     */
+    data: XOR<PromoPopupUpdateInput, PromoPopupUncheckedUpdateInput>
+    /**
+     * Choose, which PromoPopup to update.
+     */
+    where: PromoPopupWhereUniqueInput
+  }
+
+  /**
+   * PromoPopup updateMany
+   */
+  export type PromoPopupUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update PromoPopups.
+     */
+    data: XOR<PromoPopupUpdateManyMutationInput, PromoPopupUncheckedUpdateManyInput>
+    /**
+     * Filter which PromoPopups to update
+     */
+    where?: PromoPopupWhereInput
+  }
+
+  /**
+   * PromoPopup upsert
+   */
+  export type PromoPopupUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * The filter to search for the PromoPopup to update in case it exists.
+     */
+    where: PromoPopupWhereUniqueInput
+    /**
+     * In case the PromoPopup found by the `where` argument doesn't exist, create a new PromoPopup with this data.
+     */
+    create: XOR<PromoPopupCreateInput, PromoPopupUncheckedCreateInput>
+    /**
+     * In case the PromoPopup was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PromoPopupUpdateInput, PromoPopupUncheckedUpdateInput>
+  }
+
+  /**
+   * PromoPopup delete
+   */
+  export type PromoPopupDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
+    /**
+     * Filter which PromoPopup to delete.
+     */
+    where: PromoPopupWhereUniqueInput
+  }
+
+  /**
+   * PromoPopup deleteMany
+   */
+  export type PromoPopupDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which PromoPopups to delete
+     */
+    where?: PromoPopupWhereInput
+  }
+
+  /**
+   * PromoPopup without action
+   */
+  export type PromoPopupDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the PromoPopup
+     */
+    select?: PromoPopupSelect<ExtArgs> | null
   }
 
 
@@ -38126,6 +39114,19 @@ export namespace Prisma {
   export type HeroBannerScalarFieldEnum = (typeof HeroBannerScalarFieldEnum)[keyof typeof HeroBannerScalarFieldEnum]
 
 
+  export const PromoPopupScalarFieldEnum: {
+    id: 'id',
+    title: 'title',
+    image: 'image',
+    linkUrl: 'linkUrl',
+    isActive: 'isActive',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PromoPopupScalarFieldEnum = (typeof PromoPopupScalarFieldEnum)[keyof typeof PromoPopupScalarFieldEnum]
+
+
   export const CashierShiftScalarFieldEnum: {
     id: 'id',
     cashierId: 'cashierId',
@@ -39848,6 +40849,68 @@ export namespace Prisma {
     order?: IntWithAggregatesFilter<"HeroBanner"> | number
     createdAt?: DateTimeWithAggregatesFilter<"HeroBanner"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"HeroBanner"> | Date | string
+  }
+
+  export type PromoPopupWhereInput = {
+    AND?: PromoPopupWhereInput | PromoPopupWhereInput[]
+    OR?: PromoPopupWhereInput[]
+    NOT?: PromoPopupWhereInput | PromoPopupWhereInput[]
+    id?: StringFilter<"PromoPopup"> | string
+    title?: StringFilter<"PromoPopup"> | string
+    image?: StringFilter<"PromoPopup"> | string
+    linkUrl?: StringNullableFilter<"PromoPopup"> | string | null
+    isActive?: BoolFilter<"PromoPopup"> | boolean
+    createdAt?: DateTimeFilter<"PromoPopup"> | Date | string
+    updatedAt?: DateTimeFilter<"PromoPopup"> | Date | string
+  }
+
+  export type PromoPopupOrderByWithRelationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    image?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    isActive?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PromoPopupWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: PromoPopupWhereInput | PromoPopupWhereInput[]
+    OR?: PromoPopupWhereInput[]
+    NOT?: PromoPopupWhereInput | PromoPopupWhereInput[]
+    title?: StringFilter<"PromoPopup"> | string
+    image?: StringFilter<"PromoPopup"> | string
+    linkUrl?: StringNullableFilter<"PromoPopup"> | string | null
+    isActive?: BoolFilter<"PromoPopup"> | boolean
+    createdAt?: DateTimeFilter<"PromoPopup"> | Date | string
+    updatedAt?: DateTimeFilter<"PromoPopup"> | Date | string
+  }, "id">
+
+  export type PromoPopupOrderByWithAggregationInput = {
+    id?: SortOrder
+    title?: SortOrder
+    image?: SortOrder
+    linkUrl?: SortOrderInput | SortOrder
+    isActive?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PromoPopupCountOrderByAggregateInput
+    _max?: PromoPopupMaxOrderByAggregateInput
+    _min?: PromoPopupMinOrderByAggregateInput
+  }
+
+  export type PromoPopupScalarWhereWithAggregatesInput = {
+    AND?: PromoPopupScalarWhereWithAggregatesInput | PromoPopupScalarWhereWithAggregatesInput[]
+    OR?: PromoPopupScalarWhereWithAggregatesInput[]
+    NOT?: PromoPopupScalarWhereWithAggregatesInput | PromoPopupScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"PromoPopup"> | string
+    title?: StringWithAggregatesFilter<"PromoPopup"> | string
+    image?: StringWithAggregatesFilter<"PromoPopup"> | string
+    linkUrl?: StringNullableWithAggregatesFilter<"PromoPopup"> | string | null
+    isActive?: BoolWithAggregatesFilter<"PromoPopup"> | boolean
+    createdAt?: DateTimeWithAggregatesFilter<"PromoPopup"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"PromoPopup"> | Date | string
   }
 
   export type CashierShiftWhereInput = {
@@ -42878,6 +43941,76 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type PromoPopupCreateInput = {
+    id?: string
+    title: string
+    image: string
+    linkUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PromoPopupUncheckedCreateInput = {
+    id?: string
+    title: string
+    image: string
+    linkUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PromoPopupUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    image?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PromoPopupUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    image?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PromoPopupCreateManyInput = {
+    id?: string
+    title: string
+    image: string
+    linkUrl?: string | null
+    isActive?: boolean
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PromoPopupUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    image?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PromoPopupUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    title?: StringFieldUpdateOperationsInput | string
+    image?: StringFieldUpdateOperationsInput | string
+    linkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    isActive?: BoolFieldUpdateOperationsInput | boolean
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
   export type CashierShiftCreateInput = {
     id?: string
     openedAt?: Date | string
@@ -45765,6 +46898,36 @@ export namespace Prisma {
 
   export type HeroBannerSumOrderByAggregateInput = {
     order?: SortOrder
+  }
+
+  export type PromoPopupCountOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    image?: SortOrder
+    linkUrl?: SortOrder
+    isActive?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PromoPopupMaxOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    image?: SortOrder
+    linkUrl?: SortOrder
+    isActive?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PromoPopupMinOrderByAggregateInput = {
+    id?: SortOrder
+    title?: SortOrder
+    image?: SortOrder
+    linkUrl?: SortOrder
+    isActive?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
   }
 
   export type CashierShiftCountOrderByAggregateInput = {
@@ -54604,6 +55767,10 @@ export namespace Prisma {
      * @deprecated Use HeroBannerDefaultArgs instead
      */
     export type HeroBannerArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = HeroBannerDefaultArgs<ExtArgs>
+    /**
+     * @deprecated Use PromoPopupDefaultArgs instead
+     */
+    export type PromoPopupArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = PromoPopupDefaultArgs<ExtArgs>
     /**
      * @deprecated Use CashierShiftDefaultArgs instead
      */

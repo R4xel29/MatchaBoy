@@ -178,23 +178,25 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             {order.paymentProofUrl && (
               <div className="mt-4 pt-4 border-t border-dashed border-gray-150">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted-foreground mb-2 flex items-center gap-1.5">
-                  <ImageIcon className="w-3.5 h-3.5 text-[#B48A5E]" /> Bukti Pembayaran (Sudah Diunggah)
+                  <ImageIcon className="w-3.5 h-3.5 text-[#B48A5E]" /> {order.paymentProofUrl === '/verified-cashier.svg' ? 'Status Pembayaran' : 'Bukti Pembayaran (Sudah Diunggah)'}
                 </p>
                 <div className="relative w-full max-w-[200px] aspect-[4/3] rounded-xl overflow-hidden border border-border bg-slate-50 group shadow-sm">
                   <img 
                     src={order.paymentProofUrl} 
                     alt="Bukti Pembayaran" 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-all duration-300"
+                    className={`w-full h-full ${order.paymentProofUrl === '/verified-cashier.svg' ? 'object-contain p-2' : 'object-cover group-hover:scale-105'} transition-all duration-300`}
                   />
-                  <a 
-                    href={order.paymentProofUrl} 
-                    target="_blank" 
-                    rel="noreferrer" 
-                    className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition-opacity gap-1"
-                  >
-                    <ImageIcon className="w-4 h-4 text-white" />
-                    <span>Buka Ukuran Penuh</span>
-                  </a>
+                  {order.paymentProofUrl !== '/verified-cashier.svg' && (
+                    <a 
+                      href={order.paymentProofUrl} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-bold transition-opacity gap-1"
+                    >
+                      <ImageIcon className="w-4 h-4 text-white" />
+                      <span>Buka Ukuran Penuh</span>
+                    </a>
+                  )}
                 </div>
               </div>
             )}

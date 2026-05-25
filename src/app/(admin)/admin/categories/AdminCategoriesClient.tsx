@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Edit2, Trash2, X, Save, Loader2, FolderOpen, Package } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 interface CategoryWithCount { id: string; name: string; slug: string; _count: { products: number }; }
 interface Props { initialCategories: CategoryWithCount[]; }
 
 export default function AdminCategoriesClient({ initialCategories }: Props) {
+  const { showToast } = useToast();
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryWithCount | null>(null);
@@ -25,14 +27,15 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
   const closeModal = () => { setShowModal(false); setEditingCategory(null); setName(''); };
 
   const handleSave = async () => {
-    if (!name.trim()) { alert('Category name is required'); return; }
+    if (!name.trim()) { showToast('Category name is required', 'error'); return; }
     setSaving(true);
     try {
       const url = editingCategory ? `/api/admin/categories/${editingCategory.id}` : '/api/admin/categories';
       const res = await fetch(url, { method: editingCategory ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: name.trim() }) });
       if (!res.ok) throw new Error('Failed');
       closeModal(); router.refresh();
-    } catch { alert('Error saving category'); }
+      showToast('Kategori berhasil disimpan', 'success');
+    } catch { showToast('Error saving category', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -44,7 +47,8 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
       if (res.status === 409) { const data = await res.json(); setDeleteError(data.error); return; }
       if (!res.ok) throw new Error('Failed');
       setDeleteTarget(null); router.refresh();
-    } catch { alert('Error deleting category'); }
+      showToast('Kategori berhasil dihapus', 'success');
+    } catch { showToast('Error deleting category', 'error'); }
   };
 
   return (

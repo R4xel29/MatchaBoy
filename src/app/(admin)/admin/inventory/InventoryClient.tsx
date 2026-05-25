@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
 import {
   Search, Plus, Edit2, Trash2, X, Save, Loader2,
   Package, History, AlertTriangle, TrendingUp, TrendingDown
@@ -24,6 +25,7 @@ interface Props {
 
 export default function InventoryClient({ initialIngredients }: Props) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
   
@@ -84,7 +86,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
 
   const handleSave = async () => {
     if (!formData.name || !formData.unit) {
-      alert('Name and Unit are required');
+      showToast('Nama dan Satuan bahan wajib diisi', 'error');
       return;
     }
     setSaving(true);
@@ -99,7 +101,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
       setShowModal(false);
       router.refresh();
     } catch (err) {
-      alert('Error saving ingredient');
+      showToast('Gagal menyimpan bahan', 'error');
     } finally {
       setSaving(false);
     }
@@ -107,7 +109,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
 
   const handleRestock = async () => {
     if (!restockIngredient || !restockData.quantity || !restockData.totalCost) {
-      alert('Quantity and Total Cost are required');
+      showToast('Jumlah dan Total Biaya wajib diisi', 'error');
       return;
     }
     setSaving(true);
@@ -124,7 +126,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
       setShowRestockModal(false);
       router.refresh();
     } catch (err) {
-      alert('Error restocking ingredient');
+      showToast('Gagal merestock bahan', 'error');
     } finally {
       setSaving(false);
     }
@@ -138,7 +140,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
       setDeleteTarget(null);
       router.refresh();
     } catch (err) {
-      alert('Error deleting ingredient');
+      showToast('Gagal menghapus bahan', 'error');
     }
   };
 

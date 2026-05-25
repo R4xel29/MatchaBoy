@@ -210,7 +210,8 @@ model Order {
   pickupReminderSent Boolean   @default(false)
 
   // Notes
-  notes String?
+  notes        String?
+  cancelReason String?
 
   // Payment proof (for QRIS/Transfer)
   paymentProofUrl  String?
@@ -306,6 +307,16 @@ model HeroBanner {
   order       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model PromoPopup {
+  id        String   @id @default(cuid())
+  title     String
+  image     String // Image URL
+  linkUrl   String? // Optional redirect URL when clicked
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CashierShift {

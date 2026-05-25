@@ -8,7 +8,7 @@ export default async function DriverLayout({ children }: { children: ReactNode }
   const session = await auth();
   
   if (!session?.user) {
-    redirect('/login');
+    redirect('/login/driver');
   }
 
   return (

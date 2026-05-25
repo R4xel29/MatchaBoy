@@ -6,6 +6,7 @@ import { formatRupiah } from '@/lib/utils';
 import { Search, MapPin, Package, Clock, ArrowUpRight, ShoppingBag, Truck, UserPlus, Bell } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
+import { useToast } from '@/components/ui/Toast';
 
 interface OrderItem { id: string; qty: number; price: number; product: { name: string; image: string | null; }; }
 interface OrderData {
@@ -17,6 +18,7 @@ interface Props { initialOrders: OrderData[]; }
 
 export default function AdminOrdersClient({ initialOrders }: Props) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
@@ -64,7 +66,10 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const getNextStatus = (status: string, orderType: string) => {
+  const getNextStatus = (status: string, orderType: string, paymentMethod?: string, paymentProofUrl?: string | null) => {
+    if (status === 'PENDING_PAYMENT' && ['QRIS', 'TRANSFER'].includes(paymentMethod || '') && !paymentProofUrl) {
+      return 'PENDING';
+    }
     if (orderType === 'DELIVERY') {
       const map: Record<string, string> = {
         'PENDING': 'PREPARING',
@@ -83,15 +88,15 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
     }
   };
 
-  const advanceOrderStatus = async (orderId: string, currentStatus: string, orderType: string) => {
-    const nextStatus = getNextStatus(currentStatus, orderType);
+  const advanceOrderStatus = async (orderId: string, nextStatus: string) => {
     if (!nextStatus) return;
     setIsUpdating(orderId);
     try {
       const res = await fetch(`/api/admin/orders/${orderId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: nextStatus }) });
       if (!res.ok) throw new Error('Failed');
       router.refresh();
-    } catch { alert('Error updating order'); }
+      showToast('Status pesanan berhasil diperbarui', 'success');
+    } catch { showToast('Gagal mengupdate pesanan', 'error'); }
     finally { setIsUpdating(null); }
   };
 
@@ -236,11 +241,24 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                   >
                     <UserPlus className="w-3.5 h-3.5" /> Tugaskan Kurir
                   </button>
-                ) : getNextStatus(order.status, order.orderType) && order.status !== 'DELIVERED' ? (
-                  <button onClick={() => advanceOrderStatus(order.id, order.status, order.orderType)} disabled={isUpdating === order.id}
-                    className="flex-1 py-2 px-4 rounded-xl gradient-brand text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98]">
-                    {isUpdating === order.id ? 'Updating...' : `Advance → ${getNextStatus(order.status, order.orderType)?.replace('_', ' ')}`}
-                  </button>
+                ) : getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl) && order.status !== 'DELIVERED' ? (
+                  (() => {
+                    const nextStatus = getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl)!;
+                    const isAcceptPayment = nextStatus === 'PENDING';
+                    return (
+                      <button 
+                        onClick={() => advanceOrderStatus(order.id, nextStatus)} 
+                        disabled={isUpdating === order.id}
+                        className={`flex-1 py-2 px-4 rounded-xl ${
+                          isAcceptPayment 
+                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-500' 
+                            : 'gradient-brand'
+                        } text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98]`}
+                      >
+                        {isUpdating === order.id ? 'Updating...' : isAcceptPayment ? 'Terima Pembayaran' : `Advance → ${nextStatus.replace('_', ' ')}`}
+                      </button>
+                    );
+                  })()
                 ) : (
                   <div className="flex-1 text-center text-xs text-muted-foreground font-medium">
                     {order.status === 'DELIVERED' ? 'Selesai' : 'Menunggu kurir'}

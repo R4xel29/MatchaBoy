@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -34,6 +35,7 @@ export async function GET() {
         email: true,
         phone: true,
         image: true,
+        password: true,
         createdAt: true,
         driverProfile: {
           select: {
@@ -50,8 +52,14 @@ export async function GET() {
       orderBy: { createdAt: 'desc' }
     })
 
+    // Map to include hasPassword flag without leaking the hash
+    const safeDrivers = drivers.map(d => ({
+      ...d,
+      hasPassword: !!d.password,
+      password: undefined,
+    }))
 
-    return NextResponse.json(drivers)
+    return NextResponse.json(safeDrivers)
   } catch (error) {
     console.error('List drivers error:', error)
     return NextResponse.json({ error: 'Failed' }, { status: 500 })
@@ -74,10 +82,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    const { name, email, phone, vehicleType, plateNumber } = await req.json()
+    const { name, email, phone, vehicleType, plateNumber, password } = await req.json()
 
     if (!name || !email) {
       return NextResponse.json({ error: 'Nama dan email wajib diisi' }, { status: 400 })
+    }
+
+    // Hash password if provided
+    let hashedPassword: string | undefined = undefined
+    if (password && password.length >= 6) {
+      hashedPassword = await bcrypt.hash(password, 10)
     }
 
     // Check if user with this email already exists
@@ -95,7 +109,12 @@ export async function POST(req: Request) {
       // Update existing user to DRIVER role
       await prisma.user.update({
         where: { id: existingUser.id },
-        data: { role: 'DRIVER', name, phone: phone || undefined }
+        data: { 
+          role: 'DRIVER', 
+          name, 
+          phone: phone || undefined,
+          ...(hashedPassword ? { password: hashedPassword } : {}),
+        }
       })
 
       // Create or update driver profile
@@ -124,6 +143,7 @@ export async function POST(req: Request) {
         email,
         phone: phone || null,
         role: 'DRIVER',
+        ...(hashedPassword ? { password: hashedPassword } : {}),
         driverProfile: {
           create: {
             vehicleType: vehicleType || 'Motor',

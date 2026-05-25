@@ -45,7 +45,8 @@ export async function POST(req: Request) {
                 type: voucher.type,
                 description: voucher.description,
                 discountAmount: voucher.discountAmount,
-                minPurchase: voucher.template?.minPurchase || 0
+                minPurchase: voucher.template?.minPurchase || 0,
+                maxDiscount: voucher.template?.maxDiscount || null
             }
         })
     } catch (error) {

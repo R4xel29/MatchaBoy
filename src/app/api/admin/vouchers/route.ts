@@ -38,7 +38,24 @@ export async function GET(req: Request) {
         where: { id: templateId },
         include: {
           vouchers: {
-            select: { id: true }
+            select: {
+              id: true,
+              code: true,
+              isUsed: true,
+              usedAt: true,
+              createdAt: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true
+                }
+              }
+            },
+            orderBy: {
+              createdAt: 'desc'
+            }
           }
         }
       })

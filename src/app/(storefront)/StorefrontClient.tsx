@@ -134,12 +134,14 @@ export default function StorefrontClient({
     const bundles = products.filter(p => p.modifiers?.isBundle === true);
     const combined = [...bundles, ...bestSellers];
     const unique = combined.filter((item, index) => combined.findIndex(p => p.id === item.id) === index);
-    return unique.length > 0 ? unique : products.slice(0, 4);
+    const list = unique.length > 0 ? unique : products.slice(0, 4);
+    return [...list].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
   }, [products]);
 
   const baruProducts = useMemo(() => {
     const list = products.filter(p => p.badge === 'new');
-    return list.length > 0 ? list : products.slice(1, 3);
+    const baseList = list.length > 0 ? list : products.slice(1, 3);
+    return [...baseList].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
   }, [products]);
 
   const makananProducts = useMemo(() => {
@@ -150,7 +152,8 @@ export default function StorefrontClient({
       const catLower = p.category.toLowerCase();
       return foodKeywords.some(kw => nameLower.includes(kw) || descLower.includes(kw) || catLower.includes(kw));
     });
-    return list.length > 0 ? list : products.slice(2, 8);
+    const baseList = list.length > 0 ? list : products.slice(2, 8);
+    return [...baseList].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
   }, [products]);
 
   const handleProductClick = (product: Product) => {
@@ -333,90 +336,59 @@ export default function StorefrontClient({
             </div>
 
             <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
-              {spesialProducts.map((p) => (
-                <div 
-                  key={p.id}
-                  onClick={() => handleProductClick(p)}
-                  className="w-[145px] md:w-[175px] shrink-0 bg-white/70 backdrop-blur-md border border-[#D4A574]/15 hover:border-[#B48A5E]/40 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(180,138,94,0.12)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer rounded-3xl p-3 relative group overflow-hidden"
-                >
-                  {p.image && (
-                    <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-white mb-2.5 border border-[#EADFC9]/20 shadow-sm">
-                      <Image
-                        src={p.image}
-                        alt={p.name}
-                        fill
-                        sizes="(max-width: 768px) 120px, 150px"
-                        className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                      />
-                      <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-white/90 backdrop-blur-md text-[#D4A574] text-[8px] font-black shadow-sm flex items-center gap-0.5 leading-none">
-                        <Star className="w-3 h-3 fill-[#D4A574] stroke-none" /> 4.9
-                      </span>
-                    </div>
-                  )}
+              {spesialProducts.map((p) => {
+                const isSoldOut = p.badge === 'sold-out';
+                return (
+                  <div 
+                    key={p.id}
+                    onClick={() => handleProductClick(p)}
+                    className={`w-[145px] md:w-[175px] shrink-0 bg-white/70 backdrop-blur-md border border-[#D4A574]/15 shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden ${
+                      isSoldOut
+                        ? 'opacity-60 cursor-not-allowed'
+                        : 'hover:border-[#B48A5E]/40 hover:shadow-[0_12px_40px_rgba(180,138,94,0.12)] hover:-translate-y-1.5 cursor-pointer'
+                    }`}
+                  >
+                    {p.image && (
+                      <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-white mb-2.5 border border-[#EADFC9]/20 shadow-sm">
+                        <Image
+                          src={p.image}
+                          alt={p.name}
+                          fill
+                          sizes="(max-width: 768px) 120px, 150px"
+                          className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
+                            isSoldOut ? 'grayscale brightness-50' : ''
+                          }`}
+                        />
+                        {isSoldOut ? (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                            <span className="bg-black/80 text-white font-extrabold text-[8px] px-2 py-0.5 rounded-md tracking-wider uppercase">
+                              Habis
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-white/90 backdrop-blur-md text-[#D4A574] text-[8px] font-black shadow-sm flex items-center gap-0.5 leading-none">
+                            <Star className="w-3 h-3 fill-[#D4A574] stroke-none" /> 4.9
+                          </span>
+                        )}
+                      </div>
+                    )}
 
-                  <div className="flex-grow flex flex-col justify-between">
-                    <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-[#2E5A44] transition-colors">
-                      {p.name}
-                    </p>
-                    <div className="mt-2 flex items-baseline justify-between">
-                      <span className="font-bold text-xs text-[#B48A5E]">
-                        {formatRupiah(p.price)}
-                      </span>
-                      <span className="text-[8px] font-black uppercase text-[#2E5A44] bg-[#E8F5E9] px-1.5 py-0.5 rounded">
-                        Combo
-                      </span>
+                    <div className="flex-grow flex flex-col justify-between">
+                      <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-[#2E5A44] transition-colors">
+                        {p.name}
+                      </p>
+                      <div className="mt-2 flex items-baseline justify-between">
+                        <span className="font-bold text-xs text-[#B48A5E]">
+                          {formatRupiah(p.price)}
+                        </span>
+                        <span className="text-[8px] font-black uppercase text-[#2E5A44] bg-[#E8F5E9] px-1.5 py-0.5 rounded">
+                          Combo
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* Vouchers & Discounts (Premium Ticket Cuts Layout) */}
-          <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm">
-            <h3 className="font-serif font-black text-base md:text-lg text-gray-900 tracking-tight mb-5 flex items-center gap-1.5">
-              <Sparkles className="w-5 h-5 text-[#B48A5E]" /> Diskon & Voucher Belanja
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {/* Ticket 1 */}
-              <div className="ticket-card border border-gray-150/70 hover:border-amber-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-2xl p-4.5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
-                <div className="min-w-0 pr-3 flex-1">
-                  <span className="text-[8px] font-black text-[#0096C7] bg-cyan-50 border border-cyan-150 px-2 py-0.5 rounded uppercase tracking-wider">blu BCA</span>
-                  <p className="text-lg font-serif font-black text-[#0077B6] leading-none mt-2">40% OFF</p>
-                  <p className="text-[9px] mt-1 text-gray-400 font-bold uppercase tracking-wider leading-none">BCA Digital Payment</p>
-                </div>
-                <div className="border-l border-dashed border-gray-150 h-11 mx-2 shrink-0" />
-                <div className="w-10 h-10 rounded-xl bg-cyan-50 border border-cyan-100 flex items-center justify-center shrink-0 shadow-inner text-xs font-black text-[#0096C7] group-hover:scale-105 transition-transform">
-                  blu
-                </div>
-              </div>
-
-              {/* Ticket 2 */}
-              <div className="ticket-card border border-gray-150/70 hover:border-amber-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-2xl p-4.5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
-                <div className="min-w-0 pr-3 flex-1">
-                  <span className="text-[8px] font-black text-[#7B1FA2] bg-purple-50 border border-purple-150 px-2 py-0.5 rounded uppercase tracking-wider">OVO</span>
-                  <p className="text-lg font-serif font-black text-[#4C2A86] leading-none mt-2">60% OFF</p>
-                  <p className="text-[9px] mt-1 text-gray-400 font-bold uppercase tracking-wider leading-none">Cashback OVO Cash</p>
-                </div>
-                <div className="border-l border-dashed border-gray-150 h-11 mx-2 shrink-0" />
-                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center shrink-0 shadow-inner text-xs font-black text-[#7B1FA2] group-hover:scale-105 transition-transform">
-                  OVO
-                </div>
-              </div>
-
-              {/* Ticket 3 */}
-              <div className="ticket-card border border-gray-150/70 hover:border-amber-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 rounded-2xl p-4.5 flex items-center justify-between relative overflow-hidden group transition-all duration-300 cursor-pointer">
-                <div className="min-w-0 pr-3 flex-1">
-                  <span className="text-[8px] font-black text-[#FF5722] bg-orange-50 border border-orange-150 px-2 py-0.5 rounded uppercase tracking-wider">ShopeePay</span>
-                  <p className="text-lg font-serif font-black text-[#D35400] leading-none mt-2">50% OFF</p>
-                  <p className="text-[9px] mt-1 text-gray-400 font-bold uppercase tracking-wider leading-none">Klaim Shopee Cashback</p>
-                </div>
-                <div className="border-l border-dashed border-gray-150 h-11 mx-2 shrink-0" />
-                <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center shrink-0 shadow-inner text-xs font-black text-[#FF5722] group-hover:scale-105 transition-transform">
-                  SPay
-                </div>
-              </div>
+                );
+              })}
             </div>
           </section>
 
@@ -432,37 +404,54 @@ export default function StorefrontClient({
             </div>
 
             <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
-              {baruProducts.map((p) => (
-                <div 
-                  key={p.id}
-                  onClick={() => handleProductClick(p)}
-                  className="w-[145px] md:w-[175px] shrink-0 bg-white/70 backdrop-blur-md border border-[#D4A574]/15 hover:border-[#B48A5E]/40 shadow-[0_8px_30px_rgba(0,0,0,0.025)] hover:shadow-[0_12px_40px_rgba(180,138,94,0.12)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer rounded-3xl p-3 relative group overflow-hidden"
-                >
-                  {p.image && (
-                    <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-white mb-2.5 border border-[#EADFC9]/20 shadow-sm">
-                      <Image
-                        src={p.image}
-                        alt={p.name}
-                        fill
-                        sizes="(max-width: 768px) 120px, 150px"
-                        className="object-cover group-hover:scale-105 transition-transform duration-550 ease-out"
-                      />
-                      <span className="absolute bottom-1.5 left-1.5 z-10 px-2 py-0.5 rounded-full bg-[#E8F5E9] text-[#2E7D32] text-[8px] font-black shadow-sm uppercase tracking-wider flex items-center gap-0.5 leading-none">
-                        New
-                      </span>
-                    </div>
-                  )}
+              {baruProducts.map((p) => {
+                const isSoldOut = p.badge === 'sold-out';
+                return (
+                  <div 
+                    key={p.id}
+                    onClick={() => handleProductClick(p)}
+                    className={`w-[145px] md:w-[175px] shrink-0 bg-white/70 backdrop-blur-md border border-[#D4A574]/15 shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden ${
+                      isSoldOut
+                        ? 'opacity-60 cursor-not-allowed'
+                        : 'hover:border-[#B48A5E]/40 hover:shadow-[0_12px_40px_rgba(180,138,94,0.12)] hover:-translate-y-1.5 cursor-pointer'
+                    }`}
+                  >
+                    {p.image && (
+                      <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-white mb-2.5 border border-[#EADFC9]/20 shadow-sm">
+                        <Image
+                          src={p.image}
+                          alt={p.name}
+                          fill
+                          sizes="(max-width: 768px) 120px, 150px"
+                          className={`object-cover group-hover:scale-105 transition-transform duration-555 ease-out ${
+                            isSoldOut ? 'grayscale brightness-50' : ''
+                          }`}
+                        />
+                        {isSoldOut ? (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                            <span className="bg-black/80 text-white font-extrabold text-[8px] px-2 py-0.5 rounded-md tracking-wider uppercase">
+                              Habis
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="absolute bottom-1.5 left-1.5 z-10 px-2 py-0.5 rounded-full bg-[#E8F5E9] text-[#2E7D32] text-[8px] font-black shadow-sm uppercase tracking-wider flex items-center gap-0.5 leading-none">
+                            New
+                          </span>
+                        )}
+                      </div>
+                    )}
 
-                  <div className="flex-grow flex flex-col justify-between">
-                    <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-[#2E5A44] transition-colors">
-                      {p.name}
-                    </p>
-                    <p className="font-bold text-xs text-[#B48A5E] leading-none mt-2">
-                      {formatRupiah(p.price)}
-                    </p>
+                    <div className="flex-grow flex flex-col justify-between">
+                      <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-[#2E5A44] transition-colors">
+                        {p.name}
+                      </p>
+                      <p className="font-bold text-xs text-[#B48A5E] leading-none mt-2">
+                        {formatRupiah(p.price)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 
@@ -478,34 +467,50 @@ export default function StorefrontClient({
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {makananProducts.map((p) => (
-                <div 
-                  key={p.id}
-                  onClick={() => handleProductClick(p)}
-                  className="bg-white/80 backdrop-blur-sm border border-[#D4A574]/15 hover:border-[#B48A5E]/45 shadow-[0_6px_20px_rgba(0,0,0,0.015)] hover:shadow-[0_12px_35px_rgba(180,138,94,0.1)] hover:-translate-y-1.5 transition-all duration-300 cursor-pointer rounded-3xl p-3.5 relative group overflow-hidden"
-                >
-                  {p.image && (
-                    <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#FAF8F5] mb-2.5 border border-[#EADFC9]/30 shadow-sm">
-                      <Image
-                        src={p.image}
-                        alt={p.name}
-                        fill
-                        sizes="(max-width: 768px) 120px, 150px"
-                        className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                      />
-                    </div>
-                  )}
+              {makananProducts.map((p) => {
+                const isSoldOut = p.badge === 'sold-out';
+                return (
+                  <div 
+                    key={p.id}
+                    onClick={() => handleProductClick(p)}
+                    className={`bg-white/80 backdrop-blur-sm border border-[#D4A574]/15 shadow-[0_6px_20px_rgba(0,0,0,0.015)] transition-all duration-300 rounded-3xl p-3.5 relative group overflow-hidden ${
+                      isSoldOut
+                        ? 'opacity-60 cursor-not-allowed'
+                        : 'hover:border-[#B48A5E]/45 hover:shadow-[0_12px_35px_rgba(180,138,94,0.1)] hover:-translate-y-1.5 cursor-pointer'
+                    }`}
+                  >
+                    {p.image && (
+                      <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#FAF8F5] mb-2.5 border border-[#EADFC9]/30 shadow-sm">
+                        <Image
+                          src={p.image}
+                          alt={p.name}
+                          fill
+                          sizes="(max-width: 768px) 120px, 150px"
+                          className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
+                            isSoldOut ? 'grayscale brightness-50' : ''
+                          }`}
+                        />
+                        {isSoldOut && (
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                            <span className="bg-black/80 text-white font-extrabold text-[8px] px-2 py-0.5 rounded-md tracking-wider uppercase">
+                              Habis
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  <div className="flex-1 flex flex-col justify-between">
-                    <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-[#2E5A44] transition-colors">
-                      {p.name}
-                    </p>
-                    <p className="font-bold text-xs text-gray-800 leading-none mt-2">
-                      {formatRupiah(p.price)}
-                    </p>
+                    <div className="flex-1 flex flex-col justify-between">
+                      <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-[#2E5A44] transition-colors">
+                        {p.name}
+                      </p>
+                      <p className="font-bold text-xs text-gray-800 leading-none mt-2">
+                        {formatRupiah(p.price)}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
 

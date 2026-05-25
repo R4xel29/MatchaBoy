@@ -122,12 +122,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   const statusRef = useRef(currentStatus);
   statusRef.current = currentStatus;
 
-  // Auto-redirect to payment page if Doku payment is pending
-  useEffect(() => {
-    if (order.paymentMethod === 'DOKU' && currentStatus === 'PENDING_PAYMENT') {
-      router.replace(`/orders/${orderId}/payment`);
-    }
-  }, [order.paymentMethod, currentStatus, orderId, router]);
+  // Auto-redirect to payment page removed to prevent back button navigation loop
 
   // Cancel dialog states
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -476,28 +471,51 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           </section>
         )}
 
-        {/* DOKU Pay Now Button */}
-        {order.paymentMethod === 'DOKU' && currentStatus === 'PENDING_PAYMENT' && order.paymentUrl && (
-          <div className="p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50 space-y-3 shadow-sm">
-            <div className="flex items-start gap-2.5">
-              <CreditCard className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-0.5">
-                  Menunggu Pembayaran
-                </p>
-                <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
-                  Segera selesaikan pembayaran via DOKU agar pesanan Anda langsung diproses secara otomatis.
-                </p>
+        {/* Unified Pay Now Button */}
+        {currentStatus === 'PENDING_PAYMENT' && (
+          order.paymentMethod === 'DOKU' && order.paymentUrl ? (
+            <div className="p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50 space-y-3 shadow-sm">
+              <div className="flex items-start gap-2.5">
+                <CreditCard className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-0.5">
+                    Menunggu Pembayaran
+                  </p>
+                  <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
+                    Segera selesaikan pembayaran via DOKU agar pesanan Anda langsung diproses secara otomatis.
+                  </p>
+                </div>
               </div>
+              <a
+                href={order.paymentUrl}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
+              >
+                <CreditCard className="w-4 h-4" />
+                Bayar Sekarang ({formatRupiah(order.total)})
+              </a>
             </div>
-            <a
-              href={order.paymentUrl}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
-            >
-              <CreditCard className="w-4 h-4" />
-              Bayar Sekarang ({formatRupiah(order.total)})
-            </a>
-          </div>
+          ) : (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3 shadow-sm">
+              <div className="flex items-start gap-2.5">
+                <CreditCard className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-0.5">
+                    Menunggu Pembayaran
+                  </p>
+                  <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
+                    Pesanan Anda belum dibayar. Silakan lakukan pembayaran agar pesanan Anda dapat diproses.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => router.push(`/orders/${order.id}/payment`)}
+                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-750 hover:from-amber-700 hover:to-amber-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
+              >
+                <CreditCard className="w-4 h-4" />
+                Selesaikan Pembayaran ({formatRupiah(order.total)})
+              </button>
+            </div>
+          )
         )}
 
         {/* Contact Admin */}

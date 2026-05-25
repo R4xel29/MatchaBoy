@@ -30,14 +30,35 @@ export async function PATCH(
       return NextResponse.json({ error: 'Status tidak valid' }, { status: 400 })
     }
 
-    // Fetch existing order for audit trail
+    // Fetch existing order for audit trail & validation
     const existingOrder = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, status: true, customerName: true, userId: true, notes: true, voucherCode: true }
+      select: {
+        id: true,
+        status: true,
+        customerName: true,
+        userId: true,
+        notes: true,
+        voucherCode: true,
+        paymentMethod: true,
+        paymentProofUrl: true
+      }
     })
 
     if (!existingOrder) {
       return NextResponse.json({ error: 'Pesanan tidak ditemukan' }, { status: 404 })
+    }
+
+    // Validation: if no proof uploaded yet for QRIS/TRANSFER, cashier cannot change to PREPARING or beyond,
+    // but they can change to PENDING (Accept) or CANCELLED (Reject/Cancel)
+    const isManualPayment = ['QRIS', 'TRANSFER'].includes(existingOrder.paymentMethod)
+    const hasNoProof = !existingOrder.paymentProofUrl
+    const isAttemptingProgress = !['PENDING', 'PENDING_PAYMENT', 'CANCELLED'].includes(status)
+
+    if (isManualPayment && hasNoProof && isAttemptingProgress) {
+      return NextResponse.json({
+        error: 'Bukti transaksi belum diunggah. Silakan terima pembayaran (Accept) terlebih dahulu atau tolak/batalkan pesanan.'
+      }, { status: 400 })
     }
 
     // Update order status (with point/voucher refund if cancelled)
@@ -50,7 +71,10 @@ export async function PATCH(
           cancelReason: status === 'CANCELLED' && reason ? reason : undefined,
           notes: status === 'CANCELLED' && reason
             ? (existingOrder.notes ? `${existingOrder.notes}\n[Batal] ${reason}` : `[Batal] ${reason}`)
-            : existingOrder.notes
+            : existingOrder.notes,
+          paymentProofUrl: (status === 'PENDING' && existingOrder.status === 'PENDING_PAYMENT' && !existingOrder.paymentProofUrl)
+            ? '/verified-cashier.svg'
+            : undefined
         }
       })
 

@@ -32,6 +32,11 @@ export default auth((req) => {
         return NextResponse.next()
     }
 
+    // Separate driver account functions from regular user pages
+    if (isLoggedIn && role === 'DRIVER' && !pathname.startsWith('/driver')) {
+        return NextResponse.redirect(new URL('/driver', req.url))
+    }
+
     // Protect sensitive routes
     if (protectedRoutes.some(route => pathname.startsWith(route)) && !pathname.startsWith('/adminarus')) {
         if (!isLoggedIn) {
@@ -39,7 +44,7 @@ export default auth((req) => {
             if (pathname.startsWith('/admin')) {
                 return NextResponse.rewrite(new URL('/404', req.url))
             }
-            const loginUrl = new URL('/login', req.url)
+            const loginUrl = new URL(pathname.startsWith('/driver') ? '/login/driver' : '/login', req.url)
             loginUrl.searchParams.set('callbackUrl', pathname)
             return NextResponse.redirect(loginUrl)
         }

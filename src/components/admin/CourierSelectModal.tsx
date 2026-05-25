@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, User as UserIcon, Truck, Loader2, MapPin, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
+import { useToast } from '@/components/ui/Toast';
 
 interface Driver {
   id: string;
@@ -29,6 +30,7 @@ interface CourierSelectModalProps {
 }
 
 export function CourierSelectModal({ isOpen, onClose, onSelectDriver, orderId }: CourierSelectModalProps) {
+  const { showToast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function CourierSelectModal({ isOpen, onClose, onSelectDriver, orderId }:
       onClose();
     } catch (err) {
       console.error(err);
-      alert('Gagal menugaskan kurir. Silakan coba lagi.');
+      showToast('Gagal menugaskan kurir. Silakan coba lagi.', 'error');
     } finally {
       setAssigning(null);
     }

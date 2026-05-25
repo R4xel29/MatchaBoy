@@ -65,11 +65,28 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
             return NextResponse.json({ error: "Location not found" }, { status: 404 });
         }
 
-        await prisma.location.delete({
+        const deletedLocation = await prisma.location.delete({
             where: { id },
         });
 
-        return NextResponse.json({ success: true });
+        let newDefaultId = null;
+
+        // If the deleted location was default, set another one as default
+        if (deletedLocation.isDefault) {
+            const nextLocation = await prisma.location.findFirst({
+                where: { userId: session.user.id },
+                orderBy: { createdAt: "desc" },
+            });
+            if (nextLocation) {
+                await prisma.location.update({
+                    where: { id: nextLocation.id },
+                    data: { isDefault: true },
+                });
+                newDefaultId = nextLocation.id;
+            }
+        }
+
+        return NextResponse.json({ success: true, newDefaultId });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }

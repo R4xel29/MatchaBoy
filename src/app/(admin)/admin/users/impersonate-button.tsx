@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { UserCircle } from 'lucide-react';
 import { impersonateUserAction } from '@/app/actions/admin';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
 
 export default function ImpersonateButton({ userId, userName }: { userId: string, userName: string }) {
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -14,7 +16,7 @@ export default function ImpersonateButton({ userId, userName }: { userId: string
     try {
         const result = await impersonateUserAction(userId)
         if (result?.error) {
-           alert(result.error);
+           showToast(result.error, 'error');
            setLoading(false);
            setIsModalOpen(false);
         }

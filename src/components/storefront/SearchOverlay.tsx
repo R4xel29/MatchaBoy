@@ -42,19 +42,21 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
     const bundles = products.filter(p => p.modifiers?.isBundle === true);
     const combined = [...bundles, ...bestSellers];
     const unique = combined.filter((item, index) => combined.findIndex(p => p.id === item.id) === index);
-    return unique.length > 0 ? unique : products.slice(0, 4);
+    const list = unique.length > 0 ? unique : products.slice(0, 4);
+    return [...list].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
   }, [products]);
 
   // Produk baru
   const baruProducts = useMemo(() => {
     const list = products.filter(p => p.badge === 'new');
-    return list.length > 0 ? list : products.slice(1, 3);
+    const baseList = list.length > 0 ? list : products.slice(1, 3);
+    return [...baseList].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
   }, [products]);
 
   // Hasil pencarian
   const searchResults = useMemo(() => {
     if (query.trim().length === 0) return [];
-    return products.filter(p => {
+    const list = products.filter(p => {
       const catName = categories.find(c => c.id === p.category)?.name.toLowerCase() || '';
       return (
         p.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -62,6 +64,7 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
         catName.includes(query.toLowerCase())
       );
     });
+    return [...list].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
   }, [query, products, categories]);
 
   const isSearching = query.trim().length > 0;
@@ -323,37 +326,56 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
                   </div>
 
                   <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                    {spesialProducts.map((p) => (
-                      <div
-                        key={p.id}
-                        onClick={() => handleSelectProduct(p)}
-                        className="w-[140px] shrink-0 bg-white border border-[#EADFC9]/40 hover:border-[#D4AF37]/35 hover:shadow-[0_8px_20px_rgba(148,111,72,0.04)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer rounded-2xl p-2.5 group"
-                      >
-                        {p.image && (
-                          <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#FAF6EE] mb-2 border border-[#EADFC9]/20">
-                            <Image
-                              src={p.image}
-                              alt={p.name}
-                              fill
-                              sizes="120px"
-                              className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                            />
-                            <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-sm text-[#D4AF37] text-[7px] font-bold shadow-sm flex items-center gap-0.5">
-                              <Star className="w-2.5 h-2.5 fill-[#D4AF37] stroke-none" /> 4.9
-                            </span>
-                            <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-[#946F48] text-white text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
-                              <Flame className="w-2.5 h-2.5 text-[#D4AF37] fill-[#D4AF37]" /> {p.badge === 'best-seller' ? 'Best' : 'Promo'}
-                            </span>
-                          </div>
-                        )}
-                        <p className="font-serif font-black text-[11px] text-[#2A1A0F] line-clamp-1 group-hover:text-[#946F48] transition-colors">
-                          {p.name}
-                        </p>
-                        <p className="font-serif font-extrabold text-[11px] text-[#B48A5E] mt-1">
-                          {formatRupiah(p.price)}
-                        </p>
-                      </div>
-                    ))}
+                    {spesialProducts.map((p) => {
+                      const isSoldOut = p.badge === 'sold-out';
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => handleSelectProduct(p)}
+                          className={`w-[140px] shrink-0 bg-white border border-[#EADFC9]/40 rounded-2xl p-2.5 group transition-all duration-300 ${
+                            isSoldOut 
+                              ? 'opacity-60 cursor-not-allowed' 
+                              : 'hover:border-[#D4AF37]/35 hover:shadow-[0_8px_20px_rgba(148,111,72,0.04)] hover:-translate-y-0.5 cursor-pointer'
+                          }`}
+                        >
+                          {p.image && (
+                            <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#FAF6EE] mb-2 border border-[#EADFC9]/20">
+                              <Image
+                                src={p.image}
+                                alt={p.name}
+                                fill
+                                sizes="120px"
+                                className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
+                                  isSoldOut ? 'grayscale brightness-50' : ''
+                                }`}
+                              />
+                              {isSoldOut ? (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                                  <span className="bg-black/80 text-white font-extrabold text-[8px] px-2 py-0.5 rounded-md tracking-wider uppercase">
+                                    Habis
+                                  </span>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-sm text-[#D4AF37] text-[7px] font-bold shadow-sm flex items-center gap-0.5">
+                                    <Star className="w-2.5 h-2.5 fill-[#D4AF37] stroke-none" /> 4.9
+                                  </span>
+                                  <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-[#946F48] text-white text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
+                                    <Flame className="w-2.5 h-2.5 text-[#D4AF37] fill-[#D4AF37]" /> {p.badge === 'best-seller' ? 'Best' : 'Promo'}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          <p className="font-serif font-black text-[11px] text-[#2A1A0F] line-clamp-1 group-hover:text-[#946F48] transition-colors">
+                            {p.name}
+                          </p>
+                          <p className="font-serif font-extrabold text-[11px] text-[#B48A5E] mt-1">
+                            {formatRupiah(p.price)}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -367,43 +389,64 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
                   </div>
 
                   <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                    {baruProducts.map((p) => (
-                      <div
-                        key={p.id}
-                        onClick={() => handleSelectProduct(p)}
-                        className="w-[140px] shrink-0 bg-white border border-[#EADFC9]/40 hover:border-[#D4AF37]/35 hover:shadow-[0_8px_20px_rgba(148,111,72,0.04)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer rounded-2xl p-2.5 group"
-                      >
-                        {p.image && (
-                          <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#FAF6EE] mb-2 border border-[#EADFC9]/20">
-                            <Image
-                              src={p.image}
-                              alt={p.name}
-                              fill
-                              sizes="120px"
-                              className="object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-                            />
-                            <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-sm text-[#D4AF37] text-[7px] font-bold shadow-sm flex items-center gap-0.5">
-                              <Star className="w-2.5 h-2.5 fill-[#D4AF37] stroke-none" /> 4.8
-                            </span>
-                            <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-[#FAF6EE] text-[#946F48] border border-[#EADFC9]/30 text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
-                              <Sparkles className="w-2.5 h-2.5 text-[#D4AF37]" /> New
-                            </span>
-                          </div>
-                        )}
-                        <p className="font-serif font-black text-[11px] text-[#2A1A0F] line-clamp-1 group-hover:text-[#946F48] transition-colors">
-                          {p.name}
-                        </p>
-                        <p className="font-serif font-extrabold text-[11px] text-[#B48A5E] mt-1">
-                          {formatRupiah(p.price)}
-                        </p>
-                      </div>
-                    ))}
+                    {baruProducts.map((p) => {
+                      const isSoldOut = p.badge === 'sold-out';
+                      return (
+                        <div
+                          key={p.id}
+                          onClick={() => handleSelectProduct(p)}
+                          className={`w-[140px] shrink-0 bg-white border border-[#EADFC9]/40 rounded-2xl p-2.5 group transition-all duration-300 ${
+                            isSoldOut 
+                              ? 'opacity-60 cursor-not-allowed' 
+                              : 'hover:border-[#D4AF37]/35 hover:shadow-[0_8px_20px_rgba(148,111,72,0.04)] hover:-translate-y-0.5 cursor-pointer'
+                          }`}
+                        >
+                          {p.image && (
+                            <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#FAF6EE] mb-2 border border-[#EADFC9]/20">
+                              <Image
+                                src={p.image}
+                                alt={p.name}
+                                fill
+                                sizes="120px"
+                                className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
+                                  isSoldOut ? 'grayscale brightness-50' : ''
+                                }`}
+                              />
+                              {isSoldOut ? (
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                                  <span className="bg-black/80 text-white font-extrabold text-[8px] px-2 py-0.5 rounded-md tracking-wider uppercase">
+                                    Habis
+                                  </span>
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-sm text-[#D4AF37] text-[7px] font-bold shadow-sm flex items-center gap-0.5">
+                                    <Star className="w-2.5 h-2.5 fill-[#D4AF37] stroke-none" /> 4.8
+                                  </span>
+                                  <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-[#FAF6EE] text-[#946F48] border border-[#EADFC9]/30 text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
+                                    <Sparkles className="w-2.5 h-2.5 text-[#D4AF37]" /> New
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          <p className="font-serif font-black text-[11px] text-[#2A1A0F] line-clamp-1 group-hover:text-[#946F48] transition-colors">
+                            {p.name}
+                          </p>
+                          <p className="font-serif font-extrabold text-[11px] text-[#B48A5E] mt-1">
+                            {formatRupiah(p.price)}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Kategori Database: Grid 2-Kolom per Kategori */}
                 {categories.filter(cat => cat.id !== 'all').map((cat) => {
-                  const filteredProducts = products.filter(p => p.category === cat.id);
+                  const filteredProducts = products
+                    .filter(p => p.category === cat.id)
+                    .sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
                   if (filteredProducts.length === 0) return null;
 
                   return (
@@ -485,7 +528,7 @@ function MenuProductCard({
               fill
               sizes="(max-width: 768px) 45vw, 180px"
               className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
-                isSoldOut ? 'grayscale' : ''
+                isSoldOut ? 'grayscale brightness-50' : ''
               }`}
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = 'none';

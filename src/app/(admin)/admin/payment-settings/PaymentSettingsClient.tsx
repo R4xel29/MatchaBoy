@@ -6,6 +6,8 @@ import {
   Save, Loader2, CheckCircle2, Plus, Trash2, Upload,
   ToggleLeft, ToggleRight, Building2, Image as ImageIcon,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 interface PaymentConfig {
   id: string;
@@ -35,6 +37,7 @@ interface BankAccount {
 }
 
 export default function PaymentSettingsClient() {
+  const { showToast } = useToast();
   const [settings, setSettings] = useState<PaymentConfig | null>(null);
   const [banks, setBanks] = useState<BankAccount[]>([]);
   const [saving, setSaving] = useState(false);
@@ -44,6 +47,19 @@ export default function PaymentSettingsClient() {
   // New bank form
   const [showNewBank, setShowNewBank] = useState(false);
   const [newBank, setNewBank] = useState({ bankName: '', accountNumber: '', accountName: '', bankLogo: '' });
+  
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     fetchData();
@@ -72,8 +88,9 @@ export default function PaymentSettingsClient() {
         body: JSON.stringify(settings),
       });
       setSaved(true);
+      showToast('Pengaturan pembayaran berhasil disimpan', 'success');
       setTimeout(() => setSaved(false), 2000);
-    } catch { alert('Gagal menyimpan'); }
+    } catch { showToast('Gagal menyimpan pengaturan', 'error'); }
     finally { setSaving(false); }
   };
 
@@ -88,15 +105,25 @@ export default function PaymentSettingsClient() {
       setBanks([...banks, bank]);
       setNewBank({ bankName: '', accountNumber: '', accountName: '', bankLogo: '' });
       setShowNewBank(false);
-    } catch { alert('Gagal menambah bank'); }
+      showToast('Rekening bank berhasil ditambahkan', 'success');
+    } catch { showToast('Gagal menambah bank', 'error'); }
   };
 
   const deleteBank = async (id: string) => {
-    if (!confirm('Hapus rekening ini?')) return;
-    try {
-      await fetch(`/api/admin/bank-accounts?id=${id}`, { method: 'DELETE' });
-      setBanks(banks.filter(b => b.id !== id));
-    } catch { alert('Gagal menghapus'); }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Rekening',
+      message: 'Apakah Anda yakin ingin menghapus rekening bank ini?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+        try {
+          await fetch(`/api/admin/bank-accounts?id=${id}`, { method: 'DELETE' });
+          setBanks(banks.filter(b => b.id !== id));
+          showToast('Rekening bank berhasil dihapus', 'success');
+        } catch { showToast('Gagal menghapus rekening', 'error'); }
+      }
+    });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'qrisImage' | 'qrisLogo') => {
@@ -474,6 +501,14 @@ export default function PaymentSettingsClient() {
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

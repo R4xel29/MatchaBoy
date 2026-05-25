@@ -146,16 +146,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             if (account?.provider === 'google') {
                 const dbUser = await prisma.user.findUnique({
                     where: { email: user.email as string },
-                    select: { id: true, phone: true, phoneVerified: true, password: true }
+                    select: { id: true, phone: true, phoneVerified: true, password: true, role: true }
                 });
 
-                if (dbUser && dbUser.phone && dbUser.phoneVerified) {
+                // Admin, Cashier, and Driver accounts created by administrators do not need to verify phone via storefront cookie
+                const isStaff = dbUser && (dbUser.role === 'ADMIN' || dbUser.role === 'CASHIER' || dbUser.role === 'DRIVER');
+
+                if (dbUser && (isStaff || (dbUser.phone && dbUser.phoneVerified))) {
                     // Check if banned
                     const banned = await prisma.bannedContact.findFirst({
                         where: {
                             OR: [
                                 { type: 'EMAIL', value: user.email || '___' },
-                                { type: 'PHONE', value: dbUser.phone }
+                                { type: 'PHONE', value: dbUser.phone || '___' }
                             ]
                         }
                     });

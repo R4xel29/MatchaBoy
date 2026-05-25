@@ -6,8 +6,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Clock, Save, Info, CheckCircle2, ChevronRight, Upload, X, Loader2, Check } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 import Image from 'next/image'
+import { useToast } from '@/components/ui/Toast'
 
 export default function QrisClient({ order }: { order: any }) {
+  const { showToast } = useToast()
   const router = useRouter()
   const [timeLeft, setTimeLeft] = useState('')
   const [percentLeft, setPercentLeft] = useState(100)
@@ -110,10 +112,10 @@ export default function QrisClient({ order }: { order: any }) {
           router.push(`/orders/${order.id}`);
         }, 3000);
       } else {
-        alert('Gagal memverifikasi bukti pembayaran. Silakan coba lagi.');
+        showToast('Gagal memverifikasi bukti pembayaran. Silakan coba lagi.', 'error');
       }
     } catch {
-      alert('Terjadi kesalahan jaringan.');
+      showToast('Terjadi kesalahan jaringan.', 'error');
     } finally {
       setSubmittingProof(false);
     }
@@ -191,7 +193,7 @@ export default function QrisClient({ order }: { order: any }) {
         <div className="space-y-3">
           <button
             onClick={() => {
-              alert("Silakan lakukan screenshot (tangkapan layar) pada layar handphone Anda untuk menyimpan kode QRIS ke galeri.")
+              showToast("Silakan lakukan screenshot (tangkapan layar) pada layar handphone Anda untuk menyimpan kode QRIS ke galeri.", 'info')
             }}
             className="w-full py-4.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs"
           >

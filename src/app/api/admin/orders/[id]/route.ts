@@ -27,11 +27,27 @@ export async function PATCH(
         const { id } = await params;
         const existingOrder = await prisma.order.findUnique({
             where: { id },
-            select: { id: true, status: true, customerName: true }
+            select: {
+                id: true,
+                status: true,
+                customerName: true,
+                paymentMethod: true,
+                paymentProofUrl: true
+            }
         });
 
         if (!existingOrder) {
             return new NextResponse('Order not found', { status: 404 });
+        }
+
+        // Validation: if no proof uploaded yet for QRIS/TRANSFER, admin cannot change to PREPARING or beyond,
+        // but they can change to PENDING (Accept) or CANCELLED (Reject/Cancel)
+        const isManualPayment = ['QRIS', 'TRANSFER'].includes(existingOrder.paymentMethod);
+        const hasNoProof = !existingOrder.paymentProofUrl;
+        const isAttemptingProgress = !['PENDING', 'PENDING_PAYMENT', 'CANCELLED'].includes(status);
+
+        if (isManualPayment && hasNoProof && isAttemptingProgress) {
+            return new NextResponse('Bukti transaksi belum diunggah. Silakan terima pembayaran (Accept) terlebih dahulu atau tolak/batalkan pesanan.', { status: 400 });
         }
 
         const order = await prisma.order.update({
@@ -40,6 +56,9 @@ export async function PATCH(
             },
             data: {
                 status,
+                paymentProofUrl: (status === 'PENDING' && existingOrder.status === 'PENDING_PAYMENT' && !existingOrder.paymentProofUrl)
+                    ? '/verified-cashier.svg'
+                    : undefined
             },
         });
 

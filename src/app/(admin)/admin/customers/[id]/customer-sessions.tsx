@@ -15,6 +15,7 @@ import {
 import { formatDistanceToNow, format } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
 import { revokeSessionAction, revokeAllSessionsAction } from '@/app/actions/admin'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 interface Session {
   id: string
@@ -39,51 +40,73 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null)
   const [loadingAll, setLoadingAll] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  })
 
   const handleRevokeSession = async (sessionId: string) => {
-    if (!confirm('Apakah Anda yakin ingin memutuskan sesi perangkat ini? Pengguna akan langsung dikeluarkan dari perangkat tersebut.')) {
-      return
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Putuskan Sesi',
+      message: 'Apakah Anda yakin ingin memutuskan sesi perangkat ini? Pengguna akan langsung dikeluarkan dari perangkat tersebut.',
+      isDestructive: true,
+      onConfirm: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        setLoadingSessionId(sessionId)
+        setMessage(null)
 
-    setLoadingSessionId(sessionId)
-    setMessage(null)
-
-    startTransition(async () => {
-      try {
-        const result = await revokeSessionAction(sessionId, userId)
-        if (result.success) {
-          setMessage({ type: 'success', text: 'Sesi perangkat berhasil diputuskan!' })
-        } else {
-          setMessage({ type: 'error', text: result.error || 'Gagal memutuskan sesi' })
-        }
-      } catch (err) {
-        setMessage({ type: 'error', text: 'Terjadi kesalahan sistem' })
-      } finally {
-        setLoadingSessionId(null)
+        startTransition(async () => {
+          try {
+            const result = await revokeSessionAction(sessionId, userId)
+            if (result.success) {
+              setMessage({ type: 'success', text: 'Sesi perangkat berhasil diputuskan!' })
+            } else {
+              setMessage({ type: 'error', text: result.error || 'Gagal memutuskan sesi' })
+            }
+          } catch (err) {
+            setMessage({ type: 'error', text: 'Terjadi kesalahan sistem' })
+          } finally {
+            setLoadingSessionId(null)
+          }
+        })
       }
     })
   }
 
   const handleRevokeAll = async () => {
-    if (!confirm('Apakah Anda yakin ingin memutuskan SELURUH sesi perangkat untuk pengguna ini? Pengguna akan keluar dari semua perangkat aktif.')) {
-      return
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Putuskan Semua Sesi',
+      message: 'Apakah Anda yakin ingin memutuskan SELURUH sesi perangkat untuk pengguna ini? Pengguna akan keluar dari semua perangkat aktif.',
+      isDestructive: true,
+      onConfirm: () => {
+        setConfirmModal(prev => ({ ...prev, isOpen: false }))
+        setLoadingAll(true)
+        setMessage(null)
 
-    setLoadingAll(true)
-    setMessage(null)
-
-    startTransition(async () => {
-      try {
-        const result = await revokeAllSessionsAction(userId)
-        if (result.success) {
-          setMessage({ type: 'success', text: 'Seluruh sesi perangkat berhasil diputuskan!' })
-        } else {
-          setMessage({ type: 'error', text: result.error || 'Gagal memutuskan seluruh sesi' })
-        }
-      } catch (err) {
-        setMessage({ type: 'error', text: 'Terjadi kesalahan sistem' })
-      } finally {
-        setLoadingAll(false)
+        startTransition(async () => {
+          try {
+            const result = await revokeAllSessionsAction(userId)
+            if (result.success) {
+              setMessage({ type: 'success', text: 'Seluruh sesi perangkat berhasil diputuskan!' })
+            } else {
+              setMessage({ type: 'error', text: result.error || 'Gagal memutuskan seluruh sesi' })
+            }
+          } catch (err) {
+            setMessage({ type: 'error', text: 'Terjadi kesalahan sistem' })
+          } finally {
+            setLoadingAll(false)
+          }
+        })
       }
     })
   }
@@ -215,6 +238,14 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
           </div>
         )}
       </div>
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   )
 }

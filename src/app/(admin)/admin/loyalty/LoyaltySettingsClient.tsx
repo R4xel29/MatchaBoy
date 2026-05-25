@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/components/ui/Toast';
 import {
   Gift, Award, Coffee, Leaf, Share2, Save, Loader2,
   Trophy, Target, Recycle, ToggleLeft, ToggleRight,
@@ -71,6 +72,7 @@ const REWARD_TYPES = [
 
 export default function LoyaltySettingsClient({ initialSettings, stats }: Props) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [settings, setSettings] = useState(initialSettings);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -86,14 +88,15 @@ export default function LoyaltySettingsClient({ initialSettings, stats }: Props)
       });
       if (res.ok) {
         setSaved(true);
+        showToast('Pengaturan loyalty berhasil disimpan', 'success');
         setTimeout(() => setSaved(false), 2000);
         router.refresh();
       } else {
         const data = await res.json().catch(() => ({}));
-        alert(data.detail || data.error || 'Gagal menyimpan pengaturan');
+        showToast(data.detail || data.error || 'Gagal menyimpan pengaturan', 'error');
       }
     } catch {
-      alert('Terjadi kesalahan jaringan');
+      showToast('Terjadi kesalahan jaringan', 'error');
     } finally {
       setSaving(false);
     }
