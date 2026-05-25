@@ -6,22 +6,27 @@ import crypto from "crypto";
 
 // Fungsi untuk mengirim pesan balasan WhatsApp
 async function sendWhatsAppMessage(phone: string, text: string, jid?: string) {
-  // TODO: Implementasi pemanggilan API provider WA yang digunakan (misal Fonnte, WATSAP, dll)
-  // Untuk saat ini karena belum ditentukan provider-nya, kita buat console log.
-  console.log(`[WHATSAPP_BOT] Mengirim ke ${phone} (JID: ${jid || 'N/A'}): ${text}`);
-  
-  // Memanggil API lokal dari Bot Baileys yang kita buat
   const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
-  if (waProviderUrl) {
-    try {
-      await fetch(waProviderUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, message: text, jid }),
-      });
-    } catch (error) {
-      console.error("[WHATSAPP_BOT] Gagal memanggil API Provider WA", error);
+  
+  // Peringatan konfigurasi: di production (Vercel), WA_PROVIDER_URL HARUS mengarah ke bot Render/Railway
+  if (waProviderUrl.includes("localhost")) {
+    console.warn("[WHATSAPP_BOT] ⚠️  WA_PROVIDER_URL masih localhost! Set ke URL bot Render/Railway di Vercel env vars.");
+  }
+  
+  console.log(`[WHATSAPP_BOT] Mengirim ke ${phone} (JID: ${jid || 'N/A'}): ${text.substring(0, 60)}...`);
+  
+  try {
+    const res = await fetch(waProviderUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone, message: text, jid }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`[WHATSAPP_BOT] Bot API error ${res.status}:`, errBody);
     }
+  } catch (error) {
+    console.error("[WHATSAPP_BOT] Gagal memanggil API Provider WA:", error);
   }
 }
 
@@ -139,7 +144,7 @@ export async function POST(req: Request) {
         await sendWhatsAppMessage(standardizedSenderPhone, reply, jid);
       } catch {}
 
-      return NextResponse.json({ success: true, message: "Phone verified and confirmed via WhatsApp", replyMessage: reply });
+      return NextResponse.json({ success: true, message: "Phone verified and confirmed via WhatsApp", replyMessage: reply, sent: true });
     }
 
     if (isDeleteRequest) {
@@ -252,7 +257,7 @@ export async function POST(req: Request) {
         await sendWhatsAppMessage(standardizedSenderPhone, deleteMessage, jid);
       } catch {}
 
-      return NextResponse.json({ success: true, message: "Account deleted and confirmed via WhatsApp", replyMessage: deleteMessage });
+      return NextResponse.json({ success: true, message: "Account deleted and confirmed via WhatsApp", replyMessage: deleteMessage, sent: true });
     }
 
     if (isLoginRequest) {
@@ -316,7 +321,7 @@ export async function POST(req: Request) {
         } catch {}
       }
 
-      return NextResponse.json({ success: true, message: "Magic link sent", magicLink, replyMessage });
+      return NextResponse.json({ success: true, message: "Magic link sent", magicLink, replyMessage, sent: true });
     }
 
     return NextResponse.json({ success: true, message: "Ignored" });
