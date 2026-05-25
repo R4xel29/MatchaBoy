@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { expireOrder } from "@/lib/order-utils"
 import OrderTrackingClient from "./OrderTrackingClient"
 import { notFound, redirect } from "next/navigation"
 
@@ -12,6 +13,9 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   if (!session?.user?.id) {
     redirect('/login')
   }
+
+  // Auto-expire order if past payment deadline
+  await expireOrder(id);
 
   const order = await prisma.order.findUnique({
     where: { id },
@@ -38,6 +42,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   const mappedOrder = {
     id: order.id,
     status: order.status, // Keep UPPERCASE to match client-side comparisons
+    cancelReason: order.cancelReason || null,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
     address: order.address,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import { useToast } from '@/components/ui/Toast';
@@ -69,6 +69,7 @@ export default function StorefrontClient({
   const [easterEggConfig, setEasterEggConfig] = useState<{ enabled: boolean; discount: number; quota: number; hasClaimed: boolean } | null>(null);
   const [isEasterEggExpanded, setIsEasterEggExpanded] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
+  const loyaltyFetchedRef = useRef(false);
 
   useEffect(() => {
     const hour = new Date().getHours();
@@ -76,7 +77,8 @@ export default function StorefrontClient({
   }, []);
 
   useEffect(() => {
-    if (status === 'authenticated') {
+    if (status === 'authenticated' && !loyaltyFetchedRef.current) {
+      loyaltyFetchedRef.current = true;
       fetch('/api/user/loyalty')
         .then(res => res.json())
         .then(data => {

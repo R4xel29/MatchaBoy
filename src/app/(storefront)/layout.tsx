@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, createContext, useContext, useEffect, Suspense } from 'react';
+import { useState, useRef, createContext, useContext, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -43,10 +43,12 @@ export default function StorefrontLayout({
   const [loginOpen, setLoginOpen] = useState(false);
   const { data: session, status } = useSession();
   const [setupChecked, setSetupChecked] = useState(false);
+  const setupCheckRef = useRef(false);
 
-  // Check if logged-in user has pin and name
+  // Check if logged-in user has pin and name (runs once per auth)
   useEffect(() => {
-    if (status === 'authenticated' && session?.user) {
+    if (status === 'authenticated' && session?.user && !setupCheckRef.current) {
+      setupCheckRef.current = true;
       fetch('/api/user/check-phone')
         .then((res) => res.json())
         .then((data) => {
@@ -73,7 +75,7 @@ export default function StorefrontLayout({
     } else if (status === 'unauthenticated') {
       setSetupChecked(true);
     }
-  }, [status, session, router]);
+  }, [status, session?.user?.id, router]);
 
   if (status === 'loading' || (status === 'authenticated' && !setupChecked)) {
     return <LoadingScreen isSplash={false} />;

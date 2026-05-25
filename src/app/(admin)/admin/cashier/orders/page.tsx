@@ -30,6 +30,7 @@ export default async function AdminCashierOrdersPage() {
     total: o.total,
     status: o.status,
     createdAt: o.createdAt.toISOString(),
+    paymentProofUrl: o.paymentProofUrl,
     items: o.items.map((item) => ({
       id: item.id,
       qty: item.qty,

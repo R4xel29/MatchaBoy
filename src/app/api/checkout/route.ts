@@ -132,11 +132,13 @@ export async function POST(req: Request) {
             deliveryFee = Math.round(distanceKm * perKmFee)
         }
 
+        // Fetch loyalty settings
+        const loyaltySettings = await prisma.loyaltySettings.findFirst()
+
         // Tumbler discount
         const hasTumbler = body.hasTumbler === true
         let tumblerDiscount = 0
         if (hasTumbler) {
-            const loyaltySettings = await prisma.loyaltySettings.findFirst()
             if (loyaltySettings?.tumblerBonusEnabled && loyaltySettings.tumblerDiscountPct > 0) {
                 tumblerDiscount = Math.round(secureSubtotal * loyaltySettings.tumblerDiscountPct / 100)
             }
@@ -261,7 +263,8 @@ export async function POST(req: Request) {
             if (!user || user.points < pointsUsed) {
                 return NextResponse.json({ error: 'Poin tidak mencukupi' }, { status: 400 })
             }
-            pointsDiscount = pointsUsed * 1000 // 1 point = Rp1.000
+            const pointValue = loyaltySettings?.pointValue ?? 1000
+            pointsDiscount = pointsUsed * pointValue // 1 point = Rp<pointValue>
         }
 
         const secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, deliveryFee - ongkirDiscount)
@@ -316,7 +319,7 @@ export async function POST(req: Request) {
                     hasTumbler,
                     notes: body.notes || null,
                     voucherCode: voucherCode || null,
-                    paymentExpiredAt: (isDoku || body.paymentMethod?.toUpperCase() === 'QRIS') ? new Date(Date.now() + 15 * 60 * 1000) : null,
+                    paymentExpiredAt: (isDoku || body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'TRANSFER') ? new Date(Date.now() + 15 * 60 * 1000) : null,
                     items: {
                         create: orderItemsToCreate
                     }

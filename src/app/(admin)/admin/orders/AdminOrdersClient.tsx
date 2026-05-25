@@ -11,6 +11,7 @@ interface OrderItem { id: string; qty: number; price: number; product: { name: s
 interface OrderData {
   id: string; customerName: string; customerPhone: string; address: string;
   orderType: string; paymentMethod: string; total: number; status: string; createdAt: string; items: OrderItem[];
+  paymentProofUrl?: string | null;
 }
 interface Props { initialOrders: OrderData[]; }
 
@@ -20,31 +21,43 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [orders, setOrders] = useState(initialOrders);
 
-  // Auto-refresh and Notification Logic
-  const prevOrdersCount = useRef(initialOrders.length);
+  // Sync when server-side initialOrders changes (e.g. after manual action)
+  useEffect(() => {
+    setOrders(initialOrders);
+  }, [initialOrders]);
+
+  // Lightweight client-side polling (no router.refresh = no full server recompile)
+  const prevOrdersCount = useRef(orders.length);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      router.refresh();
-    }, 15000); // Refresh every 15 seconds for general admin list
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/admin/orders?format=json');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.orders) setOrders(data.orders);
+        }
+      } catch {}
+    }, 15000);
 
     return () => clearInterval(interval);
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     // If new orders are detected
-    if (initialOrders.length > prevOrdersCount.current) {
+    if (orders.length > prevOrdersCount.current) {
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
       audio.play().catch(e => console.log('Audio play blocked by browser:', e));
     }
-    prevOrdersCount.current = initialOrders.length;
-  }, [initialOrders.length]);
+    prevOrdersCount.current = orders.length;
+  }, [orders.length]);
 
   const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
   const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
 
-  const filteredOrders = initialOrders.filter(o => {
+  const filteredOrders = orders.filter(o => {
     const matchesSearch = o.id.toLowerCase().includes(search.toLowerCase()) || o.customerName.toLowerCase().includes(search.toLowerCase()) || o.customerPhone.includes(search);
     const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
     const matchesType = typeFilter === 'ALL' || o.orderType === typeFilter;
@@ -168,6 +181,11 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                     }`}>
                       {order.orderType === 'PICKUP' ? 'Pickup' : 'Delivery'}
                     </span>
+                    {order.paymentProofUrl && (
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">
+                        📸 Bukti Ada
+                      </span>
+                    )}
                   </div>
                   <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                     <Clock className="w-3 h-3" />

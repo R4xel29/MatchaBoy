@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Gift, Award, Coffee, Leaf, Share2, Save, Loader2,
   Trophy, Target, Recycle, ToggleLeft, ToggleRight,
-  TrendingUp, Ticket, CheckCircle2, BarChart3, ShieldCheck
+  TrendingUp, Ticket, CheckCircle2, BarChart3, ShieldCheck, Coins
 } from 'lucide-react';
 
 interface LoyaltySettingsData {
@@ -34,6 +34,12 @@ interface LoyaltySettingsData {
   referralRewardPoints: number;
   referralRewardVoucher: string;
   referralRewardDesc: string;
+  
+  // Point Value & Earning Settings
+  pointMode: string;
+  pointPerTransaction: number;
+  pointPerAmount: number;
+  pointValue: number;
   
   // Easter Egg fields
   easterEggEnabled: boolean;
@@ -83,10 +89,11 @@ export default function LoyaltySettingsClient({ initialSettings, stats }: Props)
         setTimeout(() => setSaved(false), 2000);
         router.refresh();
       } else {
-        alert('Gagal menyimpan pengaturan');
+        const data = await res.json().catch(() => ({}));
+        alert(data.detail || data.error || 'Gagal menyimpan pengaturan');
       }
     } catch {
-      alert('Terjadi kesalahan');
+      alert('Terjadi kesalahan jaringan');
     } finally {
       setSaving(false);
     }
@@ -251,7 +258,26 @@ export default function LoyaltySettingsClient({ initialSettings, stats }: Props)
               </div>
             </div>
           </div>
-
+ 
+          {/* Pengaturan Nilai Rupiah Poin */}
+          <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center gap-2 mb-4 border-b border-border/20 pb-3">
+              <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                <Coins className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Pengaturan Nilai Rupiah Poin</h3>
+                <p className="text-[10px] text-muted-foreground">Atur harga/nilai Rupiah dari 1 poin untuk potongan diskon belanja pelanggan.</p>
+              </div>
+            </div>
+            <div className="max-w-xs">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Harga 1 Poin (Rupiah)</label>
+              <input type="number" value={settings.pointValue || 0} onChange={(e) => update('pointValue', parseInt(e.target.value) || 0)}
+                className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20" />
+              <p className="text-[10px] text-muted-foreground mt-1">1 poin = Rp {(settings.pointValue || 0).toLocaleString('id-ID')} diskon</p>
+            </div>
+          </div>
+ 
           {/* Tumbler & Referral */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Tumbler Bonus */}

@@ -17,7 +17,8 @@ export async function POST(req: Request) {
         }
 
         const voucher = await prisma.voucher.findUnique({
-            where: { code }
+            where: { code },
+            include: { template: true }
         })
 
         if (!voucher) {
@@ -42,7 +43,9 @@ export async function POST(req: Request) {
                 id: voucher.id,
                 code: voucher.code,
                 type: voucher.type,
-                description: voucher.description
+                description: voucher.description,
+                discountAmount: voucher.discountAmount,
+                minPurchase: voucher.template?.minPurchase || 0
             }
         })
     } catch (error) {

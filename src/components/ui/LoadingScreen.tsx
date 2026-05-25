@@ -8,6 +8,7 @@ interface LoadingScreenProps {
   isSplash?: boolean;
   onFinished?: () => void;
   fullScreen?: boolean;
+  customMessages?: string[];
 }
 
 const BREWING_MESSAGES = [
@@ -20,18 +21,30 @@ const BREWING_MESSAGES = [
   "Minuman Anda siap disajikan..."
 ];
 
-export function LoadingScreen({ isSplash = false, onFinished, fullScreen = true }: LoadingScreenProps) {
+export function LoadingScreen({ 
+  isSplash = false, 
+  onFinished, 
+  fullScreen = true,
+  customMessages
+}: LoadingScreenProps) {
+  const messages = customMessages || BREWING_MESSAGES;
   const [progress, setProgress] = useState(0);
   const [messageIndex, setMessageIndex] = useState(0);
 
+  // Reset messageIndex if messages list changes
+  useEffect(() => {
+    setMessageIndex(0);
+  }, [messages]);
+
   // Rotate brewing messages
   useEffect(() => {
+    if (messages.length <= 1) return;
     const messageInterval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % BREWING_MESSAGES.length);
+      setMessageIndex((prev) => (prev + 1) % messages.length);
     }, 1500);
 
     return () => clearInterval(messageInterval);
-  }, []);
+  }, [messages]);;
 
   // Simulate progress when used as a splash screen
   useEffect(() => {
@@ -282,7 +295,7 @@ export function LoadingScreen({ isSplash = false, onFinished, fullScreen = true 
               transition={{ duration: 0.45, ease: "easeOut" }}
               className="text-xs uppercase tracking-widest font-bold text-[#EFDCA7] font-sans"
             >
-              {BREWING_MESSAGES[messageIndex]}
+              {messages[messageIndex]}
             </motion.p>
           </AnimatePresence>
         </div>

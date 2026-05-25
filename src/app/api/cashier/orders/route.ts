@@ -2,6 +2,52 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
+// Lightweight JSON endpoint for client-side polling (replaces router.refresh)
+export async function GET() {
+  try {
+    const session = await auth();
+    if (!session?.user || (session.user.role !== 'CASHIER' && session.user.role !== 'ADMIN')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const orders = await prisma.order.findMany({
+      where: { createdAt: { gte: startOfDay } },
+      include: { items: { include: { product: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const mappedOrders = orders.map((o) => ({
+      id: o.id,
+      customerName: o.customerName,
+      customerPhone: o.customerPhone,
+      orderType: o.orderType,
+      tableNumber: o.tableNumber,
+      address: o.address,
+      paymentMethod: o.paymentMethod,
+      total: o.total,
+      status: o.status,
+      cancelReason: o.cancelReason,
+      createdAt: o.createdAt.toISOString(),
+      paymentProofUrl: o.paymentProofUrl,
+      items: o.items.map((item) => ({
+        id: item.id,
+        qty: item.qty,
+        price: item.price,
+        product: { name: item.product.name, image: item.product.image },
+      })),
+    }));
+
+    return NextResponse.json({ orders: mappedOrders });
+  } catch (error) {
+    console.error('Cashier orders polling error:', error);
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+  }
+}
+
+
 export async function POST(req: Request) {
   try {
     const session = await auth()

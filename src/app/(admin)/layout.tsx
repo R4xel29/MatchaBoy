@@ -1,10 +1,12 @@
 import { ReactNode } from 'react';
 import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import { AdminIncomingOrderAlarm } from '@/components/admin/AdminIncomingOrderAlarm';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-[#F8F9FB]">
       <AdminSidebar />
+      <AdminIncomingOrderAlarm />
 
       {/* Main Content */}
       <main className="lg:pl-[260px] pt-14 lg:pt-0 min-h-dvh">

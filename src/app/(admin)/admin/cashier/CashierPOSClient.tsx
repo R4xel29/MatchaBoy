@@ -76,6 +76,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [showSuccess, setShowSuccess] = useState(false);
   const [lastOrderId, setLastOrderId] = useState('');
   const [hasTumbler, setHasTumbler] = useState(false);
+  const [loyaltySettings, setLoyaltySettings] = useState<{ tumblerBonusPoints: number; tumblerDiscountPct: number } | null>(null);
 
   // QR Scan + Points state
   const [showQRModal, setShowQRModal] = useState(false);
@@ -85,10 +86,31 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [qrError, setQrError] = useState('');
   const [pointsAwarded, setPointsAwarded] = useState(false);
 
+  useEffect(() => {
+    fetch('/api/user/loyalty')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.milestones?.tumblerBonus) {
+          setLoyaltySettings({
+            tumblerBonusPoints: d.milestones.tumblerBonus.points,
+            tumblerDiscountPct: d.milestones.tumblerBonus.discountPct,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Phone lookup state
   const [phoneLookupResult, setPhoneLookupResult] = useState<{ id: string; name: string; phone: string; points: number } | null>(null);
   const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
   const phoneDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Reset tumbler option if order type becomes DELIVERY or if member is removed
+  useEffect(() => {
+    if (orderType === 'DELIVERY' || !phoneLookupResult) {
+      setHasTumbler(false);
+    }
+  }, [orderType, phoneLookupResult]);
 
   // Pre-order QR scan state
   const [showPreScanQR, setShowPreScanQR] = useState(false);
@@ -151,6 +173,13 @@ export default function CashierPOSClient({ products, categories }: Props) {
   // Cart calculations
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const tumblerDiscount = useMemo(() => {
+    if (!hasTumbler || !loyaltySettings) return 0;
+    return Math.round((subtotal * loyaltySettings.tumblerDiscountPct) / 100);
+  }, [hasTumbler, loyaltySettings, subtotal]);
+
+  const totalPayable = subtotal - tumblerDiscount;
 
   // Add to cart
   const handleProductClick = (product: POSProduct) => {
@@ -272,7 +301,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       // Show QR scan modal instead of success toast
       setShowQRModal(true);
       setQrInput('');
-      setQrCustomer(null);
+      setQrCustomer(phoneLookupResult ? { id: phoneLookupResult.id, name: phoneLookupResult.name, points: phoneLookupResult.points } : null);
       setQrError('');
       setPointsAwarded(false);
     } catch (error: any) {
@@ -462,35 +491,47 @@ export default function CashierPOSClient({ products, categories }: Props) {
               className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
             />
 
-            {/* Tumbler Toggle */}
-            <button
-              type="button"
-              onClick={() => setHasTumbler(!hasTumbler)}
-              className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
-                hasTumbler
-                  ? 'border-emerald-400 bg-emerald-50'
-                  : 'border-border/40 bg-muted/20 hover:border-emerald-300'
-              }`}
-            >
-              <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-                hasTumbler ? 'bg-emerald-500' : 'bg-gray-100'
-              }`}>
-                <Leaf className={`w-4 h-4 ${hasTumbler ? 'text-white' : 'text-gray-400'}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={`text-xs font-bold ${hasTumbler ? 'text-emerald-700' : 'text-muted-foreground'}`}>
-                  Pelanggan Bawa Tumbler 🌿
-                </p>
-                <p className="text-[10px] text-muted-foreground">Bonus poin extra & kurangi plastik</p>
-              </div>
-              <div className={`w-9 h-5 rounded-full transition-colors shrink-0 relative ${
-                hasTumbler ? 'bg-emerald-500' : 'bg-gray-200'
-              }`}>
-                <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
-                  hasTumbler ? 'left-[18px]' : 'left-0.5'
-                }`} />
-              </div>
-            </button>
+            {/* Tumbler Toggle - Only for Pickup/Dine-in and Registered Member */}
+            {orderType !== 'DELIVERY' && (
+              phoneLookupResult ? (
+                <button
+                  type="button"
+                  onClick={() => setHasTumbler(!hasTumbler)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                    hasTumbler
+                      ? 'border-emerald-400 bg-emerald-50'
+                      : 'border-border/40 bg-muted/20 hover:border-emerald-300'
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                    hasTumbler ? 'bg-emerald-500' : 'bg-gray-100'
+                  }`}>
+                    <Leaf className={`w-4 h-4 ${hasTumbler ? 'text-white' : 'text-gray-400'}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-bold ${hasTumbler ? 'text-emerald-700' : 'text-muted-foreground'}`}>
+                      Pelanggan Bawa Tumbler 🌿
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Bonus +{loyaltySettings?.tumblerBonusPoints || 0} poin & diskon {loyaltySettings?.tumblerDiscountPct || 0}%
+                    </p>
+                  </div>
+                  <div className={`w-9 h-5 rounded-full transition-colors shrink-0 relative ${
+                    hasTumbler ? 'bg-emerald-500' : 'bg-gray-200'
+                  }`}>
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${
+                      hasTumbler ? 'left-[18px]' : 'left-0.5'
+                    }`} />
+                  </div>
+                </button>
+              ) : (
+                <div className="p-3 rounded-xl border border-dashed border-border bg-muted/10 text-center">
+                  <p className="text-[10px] text-muted-foreground font-medium leading-relaxed">
+                    Bawa Tumbler? Masukkan nomor HP member di atas untuk mendapatkan bonus poin & diskon tumbler. 🌿
+                  </p>
+                </div>
+              )
+            )}
           </div>
 
           {/* Cart Items */}
@@ -558,10 +599,17 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   ))}
                 </div>
 
+                {hasTumbler && tumblerDiscount > 0 && (
+                  <div className="flex justify-between items-center text-xs text-emerald-600 font-semibold px-1">
+                    <span className="flex items-center gap-1"><Leaf className="w-3.5 h-3.5" /> Diskon Tumbler ({loyaltySettings?.tumblerDiscountPct}%)</span>
+                    <span>-{formatRupiah(tumblerDiscount)}</span>
+                  </div>
+                )}
+
                 {/* Total */}
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-semibold text-foreground">Total</span>
-                  <span className="text-lg font-bold text-amber-700">{formatRupiah(subtotal)}</span>
+                  <span className="text-lg font-bold text-amber-700">{formatRupiah(totalPayable)}</span>
                 </div>
 
                 {/* Submit */}

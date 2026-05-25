@@ -129,3 +129,72 @@ export async function deductStockForOrder(orderId: string) {
     // Non-blocking error, we don't want to fail the order update if stock fails
   }
 }
+
+/**
+ * Restores stock for an order if it was previously deducted.
+ */
+export async function restoreStockForOrder(orderId: string) {
+  try {
+    // Find all 'OUT' movements for this order
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        reason: {
+          contains: `Order #${orderId.slice(-6).toUpperCase()}`,
+        },
+        type: 'OUT',
+      },
+    });
+
+    if (movements.length === 0) {
+      console.log(`No stock was deducted for order ${orderId}, skipping restoration.`);
+      return;
+    }
+
+    // Check if we already did a restoration to prevent double refund
+    const alreadyRestored = await prisma.stockMovement.findFirst({
+      where: {
+        reason: {
+          contains: `Refund Order #${orderId.slice(-6).toUpperCase()}`,
+        },
+        type: 'IN',
+      },
+    });
+
+    if (alreadyRestored) {
+      console.log(`Stock already restored for order ${orderId}`);
+      return;
+    }
+
+    // Process restoration
+    for (const move of movements) {
+      const refundQty = Math.abs(move.quantity);
+      if (refundQty <= 0) continue;
+
+      await prisma.$transaction([
+        // Restore stock
+        prisma.ingredient.update({
+          where: { id: move.ingredientId },
+          data: {
+            stock: {
+              increment: refundQty,
+            },
+          },
+        }),
+        // Log movement
+        prisma.stockMovement.create({
+          data: {
+            ingredientId: move.ingredientId,
+            quantity: refundQty,
+            type: 'IN',
+            reason: `Refund Order #${orderId.slice(-6).toUpperCase()} - Restoration (Original: ${move.reason})`,
+          },
+        }),
+      ]);
+    }
+
+    console.log(`Successfully restored stock for order ${orderId}`);
+  } catch (error) {
+    console.error('Error in restoreStockForOrder:', error);
+  }
+}
+

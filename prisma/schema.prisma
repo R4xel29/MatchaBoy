@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/client"
 }
 
 datasource db {
@@ -210,6 +211,7 @@ model Order {
 
   // Notes
   notes         String?
+  cancelReason  String?
 
   // Payment proof (for QRIS/Transfer)
   paymentProofUrl String?
@@ -437,6 +439,7 @@ model LoyaltySettings {
   pointMode             String  @default("PER_TRANSACTION") // PER_TRANSACTION atau PER_AMOUNT
   pointPerTransaction   Int     @default(1)                  // Poin per transaksi (jika PER_TRANSACTION)
   pointPerAmount        Int     @default(10000)              // Per berapa rupiah = 1 poin (jika PER_AMOUNT)
+  pointValue            Int     @default(1000)               // Nilai Rupiah dari 1 poin (contoh: 1 poin = Rp1.000)
   referralRewardDesc    String  @default("1 Minuman Gratis (Hadiah Referral)")
 
   // Pengaturan Easter Egg

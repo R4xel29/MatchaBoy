@@ -8,3 +8,465 @@ GET API CALLED
 GET API CALLED
 User Role: ADMIN
 User Role: ADMIN
+PUT ERROR: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update()` invocation in
+C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__f02e486d._.js:703:176
+
+  700         }
+  701     });
+  702 }
+→ 703 const updated = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update({
+        where: {
+          id: "default-loyalty-settings"
+        },
+        data: {
+          milestone1Points: 5,
+          milestone1Reward: "DISCOUNT_20",
+          milestone1Desc: "Gratis 1 Topping",
+          milestone1Enabled: true,
+          milestone2Points: 10,
+          milestone2Reward: "UPGRADE_SIZE",
+          milestone2Desc: "Free Upgrade Size",
+          milestone2Enabled: true,
+          milestone3Points: 15,
+          milestone3Reward: "FREE_DRINK",
+          milestone3Desc: "1 Minuman Gratis Pilihan",
+          milestone3Enabled: true,
+          milestone3ResetPoints: false,
+          tumblerBonusEnabled: true,
+          tumblerBonusPoints: 1,
+          tumblerDiscountPct: 0,
+          tumblerVoucherEnabled: true,
+          tumblerVoucherType: "UPGRADE_SIZE",
+          tumblerVoucherDesc: "Eco-Reward: Free Upgrade Size (Bawa Tumbler)",
+          referralEnabled: true,
+          referralRewardType: "VOUCHER",
+          referralRewardPoints: 5,
+          referralRewardVoucher: "FREE_DRINK",
+          referralRewardDesc: "1 Minuman Gratis (Hadiah Referral)",
+          pointMode: "PER_TRANSACTION",
+          pointPerTransaction: 1,
+          pointPerAmount: 10000,
+          pointValue: 250,
+          ~~~~~~~~~~
+          easterEggEnabled: true,
+          easterEggVoucherCode: "EASTERSTELLAR",
+          easterEggDiscount: 15000,
+          easterEggQuota: 10,
+      ?   id?: String | StringFieldUpdateOperationsInput,
+      ?   createdAt?: DateTime | DateTimeFieldUpdateOperationsInput,
+      ?   updatedAt?: DateTime | DateTimeFieldUpdateOperationsInput
+        }
+      })
+
+Unknown argument `pointValue`. Available options are marked with ?.
+    at wn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at $n.handleRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6958)
+    at $n.handleAndLogRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async PUT (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__f02e486d._.js:703:25)
+    at async AppRouteRouteModule.do (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17148:38)
+    at async AppRouteRouteModule.handleResponse (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17211:32)
+    at async Module.handler (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17264:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\start-server.js:226:13)
+PUT ERROR: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update()` invocation in
+C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:176
+
+  8873         }
+  8874     });
+  8875 }
+→ 8876 const updated = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update({
+         where: {
+           id: "default-loyalty-settings"
+         },
+         data: {
+           milestone1Points: 5,
+           milestone1Reward: "DISCOUNT_20",
+           milestone1Desc: "Gratis 1 Topping",
+           milestone1Enabled: true,
+           milestone2Points: 10,
+           milestone2Reward: "UPGRADE_SIZE",
+           milestone2Desc: "Free Upgrade Size",
+           milestone2Enabled: true,
+           milestone3Points: 15,
+           milestone3Reward: "FREE_DRINK",
+           milestone3Desc: "1 Minuman Gratis Pilihan",
+           milestone3Enabled: true,
+           milestone3ResetPoints: false,
+           tumblerBonusEnabled: true,
+           tumblerBonusPoints: 1,
+           tumblerDiscountPct: 0,
+           tumblerVoucherEnabled: true,
+           tumblerVoucherType: "UPGRADE_SIZE",
+           tumblerVoucherDesc: "Eco-Reward: Free Upgrade Size (Bawa Tumbler)",
+           referralEnabled: true,
+           referralRewardType: "VOUCHER",
+           referralRewardPoints: 5,
+           referralRewardVoucher: "FREE_DRINK",
+           referralRewardDesc: "1 Minuman Gratis (Hadiah Referral)",
+           pointMode: "PER_TRANSACTION",
+           pointPerTransaction: 1,
+           pointPerAmount: 10000,
+           pointValue: 250,
+           ~~~~~~~~~~
+           easterEggEnabled: true,
+           easterEggVoucherCode: "EASTERSTELLAR",
+           easterEggDiscount: 15000,
+           easterEggQuota: 10,
+       ?   id?: String | StringFieldUpdateOperationsInput,
+       ?   createdAt?: DateTime | DateTimeFieldUpdateOperationsInput,
+       ?   updatedAt?: DateTime | DateTimeFieldUpdateOperationsInput
+         }
+       })
+
+Unknown argument `pointValue`. Available options are marked with ?.
+    at wn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at $n.handleRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6958)
+    at $n.handleAndLogRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async PUT (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:25)
+    at async AppRouteRouteModule.do (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17148:38)
+    at async AppRouteRouteModule.handleResponse (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17211:32)
+    at async Module.handler (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17264:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\start-server.js:226:13)
+PUT ERROR: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update()` invocation in
+C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:176
+
+  8873         }
+  8874     });
+  8875 }
+→ 8876 const updated = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update({
+         where: {
+           id: "default-loyalty-settings"
+         },
+         data: {
+           milestone1Points: 5,
+           milestone1Reward: "DISCOUNT_20",
+           milestone1Desc: "Gratis 1 Topping",
+           milestone1Enabled: true,
+           milestone2Points: 10,
+           milestone2Reward: "UPGRADE_SIZE",
+           milestone2Desc: "Free Upgrade Size",
+           milestone2Enabled: true,
+           milestone3Points: 15,
+           milestone3Reward: "FREE_DRINK",
+           milestone3Desc: "1 Minuman Gratis Pilihan",
+           milestone3Enabled: true,
+           milestone3ResetPoints: false,
+           tumblerBonusEnabled: false,
+           tumblerBonusPoints: 1,
+           tumblerDiscountPct: 0,
+           tumblerVoucherEnabled: true,
+           tumblerVoucherType: "UPGRADE_SIZE",
+           tumblerVoucherDesc: "Eco-Reward: Free Upgrade Size (Bawa Tumbler)",
+           referralEnabled: true,
+           referralRewardType: "VOUCHER",
+           referralRewardPoints: 5,
+           referralRewardVoucher: "FREE_DRINK",
+           referralRewardDesc: "1 Minuman Gratis (Hadiah Referral)",
+           pointMode: "PER_TRANSACTION",
+           pointPerTransaction: 1,
+           pointPerAmount: 10000,
+           pointValue: 250,
+           ~~~~~~~~~~
+           easterEggEnabled: true,
+           easterEggVoucherCode: "EASTERSTELLAR",
+           easterEggDiscount: 15000,
+           easterEggQuota: 10,
+       ?   id?: String | StringFieldUpdateOperationsInput,
+       ?   createdAt?: DateTime | DateTimeFieldUpdateOperationsInput,
+       ?   updatedAt?: DateTime | DateTimeFieldUpdateOperationsInput
+         }
+       })
+
+Unknown argument `pointValue`. Available options are marked with ?.
+    at wn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at $n.handleRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6958)
+    at $n.handleAndLogRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async PUT (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:25)
+    at async AppRouteRouteModule.do (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17148:38)
+    at async AppRouteRouteModule.handleResponse (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17211:32)
+    at async Module.handler (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17264:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\start-server.js:226:13)
+PUT ERROR: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update()` invocation in
+C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:176
+
+  8873         }
+  8874     });
+  8875 }
+→ 8876 const updated = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update({
+         where: {
+           id: "default-loyalty-settings"
+         },
+         data: {
+           milestone1Points: 5,
+           milestone1Reward: "DISCOUNT_20",
+           milestone1Desc: "Gratis 1 Topping",
+           milestone1Enabled: true,
+           milestone2Points: 10,
+           milestone2Reward: "UPGRADE_SIZE",
+           milestone2Desc: "Free Upgrade Size",
+           milestone2Enabled: true,
+           milestone3Points: 15,
+           milestone3Reward: "FREE_DRINK",
+           milestone3Desc: "1 Minuman Gratis Pilihan",
+           milestone3Enabled: true,
+           milestone3ResetPoints: false,
+           tumblerBonusEnabled: false,
+           tumblerBonusPoints: 1,
+           tumblerDiscountPct: 0,
+           tumblerVoucherEnabled: true,
+           tumblerVoucherType: "UPGRADE_SIZE",
+           tumblerVoucherDesc: "Eco-Reward: Free Upgrade Size (Bawa Tumbler)",
+           referralEnabled: true,
+           referralRewardType: "VOUCHER",
+           referralRewardPoints: 5,
+           referralRewardVoucher: "FREE_DRINK",
+           referralRewardDesc: "1 Minuman Gratis (Hadiah Referral)",
+           pointMode: "PER_TRANSACTION",
+           pointPerTransaction: 1,
+           pointPerAmount: 10000,
+           pointValue: 250,
+           ~~~~~~~~~~
+           easterEggEnabled: true,
+           easterEggVoucherCode: "EASTERSTELLAR",
+           easterEggDiscount: 15000,
+           easterEggQuota: 10,
+       ?   id?: String | StringFieldUpdateOperationsInput,
+       ?   createdAt?: DateTime | DateTimeFieldUpdateOperationsInput,
+       ?   updatedAt?: DateTime | DateTimeFieldUpdateOperationsInput
+         }
+       })
+
+Unknown argument `pointValue`. Available options are marked with ?.
+    at wn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at $n.handleRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6958)
+    at $n.handleAndLogRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async PUT (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:25)
+    at async AppRouteRouteModule.do (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17148:38)
+    at async AppRouteRouteModule.handleResponse (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17211:32)
+    at async Module.handler (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17264:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\start-server.js:226:13)
+PUT ERROR: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update()` invocation in
+C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:176
+
+  8873         }
+  8874     });
+  8875 }
+→ 8876 const updated = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update({
+         where: {
+           id: "default-loyalty-settings"
+         },
+         data: {
+           milestone1Points: 5,
+           milestone1Reward: "DISCOUNT_20",
+           milestone1Desc: "Gratis 1 Topping",
+           milestone1Enabled: true,
+           milestone2Points: 10,
+           milestone2Reward: "UPGRADE_SIZE",
+           milestone2Desc: "Free Upgrade Size",
+           milestone2Enabled: true,
+           milestone3Points: 15,
+           milestone3Reward: "FREE_DRINK",
+           milestone3Desc: "1 Minuman Gratis Pilihan",
+           milestone3Enabled: true,
+           milestone3ResetPoints: false,
+           tumblerBonusEnabled: false,
+           tumblerBonusPoints: 1,
+           tumblerDiscountPct: 0,
+           tumblerVoucherEnabled: true,
+           tumblerVoucherType: "UPGRADE_SIZE",
+           tumblerVoucherDesc: "Eco-Reward: Free Upgrade Size (Bawa Tumbler)",
+           referralEnabled: true,
+           referralRewardType: "VOUCHER",
+           referralRewardPoints: 5,
+           referralRewardVoucher: "FREE_DRINK",
+           referralRewardDesc: "1 Minuman Gratis (Hadiah Referral)",
+           pointMode: "PER_TRANSACTION",
+           pointPerTransaction: 1,
+           pointPerAmount: 10000,
+           pointValue: 250,
+           ~~~~~~~~~~
+           easterEggEnabled: true,
+           easterEggVoucherCode: "EASTERSTELLAR",
+           easterEggDiscount: 15000,
+           easterEggQuota: 10,
+       ?   id?: String | StringFieldUpdateOperationsInput,
+       ?   createdAt?: DateTime | DateTimeFieldUpdateOperationsInput,
+       ?   updatedAt?: DateTime | DateTimeFieldUpdateOperationsInput
+         }
+       })
+
+Unknown argument `pointValue`. Available options are marked with ?.
+    at wn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at $n.handleRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6958)
+    at $n.handleAndLogRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async PUT (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:25)
+    at async AppRouteRouteModule.do (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17148:38)
+    at async AppRouteRouteModule.handleResponse (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17211:32)
+    at async Module.handler (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17264:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\start-server.js:226:13)
+PUT ERROR: PrismaClientValidationError: 
+Invalid `__TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update()` invocation in
+C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:176
+
+  8873         }
+  8874     });
+  8875 }
+→ 8876 const updated = await __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$lib$2f$prisma$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["prisma"].loyaltySettings.update({
+         where: {
+           id: "default-loyalty-settings"
+         },
+         data: {
+           milestone1Points: 5,
+           milestone1Reward: "DISCOUNT_20",
+           milestone1Desc: "Gratis 1 Topping",
+           milestone1Enabled: true,
+           milestone2Points: 10,
+           milestone2Reward: "UPGRADE_SIZE",
+           milestone2Desc: "Free Upgrade Size",
+           milestone2Enabled: true,
+           milestone3Points: 15,
+           milestone3Reward: "FREE_DRINK",
+           milestone3Desc: "1 Minuman Gratis Pilihan",
+           milestone3Enabled: true,
+           milestone3ResetPoints: false,
+           tumblerBonusEnabled: true,
+           tumblerBonusPoints: 1,
+           tumblerDiscountPct: 0,
+           tumblerVoucherEnabled: true,
+           tumblerVoucherType: "UPGRADE_SIZE",
+           tumblerVoucherDesc: "Eco-Reward: Free Upgrade Size (Bawa Tumbler)",
+           referralEnabled: true,
+           referralRewardType: "VOUCHER",
+           referralRewardPoints: 5,
+           referralRewardVoucher: "FREE_DRINK",
+           referralRewardDesc: "1 Minuman Gratis (Hadiah Referral)",
+           pointMode: "PER_TRANSACTION",
+           pointPerTransaction: 1,
+           pointPerAmount: 10000,
+           pointValue: 250,
+           ~~~~~~~~~~
+           easterEggEnabled: true,
+           easterEggVoucherCode: "EASTERSTELLAR",
+           easterEggDiscount: 15000,
+           easterEggQuota: 10,
+       ?   id?: String | StringFieldUpdateOperationsInput,
+       ?   createdAt?: DateTime | DateTimeFieldUpdateOperationsInput,
+       ?   updatedAt?: DateTime | DateTimeFieldUpdateOperationsInput
+         }
+       })
+
+Unknown argument `pointValue`. Available options are marked with ?.
+    at wn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:29:1363)
+    at $n.handleRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6958)
+    at $n.handleAndLogRequestError (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6623)
+    at $n.request (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:121:6307)
+    at async l (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_modules\@prisma\client\runtime\library.js:130:9633)
+    at async PUT (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\[root-of-the-server]__78651a2a._.js:8876:25)
+    at async AppRouteRouteModule.do (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:37866)
+    at async AppRouteRouteModule.handle (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:5:45156)
+    at async responseGenerator (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17148:38)
+    at async AppRouteRouteModule.handleResponse (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\compiled\next-server\app-route-turbo.runtime.dev.js:1:191938)
+    at async handleResponse (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17211:32)
+    at async Module.handler (C:\UBIG\Matchaboy\matchaboy\.next\dev\server\chunks\bf1cb_next_a2517a1e._.js:17264:13)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\UBIG\Matchaboy\matchaboy\node_modules\.pnpm\next@16.1.6_@babel+core@7.2_64d5eeabc3e5d7da937e2327328eb8d4\node_modules\next\dist\server\lib\start-server.js:226:13)

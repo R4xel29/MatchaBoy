@@ -1,0 +1,657 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// -----------------------------------------------------------------------------
+// NEXTAUTH.JS ADAPTER MODELS
+// -----------------------------------------------------------------------------
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("CUSTOMER") // CUSTOMER, ADMIN, CASHIER, DRIVER
+
+  accounts Account[]
+  sessions Session[]
+
+  // App Specific
+  phone         String?        @unique
+  phoneVerified Boolean        @default(false)
+  orders        Order[]        @relation("UserOrders")
+  cashierOrders Order[]        @relation("CashierOrders")
+  driverOrders  Order[]        @relation("DriverOrders")
+  driverProfile DriverProfile?
+  locations     Location[]
+  favorites     Favorite[]
+  notifications Notification[]
+  activityLogs  ActivityLog[]
+  cashierShifts CashierShift[]
+
+  // Loyalty & Points
+  points            Int     @default(0)
+  referralCode      String  @unique @default(cuid())
+  referredById      String?
+  referredBy        User?   @relation("Referrals", fields: [referredById], references: [id])
+  referrals         User[]  @relation("Referrals")
+  referralBonusPaid Boolean @default(false) // true jika referrer sudah dapat bonus dari user ini
+
+  gender    String? // WOMAN, MAN, SECRET
+  birthDate DateTime?
+  pin       String? // 6-digit PIN for security
+
+  pointHistory      PointHistory[]
+  vouchers          Voucher[]
+  authenticators    Authenticator[]
+  pushSubscriptions PushSubscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Authenticator {
+  credentialID         String  @unique
+  userId               String
+  providerAccountId    String
+  credentialPublicKey  String
+  counter              Int
+  credentialDeviceType String
+  credentialBackedUp   Boolean
+  transports           String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, credentialID])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Tracking fields
+  userAgent  String?
+  ipAddress  String?
+  deviceType String?
+  browser    String?
+  os         String?
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// -----------------------------------------------------------------------------
+// APP CORE MODELS
+// -----------------------------------------------------------------------------
+
+model Location {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  address   String
+  lat       Float?
+  lng       Float?
+  isDefault Boolean @default(false)
+
+  name      String? // Nama Alamat / Label (sekolah, rumah)
+  recipient String? // Nama Penerima
+  phone     String? // Nomor Telepon Penerima
+  notes     String? // Catatan Spesial (catatan patokan)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  slug      String    @unique
+  name      String
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  price       Int
+  image       String?
+  badge       String? // e.g., 'best-seller', 'new', 'sold-out'
+  modifiers   String? // JSON: { iceLevel?: string[], sugarLevel?: string[], addOns?: {id,name,price}[] }
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+
+  orderItems         OrderItem[]
+  productIngredients ProductIngredient[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  Favorite  Favorite[]
+}
+
+model Order {
+  id String @id @default(cuid())
+
+  // Relations
+  userId    String?
+  user      User?   @relation("UserOrders", fields: [userId], references: [id])
+  cashierId String?
+  cashier   User?   @relation("CashierOrders", fields: [cashierId], references: [id])
+  driverId  String?
+  driver    User?   @relation("DriverOrders", fields: [driverId], references: [id])
+
+  // Order channel
+  orderType String @default("PICKUP") // DELIVERY, PICKUP, DINE_IN
+  source    String @default("POS") // POS, APP — asal order
+
+  // Customer Info snapshot
+  customerName  String
+  customerPhone String
+  address       String @default("")
+  distanceKm    Float?
+
+  // Dine-in specific
+  tableNumber String?
+
+  // Pickup specific
+  pickupDate         DateTime?
+  pickupTime         String? // e.g. "14:30"
+  pickupReminderSent Boolean   @default(false)
+
+  // Notes
+  notes String?
+
+  // Payment proof (for QRIS/Transfer)
+  paymentProofUrl  String?
+  paymentUrl       String?
+  paymentQrContent String?
+  paymentExpiredAt DateTime?
+  voucherCode      String?
+
+  // Financials
+  subtotal    Int
+  deliveryFee Int @default(0)
+  total       Int
+
+  paymentMethod String // CASH, QRIS, COD, MIDTRANS
+  status        String      @default("PENDING") // PENDING, PREPARING, READY, COMPLETED, ASSIGNED, TO_STORE, PICKED_UP, ON_DELIVERY, DELIVERED, CANCELLED
+  items         OrderItem[]
+
+  // Loyalty
+  hasTumbler    Boolean @default(false) // Pelanggan bawa tumbler/wadah sendiri
+  pointsEarned  Int     @default(0) // Total poin yang didapat dari order ini
+  pointsAwarded Boolean @default(false) // Sudah diberi poin atau belum
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  qty       Int
+  price     Int // Price at the time of order
+  modifiers String? // Stored as JSON string or plain text for simple modifiers
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Favorite {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  cartJson String? // Optional: storing specific modifiers they liked
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, productId])
+}
+
+model Notification {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type    String // 'order', 'promo', 'system', 'points'
+  title   String
+  message String
+  isRead  Boolean @default(false)
+  linkUrl String?
+
+  senderId String? // ID admin pengirim (null = system)
+  data     String? // JSON metadata
+
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String // e.g., "CREATE", "UPDATE", "DELETE", "LOGIN"
+  entity    String // e.g., "PRODUCT", "CATEGORY", "USER", "ORDER", etc.
+  entityId  String? // ID of the entity that was affected
+  details   String? // JSON string or plain text describing the change
+  createdAt DateTime @default(now())
+}
+
+model HeroBanner {
+  id          String   @id @default(cuid())
+  image       String
+  alt         String
+  headline    String
+  subheadline String
+  isActive    Boolean  @default(true)
+  isCover     Boolean  @default(true)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CashierShift {
+  id        String @id @default(cuid())
+  cashierId String
+  cashier   User   @relation(fields: [cashierId], references: [id])
+
+  openedAt    DateTime  @default(now())
+  closedAt    DateTime?
+  openingCash Int       @default(0)
+  closingCash Int?
+
+  totalOrders  Int @default(0)
+  totalRevenue Int @default(0)
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// LOYALTY & POINTS MODELS
+// -----------------------------------------------------------------------------
+
+// Riwayat perolehan dan penggunaan poin pelanggan
+model PointHistory {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  amount      Int // Positif = dapat poin, Negatif = poin dikurangi (redeem)
+  type        String // EARN_ORDER, EARN_CASHIER, EARN_REFERRAL, EARN_TUMBLER, REDEEM_MILESTONE, ADMIN_ADJUST
+  description String // Deskripsi human-readable, contoh: "Beli 2 cup Matcha Latte"
+
+  orderId String? // Referensi ke Order jika ada
+
+  createdAt DateTime @default(now())
+}
+
+// Voucher reward yang didapat dari milestone poin atau referral, atau diklaim dari template
+model Voucher {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  code           String    @unique @default(cuid()) // Kode unik voucher
+  type           String // FREE_TOPPING, UPGRADE_SIZE, FREE_DRINK, REFERRAL_REWARD, CUSTOM, DISCOUNT_PCT, DISCOUNT_RP, GRATIS_ONGKIR
+  description    String // Deskripsi reward yang bisa dibaca, contoh: "Gratis 1 Topping"
+  discountAmount Int       @default(0) // Nilai diskon dalam Rupiah (e.g. 25000 untuk FREE_DRINK)
+  isUsed         Boolean   @default(false)
+  usedAt         DateTime?
+  expiresAt      DateTime? // Opsional: tanggal kadaluarsa
+
+  // Relasi ke template jika di-generate dari master template
+  templateId String?
+  template   VoucherTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  // Referral tracking: jika voucher ini hasil dari referral
+  fromReferralUserId String? // ID user yang diajak (referee)
+
+  createdAt DateTime @default(now())
+}
+
+// Master Template Voucher yang dibuat oleh Admin
+model VoucherTemplate {
+  id            String  @id @default(cuid())
+  code          String  @unique // Kode klaim voucher, e.g., "MATACHABOYBARU"
+  title         String // Nama voucher
+  description   String // Deskripsi voucher
+  bannerImage   String? // Banner spanduk promo
+  type          String // DISCOUNT_PCT, DISCOUNT_RP, FREE_DRINK, FREE_TOPPING, UPGRADE_SIZE, GRATIS_ONGKIR
+  discountValue Int     @default(0) // Nilai diskon (persen atau rupiah)
+  minPurchase   Int     @default(0) // Syarat minimal belanja dari subtotal
+  maxDiscount   Int? // Maksimal potongan (untuk DISCOUNT_PCT)
+
+  // Batasan produk valid (disimpan sebagai JSON array string dari productIds, e.g., '["prod1", "prod2"]')
+  validProductIds String? // Opsi pembatasan produk khusus. Jika null, berlaku untuk semua produk.
+
+  terms String // Syarat dan Ketentuan, dipisah baris baru (\n) untuk poin-poin syarat
+
+  expiresAt  DateTime? // Tanggal kadaluarsa voucher template (kapan voucher tidak bisa diklaim lagi)
+  usageLimit Int       @default(0) // 0 berarti tidak terbatas. Kuota klaim maksimum voucher.
+  usageCount Int       @default(0) // Jumlah kuota yang sudah diklaim
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vouchers Voucher[] // Hubungan ke voucher pengguna yang di-generate dari template ini
+}
+
+// Pengaturan sistem loyalty yang bisa diedit admin tanpa coding
+// Hanya ada 1 row yang dipakai (singleton config)
+model LoyaltySettings {
+  id String @id @default(cuid())
+
+  // Milestone 1 (kelipatan)
+  milestone1Points  Int     @default(5) // Setiap kelipatan N poin
+  milestone1Reward  String  @default("FREE_TOPPING") // Jenis reward
+  milestone1Desc    String  @default("Gratis 1 Topping") // Keterangan untuk pelanggan
+  milestone1Enabled Boolean @default(true)
+
+  // Milestone 2 (kelipatan)
+  milestone2Points  Int     @default(10)
+  milestone2Reward  String  @default("UPGRADE_SIZE")
+  milestone2Desc    String  @default("Free Upgrade Size")
+  milestone2Enabled Boolean @default(true)
+
+  // Milestone 3 - Target Utama (RESET setelah ini)
+  milestone3Points      Int     @default(15)
+  milestone3Reward      String  @default("FREE_DRINK")
+  milestone3Desc        String  @default("1 Minuman Gratis Pilihan")
+  milestone3Enabled     Boolean @default(true)
+  milestone3ResetPoints Boolean @default(true) // Jika true, poin dikurangi setelah milestone 3
+
+  // Pengaturan Tumbler Bonus
+  tumblerBonusEnabled   Boolean @default(true)
+  tumblerBonusPoints    Int     @default(1) // Extra poin per transaksi pakai tumbler
+  tumblerDiscountPct    Int     @default(0) // Diskon % untuk pengguna tumbler (0 = tidak ada diskon)
+  tumblerVoucherEnabled Boolean @default(true)
+  tumblerVoucherType    String  @default("UPGRADE_SIZE") // UPGRADE_SIZE, FREE_TOPPING, FREE_DRINK
+  tumblerVoucherDesc    String  @default("Eco-Reward: Free Upgrade Size (Bawa Tumbler)")
+
+  // Pengaturan Referral
+  referralEnabled       Boolean @default(true)
+  referralRewardType    String  @default("VOUCHER") // POINTS atau VOUCHER
+  referralRewardPoints  Int     @default(5) // Jika POINTS: berapa poin yang diberikan ke referrer
+  referralRewardVoucher String  @default("FREE_DRINK") // Jika VOUCHER: jenis voucher untuk referrer
+
+  // Pengaturan Perhitungan Poin
+  pointMode           String @default("PER_TRANSACTION") // PER_TRANSACTION atau PER_AMOUNT
+  pointPerTransaction Int    @default(1) // Poin per transaksi (jika PER_TRANSACTION)
+  pointPerAmount      Int    @default(10000) // Per berapa rupiah = 1 poin (jika PER_AMOUNT)
+  pointValue          Int    @default(1000) // Nilai Rupiah dari 1 poin (contoh: 1 poin = Rp1.000)
+  referralRewardDesc  String @default("1 Minuman Gratis (Hadiah Referral)")
+
+  // Pengaturan Easter Egg
+  easterEggEnabled     Boolean @default(true)
+  easterEggVoucherCode String  @default("EASTERSTELLAR")
+  easterEggDiscount    Int     @default(15000)
+  easterEggQuota       Int     @default(10)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Template pesan notifikasi otomatis
+model NotificationTemplate {
+  id        String   @id @default(cuid())
+  trigger   String   @unique // ORDER_COMPLETED, POINTS_EARNED, WELCOME, PICKUP_REMINDER, CUSTOM
+  title     String
+  message   String // Supports {{name}}, {{points}}, {{orderNo}}, {{pickupTime}} placeholders
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Pengaturan toko (jam operasional, dll)
+model StoreSettings {
+  id                    String   @id @default(cuid())
+  openTime              String   @default("08:00")
+  closeTime             String   @default("21:00")
+  pickupSlotInterval    Int      @default(5) // interval menit per slot
+  cancellationTimeLimit Int      @default(15) // waktu maksimal pembatalan pesanan COD dalam menit
+  deliveryFeePerKm      Int      @default(2000) // ongkos kirim per km
+  maxDeliveryDistance   Int      @default(10) // radius maksimal pengiriman dalam km
+  storeName             String   @default("Matchaboy HQ")
+  storeAddress          String   @default("Jl. Matcha No. 1, Jakarta Selatan")
+  storeLat              Float    @default(-6.2088)
+  storeLng              Float    @default(106.8456)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// Pengaturan pembayaran (QRIS, Bank Transfer, COD)
+model PaymentSettings {
+  id String @id @default(cuid())
+
+  // COD
+  codEnabled  Boolean @default(true)
+  codWhatsApp String  @default("") // Nomor WA admin untuk COD
+
+  // QRIS
+  qrisEnabled      Boolean @default(true)
+  qrisImage        String? // URL gambar QRIS
+  qrisLogo         String? // URL logo QRIS
+  qrisLabel        String  @default("QRIS")
+  qrisAutoGenerate Boolean @default(true) // Toggle auto generate
+  qrisNmid         String  @default("") // NMID untuk auto-generate qris
+
+  // Bank Transfer
+  transferEnabled Boolean @default(true)
+
+  // DOKU
+  dokuEnabled   Boolean @default(false)
+  dokuClientId  String  @default("")
+  dokuSharedKey String  @default("")
+  dokuSandbox   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Bank accounts untuk transfer
+model BankAccount {
+  id            String   @id @default(cuid())
+  bankName      String // "BCA", "BRI", "Mandiri"
+  bankLogo      String? // URL logo bank
+  accountNumber String
+  accountName   String
+  isActive      Boolean  @default(true)
+  order         Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Referral Tiers — tiered referral rewards
+model ReferralTier {
+  id            String   @id @default(cuid())
+  tierNumber    Int // 1, 2, 3...
+  targetInvites Int // Jumlah orang yang harus diajak
+  rewardType    String // VOUCHER, POINTS, CUSTOM
+  rewardValue   String // Jenis voucher atau jumlah poin
+  rewardDesc    String // Deskripsi hadiah
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Referral Events — event/promo-based referral campaigns
+model ReferralEvent {
+  id            String   @id @default(cuid())
+  name          String // "Promo Lebaran", "Anniversary"
+  description   String?
+  rewardType    String // VOUCHER, POINTS, CUSTOM
+  rewardValue   String
+  rewardDesc    String
+  refereeReward String? // Reward untuk yang diajak
+  startDate     DateTime
+  endDate       DateTime
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Report Settings — pengaturan format laporan
+model ReportSettings {
+  id           String   @id @default(cuid())
+  storeName    String   @default("Matchaboy")
+  storeLogo    String? // URL logo untuk header laporan
+  storeAddress String   @default("")
+  storePhone   String   @default("")
+  footerText   String   @default("Terima kasih atas kepercayaan Anda")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// DRIVER MODELS
+// -----------------------------------------------------------------------------
+
+model DriverProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  vehicleType    String  @default("Motor")
+  plateNumber    String  @default("")
+  driverImageUrl String?
+
+  isOnline   Boolean @default(false)
+  shiftStart String? // HH:mm
+  shiftEnd   String? // HH:mm
+
+  lastLat            Float?
+  lastLng            Float?
+  lastLocationUpdate DateTime?
+
+  status String @default("APPROVED") // PENDING, APPROVED, SUSPENDED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// BANNED CONTACTS
+// -----------------------------------------------------------------------------
+
+model BannedContact {
+  id        String   @id @default(cuid())
+  type      String // "EMAIL" or "PHONE"
+  value     String   @unique
+  reason    String?
+  createdAt DateTime @default(now())
+}
+
+// -----------------------------------------------------------------------------
+// INVENTORY & PROFIT MODELS
+// -----------------------------------------------------------------------------
+
+model Ingredient {
+  id          String  @id @default(cuid())
+  name        String
+  unit        String // e.g., "gr", "ml", "pcs"
+  stock       Float   @default(0)
+  costPerUnit Int     @default(0) // Average purchase price
+  isPackaging Boolean @default(false)
+
+  productIngredients ProductIngredient[]
+  stockMovements     StockMovement[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ProductIngredient {
+  id           String     @id @default(cuid())
+  productId    String
+  product      Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  quantity Float // Quantity needed per serve
+
+  @@unique([productId, ingredientId])
+}
+
+model StockMovement {
+  id           String     @id @default(cuid())
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  quantity Float // Positive for IN, Negative for OUT
+  type     String // "IN" (restock), "OUT" (usage), "WASTE" (damaged/expired), "ADJUST" (manual correction)
+  reason   String? // e.g., "Order #123", "Restock from supplier"
+
+  createdAt DateTime @default(now())
+}
+
+model Expense {
+  id       String   @id @default(cuid())
+  name     String
+  amount   Int
+  category String // "RENT", "UTILITIES", "SALARY", "MARKETING", "OTHER"
+  date     DateTime @default(now())
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

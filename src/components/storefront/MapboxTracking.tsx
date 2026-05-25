@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Truck, Clock, MapPin, Navigation } from 'lucide-react';
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -21,6 +21,7 @@ export function LeafletTracking({ orderId }: LeafletTrackingProps) {
   } | null>(null);
 
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
+  const prevDriverPos = useRef<{ lat: number; lng: number } | null>(null);
 
   // Fetch driver location periodically
   useEffect(() => {
@@ -52,11 +53,9 @@ export function LeafletTracking({ orderId }: LeafletTrackingProps) {
     return () => clearInterval(interval);
   }, [orderId]);
 
-  // Init map once we have driver info
+  // Init map + update marker (lightweight, runs on every poll)
   useEffect(() => {
     if (!mapContainer.current || !driverInfo) return;
-
-    let mapInstance: L.Map | null = null;
 
     if (!mapRef.current) {
       import('leaflet').then((leaflet) => {
@@ -69,7 +68,6 @@ export function LeafletTracking({ orderId }: LeafletTrackingProps) {
           attributionControl: false,
         });
 
-        mapInstance = map;
         mapRef.current = map;
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -113,57 +111,70 @@ export function LeafletTracking({ orderId }: LeafletTrackingProps) {
 
       });
     } else {
-      // Update existing driver marker
+      // Update existing driver marker (lightweight - no route fetch)
       driverMarkerRef.current?.setLatLng([driverInfo.lat, driverInfo.lng]);
       mapRef.current.flyTo([driverInfo.lat, driverInfo.lng], undefined, { duration: 0.5 });
     }
+  }, [driverInfo]);
 
-    // Fetch route from OSRM if destination is known
-    if (driverInfo.destinationLat && driverInfo.destinationLng && mapRef.current) {
-      const fetchRoute = async () => {
-        try {
-          const url = `https://router.project-osrm.org/route/v1/driving/${driverInfo.lng},${driverInfo.lat};${driverInfo.destinationLng},${driverInfo.destinationLat}?overview=full&geometries=geojson`;
-          const res = await fetch(url);
-          const data = await res.json();
+  // Fetch route from OSRM only when driver moves significantly (>100m)
+  useEffect(() => {
+    if (!driverInfo?.destinationLat || !driverInfo?.destinationLng || !mapRef.current) return;
 
-          if (data.routes && data.routes.length > 0) {
-            const route = data.routes[0];
-            setRouteInfo({
-              distance: route.distance / 1000,
-              duration: route.duration / 60,
-            });
-
-            const coords: L.LatLngTuple[] = route.geometry.coordinates.map(
-              (c: [number, number]) => [c[1], c[0]] as L.LatLngTuple
-            );
-
-            import('leaflet').then((leaflet) => {
-              const L = leaflet.default;
-              if (routeLayerRef.current) {
-                routeLayerRef.current.setLatLngs(coords);
-              } else {
-                routeLayerRef.current = L.polyline(coords, {
-                  color: '#22C55E',
-                  weight: 4,
-                  opacity: 0.7,
-                  dashArray: '8, 6',
-                }).addTo(mapRef.current!);
-              }
-
-              // Fit bounds
-              const bounds = L.latLngBounds(
-                [driverInfo.lat, driverInfo.lng],
-                [driverInfo.destinationLat, driverInfo.destinationLng]
-              );
-              mapRef.current!.fitBounds(bounds, { padding: [40, 40] });
-            });
-          }
-        } catch (err) {
-          console.error('Failed to fetch route', err);
-        }
-      };
-      fetchRoute();
+    // Calculate distance from previous position
+    const prev = prevDriverPos.current;
+    if (prev) {
+      const dlat = driverInfo.lat - prev.lat;
+      const dlng = driverInfo.lng - prev.lng;
+      const distSq = dlat * dlat + dlng * dlng;
+      // ~100m threshold (approx 0.001 degrees squared)
+      if (distSq < 0.000001) return;
     }
+    prevDriverPos.current = { lat: driverInfo.lat, lng: driverInfo.lng };
+
+    const fetchRoute = async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${driverInfo.lng},${driverInfo.lat};${driverInfo.destinationLng},${driverInfo.destinationLat}?overview=full&geometries=geojson`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          setRouteInfo({
+            distance: route.distance / 1000,
+            duration: route.duration / 60,
+          });
+
+          const coords: L.LatLngTuple[] = route.geometry.coordinates.map(
+            (c: [number, number]) => [c[1], c[0]] as L.LatLngTuple
+          );
+
+          import('leaflet').then((leaflet) => {
+            const L = leaflet.default;
+            if (routeLayerRef.current) {
+              routeLayerRef.current.setLatLngs(coords);
+            } else {
+              routeLayerRef.current = L.polyline(coords, {
+                color: '#22C55E',
+                weight: 4,
+                opacity: 0.7,
+                dashArray: '8, 6',
+              }).addTo(mapRef.current!);
+            }
+
+            // Fit bounds
+            const bounds = L.latLngBounds(
+              [driverInfo.lat, driverInfo.lng],
+              [driverInfo.destinationLat!, driverInfo.destinationLng!]
+            );
+            mapRef.current!.fitBounds(bounds, { padding: [40, 40] });
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch route', err);
+      }
+    };
+    fetchRoute();
   }, [driverInfo]);
 
   // Cleanup

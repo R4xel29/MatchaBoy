@@ -10,7 +10,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ArrowLeft, Phone, User, CreditCard, Banknote,
-  ChevronDown, ChevronUp, Trash2, Plus, Minus,
+  ChevronDown, ChevronUp, ChevronRight, Trash2, Plus, Minus,
   ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle, MapPin,
   Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode
 } from 'lucide-react';
@@ -65,14 +65,22 @@ export default function CheckoutPage() {
 
   // Voucher state
   const [voucherCode, setVoucherCode] = useState('');
-  const [appliedVoucher, setAppliedVoucher] = useState<{ id: string; code: string; type: string; description: string } | null>(null);
+  const [appliedVoucher, setAppliedVoucher] = useState<{ id: string; code: string; type: string; description: string; discountAmount?: number; minPurchase?: number } | null>(null);
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError] = useState('');
+  const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
+  const [userVouchers, setUserVouchers] = useState<any[]>([]);
+  const [claimableTemplates, setClaimableTemplates] = useState<any[]>([]);
+  const [voucherModalTab, setVoucherModalTab] = useState<'vouchers' | 'pack'>('vouchers');
+  const [selectedVoucherFilter, setSelectedVoucherFilter] = useState<'semua' | 'diskon' | 'cashback' | 'delivery'>('semua');
+  const [voucherSearchQuery, setVoucherSearchQuery] = useState('');
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
 
   // Points state
   const [userPoints, setUserPoints] = useState(0);
   const [usePoints, setUsePoints] = useState(false);
   const [pointsToUse, setPointsToUse] = useState(0);
+  const [pointValue, setPointValue] = useState(1000);
 
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
@@ -88,7 +96,15 @@ export default function CheckoutPage() {
     deliveryFeePerKm: 2000, maxDeliveryDistance: 10
   });
 
+  // Automatically reset tumbler option when shipping method changes to DELIVERY
+  useEffect(() => {
+    if (orderType === 'DELIVERY') {
+      setHasTumbler(false);
+    }
+  }, [orderType]);
+
   const [deliveryAddress, setDeliveryAddress] = useState<{ label: string, detail: string, streetDetail: string, lat: number, lng: number, distance: number, deliveryFee: number } | null>(null);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
 
   // Payment Config State
@@ -103,13 +119,16 @@ export default function CheckoutPage() {
 
     fetch('/api/admin/store-settings')
       .then(r => r.json())
-      .then(d => { if (d.openTime) setStoreSettings({ ...storeSettings, ...d }); })
+      .then(d => { if (d.openTime) setStoreSettings(prev => ({ ...prev, ...d })); })
       .catch(() => {});
 
-    // Fetch tumbler bonus settings
+    // Fetch loyalty settings
     fetch('/api/admin/loyalty/settings')
       .then(r => r.json())
       .then(d => {
+        if (d.pointValue !== undefined) {
+          setPointValue(d.pointValue || 1000);
+        }
         if (d.tumblerBonusEnabled) {
           setTumblerEnabled(true);
           setTumblerBonusPoints(d.tumblerBonusPoints || 0);
@@ -152,7 +171,67 @@ export default function CheckoutPage() {
         })
         .catch(() => {});
     }
-  }, [session, setValue]);
+  }, [session?.user?.id, setValue]);
+
+  const fetchVouchers = async () => {
+    setLoadingVouchers(true);
+    try {
+      const res = await fetch('/api/user/vouchers');
+      if (res.ok) {
+        const data = await res.json();
+        setUserVouchers(data.vouchers || []);
+        setClaimableTemplates(data.templates || []);
+      }
+    } catch (e) {
+      console.error('Error fetching vouchers:', e);
+    } finally {
+      setLoadingVouchers(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session?.user) {
+      fetchVouchers();
+    }
+  }, [session?.user?.id]);
+
+  const subtotal = totalPrice();
+
+  const filteredUserVouchers = useMemo(() => {
+    return userVouchers.filter(v => {
+      if (voucherSearchQuery) {
+        const q = voucherSearchQuery.toLowerCase();
+        const codeMatch = v.code?.toLowerCase().includes(q);
+        const descMatch = v.description?.toLowerCase().includes(q);
+        const titleMatch = v.title?.toLowerCase().includes(q);
+        if (!codeMatch && !descMatch && !titleMatch) return false;
+      }
+
+      if (selectedVoucherFilter === 'semua') return true;
+      if (selectedVoucherFilter === 'diskon') {
+        return v.type === 'DISCOUNT_RP' || v.type === 'DISCOUNT_PCT' || v.type === 'FREE_DRINK' || v.type === 'FREE_TOPPING' || v.type === 'UPGRADE_SIZE' || v.type === 'REFERRAL_REWARD';
+      }
+      if (selectedVoucherFilter === 'cashback') {
+        return v.type === 'CASHBACK' || v.description?.toLowerCase().includes('cashback') || v.title?.toLowerCase().includes('cashback');
+      }
+      if (selectedVoucherFilter === 'delivery') {
+        return v.type === 'GRATIS_ONGKIR' || v.type === 'DISKON_ONGKIR';
+      }
+      return true;
+    });
+  }, [userVouchers, selectedVoucherFilter, voucherSearchQuery]);
+
+  const usableVouchers = useMemo(() => {
+    return filteredUserVouchers.filter(v => subtotal >= (v.template?.minPurchase || v.minPurchase || 0));
+  }, [filteredUserVouchers, subtotal]);
+
+  const unusableVouchers = useMemo(() => {
+    return filteredUserVouchers.filter(v => subtotal < (v.template?.minPurchase || v.minPurchase || 0));
+  }, [filteredUserVouchers, subtotal]);
+
+  const hasUnusableVouchers = useMemo(() => {
+    return userVouchers.some(v => subtotal < (v.template?.minPurchase || v.minPurchase || 0));
+  }, [userVouchers, subtotal]);
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -161,8 +240,6 @@ export default function CheckoutPage() {
       return () => clearTimeout(t);
     }
   }, [toast]);
-
-  const subtotal = totalPrice();
   const tumblerDiscount = hasTumbler && tumblerDiscountPct > 0 ? Math.round(subtotal * tumblerDiscountPct / 100) : 0;
   const shippingFee = orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0;
   
@@ -178,24 +255,34 @@ export default function CheckoutPage() {
     });
   }, [items, allProducts]);
 
-  const ongkirDiscount = hasFreeShippingBundle
-    ? shippingFee
-    : appliedVoucher
-      ? appliedVoucher.type === 'GRATIS_ONGKIR' ? shippingFee
-      : appliedVoucher.type === 'DISKON_ONGKIR' ? Math.min(shippingFee, 10000)
-      : 0
-      : 0;
+  const ongkirDiscount = useMemo(() => {
+    if (hasFreeShippingBundle) return shippingFee;
+    if (!appliedVoucher) return 0;
+    if (appliedVoucher.type === 'GRATIS_ONGKIR') return shippingFee;
+    if (appliedVoucher.type === 'DISKON_ONGKIR') return Math.min(shippingFee, appliedVoucher.discountAmount || 10000);
+    return 0;
+  }, [hasFreeShippingBundle, appliedVoucher, shippingFee]);
 
-  const voucherDiscount = appliedVoucher
-    ? appliedVoucher.type === 'FREE_DRINK' ? 25000
-    : appliedVoucher.type === 'FREE_TOPPING' ? 3000
-    : appliedVoucher.type === 'UPGRADE_SIZE' ? 5000
-    : appliedVoucher.type === 'REFERRAL_REWARD' ? 25000
-    : appliedVoucher.type === 'GRATIS_ONGKIR' || appliedVoucher.type === 'DISKON_ONGKIR' ? 0
-    : 10000
-    : 0;
+  const voucherDiscount = useMemo(() => {
+    if (!appliedVoucher) return 0;
+    if (appliedVoucher.type === 'GRATIS_ONGKIR' || appliedVoucher.type === 'DISKON_ONGKIR') return 0;
+    if (appliedVoucher.discountAmount !== undefined && appliedVoucher.discountAmount !== null) {
+      if (appliedVoucher.type === 'DISCOUNT_PCT') {
+        return Math.round((subtotal * appliedVoucher.discountAmount) / 100);
+      }
+      return appliedVoucher.discountAmount;
+    }
+    switch (appliedVoucher.type) {
+      case 'FREE_DRINK': return 25000;
+      case 'FREE_TOPPING': return 3000;
+      case 'UPGRADE_SIZE': return 5000;
+      case 'REFERRAL_REWARD': return 25000;
+      case 'DISCOUNT_RP': return 10000;
+      default: return 10000;
+    }
+  }, [appliedVoucher, subtotal]);
 
-  const pointsDiscount = usePoints ? pointsToUse * 1000 : 0;
+  const pointsDiscount = usePoints ? pointsToUse * pointValue : 0;
   const grandTotal = Math.max(0, subtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, shippingFee - ongkirDiscount);
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -546,11 +633,66 @@ export default function CheckoutPage() {
               <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
                 <MapPin className="w-4.5 h-4.5 text-[#B48A5E]" /> Alamat Pengiriman
               </h2>
-              <MapPicker
-                onLocationSelect={setDeliveryAddress}
-                deliveryFeePerKm={storeSettings.deliveryFeePerKm}
-                maxDeliveryDistance={storeSettings.maxDeliveryDistance}
-              />
+
+              {!deliveryAddress ? (
+                <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-[2rem] p-8 bg-gray-50 text-center gap-4">
+                  <div className="w-14 h-14 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E]">
+                    <MapPin className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-gray-800">Belum Ada Lokasi Terpilih</p>
+                    <p className="text-[11px] text-gray-400 max-w-[260px]">Tentukan koordinat peta dan detail alamat pengantaran Anda</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsMapOpen(true)}
+                    className="px-6 py-3 rounded-full bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-xs shadow-md shadow-[#B48A5E]/10 hover:shadow-[#B48A5E]/20 active:scale-95 transition-all flex items-center gap-2"
+                  >
+                    Pilih Alamat di Peta (Buka Map)
+                  </button>
+                </div>
+              ) : (
+                <div className="border border-[#B48A5E]/20 bg-[#FFFBF5] rounded-[2rem] p-5 shadow-sm space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E] shrink-0 mt-0.5">
+                        <MapPin className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-extrabold text-gray-900 truncate">{deliveryAddress.label}</p>
+                        <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5 line-clamp-2">{deliveryAddress.detail}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMapOpen(true)}
+                      className="text-xs font-bold text-[#B48A5E] hover:underline shrink-0"
+                    >
+                      Ubah Alamat
+                    </button>
+                  </div>
+
+                  {/* Detailed Info Badge Grid */}
+                  <div className="grid grid-cols-2 gap-3.5 border-y border-gray-100 py-3.5">
+                    <div>
+                      <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Jarak</span>
+                      <span className="text-xs font-extrabold text-gray-800">{deliveryAddress.distance.toFixed(1)} km</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ongkir</span>
+                      <span className="text-xs font-extrabold text-[#B48A5E]">{formatRupiah(deliveryAddress.deliveryFee)}</span>
+                    </div>
+                  </div>
+
+                  {/* Custom Street Details Card */}
+                  <div className="bg-white border border-gray-100 rounded-2xl p-3.5 space-y-1">
+                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Detail Alamat Pengiriman</span>
+                    <p className="text-xs font-semibold text-gray-700 leading-snug">
+                      {deliveryAddress.streetDetail}
+                    </p>
+                  </div>
+                </div>
+              )}
             </motion.section>
           )}
 
@@ -584,7 +726,7 @@ export default function CheckoutPage() {
           </section>
 
           {/* ── 3b. Tumbler Toggle (Eco Card Glassmorphic) ──────────────────── */}
-          {tumblerEnabled && (
+          {tumblerEnabled && orderType === 'PICKUP' && (
             <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
               <button
                 type="button"
@@ -700,6 +842,45 @@ export default function CheckoutPage() {
               + Tambah Menu Lain
             </button>
           </section>
+
+          {/* ── Voucher Trigger Section matching screenshot 1 ── */}
+          <div className="space-y-0 select-none">
+            {hasUnusableVouchers && (
+              <div className="bg-[#FFF4E6] text-[#D97706] text-xs font-semibold px-4 py-3.5 rounded-t-2xl border border-b-0 border-[#FAD9C1] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Plus className="w-4 h-4 shrink-0 text-[#D97706]" />
+                  <span>Tambah pesanan untuk pakai voucher</span>
+                </div>
+                <button type="button" onClick={() => setIsVoucherModalOpen(true)} className="text-gray-400 font-bold hover:text-gray-600 text-lg leading-none pb-1">
+                  •••
+                </button>
+              </div>
+            )}
+            
+            <button
+              type="button"
+              onClick={() => setIsVoucherModalOpen(true)}
+              className={`w-full bg-[#FFFBF4] border border-[#F5E3D0] px-5 py-4 flex items-center justify-between hover:bg-[#FFF8EE] active:scale-[0.99] transition-all text-left
+                ${hasUnusableVouchers ? 'rounded-b-2xl border-t-0' : 'rounded-2xl'}`}
+            >
+              <div className="flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-[#FDF0DF] border border-[#F6D2B1] flex items-center justify-center text-[#C05621] shrink-0">
+                  <span className="font-extrabold text-base">%</span>
+                </div>
+                <div>
+                  <p className="font-bold text-sm text-[#5C3D2E]">
+                    {appliedVoucher ? appliedVoucher.description : 'Pakai Kode Voucher'}
+                  </p>
+                  {appliedVoucher && (
+                    <p className="text-[10px] text-[#C05621] font-extrabold uppercase tracking-widest mt-0.5">
+                      Kode: {appliedVoucher.code}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-[#8C7864]" />
+            </button>
+          </div>
         </div> {/* END LEFT COLUMN */}
 
         {/* RIGHT COLUMN */}
@@ -766,44 +947,7 @@ export default function CheckoutPage() {
             </div>
           </section>
 
-          {/* ── 5a. Voucher Section ──────────────────────────── */}
-          <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-3">
-            <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
-              <Ticket className="w-4.5 h-4.5 text-[#B48A5E]" /> Promo Voucher
-            </h2>
-            {appliedVoucher ? (
-              <div className="flex items-center gap-3.5 px-4.5 py-3.5 rounded-2xl bg-emerald-50 border border-emerald-250 shadow-sm">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-emerald-800 truncate">{appliedVoucher.description}</p>
-                  <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Kode: {appliedVoucher.code}</p>
-                </div>
-                <button type="button" onClick={() => { setAppliedVoucher(null); setVoucherCode(''); }} className="p-1.5 rounded-full hover:bg-emerald-100/50 text-emerald-600 transition-colors">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <input
-                    value={voucherCode}
-                    onChange={(e) => { setVoucherCode(e.target.value); setVoucherError(''); }}
-                    placeholder="Kode promo voucher"
-                    className="flex-1 px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleApplyVoucher}
-                    disabled={voucherLoading || !voucherCode.trim()}
-                    className="px-6 py-3.5 rounded-2xl bg-[#B48A5E] text-white font-bold text-xs hover:bg-[#946F48] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2"
-                  >
-                    {voucherLoading ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : 'Pakai'}
-                  </button>
-                </div>
-                {voucherError && <p className="text-xs text-red-500 pl-1 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" />{voucherError}</p>}
-              </div>
-            )}
-          </section>
+
 
           {/* ── 5b. Points Section ──────────────────────────── */}
           {userPoints > 0 && (
@@ -813,7 +957,7 @@ export default function CheckoutPage() {
               </h2>
               <button
                 type="button"
-                onClick={() => { setUsePoints(!usePoints); if (!usePoints) setPointsToUse(Math.min(userPoints, Math.floor(subtotal / 1000))); }}
+                onClick={() => { setUsePoints(!usePoints); if (!usePoints) setPointsToUse(Math.min(userPoints, Math.floor(subtotal / pointValue))); }}
                 className={`w-full flex items-center gap-3.5 p-4.5 rounded-2xl border-2 transition-all text-left active:scale-[0.98] ${
                   usePoints ? 'border-amber-400 bg-amber-50/20 shadow-sm' : 'border-gray-150 bg-white hover:border-gray-250'
                 }`}
@@ -826,7 +970,7 @@ export default function CheckoutPage() {
                 <div className="flex-1">
                   <p className={`text-sm font-bold ${usePoints ? 'text-amber-800' : 'text-gray-900'}`}>Tukarkan Poin</p>
                   <p className={`text-xs leading-none mt-1 ${usePoints ? 'text-amber-600' : 'text-gray-400 font-medium'}`}>
-                    {usePoints ? `${pointsToUse} poin = diskon ${formatRupiah(pointsToUse * 1000)}` : `Miliki ${userPoints} poin (1 poin = Rp1.000)`}
+                    {usePoints ? `${pointsToUse} poin = diskon ${formatRupiah(pointsToUse * pointValue)}` : `Miliki ${userPoints} poin (1 poin = ${formatRupiah(pointValue)})`}
                   </p>
                 </div>
                 <div className={`w-11 h-6 rounded-full transition-colors duration-300 shrink-0 relative border ${
@@ -842,12 +986,12 @@ export default function CheckoutPage() {
                     <input
                       type="range"
                       min={1}
-                      max={Math.min(userPoints, Math.floor(subtotal / 1000))}
+                      max={Math.min(userPoints, Math.floor(subtotal / pointValue))}
                       value={pointsToUse}
                       onChange={(e) => setPointsToUse(parseInt(e.target.value))}
                       className="flex-1 accent-amber-500 h-1.5 bg-gray-150 rounded-lg cursor-pointer"
                     />
-                    <span className="text-[10px] font-bold text-gray-400">{Math.min(userPoints, Math.floor(subtotal / 1000))}p</span>
+                    <span className="text-[10px] font-bold text-gray-400">{Math.min(userPoints, Math.floor(subtotal / pointValue))}p</span>
                   </div>
                 </motion.div>
               )}
@@ -988,44 +1132,67 @@ export default function CheckoutPage() {
       </AnimatePresence>
 
       {/* Sticky Bottom Bar for Mobile Checkout */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-150 p-4 md:hidden pb-safe flex gap-3 shadow-[0_-8px_24px_rgba(0,0,0,0.035)]">
-        {orderType === 'PICKUP' && (
-          <button
-            type="button"
-            onClick={() => setIsScheduleModalOpen(true)}
-            className="flex items-center justify-center gap-1.5 px-4.5 rounded-2xl border-2 border-[#946F48] text-[#946F48] font-bold text-xs shrink-0 active:scale-95 transition-all"
-          >
-            <Clock className="w-4 h-4 text-[#946F48]" />
-            {pickupTime === 'Sekarang' ? 'Jadwalkan' : pickupTime}
-          </button>
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-150 md:hidden pb-safe flex flex-col shadow-[0_-8px_24px_rgba(0,0,0,0.035)]">
+        {/* Green Discount Notification Banner */}
+        {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
+          <div className="bg-[#E8F8F0] border-b border-[#D1F0DB] px-4 py-2.5 text-xs font-bold text-[#1E7D44] flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-[#1E7D44] text-white flex items-center justify-center font-extrabold text-[10px] shrink-0">%</span>
+            <span>Kamu dapat diskon {formatRupiah(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount)}!</span>
+          </div>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            if (canSubmit && !isSubmitting) {
-              handleSubmit(onSubmit)();
-            }
-          }}
-          disabled={!canSubmit || isSubmitting}
-          className={`flex-1 py-4 rounded-2xl font-bold text-xs tracking-wider text-center transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${
-            canSubmit && !isSubmitting
-              ? 'bg-[#946F48] text-white shadow-md shadow-[#946F48]/15 hover:bg-[#745432]'
-              : 'bg-gray-250 text-gray-400 cursor-not-allowed border border-gray-300/10'
-          }`}
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="w-4.5 h-4.5 animate-spin" />
-              <span>Memproses...</span>
-            </>
-          ) : orderType === 'PICKUP' && (!pickupDate || !pickupTime) ? (
-            'Waktu Ambil Kosong'
-          ) : orderType === 'DELIVERY' && !deliveryAddress ? (
-            'Pilih Alamat Kirim'
-          ) : (
-            `BAYAR SEKARANG - ${formatRupiah(grandTotal)}`
-          )}
-        </button>
+
+        <div className="p-4 flex items-center justify-between gap-3">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total</span>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-serif font-black text-lg text-gray-900 leading-none">
+                {formatRupiah(grandTotal)}
+              </span>
+              {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
+                <span className="text-[10px] text-gray-400 line-through">
+                  {formatRupiah(subtotal + shippingFee)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {orderType === 'PICKUP' && (
+              <button
+                type="button"
+                onClick={() => setIsScheduleModalOpen(true)}
+                className="flex items-center justify-center gap-1 px-3 py-3.5 rounded-xl border border-gray-200 text-[#8C7864] font-bold text-xs bg-white active:scale-95 transition-all"
+              >
+                <Clock className="w-4 h-4 text-[#8C7864]" />
+                <span>{pickupTime === 'Sekarang' ? 'Jadwal' : pickupTime}</span>
+              </button>
+            )}
+            
+            <button
+              type="button"
+              onClick={() => {
+                if (canSubmit && !isSubmitting) {
+                  handleSubmit(onSubmit)();
+                }
+              }}
+              disabled={!canSubmit || isSubmitting}
+              className={`px-6 py-3.5 rounded-xl font-bold text-xs tracking-wider text-center transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${
+                canSubmit && !isSubmitting
+                  ? 'bg-[#B82B32] text-white shadow-md shadow-[#B82B32]/10 hover:bg-[#9B2026]'
+                  : 'bg-gray-250 text-gray-400 cursor-not-allowed border border-gray-300/10'
+              }`}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Memproses...</span>
+                </>
+              ) : (
+                'Pilih Pembayaran'
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Pickup Schedule Modal (Framer Motion spring based wheel) */}
@@ -1163,6 +1330,288 @@ export default function CheckoutPage() {
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Voucher Selection Modal */}
+      <AnimatePresence>
+        {isVoucherModalOpen && (
+          <div className="fixed inset-0 z-[100] flex flex-col bg-[#FFFBF5] select-none">
+            {/* Header */}
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 flex items-center justify-between px-6 py-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setIsVoucherModalOpen(false)}
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 text-gray-700 transition-colors"
+                >
+                  <ArrowLeft className="w-6 h-6" />
+                </button>
+                <h2 className="font-serif font-black text-xl text-gray-900">Vouchers</h2>
+              </div>
+              <button type="button" className="p-2 hover:bg-gray-50 rounded-full text-gray-700 transition-colors">
+                <Ticket className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Tabs: Vouchers vs Voucher Pack */}
+            <div className="p-4 bg-gray-50 flex gap-2 border-b border-gray-100">
+              <button
+                type="button"
+                onClick={() => setVoucherModalTab('vouchers')}
+                className={`flex-1 py-3 text-center rounded-2xl font-bold text-sm transition-all ${
+                  voucherModalTab === 'vouchers'
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50'
+                    : 'text-gray-500 hover:bg-white/50'
+                }`}
+              >
+                Vouchers
+              </button>
+              <button
+                type="button"
+                onClick={() => setVoucherModalTab('pack')}
+                className={`flex-1 py-3 text-center rounded-2xl font-bold text-sm transition-all ${
+                  voucherModalTab === 'pack'
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50'
+                    : 'text-gray-500 hover:bg-white/50'
+                }`}
+              >
+                Voucher Pack
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+              {/* Search input */}
+              <div className="relative">
+                <Ticket className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#B48A5E]" />
+                <input
+                  value={voucherSearchQuery}
+                  onChange={(e) => setVoucherSearchQuery(e.target.value)}
+                  placeholder="Masukkan kode voucher ..."
+                  className="w-full pl-12 pr-24 py-4 rounded-2xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] shadow-sm"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!voucherSearchQuery.trim()) return;
+                    setVoucherLoading(true);
+                    try {
+                      const res = await fetch('/api/checkout/validate-voucher', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: voucherSearchQuery.trim() })
+                      });
+                      const d = await res.json();
+                      if (!res.ok) throw new Error(d.error);
+                      setAppliedVoucher(d.voucher);
+                      setIsVoucherModalOpen(false);
+                      setToast({ message: 'Voucher berhasil diterapkan!', type: 'success' });
+                    } catch (err: any) {
+                      setToast({ message: err.message || 'Gagal menggunakan voucher', type: 'error' });
+                    } finally {
+                      setVoucherLoading(false);
+                    }
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2.5 bg-[#B48A5E] text-white rounded-xl font-bold text-xs hover:bg-[#946F48] transition-all"
+                >
+                  Pakai
+                </button>
+              </div>
+
+              {/* Filters bar */}
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                {(['semua', 'diskon', 'cashback', 'delivery'] as const).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setSelectedVoucherFilter(f)}
+                    className={`px-4.5 py-2 rounded-full border text-xs font-bold capitalize transition-all whitespace-nowrap ${
+                      selectedVoucherFilter === f
+                        ? 'border-[#B48A5E] text-[#B48A5E] bg-[#FFF8F0]'
+                        : 'border-gray-200 text-gray-500 bg-white hover:bg-gray-50'
+                    }`}
+                  >
+                    {f === 'semua' ? 'Semua' : f === 'delivery' ? 'Delivery' : f}
+                  </button>
+                ))}
+              </div>
+
+              {loadingVouchers ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E]" />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {voucherModalTab === 'vouchers' ? (
+                    <>
+                      {/* Available & Usable Vouchers */}
+                      {usableVouchers.length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="font-serif font-black text-sm text-gray-800 flex items-center gap-1.5">
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                            Diskon & Cashback
+                          </h3>
+                          <div className="space-y-3.5">
+                            {usableVouchers.map((v) => (
+                              <div
+                                key={v.id}
+                                className="relative border border-emerald-150 rounded-2xl bg-white p-5 shadow-sm overflow-hidden"
+                              >
+                                <div className="absolute left-0 top-[70%] -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-r border-emerald-150 z-10" />
+                                <div className="absolute right-0 top-[70%] translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-l border-emerald-150 z-10" />
+                                
+                                <div className="pb-3.5 border-b border-dashed border-gray-150 flex items-start justify-between gap-4">
+                                  <div className="space-y-1">
+                                    <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50">
+                                      {v.type}
+                                    </span>
+                                    <h4 className="font-serif font-black text-base text-gray-900 leading-snug">{v.description}</h4>
+                                    <p className="text-[11px] text-gray-400">Kode: {v.code}</p>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setAppliedVoucher(v);
+                                      setIsVoucherModalOpen(false);
+                                      setToast({ message: 'Voucher berhasil diterapkan!', type: 'success' });
+                                    }}
+                                    className="px-4 py-2 bg-[#B48A5E] text-white rounded-xl font-bold text-xs hover:bg-[#946F48] transition-all shrink-0"
+                                  >
+                                    Gunakan
+                                  </button>
+                                </div>
+                                <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400">
+                                  <span>Berlaku hingga {v.expiresAt ? new Date(v.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Selamanya'}</span>
+                                  <span className="text-[#B48A5E] font-bold hover:underline cursor-pointer">Detail</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Voucher Belum Bisa Dipakai (Unusable Vouchers) */}
+                      {unusableVouchers.length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="font-serif font-black text-sm text-gray-500">
+                            Voucher Belum Bisa dipakai
+                          </h3>
+                          <div className="space-y-3.5 opacity-70">
+                            {unusableVouchers.map((v) => (
+                              <div
+                                key={v.id}
+                                className="relative border border-gray-200 rounded-2xl bg-white p-5 shadow-sm overflow-hidden"
+                              >
+                                <div className="absolute left-0 top-[70%] -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-r border-gray-250 z-10" />
+                                <div className="absolute right-0 top-[70%] translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-l border-gray-250 z-10" />
+                                
+                                <div className="pb-3.5 border-b border-dashed border-gray-150 flex items-start justify-between gap-4">
+                                  <div className="space-y-1">
+                                    <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100">
+                                      {v.type}
+                                    </span>
+                                    <h4 className="font-serif font-black text-base text-gray-700 leading-snug">{v.description}</h4>
+                                    <p className="text-[11px] text-red-500 font-bold">Min. Belanja {formatRupiah(v.template?.minPurchase || v.minPurchase || 0)}</p>
+                                    <p className="text-[11px] text-gray-400">Kode: {v.code}</p>
+                                  </div>
+                                  <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-150 flex items-center justify-center text-gray-400 shrink-0">
+                                    <Ticket className="w-5.5 h-5.5" />
+                                  </div>
+                                </div>
+                                <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400">
+                                  <span>Berlaku hingga {v.expiresAt ? new Date(v.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Selamanya'}</span>
+                                  <span className="text-blue-500 font-bold hover:underline cursor-pointer">Detail</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {usableVouchers.length === 0 && unusableVouchers.length === 0 && (
+                        <div className="text-center py-12 text-gray-400 text-sm font-medium">
+                          Tidak ada voucher tersedia
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    // Voucher Pack / Templates to Claim
+                    <div className="space-y-3.5">
+                      {claimableTemplates.map((t) => (
+                        <div
+                          key={t.id}
+                          className="relative border border-amber-100 rounded-2xl bg-white p-5 shadow-sm overflow-hidden"
+                        >
+                          <div className="absolute left-0 top-[70%] -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-r border-amber-100 z-10" />
+                          <div className="absolute right-0 top-[70%] translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-l border-amber-100 z-10" />
+                          
+                          <div className="pb-3.5 border-b border-dashed border-gray-150 flex items-start justify-between gap-4">
+                            <div className="space-y-1">
+                              <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-50">
+                                {t.type}
+                              </span>
+                              <h4 className="font-serif font-black text-base text-gray-900 leading-snug">{t.title}</h4>
+                              <p className="text-[11px] text-gray-500 leading-relaxed">{t.description}</p>
+                              <p className="text-[10px] text-[#B48A5E] font-bold mt-1">Kode: {t.code}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch('/api/user/vouchers/claim', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ code: t.code })
+                                  });
+                                  const d = await res.json();
+                                  if (!res.ok) throw new Error(d.error);
+                                  setToast({ message: 'Voucher berhasil diklaim!', type: 'success' });
+                                  fetchVouchers();
+                                } catch (err: any) {
+                                  setToast({ message: err.message || 'Gagal mengklaim voucher', type: 'error' });
+                                }
+                              }}
+                              className="px-4.5 py-2 border-2 border-[#B48A5E] text-[#B48A5E] hover:bg-[#B48A5E] hover:text-white rounded-xl font-bold text-xs transition-all shrink-0"
+                            >
+                              Klaim
+                            </button>
+                          </div>
+                          <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400">
+                            <span>Masa Berlaku hingga {t.expiresAt ? new Date(t.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '30 Hari'}</span>
+                            <span className="text-[#B48A5E] font-bold hover:underline cursor-pointer">Detail</span>
+                          </div>
+                        </div>
+                      ))}
+
+                      {claimableTemplates.length === 0 && (
+                        <div className="text-center py-12 text-gray-400 text-sm font-medium">
+                          Tidak ada voucher pack baru untuk diklaim
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Fullscreen Map Picker Modal rendered at root level to prevent stacking context conflicts */}
+      <AnimatePresence>
+        {isMapOpen && (
+          <MapPicker
+            isOpen={isMapOpen}
+            onClose={() => setIsMapOpen(false)}
+            onLocationSelect={(data) => {
+              setDeliveryAddress(data);
+              setIsMapOpen(false);
+            }}
+            initialLat={deliveryAddress?.lat}
+            initialLng={deliveryAddress?.lng}
+            deliveryFeePerKm={storeSettings.deliveryFeePerKm}
+            maxDeliveryDistance={storeSettings.maxDeliveryDistance}
+          />
         )}
       </AnimatePresence>
     </div>

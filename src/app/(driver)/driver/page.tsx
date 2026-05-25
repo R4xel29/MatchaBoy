@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Power, MapPin, Package, Navigation, Phone, Check, Loader2, AlertTriangle, Truck } from 'lucide-react';
+import { Power, MapPin, Package, Navigation, Phone, Check, Loader2, AlertTriangle, Truck, MessageCircle } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
@@ -24,6 +24,21 @@ interface Order {
   status: string;
   items: OrderItem[];
 }
+
+const formatWhatsAppNumber = (phone: string) => {
+  let cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.startsWith('08')) {
+    cleaned = '62' + cleaned.substring(1);
+  } else if (cleaned.startsWith('8')) {
+    cleaned = '62' + cleaned;
+  }
+  return cleaned;
+};
+
+const getDriverWhatsAppTemplate = (order: any) => {
+  const orderIdShort = order.id.slice(-4).toUpperCase();
+  return `Halo ${order.customerName}, saya kurir dari *Matchaboy* yang mengantarkan pesanan Anda *#${orderIdShort}*. Saya sedang dalam perjalanan menuju lokasi Anda. Mohon standby ya. Terima kasih! 🛵`;
+};
 
 export default function DriverDashboardPage() {
   const { data: session } = useSession();
@@ -80,10 +95,14 @@ export default function DriverDashboardPage() {
     return () => clearInterval(interval);
   }, []);
 
+  // Derive stable boolean for GPS effect dependency
+  const hasActiveDelivery = useMemo(
+    () => orders.some(o => o.status === 'ON_DELIVERY'),
+    [orders]
+  );
+
   // GPS Streaming Logic
   useEffect(() => {
-    const hasActiveDelivery = orders.some(o => o.status === 'ON_DELIVERY');
-    
     const sendLocation = (lat: number, lng: number) => {
       fetch('/api/driver/location', {
         method: 'PUT',
@@ -94,7 +113,7 @@ export default function DriverDashboardPage() {
 
     if (isOnline && hasActiveDelivery) {
       if ('geolocation' in navigator) {
-        // Start watching position
+        // Use watchPosition only (no duplicate setInterval)
         const watchId = navigator.geolocation.watchPosition(
           (pos) => {
             const lat = pos.coords.latitude;
@@ -107,26 +126,12 @@ export default function DriverDashboardPage() {
           { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
         );
 
-        // Fallback polling if watchPosition is not triggering often enough
-        locationIntervalRef.current = setInterval(() => {
-          navigator.geolocation.getCurrentPosition((pos) => {
-             const lat = pos.coords.latitude;
-             const lng = pos.coords.longitude;
-             setDriverLat(lat);
-             setDriverLng(lng);
-             sendLocation(lat, lng);
-          }, () => {}, { enableHighAccuracy: true });
-        }, 10000);
-
         return () => {
           navigator.geolocation.clearWatch(watchId);
-          if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
         };
       }
-    } else {
-      if (locationIntervalRef.current) clearInterval(locationIntervalRef.current);
     }
-  }, [isOnline, orders]);
+  }, [isOnline, hasActiveDelivery]);
 
   const toggleOnline = async () => {
     if (driverStatus !== 'APPROVED') {
@@ -298,9 +303,20 @@ export default function DriverDashboardPage() {
                       <h4 className="font-bold text-gray-900 text-sm">{order.customerName}</h4>
                       <p className="text-xs text-gray-500 mt-0.5">{order.items.length} item • {formatRupiah(order.total)}</p>
                     </div>
-                    <a href={`tel:${order.customerPhone}`} className="p-2.5 rounded-full bg-green-50 text-green-600 hover:bg-green-100 transition-colors">
-                      <Phone className="w-4 h-4" />
-                    </a>
+                    <div className="flex gap-2">
+                      <a href={`tel:${order.customerPhone}`} className="p-2.5 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors" title="Hubungi Telepon">
+                        <Phone className="w-4 h-4" />
+                      </a>
+                      <a
+                        href={`https://wa.me/${formatWhatsAppNumber(order.customerPhone)}?text=${encodeURIComponent(getDriverWhatsAppTemplate(order))}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2.5 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                        title="Kirim Pesan WhatsApp"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                      </a>
+                    </div>
                   </div>
 
                   <div className="flex items-start gap-3 bg-gray-50 rounded-xl p-3 mb-4">

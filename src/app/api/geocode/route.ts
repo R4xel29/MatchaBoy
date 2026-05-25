@@ -123,12 +123,32 @@ export async function GET(req: Request) {
           }
         }
       } else if (query) {
-        const url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&location=${baseLat},${baseLng}&radius=30000&language=id&key=${googleKey}`
-        const res = await fetch(url)
+        const url = 'https://places.googleapis.com/v1/places:searchText'
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': googleKey,
+            'X-Goog-FieldMask': 'places.displayName,places.formattedAddress,places.location,places.types'
+          },
+          body: JSON.stringify({
+            textQuery: query,
+            languageCode: 'id',
+            locationBias: {
+              circle: {
+                center: {
+                  latitude: baseLat,
+                  longitude: baseLng
+                },
+                radius: 30000.0
+              }
+            }
+          })
+        })
         if (res.ok) {
           const data = await res.json()
-          if (data.results && Array.isArray(data.results)) {
-            const mapped = data.results.map((place: any) => {
+          if (data.places && Array.isArray(data.places) && data.places.length > 0) {
+            const mapped = data.places.map((place: any) => {
               const primaryType = place.types?.[0] || 'establishment'
               let osmClass = 'place'
               let osmType = primaryType
@@ -149,10 +169,13 @@ export async function GET(req: Request) {
                 osmClass = 'tourism'; osmType = 'hotel'
               }
 
+              const name = place.displayName?.text || ''
+              const formattedAddress = place.formattedAddress || ''
+
               return {
-                display_name: `${place.name}, ${place.formatted_address}`,
-                lat: place.geometry?.location?.lat?.toString() || '0',
-                lon: place.geometry?.location?.lng?.toString() || '0',
+                display_name: name && formattedAddress ? `${name}, ${formattedAddress}` : (name || formattedAddress),
+                lat: place.location?.latitude?.toString() || '0',
+                lon: place.location?.longitude?.toString() || '0',
                 class: osmClass,
                 type: osmType
               }

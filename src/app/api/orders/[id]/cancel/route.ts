@@ -50,10 +50,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: `Cancellation time limit of ${timeLimitMinutes} minutes has passed` }, { status: 400 })
     }
 
+    let reason = 'Dibatalkan oleh Pelanggan';
+    try {
+      const body = await req.json();
+      if (body.reason) {
+        reason = body.reason;
+      }
+    } catch {
+      // Body may be empty or not JSON
+    }
+
     // Proceed to cancel
     const updatedOrder = await prisma.order.update({
       where: { id },
-      data: { status: 'CANCELLED' }
+      data: { 
+        status: 'CANCELLED',
+        cancelReason: reason
+      }
     })
 
     // Log the action
@@ -63,7 +76,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         action: 'CANCEL',
         entity: 'ORDER',
         entityId: id,
-        details: 'User cancelled COD order within time limit'
+        details: `User cancelled COD order: ${reason}`
       }
     })
 

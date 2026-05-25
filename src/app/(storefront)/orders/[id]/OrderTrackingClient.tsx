@@ -22,7 +22,7 @@ import {
   Leaf,
   CreditCard,
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatRupiah } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 
@@ -31,6 +31,7 @@ const LeafletTracking = dynamic(() => import('@/components/storefront/MapboxTrac
 export type TrackingOrderShape = {
   id: string;
   status: string;
+  cancelReason?: string | null;
   customerName: string;
   customerPhone: string;
   address: string;
@@ -116,7 +117,10 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
 
   const [copied, setCopied] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(order.status);
+  const [cancelReasonState, setCancelReasonState] = useState<string | null>(order.cancelReason || null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const statusRef = useRef(currentStatus);
+  statusRef.current = currentStatus;
 
   // Auto-redirect to payment page if Doku payment is pending
   useEffect(() => {
@@ -130,6 +134,8 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   const [showCancelSuccess, setShowCancelSuccess] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelError, setCancelError] = useState('');
+  const [selectedCancelReason, setSelectedCancelReason] = useState('Ingin mengubah pesanan (item/alamat)');
+  const [customCancelReason, setCustomCancelReason] = useState('');
 
   // Confirmation states
   const [isConfirming, setIsConfirming] = useState(false);
@@ -141,13 +147,16 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
       const res = await fetch(`/api/orders/${orderId}/status`);
       if (res.ok) {
         const data = await res.json();
-        if (data.status !== currentStatus) {
+        if (data.status !== statusRef.current) {
           setCurrentStatus(data.status);
           setLastUpdated(new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
         }
+        if (data.cancelReason) {
+          setCancelReasonState(data.cancelReason);
+        }
       }
     } catch {}
-  }, [orderId, currentStatus]);
+  }, [orderId]);
 
   useEffect(() => {
     // Don't poll if order is already completed/delivered
@@ -168,9 +177,15 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     setIsCancelling(true);
     setCancelError('');
     try {
-      const res = await fetch(`/api/orders/${orderId}/cancel`, { method: 'POST' });
+      const finalReason = selectedCancelReason === 'Lainnya' ? (customCancelReason.trim() || 'Lainnya') : selectedCancelReason;
+      const res = await fetch(`/api/orders/${orderId}/cancel`, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: finalReason })
+      });
       if (res.ok) {
         setCurrentStatus('CANCELLED');
+        setCancelReasonState(finalReason);
         setShowCancelConfirm(false);
         setShowCancelSuccess(true);
       } else {
@@ -243,7 +258,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl gradient-brand text-white p-5 relative overflow-hidden"
+          className={`rounded-2xl text-white p-5 relative overflow-hidden ${
+            currentStatus === 'CANCELLED' ? 'bg-gradient-to-r from-slate-600 to-slate-700' : 'gradient-brand'
+          }`}
         >
           <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/5 -mr-10 -mt-10" />
           <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-white/5 -ml-8 -mb-8" />
@@ -345,7 +362,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           </div>
 
           {/* Auto-refresh indicator */}
-          {!isFinished && (
+          {!isFinished && currentStatus !== 'CANCELLED' && (
             <div className="flex items-center justify-center gap-1.5 text-[10px] text-muted-foreground">
               <RefreshCw className="w-3 h-3 animate-spin" />
               <span>Update otomatis setiap 10 detik</span>
@@ -358,6 +375,16 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
               <p className="text-sm font-bold text-emerald-800">Pesanan Selesai!</p>
               <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Arus</p>
+            </div>
+          )}
+
+          {currentStatus === 'CANCELLED' && (
+            <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-center">
+              <AlertTriangle className="w-8 h-8 text-red-650 mx-auto mb-2" />
+              <p className="text-sm font-bold text-red-800">Pesanan Dibatalkan</p>
+              <p className="text-xs text-red-600 mt-1 font-semibold">
+                Alasan: {cancelReasonState || 'Tidak ada alasan khusus'}
+              </p>
             </div>
           )}
 
@@ -520,20 +547,58 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-card rounded-2xl shadow-xl overflow-hidden"
+              className="w-full max-w-md bg-card rounded-2xl shadow-xl overflow-hidden"
             >
-              <div className="p-6 text-center">
-                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertTriangle className="w-8 h-8" />
+              <div className="p-6">
+                <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <AlertTriangle className="w-6 h-6" />
                 </div>
-                <h3 className="text-lg font-bold text-foreground mb-2">Batalkan Pesanan?</h3>
-                <p className="text-sm text-muted-foreground mb-6">
-                  Tindakan ini tidak dapat dibatalkan. Apakah Anda yakin ingin membatalkan pesanan ini?
+                <h3 className="text-lg font-bold text-center text-foreground mb-1">Batalkan Pesanan?</h3>
+                <p className="text-xs text-center text-muted-foreground mb-4">
+                  Tindakan ini tidak dapat dibatalkan. Mengapa Anda ingin membatalkan pesanan ini?
                 </p>
-                
+
                 {cancelError && (
-                  <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600 text-left">
+                  <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
                     {cancelError}
+                  </div>
+                )}
+
+                <div className="space-y-2 mb-4">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pilih Alasan</label>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {[
+                      'Ingin mengubah pesanan (item/alamat)',
+                      'Salah pilih metode pembayaran',
+                      'Pengiriman terlalu lama / berubah pikiran',
+                      'Lainnya'
+                    ].map((reasonOption) => (
+                      <button
+                        key={reasonOption}
+                        type="button"
+                        onClick={() => setSelectedCancelReason(reasonOption)}
+                        className={`w-full py-2 px-3 rounded-xl border text-left text-xs font-semibold transition-all ${
+                          selectedCancelReason === reasonOption
+                            ? 'border-red-500 bg-red-50 text-red-700 shadow-sm'
+                            : 'border-border/60 hover:bg-muted text-foreground'
+                        }`}
+                      >
+                        {reasonOption}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {selectedCancelReason === 'Lainnya' && (
+                  <div className="space-y-1 mb-4 animate-in slide-in-from-top-1 duration-200">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Tulis Alasan Lainnya</label>
+                    <textarea
+                      value={customCancelReason}
+                      onChange={(e) => setCustomCancelReason(e.target.value)}
+                      placeholder="Masukkan alasan pembatalan..."
+                      rows={2}
+                      className="w-full p-2.5 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-foreground"
+                    />
                   </div>
                 )}
 
@@ -541,16 +606,16 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   <button
                     onClick={() => setShowCancelConfirm(false)}
                     disabled={isCancelling}
-                    className="flex-1 py-3 px-4 rounded-xl border border-border font-semibold text-sm hover:bg-muted transition-colors disabled:opacity-50"
+                    className="flex-1 py-2.5 px-4 rounded-xl border border-border font-semibold text-xs hover:bg-muted transition-colors disabled:opacity-50 text-foreground"
                   >
                     Kembali
                   </button>
                   <button
                     onClick={handleCancelOrder}
-                    disabled={isCancelling}
-                    className="flex-1 py-3 px-4 rounded-xl bg-red-600 text-white font-semibold text-sm hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+                    disabled={isCancelling || (selectedCancelReason === 'Lainnya' && !customCancelReason.trim())}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center"
                   >
-                    {isCancelling ? <RefreshCw className="w-4 h-4 animate-spin" /> : 'Ya, Batalkan'}
+                    {isCancelling ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Ya, Batalkan'}
                   </button>
                 </div>
               </div>

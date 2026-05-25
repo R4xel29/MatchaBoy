@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Ticket, Plus, Edit, Trash2, Search, Calendar, DollarSign, Percent, 
@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 import Image from 'next/image'
+import { LoadingScreen } from '@/components/ui/LoadingScreen'
 
 interface ProductSelectOption {
   id: string
@@ -22,15 +23,16 @@ interface VoucherTemplateShape {
   code: string
   title: string
   description: string
-  bannerUrl: string | null
-  discountType: 'PERCENTAGE' | 'NOMINAL'
+  bannerImage: string | null
+  type: string
   discountValue: number
-  minSpend: number
-  maxClaims: number
-  claimedCount: number
-  startDate: string
-  endDate: string
-  validProductIds: string[]
+  minPurchase: number
+  maxDiscount: number | null
+  validProductIds: string | null
+  terms: string
+  expiresAt: string | null
+  usageLimit: number
+  usageCount: number
   createdAt: string
 }
 
@@ -47,19 +49,20 @@ export default function VoucherAdminClient({
   
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'ALL' | 'PERCENTAGE' | 'NOMINAL'>('ALL')
+  const [typeFilter, setTypeFilter] = useState<string>('ALL')
   
   // Form State
   const [code, setCode] = useState('')
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
-  const [bannerUrl, setBannerUrl] = useState<string | null>(null)
-  const [discountType, setDiscountType] = useState<'PERCENTAGE' | 'NOMINAL'>('NOMINAL')
+  const [bannerImage, setBannerImage] = useState<string | null>(null)
+  const [type, setType] = useState('DISCOUNT_RP')
   const [discountValue, setDiscountValue] = useState(0)
-  const [minSpend, setMinSpend] = useState(0)
-  const [maxClaims, setMaxClaims] = useState(100)
-  const [startDate, setStartDate] = useState('')
-  const [endDate, setEndDate] = useState('')
+  const [minPurchase, setMinPurchase] = useState(0)
+  const [maxDiscount, setMaxDiscount] = useState<number | null>(null)
+  const [terms, setTerms] = useState('')
+  const [expiresAt, setExpiresAt] = useState('')
+  const [usageLimit, setUsageLimit] = useState(100)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
   
   // UI States
@@ -67,17 +70,35 @@ export default function VoucherAdminClient({
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [productSearch, setProductSearch] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Reset errors when modal is opened or closed
+  useEffect(() => {
+    if (!isOpenForm) {
+      setErrors({})
+    }
+  }, [isOpenForm])
+
+  // Clear a specific field error when user starts editing
+  const clearError = (field: string) => {
+    if (errors[field]) {
+      setErrors(prev => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
+  }
 
   // Statistics
   const stats = useMemo(() => {
     const total = templates.length
     const active = templates.filter(t => {
-      const now = new Date().getTime()
-      const start = new Date(t.startDate).getTime()
-      const end = new Date(t.endDate).getTime()
-      return now >= start && now <= end
+      if (!t.expiresAt) return true
+      return new Date(t.expiresAt).getTime() >= new Date().getTime()
     }).length
-    const totalClaims = templates.reduce((sum, t) => sum + t.claimedCount, 0)
+    const totalClaims = templates.reduce((sum, t) => sum + t.usageCount, 0)
     return { total, active, totalClaims }
   }, [templates])
 
@@ -86,7 +107,7 @@ export default function VoucherAdminClient({
     return templates.filter(t => {
       const matchesSearch = t.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             t.title.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesType = typeFilter === 'ALL' || t.discountType === typeFilter
+      const matchesType = typeFilter === 'ALL' || t.type === typeFilter
       return matchesSearch && matchesType
     })
   }, [templates, searchQuery, typeFilter])
@@ -153,7 +174,7 @@ export default function VoucherAdminClient({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Gagal mengunggah banner')
       
-      setBannerUrl(data.url)
+      setBannerImage(data.url)
     } catch (e: any) {
       console.error(e)
       setUploadError(e.message || 'Gagal mengompresi dan mengunggah gambar.')
@@ -167,18 +188,19 @@ export default function VoucherAdminClient({
     setCode('')
     setTitle('')
     setDescription('')
-    setBannerUrl(null)
-    setDiscountType('NOMINAL')
+    setBannerImage(null)
+    setType('DISCOUNT_RP')
     setDiscountValue(0)
-    setMinSpend(0)
-    setMaxClaims(100)
+    setMinPurchase(0)
+    setMaxDiscount(null)
+    setTerms('')
+    setUsageLimit(100)
     
-    // Default dates (today to next month)
-    const today = new Date().toISOString().split('T')[0]
+    // Default expiry (next month)
     const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    setStartDate(today)
-    setEndDate(nextMonth)
+    setExpiresAt(nextMonth)
     setSelectedProductIds([])
+    setErrors({})
     setIsOpenForm(true)
   }
 
@@ -187,14 +209,17 @@ export default function VoucherAdminClient({
     setCode(t.code)
     setTitle(t.title)
     setDescription(t.description)
-    setBannerUrl(t.bannerUrl)
-    setDiscountType(t.discountType)
+    setBannerImage(t.bannerImage)
+    setType(t.type)
     setDiscountValue(t.discountValue)
-    setMinSpend(t.minSpend)
-    setMaxClaims(t.maxClaims)
-    setStartDate(new Date(t.startDate).toISOString().split('T')[0])
-    setEndDate(new Date(t.endDate).toISOString().split('T')[0])
-    setSelectedProductIds(t.validProductIds || [])
+    setMinPurchase(t.minPurchase)
+    setMaxDiscount(t.maxDiscount)
+    setTerms(t.terms)
+    setExpiresAt(t.expiresAt ? new Date(t.expiresAt).toISOString().split('T')[0] : '')
+    setUsageLimit(t.usageLimit)
+    const parsed = t.validProductIds ? JSON.parse(t.validProductIds) : []
+    setSelectedProductIds(Array.isArray(parsed) ? parsed : [])
+    setErrors({})
     setIsOpenForm(true)
   }
 
@@ -218,8 +243,53 @@ export default function VoucherAdminClient({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!code || !title || !description || !startDate || !endDate) {
-      alert("Mohon isi semua field wajib.")
+    
+    // Custom Validation
+    const newErrors: Record<string, string> = {}
+    if (!code.trim()) {
+      newErrors.code = "Kode voucher wajib diisi."
+    } else if (!/^[A-Z0-9_-]+$/.test(code.trim())) {
+      newErrors.code = "Kode voucher hanya boleh berisi huruf kapital, angka, tanda hubung (-), dan garis bawah (_)."
+    }
+
+    if (!title.trim()) {
+      newErrors.title = "Judul voucher wajib diisi."
+    }
+
+    if (!description.trim()) {
+      newErrors.description = "Deskripsi / peraturan voucher wajib diisi."
+    }
+
+    if (discountValue === undefined || discountValue === null || isNaN(discountValue) || discountValue <= 0) {
+      newErrors.discountValue = "Nilai potongan harus lebih besar dari 0."
+    } else if (type === 'DISCOUNT_PCT' && discountValue > 100) {
+      newErrors.discountValue = "Nilai potongan persentase maksimal adalah 100%."
+    }
+
+    if (minPurchase === undefined || minPurchase === null || isNaN(minPurchase) || minPurchase < 0) {
+      newErrors.minPurchase = "Minimal total belanja tidak boleh bernilai negatif."
+    }
+
+    if (usageLimit === undefined || usageLimit === null || isNaN(usageLimit) || usageLimit < 0) {
+      newErrors.usageLimit = "Kuota klaim tidak boleh bernilai negatif."
+    }
+
+    if (!terms.trim()) {
+      newErrors.terms = "Syarat dan ketentuan voucher wajib diisi."
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors)
+      
+      // Auto-focus and scroll to the first field with an error
+      const firstErrorField = Object.keys(newErrors)[0]
+      const element = document.getElementsByName(firstErrorField)[0] || document.getElementById(firstErrorField)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (typeof (element as any).focus === 'function') {
+          (element as any).focus()
+        }
+      }
       return
     }
 
@@ -227,16 +297,18 @@ export default function VoucherAdminClient({
       code: code.trim().toUpperCase(),
       title,
       description,
-      bannerUrl,
-      discountType,
+      bannerImage,
+      type,
       discountValue: Number(discountValue),
-      minSpend: Number(minSpend),
-      maxClaims: Number(maxClaims),
-      startDate: new Date(startDate).toISOString(),
-      endDate: new Date(endDate).toISOString(),
+      minPurchase: Number(minPurchase),
+      maxDiscount: maxDiscount ? Number(maxDiscount) : null,
+      terms,
+      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+      usageLimit: Number(usageLimit),
       validProductIds: selectedProductIds
     }
 
+    setIsSaving(true)
     try {
       const url = '/api/admin/vouchers'
       const method = editingTemplate ? 'PUT' : 'POST'
@@ -259,6 +331,8 @@ export default function VoucherAdminClient({
       setIsOpenForm(false)
     } catch (err: any) {
       alert(err.message || "Gagal menyimpan voucher")
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -334,8 +408,8 @@ export default function VoucherAdminClient({
         <div className="flex gap-2 w-full md:w-auto overflow-x-auto shrink-0">
           {[
             { id: 'ALL', label: 'Semua Tipe' },
-            { id: 'NOMINAL', label: 'Diskon Nominal' },
-            { id: 'PERCENTAGE', label: 'Diskon Persentase' }
+            { id: 'DISCOUNT_RP', label: 'Diskon Nominal' },
+            { id: 'DISCOUNT_PCT', label: 'Diskon Persentase' }
           ].map((opt) => (
             <button
               key={opt.id}
@@ -366,9 +440,9 @@ export default function VoucherAdminClient({
             >
               {/* Banner image or placeholder */}
               <div className="relative h-40 bg-gray-150 w-full shrink-0 flex items-center justify-center">
-                {t.bannerUrl ? (
+                {t.bannerImage ? (
                   <Image 
-                    src={t.bannerUrl} 
+                    src={t.bannerImage} 
                     alt={t.title} 
                     fill 
                     className="object-cover" 
@@ -383,9 +457,9 @@ export default function VoucherAdminClient({
                 
                 {/* Discount Badge */}
                 <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-md text-white font-extrabold text-[10px] tracking-wide uppercase flex items-center gap-1">
-                  {t.discountType === 'PERCENTAGE' ? <Percent className="w-3.5 h-3.5" /> : <DollarSign className="w-3.5 h-3.5" />}
+                  {t.type === 'DISCOUNT_PCT' ? <Percent className="w-3.5 h-3.5" /> : <DollarSign className="w-3.5 h-3.5" />}
                   <span>
-                    {t.discountType === 'PERCENTAGE' 
+                    {t.type === 'DISCOUNT_PCT' 
                       ? `Potongan ${t.discountValue}%` 
                       : `Potongan ${formatRupiah(t.discountValue)}`}
                   </span>
@@ -400,7 +474,7 @@ export default function VoucherAdminClient({
                       {t.code}
                     </span>
                     <span className="text-[9px] font-extrabold text-gray-400 uppercase tracking-widest">
-                      Klaim: {t.claimedCount} / {t.maxClaims}
+                      Klaim: {t.usageCount}{t.usageLimit > 0 ? ` / ${t.usageLimit}` : ' (∞)'}
                     </span>
                   </div>
                   <h3 className="font-serif font-black text-gray-900 leading-snug">{t.title}</h3>
@@ -410,19 +484,22 @@ export default function VoucherAdminClient({
                 <div className="space-y-2.5 pt-3 border-t border-gray-50 text-[11px] text-gray-500 font-medium">
                   <div className="flex justify-between">
                     <span>Min. Belanja:</span>
-                    <span className="font-bold text-gray-700">{formatRupiah(t.minSpend)}</span>
+                    <span className="font-bold text-gray-700">{formatRupiah(t.minPurchase)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Produk Valid:</span>
                     <span className="font-bold text-gray-700">
-                      {t.validProductIds.length === 0 ? "Semua Produk" : `${t.validProductIds.length} Item Terdaftar`}
+                      {(() => {
+                        const parsed = t.validProductIds ? JSON.parse(t.validProductIds) : []
+                        return Array.isArray(parsed) && parsed.length > 0 ? `${parsed.length} Item Terdaftar` : "Semua Produk"
+                      })()}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Durasi:</span>
+                    <span>Kadaluarsa:</span>
                     <span className="font-bold text-gray-700 flex items-center gap-1">
                       <Calendar className="w-3 h-3 text-[#B48A5E]" />
-                      {new Date(t.startDate).toLocaleDateString('id-ID', {day:'numeric', month:'short'})} - {new Date(t.endDate).toLocaleDateString('id-ID', {day:'numeric', month:'short'})}
+                      {t.expiresAt ? new Date(t.expiresAt).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'}) : 'Tanpa Batas'}
                     </span>
                   </div>
                 </div>
@@ -488,7 +565,7 @@ export default function VoucherAdminClient({
               </div>
 
               {/* Modal Scrollable Body */}
-              <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+              <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-6 space-y-6">
                 {/* 1. Main Info */}
                 <div className="space-y-4">
                   <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400 border-b border-gray-50 pb-2">
@@ -499,36 +576,69 @@ export default function VoucherAdminClient({
                       <label className="block text-xs font-semibold text-gray-500 mb-1.5">Kode Voucher *</label>
                       <input
                         type="text"
-                        required
+                        id="code"
+                        name="code"
                         value={code}
-                        onChange={(e) => setCode(e.target.value.toUpperCase())}
+                        onChange={(e) => { setCode(e.target.value.toUpperCase()); clearError('code') }}
                         placeholder="Contoh: PROMOSEKALI"
-                        className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-xs focus:outline-none focus:border-[#B48A5E] uppercase font-mono"
+                        className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none uppercase font-mono transition-all ${
+                          errors.code 
+                            ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                            : 'border-gray-200 focus:border-[#B48A5E]'
+                        }`}
                       />
+                      {errors.code && (
+                        <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {errors.code}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 mb-1.5">Judul Voucher *</label>
                       <input
                         type="text"
-                        required
+                        id="title"
+                        name="title"
                         value={title}
-                        onChange={(e) => setTitle(e.target.value)}
+                        onChange={(e) => { setTitle(e.target.value); clearError('title') }}
                         placeholder="Contoh: Diskon Matcha Mantap"
-                        className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-xs focus:outline-none focus:border-[#B48A5E]"
+                        className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
+                          errors.title 
+                            ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                            : 'border-gray-200 focus:border-[#B48A5E]'
+                        }`}
                       />
+                      {errors.title && (
+                        <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {errors.title}
+                        </p>
+                      )}
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 mb-1.5">Deskripsi / Peraturan *</label>
                     <textarea
-                      required
+                      id="description"
+                      name="description"
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={(e) => { setDescription(e.target.value); clearError('description') }}
                       placeholder="Tulis detail syarat, ketentuan, serta produk mana saja yang valid."
                       rows={3}
-                      className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-xs focus:outline-none focus:border-[#B48A5E]"
+                      className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
+                        errors.description 
+                          ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                            : 'border-gray-200 focus:border-[#B48A5E]'
+                      }`}
                     />
+                    {errors.description && (
+                      <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        {errors.description}
+                      </p>
+                    )}
                   </div>
 
                   {/* Banner Upload Card */}
@@ -558,12 +668,12 @@ export default function VoucherAdminClient({
                         </div>
                       </div>
                       <div className="relative h-28 bg-gray-100 rounded-3xl overflow-hidden flex items-center justify-center border border-gray-100 shadow-inner">
-                        {bannerUrl ? (
+                        {bannerImage ? (
                           <>
-                            <Image src={bannerUrl} alt="Preview Banner" fill className="object-cover" sizes="200px" />
+                            <Image src={bannerImage} alt="Preview Banner" fill className="object-cover" sizes="200px" />
                             <button
                               type="button"
-                              onClick={() => setBannerUrl(null)}
+                              onClick={() => setBannerImage(null)}
                               className="absolute top-1.5 right-1.5 p-1 bg-black/60 backdrop-blur-md rounded-full text-white hover:bg-black/80 transition-colors"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -585,80 +695,134 @@ export default function VoucherAdminClient({
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tipe Potongan *</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tipe Voucher *</label>
                       <select
-                        value={discountType}
-                        onChange={(e) => setDiscountType(e.target.value as any)}
+                        id="type"
+                        name="type"
+                        value={type}
+                        onChange={(e) => setType(e.target.value)}
                         className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E] bg-white"
                       >
-                        <option value="NOMINAL">Nominal Rupiah (Rp)</option>
-                        <option value="PERCENTAGE">Persentase (%)</option>
+                        <option value="DISCOUNT_RP">Diskon Nominal (Rp)</option>
+                        <option value="DISCOUNT_PCT">Diskon Persentase (%)</option>
+                        <option value="FREE_DRINK">Gratis Minuman</option>
+                        <option value="FREE_TOPPING">Gratis Topping</option>
+                        <option value="UPGRADE_SIZE">Upgrade Size</option>
+                        <option value="GRATIS_ONGKIR">Gratis Ongkir</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 mb-1.5">
-                        Nilai Potongan {discountType === 'PERCENTAGE' ? '(%)' : '(Rp)'} *
+                        Nilai Potongan {type === 'DISCOUNT_PCT' ? '(%)' : '(Rp)'} *
                       </label>
                       <input
                         type="number"
-                        required
+                        id="discountValue"
+                        name="discountValue"
                         min={0}
                         value={discountValue}
-                        onChange={(e) => setDiscountValue(Number(e.target.value))}
-                        className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E]"
+                        onChange={(e) => { setDiscountValue(Number(e.target.value)); clearError('discountValue') }}
+                        className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
+                          errors.discountValue 
+                            ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                            : 'border-gray-250 focus:border-[#B48A5E]'
+                        }`}
                       />
+                      {errors.discountValue && (
+                        <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {errors.discountValue}
+                        </p>
+                      )}
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Minimal Total Belanja (Rp) *</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Minimal Total Belanja (Rp)</label>
                       <input
                         type="number"
-                        required
+                        id="minPurchase"
+                        name="minPurchase"
                         min={0}
-                        value={minSpend}
-                        onChange={(e) => setMinSpend(Number(e.target.value))}
-                        className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E]"
+                        value={minPurchase}
+                        onChange={(e) => { setMinPurchase(Number(e.target.value)); clearError('minPurchase') }}
+                        className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
+                          errors.minPurchase 
+                            ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                            : 'border-gray-250 focus:border-[#B48A5E]'
+                        }`}
                       />
+                      {errors.minPurchase && (
+                        <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {errors.minPurchase}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* 3. Date constraints and quotas */}
+                {/* 3. Quota and Expiry */}
                 <div className="space-y-4 pt-2">
                   <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400 border-b border-gray-50 pb-2">
-                    Batasan Kuota & Tanggal
+                    Batasan Kuota & Kadaluarsa
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Kuota Klaim Maksimal *</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Kuota Klaim Maksimal (0 = tidak terbatas)</label>
                       <input
                         type="number"
-                        required
-                        min={1}
-                        value={maxClaims}
-                        onChange={(e) => setMaxClaims(Number(e.target.value))}
-                        className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E]"
+                        id="usageLimit"
+                        name="usageLimit"
+                        min={0}
+                        value={usageLimit}
+                        onChange={(e) => { setUsageLimit(Number(e.target.value)); clearError('usageLimit') }}
+                        className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
+                          errors.usageLimit 
+                            ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                            : 'border-gray-250 focus:border-[#B48A5E]'
+                        }`}
                       />
+                      {errors.usageLimit && (
+                        <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {errors.usageLimit}
+                        </p>
+                      )}
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tanggal Mulai Berlaku *</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tanggal Kadaluarsa (opsional)</label>
                       <input
                         type="date"
-                        required
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
+                        id="expiresAt"
+                        name="expiresAt"
+                        value={expiresAt}
+                        onChange={(e) => setExpiresAt(e.target.value)}
                         className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E]"
                       />
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tanggal Berakhir *</label>
-                      <input
-                        type="date"
-                        required
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E]"
-                      />
-                    </div>
+                  </div>
+
+                  {/* Terms / S&K */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1.5">Syarat & Ketentuan *</label>
+                    <textarea
+                      id="terms"
+                      name="terms"
+                      value={terms}
+                      onChange={(e) => { setTerms(e.target.value); clearError('terms') }}
+                      placeholder="Contoh: Berlaku 1x per pengguna. Tidak bisa digabung dengan promo lain."
+                      rows={3}
+                      className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
+                        errors.terms 
+                          ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                          : 'border-gray-200 focus:border-[#B48A5E]'
+                      }`}
+                    />
+                    {errors.terms && (
+                      <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        {errors.terms}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -755,6 +919,30 @@ export default function VoucherAdminClient({
               </form>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Saving Loader Overlay Screen */}
+      <AnimatePresence>
+        {isSaving && (
+          <LoadingScreen 
+            fullScreen={true}
+            customMessages={
+              editingTemplate 
+                ? [
+                    "Menyimpan perubahan voucher...", 
+                    "Memperbarui basis data voucher...", 
+                    "Menyelaraskan data diskon...", 
+                    "Mohon tunggu sebentar..."
+                  ]
+                : [
+                    "Membuat template voucher baru...", 
+                    "Mendaftarkan data voucher...", 
+                    "Menyelaraskan data diskon...", 
+                    "Mohon tunggu sebentar..."
+                  ]
+            }
+          />
         )}
       </AnimatePresence>
     </div>
