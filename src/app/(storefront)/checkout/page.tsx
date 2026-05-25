@@ -88,7 +88,7 @@ export default function CheckoutPage() {
     deliveryFeePerKm: 2000, maxDeliveryDistance: 10
   });
 
-  const [deliveryAddress, setDeliveryAddress] = useState<{ label: string, detail: string, lat: number, lng: number, distance: number, deliveryFee: number } | null>(null);
+  const [deliveryAddress, setDeliveryAddress] = useState<{ label: string, detail: string, streetDetail: string, lat: number, lng: number, distance: number, deliveryFee: number } | null>(null);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
 
   // Payment Config State

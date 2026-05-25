@@ -12,6 +12,7 @@ interface MapPickerProps {
   onLocationSelect: (data: {
     label: string;
     detail: string;
+    streetDetail: string;
     lat: number;
     lng: number;
     distance: number;
@@ -313,16 +314,24 @@ export function MapPicker({
     );
   };
 
-  // Distance & fee calculations (using actual store location)
   const distance = calculateDistance(storeLat, storeLng, pinLat, pinLng);
   const deliveryFee = calculateDeliveryFee(distance, deliveryFeePerKm);
   const withinRange = isWithinDeliveryRange(distance, maxDeliveryDistance);
 
+  const [streetDetail, setStreetDetail] = useState('');
+  const [detailError, setDetailError] = useState('');
+
   const handleConfirm = () => {
     if (!selectedAddress) return;
+    if (!streetDetail.trim()) {
+      setDetailError('Detail alamat tambahan (No. Rumah / Perumahan) wajib diisi');
+      return;
+    }
+    setDetailError('');
     onLocationSelect({
       label: selectedAddress,
       detail: addressDetail,
+      streetDetail: streetDetail.trim(),
       lat: pinLat,
       lng: pinLng,
       distance,
@@ -410,7 +419,7 @@ export function MapPicker({
 
       {/* Selected Location Info */}
       {selectedAddress && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
           <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-brand-50 border border-brand-200">
             <MapPin className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
@@ -424,6 +433,22 @@ export function MapPicker({
             >
               Ubah
             </button>
+          </div>
+
+          {/* New specific detailed address text field */}
+          <div className="space-y-1.5">
+            <label className="block text-xs font-bold text-gray-700">Detail Alamat Rumah / Perumahan / No. Rumah *</label>
+            <input
+              type="text"
+              value={streetDetail}
+              onChange={(e) => {
+                setStreetDetail(e.target.value);
+                if (e.target.value.trim()) setDetailError('');
+              }}
+              placeholder="Contoh: Perumahan Kebon Asri Blok C-12, RT 02 RW 03, Pagar Hitam"
+              className="w-full px-4.5 py-3 rounded-xl border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-[#B48A5E] transition-all"
+            />
+            {detailError && <p className="text-xs text-red-500 font-semibold">{detailError}</p>}
           </div>
 
           <div className="flex items-center justify-between px-4 py-3 rounded-xl bg-card border border-border/50">
@@ -451,7 +476,7 @@ export function MapPicker({
               animate={{ opacity: 1, y: 0 }}
               whileTap={{ scale: 0.98 }}
               onClick={handleConfirm}
-              className="w-full py-3.5 rounded-xl gradient-brand text-white font-semibold text-sm shadow-lg flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-semibold text-sm shadow-lg flex items-center justify-center gap-2"
             >
               <Check className="w-4 h-4" /> Konfirmasi Alamat
             </motion.button>

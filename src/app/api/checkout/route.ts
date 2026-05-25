@@ -126,6 +126,9 @@ export async function POST(req: Request) {
             if (distanceKm > maxDist) {
                  return NextResponse.json({ error: `Jarak pengiriman melebihi batas maksimal (${maxDist} km)` }, { status: 400 })
             }
+            if (!body.address?.streetDetail || !body.address.streetDetail.trim()) {
+                 return NextResponse.json({ error: `Detail alamat tambahan (No. Rumah / Komplek) wajib diisi untuk Delivery` }, { status: 400 })
+            }
             deliveryFee = Math.round(distanceKm * perKmFee)
         }
 
@@ -273,7 +276,7 @@ export async function POST(req: Request) {
         // Build address string
         const address = orderType === 'PICKUP'
             ? 'Ambil di toko'
-            : `${body.address?.label || ''} - ${body.address?.detail || ''} (${body.address?.lat || 0}, ${body.address?.lng || 0})`
+            : `${body.address?.label || ''} - ${body.address?.detail || ''} | Detail: ${body.address?.streetDetail || ''} (${body.address?.lat || 0}, ${body.address?.lng || 0})`
 
         // Wrap database operations in a single interactive transaction to ensure data atomicity
         const order = await prisma.$transaction(async (tx) => {
