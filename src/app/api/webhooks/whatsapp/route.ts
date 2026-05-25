@@ -5,15 +5,11 @@ import crypto from "crypto";
 // URL dasar aplikasi akan ditentukan secara dinamis dari origin request jika env tidak diatur
 
 // Fungsi untuk mengirim pesan balasan WhatsApp
+// CATATAN: Fungsi ini hanya dipakai untuk flow server-side (bukan dari bot).
+// Flow dari bot menggunakan directReply:true sehingga fungsi ini tidak dipanggil.
 async function sendWhatsAppMessage(phone: string, text: string, jid?: string) {
   const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
-  
-  // Peringatan konfigurasi: di production (Vercel), WA_PROVIDER_URL HARUS mengarah ke bot Render/Railway
-  if (waProviderUrl.includes("localhost")) {
-    console.warn("[WHATSAPP_BOT] ⚠️  WA_PROVIDER_URL masih localhost! Set ke URL bot Render/Railway di Vercel env vars.");
-  }
-  
-  console.log(`[WHATSAPP_BOT] Mengirim ke ${phone} (JID: ${jid || 'N/A'}): ${text.substring(0, 60)}...`);
+  console.log(`[WHATSAPP_BOT] Mengirim ke ${phone} (JID: ${jid || 'N/A'}): ${text.substring(0, 80)}`);
   
   try {
     const res = await fetch(waProviderUrl, {
@@ -22,8 +18,7 @@ async function sendWhatsAppMessage(phone: string, text: string, jid?: string) {
       body: JSON.stringify({ phone, message: text, jid }),
     });
     if (!res.ok) {
-      const errBody = await res.text();
-      console.error(`[WHATSAPP_BOT] Bot API error ${res.status}:`, errBody);
+      console.error(`[WHATSAPP_BOT] Bot API error ${res.status}:`, await res.text());
     }
   } catch (error) {
     console.error("[WHATSAPP_BOT] Gagal memanggil API Provider WA:", error);
