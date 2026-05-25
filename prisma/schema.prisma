@@ -490,6 +490,8 @@ model PaymentSettings {
   qrisImage       String?  // URL gambar QRIS
   qrisLogo        String?  // URL logo QRIS
   qrisLabel       String   @default("QRIS")
+  qrisAutoGenerate Boolean @default(true) // Toggle auto generate
+  qrisNmid        String   @default("")    // NMID untuk auto-generate qris
 
   // Bank Transfer
   transferEnabled Boolean  @default(true)

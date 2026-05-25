@@ -36,6 +36,8 @@ export async function PUT(req: NextRequest) {
           qrisImage: body.qrisImage,
           qrisLogo: body.qrisLogo,
           qrisLabel: body.qrisLabel,
+          qrisAutoGenerate: body.qrisAutoGenerate,
+          qrisNmid: body.qrisNmid,
           transferEnabled: body.transferEnabled,
           dokuEnabled: body.dokuEnabled,
           dokuClientId: body.dokuClientId,

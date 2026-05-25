@@ -15,6 +15,8 @@ interface PaymentConfig {
   qrisImage: string | null;
   qrisLogo: string | null;
   qrisLabel: string;
+  qrisAutoGenerate: boolean;
+  qrisNmid: string;
   transferEnabled: boolean;
   dokuEnabled: boolean;
   dokuClientId: string;
@@ -217,47 +219,110 @@ export default function PaymentSettingsClient() {
           </div>
           <div className="space-y-3">
             <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Label</label>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Label Tampilan</label>
               <input type="text" value={settings?.qrisLabel || ''} onChange={(e) => update('qrisLabel', e.target.value)}
                 className="w-full px-3 py-2 text-sm bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+
+            {/* Toggle QRIS Auto-Generate */}
+            <div className="flex items-center justify-between py-2 border-b border-border/40">
               <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Gambar QRIS</label>
-                {settings?.qrisImage ? (
-                  <div className="relative group">
-                    <img src={settings.qrisImage} alt="QRIS" className="w-full h-24 object-contain rounded-xl border border-border/40 bg-white" />
-                    <button onClick={() => update('qrisImage', null)}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-400 transition-colors">
-                    <Upload className="w-5 h-5 text-gray-400 mb-1" />
-                    <span className="text-[10px] text-gray-400">Upload QRIS</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'qrisImage')} />
-                  </label>
-                )}
+                <span className="block text-xs font-bold text-foreground">Auto-Generate QRIS</span>
+                <span className="text-[10px] text-muted-foreground">Otomatis generate QR dengan isi nominal belanja</span>
               </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Logo QRIS</label>
-                {settings?.qrisLogo ? (
-                  <div className="relative group">
-                    <img src={settings.qrisLogo} alt="Logo" className="w-full h-24 object-contain rounded-xl border border-border/40 bg-white" />
-                    <button onClick={() => update('qrisLogo', null)}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ) : (
-                  <label className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-400 transition-colors">
-                    <ImageIcon className="w-5 h-5 text-gray-400 mb-1" />
-                    <span className="text-[10px] text-gray-400">Upload Logo</span>
-                    <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'qrisLogo')} />
-                  </label>
-                )}
+              <button onClick={() => update('qrisAutoGenerate', !settings?.qrisAutoGenerate)}>
+                {settings?.qrisAutoGenerate
+                  ? <ToggleRight className="w-7 h-7 text-emerald-500" />
+                  : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
+                }
+              </button>
+            </div>
+
+            {/* Input NMID */}
+            {settings?.qrisAutoGenerate && (
+              <div className="bg-purple-50/50 rounded-xl p-3 border border-purple-100">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-purple-700 mb-1">
+                  Nomor Merchant ID / NMID Resmi (Opsional)
+                </label>
+                <input 
+                  type="text" 
+                  value={settings?.qrisNmid || ''} 
+                  onChange={(e) => update('qrisNmid', e.target.value)}
+                  placeholder="Contoh: ID1020211516086"
+                  className="w-full px-3 py-2 text-xs bg-white border border-purple-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500/20" 
+                />
+                <p className="text-[9px] text-purple-600 mt-1">
+                  💡 Masukkan NMID resmi dari bank/merchant aggregator Anda agar QRIS mengarah ke rekening Anda.
+                </p>
               </div>
+            )}
+
+            {/* Mode info banner */}
+            <div className={`rounded-xl p-3 text-[11px] leading-relaxed font-medium border ${(!settings?.qrisAutoGenerate && settings?.qrisImage) ? 'bg-purple-50 border-purple-200 text-purple-700' : (settings?.qrisAutoGenerate ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700')}`}>
+              {settings?.qrisAutoGenerate ? (
+                <>
+                  <p className="font-bold mb-0.5">⚡ Mode Auto-Generate Aktif</p>
+                  <p>Sistem otomatis membuat QRIS dinamis untuk setiap order. Pelanggan tinggal scan dan bayar tanpa input nominal.</p>
+                </>
+              ) : settings?.qrisImage ? (
+                <>
+                  <p className="font-bold mb-0.5">📷 Mode Statis Aktif</p>
+                  <p>Gambar QRIS statis dari bank/PJSP yang Anda upload di bawah akan ditampilkan ke pelanggan. Pelanggan memasukkan nominal secara manual.</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-bold mb-0.5">⚠️ Perhatian</p>
+                  <p>Auto-generate dinonaktifkan, namun Anda belum mengupload gambar QRIS statis di bawah. Pelanggan tidak akan melihat QRIS code.</p>
+                </>
+              )}
+            </div>
+
+            {/* Upload gambar QRIS */}
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Gambar QRIS Statis{' '}
+                <span className="normal-case font-normal text-muted-foreground/60">(opsional — dari bank / PJSP)</span>
+              </label>
+              {settings?.qrisImage ? (
+                <div className="relative group">
+                  <img src={settings.qrisImage} alt="QRIS" className="w-full h-32 object-contain rounded-xl border border-border/40 bg-white" />
+                  <button onClick={() => update('qrisImage', null)}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                  <p className="text-[10px] text-muted-foreground mt-1.5 text-center">Hover → klik ikon 🗑 untuk hapus & beralih ke mode auto-generate</p>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-400 transition-colors">
+                  <Upload className="w-5 h-5 text-gray-400 mb-1" />
+                  <span className="text-[11px] font-bold text-gray-500">Upload Gambar QRIS dari Bank</span>
+                  <span className="text-[9px] text-gray-400 mt-0.5">JPG, PNG — screenshot dari aplikasi bank</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'qrisImage')} />
+                </label>
+              )}
+            </div>
+
+            {/* Logo QRIS opsional */}
+            <div>
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Logo QRIS{' '}
+                <span className="normal-case font-normal text-muted-foreground/60">(opsional)</span>
+              </label>
+              {settings?.qrisLogo ? (
+                <div className="relative group">
+                  <img src={settings.qrisLogo} alt="Logo" className="w-full h-20 object-contain rounded-xl border border-border/40 bg-white" />
+                  <button onClick={() => update('qrisLogo', null)}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center h-20 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-400 transition-colors">
+                  <ImageIcon className="w-5 h-5 text-gray-400 mb-1" />
+                  <span className="text-[10px] text-gray-400">Upload Logo</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, 'qrisLogo')} />
+                </label>
+              )}
             </div>
           </div>
         </div>

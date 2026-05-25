@@ -291,38 +291,70 @@ export default function PaymentClient({
         </div>
 
         {/* QRIS Instan Display Panel */}
-        {order.paymentMethod === 'QRIS' && (
+        {order.paymentMethod === 'QRIS' && (qrisConfig?.image || order.paymentQrContent) && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
             <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-5 text-center relative overflow-hidden flex flex-col items-center">
+              {/* QRIS Header */}
               <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-4 shrink-0">
                 <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
                   QR<span className="text-[#e26d5c]">IS</span>
                 </span>
                 <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
-                  GPN Standard
+                  {qrisConfig?.image ? 'Statis • Scan & Pay' : 'GPN Standard'}
                 </span>
               </div>
 
+              {/* QR Image — Prioritaskan gambar statis dari admin, fallback ke auto-generate */}
               <div className="relative w-64 h-64 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-inner flex items-center justify-center">
-                <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.paymentQrContent)}`}
-                  alt="QRIS Code"
-                  className="w-full h-full object-contain rounded-xl"
-                />
+                {qrisConfig?.image ? (
+                  // Mode 1: Gambar QRIS statis yang diupload admin (dari bank/PJSP resmi)
+                  <img
+                    src={qrisConfig.image}
+                    alt="QRIS Code"
+                    className="w-full h-full object-contain rounded-xl"
+                  />
+                ) : (
+                  // Mode 2: QR auto-generate dari sistem (dinamis dengan nominal)
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.paymentQrContent)}`}
+                    alt="QRIS Code"
+                    className="w-full h-full object-contain rounded-xl"
+                  />
+                )}
               </div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase mt-4">Nama Merchant</p>
+
+              {/* Info mode QRIS */}
+              {qrisConfig?.image ? (
+                <div className="mt-3 px-3 py-2 rounded-xl bg-purple-50 border border-purple-100 w-full text-center">
+                  <p className="text-[10px] text-purple-600 font-bold">
+                    📷 Scan QR di atas, lalu masukkan nominal{' '}
+                    <span className="text-purple-800">{formatRupiah(order.total)}</span> secara manual
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 w-full text-center">
+                  <p className="text-[10px] text-green-600 font-bold">
+                    ✅ Nominal sudah otomatis terisi: <span className="text-green-800">{formatRupiah(order.total)}</span>
+                  </p>
+                </div>
+              )}
+
+              <p className="text-[10px] text-gray-400 font-bold uppercase mt-3">Nama Merchant</p>
               <h3 className="text-base font-serif font-black text-gray-900 mt-0.5">MATCHABOY</h3>
-              <button
-                type="button"
-                onClick={() => router.push(`/orders/${order.id}/qris`)}
-                className="w-full mt-4 py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
-              >
-                Unduh / Buka QRIS Lebih Besar
-              </button>
+
+              {!qrisConfig?.image && (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/orders/${order.id}/qris`)}
+                  className="w-full mt-4 py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
+                >
+                  Unduh / Buka QRIS Lebih Besar
+                </button>
+              )}
             </div>
           </motion.div>
         )}

@@ -313,7 +313,7 @@ export async function POST(req: Request) {
                     hasTumbler,
                     notes: body.notes || null,
                     voucherCode: voucherCode || null,
-                    paymentExpiredAt: isDoku ? new Date(Date.now() + 15 * 60 * 1000) : null,
+                    paymentExpiredAt: (isDoku || body.paymentMethod?.toUpperCase() === 'QRIS') ? new Date(Date.now() + 15 * 60 * 1000) : null,
                     items: {
                         create: orderItemsToCreate
                     }
@@ -348,8 +348,32 @@ export async function POST(req: Request) {
             return newOrder
         })
 
-        // Call DOKU Hosted Checkout API outside the database transaction
+        // Generate QRIS string for QRIS payment method
         let paymentUrl: string | undefined
+        const isQris = body.paymentMethod?.toUpperCase() === 'QRIS'
+        if (isQris) {
+            try {
+                // If paymentSettings exists and has qrisAutoGenerate = false, do not generate QR string
+                if (paymentSettings && !paymentSettings.qrisAutoGenerate) {
+                    console.log('[QRIS] Auto generate is disabled. Skipping...')
+                } else {
+                    const { generateQrisString } = await import('@/lib/doku')
+                    const customNmid = paymentSettings?.qrisNmid || undefined
+                    const paymentQrContent = generateQrisString(secureTotal, order.id, customNmid)
+
+                    // Save QRIS content to the order
+                    await prisma.order.update({
+                        where: { id: order.id },
+                        data: { paymentQrContent }
+                    })
+                }
+            } catch (qrisError: any) {
+                console.error('[QRIS GENERATION ERROR]', qrisError)
+                // Non-fatal: order tetap dibuat, user bisa hubungi admin
+            }
+        }
+
+        // Call DOKU Hosted Checkout API outside the database transaction (currently disabled)
         if (isDoku && paymentSettings) {
             try {
                 const { createDokuCheckoutSession, generateQrisString } = await import('@/lib/doku')
