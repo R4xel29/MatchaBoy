@@ -3,8 +3,10 @@
 import { useState } from 'react';
 import {
   QrCode, Search, User, Coffee, Leaf, Loader2,
-  CheckCircle2, AlertCircle, Plus, Minus, Gift
+  CheckCircle2, AlertCircle, Plus, Minus, Gift, Camera
 } from 'lucide-react';
+import QRCameraScanner from '@/components/cashier/QRCameraScanner';
+
 
 type SearchMode = 'qr' | 'phone' | 'email';
 
@@ -25,6 +27,7 @@ export default function AddPointsClient() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<PointResult | null>(null);
   const [error, setError] = useState('');
+  const [showScanner, setShowScanner] = useState(false);
 
   const handleSubmit = async () => {
     if (!input.trim()) return;
@@ -108,13 +111,58 @@ export default function AddPointsClient() {
             <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
               {mode === 'phone' ? 'Nomor HP Pelanggan' : mode === 'email' ? 'Email Pelanggan' : 'Kode QR / Referral Code'}
             </label>
-            <input
-              type={mode === 'email' ? 'email' : 'text'}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={mode === 'phone' ? '08xxxxxxxxxx' : mode === 'email' ? 'pelanggan@email.com' : 'Masukkan kode QR'}
-              className="w-full px-4 py-3 text-sm bg-muted/20 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
-            />
+            {mode === 'qr' ? (
+              <div className="space-y-3">
+                {showScanner ? (
+                  <div className="border border-border/40 rounded-2xl p-4 bg-muted/10">
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+                        <Camera className="w-3.5 h-3.5 text-amber-600 animate-pulse" /> Scanner Aktif
+                      </span>
+                      <button 
+                        type="button" 
+                        onClick={() => setShowScanner(false)} 
+                        className="text-xs font-bold text-amber-700 hover:text-amber-800 transition-colors"
+                      >
+                        Batal Scan
+                      </button>
+                    </div>
+                    <QRCameraScanner
+                      onScan={(result) => {
+                        setInput(result);
+                        setShowScanner(false);
+                      }}
+                      placeholder="Masukkan kode referral..."
+                    />
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      placeholder="Masukkan kode QR atau klik Scan"
+                      className="flex-1 px-4 py-3 text-sm bg-muted/20 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowScanner(true)}
+                      className="px-4 py-3 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-xl border border-amber-200/50 flex items-center justify-center gap-1.5 font-bold text-sm transition-colors shadow-sm active:scale-95"
+                    >
+                      <Camera className="w-4 h-4" /> Scan
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <input
+                type={mode === 'email' ? 'email' : 'text'}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={mode === 'phone' ? '08xxxxxxxxxx' : 'pelanggan@email.com'}
+                className="w-full px-4 py-3 text-sm bg-muted/20 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400"
+              />
+            )}
           </div>
 
           {/* Cups */}
