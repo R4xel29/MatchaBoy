@@ -91,7 +91,6 @@ export async function POST(req: Request) {
       const userId = parts[1];
       const targetPhone = parts[2];
 
-      // Verify that the sender's phone number matches the target phone number
       let standardizedSenderPhone = phone.replace(/[^0-9]/g, '');
       if (standardizedSenderPhone.startsWith('08')) {
         standardizedSenderPhone = '62' + standardizedSenderPhone.substring(1);
@@ -99,20 +98,43 @@ export async function POST(req: Request) {
         standardizedSenderPhone = '62' + standardizedSenderPhone;
       }
 
-      let standardizedTargetPhone = targetPhone.replace(/[^0-9]/g, '');
-      if (standardizedTargetPhone.startsWith('08')) {
-        standardizedTargetPhone = '62' + standardizedTargetPhone.substring(1);
-      } else if (standardizedTargetPhone.startsWith('8')) {
-        standardizedTargetPhone = '62' + standardizedTargetPhone;
+      let standardizedTargetPhone = standardizedSenderPhone;
+
+      if (targetPhone) {
+        let stdTarget = targetPhone.replace(/[^0-9]/g, '');
+        if (stdTarget.startsWith('08')) {
+          stdTarget = '62' + stdTarget.substring(1);
+        } else if (stdTarget.startsWith('8')) {
+          stdTarget = '62' + stdTarget;
+        }
+        standardizedTargetPhone = stdTarget;
+
+        if (standardizedSenderPhone !== standardizedTargetPhone) {
+          console.warn(`[WHATSAPP_WEBHOOK] Phone mismatch. Sender: ${standardizedSenderPhone}, Target: ${standardizedTargetPhone}`);
+          const reply = "Verifikasi gagal ❌\n\nNomor pengirim tidak cocok dengan nomor yang Anda masukkan di aplikasi.";
+          try {
+            await sendWhatsAppMessage(phone, reply, jid);
+          } catch {}
+          return NextResponse.json({ success: false, error: "Phone number mismatch", replyMessage: reply });
+        }
       }
 
-      if (standardizedSenderPhone !== standardizedTargetPhone) {
-        console.warn(`[WHATSAPP_WEBHOOK] Phone mismatch. Sender: ${standardizedSenderPhone}, Target: ${standardizedTargetPhone}`);
-        const reply = "Verifikasi gagal ❌\n\nNomor pengirim tidak cocok dengan nomor yang Anda masukkan di aplikasi.";
+      // Check for phone conflict
+      const phoneConflict = await prisma.user.findFirst({
+        where: {
+          phone: standardizedSenderPhone,
+          phoneVerified: true,
+          NOT: { id: userId }
+        }
+      });
+
+      if (phoneConflict) {
+        console.warn(`[WHATSAPP_WEBHOOK] Phone conflict. ${standardizedSenderPhone} already verified by another account.`);
+        const reply = "Verifikasi gagal ❌\n\nNomor WhatsApp ini sudah terdaftar dan terverifikasi pada akun lain.";
         try {
           await sendWhatsAppMessage(phone, reply, jid);
         } catch {}
-        return NextResponse.json({ success: false, error: "Phone number mismatch", replyMessage: reply });
+        return NextResponse.json({ success: false, error: "Phone conflict", replyMessage: reply });
       }
 
       console.log(`[WHATSAPP_WEBHOOK] Memulai verifikasi nomor HP user ID: ${userId} ke nomor: ${standardizedTargetPhone}`);
