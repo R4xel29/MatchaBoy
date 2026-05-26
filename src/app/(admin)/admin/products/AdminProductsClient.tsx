@@ -151,6 +151,15 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Image cropping states
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const [isCropperDragging, setIsCropperDragging] = useState(false);
+  const cropperDragStart = useRef({ x: 0, y: 0 });
+  const cropperViewportRef = useRef<HTMLDivElement>(null);
+  const cropperImgRef = useRef<HTMLImageElement>(null);
+
   // Modifier state
   const [modIce, setModIce] = useState<string[]>([]);
   const [modSugar, setModSugar] = useState<string[]>([]);
@@ -354,36 +363,128 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
   const closeModal = () => { setShowModal(false); setEditingProduct(null); };
 
-  // ── Image Upload ──
-  const handleImageSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ── Image Upload & Cropping handlers ──
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImageSrc(reader.result as string);
+      setCropZoom(1);
+      setCropOffset({ x: 0, y: 0 });
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const handleCropperMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsCropperDragging(true);
+    cropperDragStart.current = { x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y };
+  };
+
+  const handleCropperMouseMove = useCallback((e: MouseEvent) => {
+    if (!isCropperDragging) return;
+    setCropOffset({
+      x: e.clientX - cropperDragStart.current.x,
+      y: e.clientY - cropperDragStart.current.y
+    });
+  }, [isCropperDragging, cropOffset.x, cropOffset.y]);
+
+  const handleCropperMouseUp = useCallback(() => {
+    setIsCropperDragging(false);
+  }, []);
+
+  const handleCropperTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+    setIsCropperDragging(true);
+    const touch = e.touches[0];
+    cropperDragStart.current = { x: touch.clientX - cropOffset.x, y: touch.clientY - cropOffset.y };
+  };
+
+  const handleCropperTouchMove = useCallback((e: TouchEvent) => {
+    if (!isCropperDragging || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    setCropOffset({
+      x: touch.clientX - cropperDragStart.current.x,
+      y: touch.clientY - cropperDragStart.current.y
+    });
+  }, [isCropperDragging, cropOffset.x, cropOffset.y]);
+
+  const handleCropperTouchEnd = useCallback(() => {
+    setIsCropperDragging(false);
+  }, []);
+
+  // Attach global window event handlers for smooth dragging when mouse/finger leaves the viewport container
+  useEffect(() => {
+    if (isCropperDragging) {
+      window.addEventListener('mousemove', handleCropperMouseMove);
+      window.addEventListener('mouseup', handleCropperMouseUp);
+      window.addEventListener('touchmove', handleCropperTouchMove);
+      window.addEventListener('touchend', handleCropperTouchEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleCropperMouseMove);
+      window.removeEventListener('mouseup', handleCropperMouseUp);
+      window.removeEventListener('touchmove', handleCropperTouchMove);
+      window.removeEventListener('touchend', handleCropperTouchEnd);
+    };
+  }, [isCropperDragging, handleCropperMouseMove, handleCropperMouseUp, handleCropperTouchMove, handleCropperTouchEnd]);
+
+  const handleCropConfirm = async () => {
+    if (!cropperViewportRef.current || !cropperImgRef.current) return;
     setUploading(true);
     try {
-      // 1. Compress to WebP on client
-      const webpBlob = await compressToWebP(file, 800, 0.8);
+      const rectV = cropperViewportRef.current.getBoundingClientRect();
+      const rectI = cropperImgRef.current.getBoundingClientRect();
 
-      // 2. Preview
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 500; // 16:10 aspect ratio
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas not supported');
+
+      // Fill background as white (in case image is smaller than container)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const canvasScale = 800 / rectV.width;
+      const x = (rectI.left - rectV.left) * canvasScale;
+      const y = (rectI.top - rectV.top) * canvasScale;
+      const w = rectI.width * canvasScale;
+      const h = rectI.height * canvasScale;
+
+      ctx.drawImage(cropperImgRef.current, x, y, w, h);
+
+      // Export to WebP blob
+      const webpBlob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => blob ? resolve(blob) : reject(new Error('Cropping failed')),
+          'image/webp',
+          0.8
+        );
+      });
+
+      // Show locally immediately
       setImagePreview(URL.createObjectURL(webpBlob));
 
-      // 3. Upload to server
+      // Upload to server
       const fd = new FormData();
-      fd.append('file', new File([webpBlob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' }));
+      fd.append('file', new File([webpBlob], 'cropped-product.webp', { type: 'image/webp' }));
 
       const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Upload failed'); }
 
       const { url } = await res.json();
       setFormData(p => ({ ...p, image: url }));
+      setCropImageSrc(null);
     } catch (err: any) {
-      showToast('Gagal mengupload gambar: ' + err.message, 'error');
-      setImagePreview(null);
+      showToast('Gagal memotong/mengupload gambar: ' + err.message, 'error');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
-  }, []);
+  };
 
   // ── Modifier Helpers ──
   const toggleIce = (level: string) => setModIce(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]);
@@ -1368,6 +1469,105 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                 className="px-5 py-2 text-xs font-bold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md active:scale-[0.98]"
               >
                 Selesai
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ Image Cropper Modal ═══════ */}
+      {cropImageSrc && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-border/10 flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 sticky top-0 bg-white z-10">
+              <div>
+                <h3 className="text-sm font-bold font-heading text-foreground">
+                  ✂️ Sesuaikan Gambar Produk
+                </h3>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Geser gambar dan gunakan slider untuk zoom agar pas di bingkai 16:10.</p>
+              </div>
+              <button onClick={() => setCropImageSrc(null)} className="p-1.5 hover:bg-muted rounded-xl transition-all">
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Viewport container */}
+            <div className="p-6 flex-1 flex flex-col items-center justify-center bg-muted/10 overflow-y-auto">
+              <div 
+                ref={cropperViewportRef}
+                className="relative w-full max-w-[420px] aspect-[16/10] overflow-hidden bg-zinc-950 border border-border/40 rounded-2xl cursor-move touch-none select-none shadow-inner"
+                onMouseDown={handleCropperMouseDown}
+                onTouchStart={handleCropperTouchStart}
+              >
+                <img
+                  ref={cropperImgRef}
+                  src={cropImageSrc}
+                  alt="To Crop"
+                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none pointer-events-none select-none transition-transform duration-75 origin-center"
+                  style={{
+                    transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropZoom})`,
+                  }}
+                />
+
+                {/* Grid Overlay */}
+                <div className="absolute inset-0 pointer-events-none border border-white/20">
+                  <div className="absolute inset-x-0 top-1/3 border-b border-dashed border-white/30" />
+                  <div className="absolute inset-x-0 top-2/3 border-b border-dashed border-white/30" />
+                  <div className="absolute inset-y-0 left-1/3 border-r border-dashed border-white/30" />
+                  <div className="absolute inset-y-0 left-2/3 border-r border-dashed border-white/30" />
+                </div>
+              </div>
+
+              {/* Zoom controls */}
+              <div className="w-full max-w-[420px] flex items-center gap-3 mt-5 px-1">
+                <CircleMinus className="w-4 h-4 text-muted-foreground" />
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.02"
+                  value={cropZoom}
+                  onChange={(e) => setCropZoom(parseFloat(e.target.value))}
+                  className="flex-1 accent-brand-600 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
+                />
+                <CirclePlus className="w-4 h-4 text-muted-foreground" />
+                <span className="text-xs font-bold text-muted-foreground w-10 text-right">
+                  {Math.round(cropZoom * 100)}%
+                </span>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-border/20 flex justify-end gap-2 bg-muted/5 sticky bottom-0">
+              <button 
+                type="button"
+                onClick={() => { setCropZoom(1); setCropOffset({ x: 0, y: 0 }); }}
+                className="px-4 py-2 text-xs font-medium rounded-xl hover:bg-muted transition-colors mr-auto"
+              >
+                Reset
+              </button>
+              <button 
+                type="button"
+                onClick={() => setCropImageSrc(null)} 
+                className="px-4 py-2 text-xs font-medium rounded-xl hover:bg-muted transition-colors"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleCropConfirm}
+                disabled={uploading}
+                className="px-5 py-2 text-xs font-bold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-md active:scale-[0.98]"
+              >
+                {uploading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Memproses...
+                  </>
+                ) : (
+                  'Terapkan'
+                )}
               </button>
             </div>
           </div>
