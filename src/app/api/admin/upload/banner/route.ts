@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { mkdir } from 'fs/promises';
-import path from 'path';
 import sharp from 'sharp';
+import { uploadToSupabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
     const session = await auth();
@@ -33,19 +32,23 @@ export async function POST(request: NextRequest) {
         
         const filename = `${safeName}-${timestamp}.avif`;
 
-        // Ensure directory exists
-        const uploadDir = path.join(process.cwd(), 'public', 'banners');
-        await mkdir(uploadDir, { recursive: true });
-
-        // Buffer and process with sharp
+        // Buffer and process with sharp (in-memory, no filesystem write)
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
-        await sharp(buffer)
+        const processedBuffer = await sharp(buffer)
             .avif({ quality: 80, effort: 4 })
-            .toFile(path.join(uploadDir, filename));
+            .toBuffer();
 
-        return NextResponse.json({ url: `/banners/${filename}` });
+        // Upload to Supabase Storage
+        const publicUrl = await uploadToSupabase(
+            'banners',
+            filename,
+            processedBuffer,
+            'image/avif'
+        );
+
+        return NextResponse.json({ url: publicUrl });
     } catch (error) {
         console.error('Upload error:', error);
         return NextResponse.json({ error: 'Upload failed' }, { status: 500 });

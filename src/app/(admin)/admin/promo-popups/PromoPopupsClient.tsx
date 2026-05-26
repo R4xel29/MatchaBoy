@@ -150,9 +150,10 @@ export default function PromoPopupsClient({ initialPopups }: { initialPopups: Pr
           body: form
         });
         
-        if (!res.ok) throw new Error('Upload failed');
-        
         const data = await res.json();
+        
+        if (!res.ok) throw new Error(data?.detail || data?.error || 'Upload failed');
+        
         setFormData(prev => ({ ...prev, image: data.url }));
         setIsCropModalOpen(false);
         setSourceImageSrc(null);
@@ -160,9 +161,9 @@ export default function PromoPopupsClient({ initialPopups }: { initialPopups: Pr
         setUploadingImage(false);
       }, 'image/jpeg', 0.9);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showToast('Gagal memproses gambar', 'error');
+      showToast(`Gagal memproses: ${error?.message || 'Unknown error'}`, 'error');
       setUploadingImage(false);
     }
   };
@@ -290,14 +291,17 @@ export default function PromoPopupsClient({ initialPopups }: { initialPopups: Pr
         body: form
       });
       
-      if (!res.ok) throw new Error('Upload failed');
-      
       const data = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(data?.detail || data?.error || 'Upload failed');
+      }
+      
       setFormData(prev => ({ ...prev, image: data.url }));
       showToast('Gambar berhasil diunggah', 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      showToast('Gagal mengunggah gambar', 'error');
+      showToast(`Gagal mengunggah: ${error?.message || 'Unknown error'}`, 'error');
     } finally {
       setUploadingImage(false);
     }

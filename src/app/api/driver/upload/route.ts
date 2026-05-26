@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
+import { uploadToSupabase } from '@/lib/supabase';
 
 export async function POST(request: NextRequest) {
     const session = await auth();
@@ -36,16 +35,19 @@ export async function POST(request: NextRequest) {
             .slice(0, 50);
         const filename = `${safeName}-${timestamp}.webp`;
 
-        // Ensure directory exists
-        const uploadDir = path.join(process.cwd(), 'public', 'drivers');
-        await mkdir(uploadDir, { recursive: true });
-
-        // Write file
+        // Read file into buffer
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
-        await writeFile(path.join(uploadDir, filename), buffer);
 
-        return NextResponse.json({ url: `/drivers/${filename}` });
+        // Upload to Supabase Storage
+        const publicUrl = await uploadToSupabase(
+            'drivers',
+            filename,
+            buffer,
+            'image/webp'
+        );
+
+        return NextResponse.json({ url: publicUrl });
     } catch (error) {
         console.error('Driver upload error:', error);
         return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
