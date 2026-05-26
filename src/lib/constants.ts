@@ -38,6 +38,12 @@ export const ADD_ONS: AddOn[] = [
 
 // ── Product Catalog ─────────────────────────────────────────
 
+const DRINK_SIZES = [
+    { name: 'Normal', price: 0 },
+    { name: 'Large', price: 3000 },
+    { name: 'Jumbo', price: 5000 },
+];
+
 export const PRODUCTS: Product[] = [
     {
         id: 'brand-signature',
@@ -51,6 +57,7 @@ export const PRODUCTS: Product[] = [
             iceLevel: ['Normal Ice', 'Less Ice', 'No Ice'],
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
     {
@@ -64,6 +71,7 @@ export const PRODUCTS: Product[] = [
             iceLevel: ['Normal Ice', 'Less Ice', 'No Ice'],
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
     {
@@ -78,6 +86,7 @@ export const PRODUCTS: Product[] = [
             iceLevel: ['Normal Ice', 'Less Ice', 'No Ice'],
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
     {
@@ -92,6 +101,7 @@ export const PRODUCTS: Product[] = [
             iceLevel: ['Normal Ice', 'Less Ice', 'No Ice'],
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
     {
@@ -106,6 +116,7 @@ export const PRODUCTS: Product[] = [
             iceLevel: ['Normal Ice', 'Less Ice', 'No Ice'],
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
     {
@@ -118,6 +129,7 @@ export const PRODUCTS: Product[] = [
         modifiers: {
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
     {
@@ -129,6 +141,7 @@ export const PRODUCTS: Product[] = [
         category: 'hidden-menu',
         modifiers: {
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
     {
@@ -165,6 +178,9 @@ export const PRODUCTS: Product[] = [
         image: '/products/yuzu-matcha.png',
         category: 'seasonal',
         badge: 'new',
+        modifiers: {
+            sizes: DRINK_SIZES,
+        }
     },
     {
         id: 'brand-mochi',
@@ -178,6 +194,7 @@ export const PRODUCTS: Product[] = [
             iceLevel: ['Normal Ice', 'Less Ice', 'No Ice'],
             sugarLevel: ['Normal Sugar', 'Less Sugar'],
             addOns: ADD_ONS,
+            sizes: DRINK_SIZES,
         },
     },
 ];

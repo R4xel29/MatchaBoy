@@ -25,6 +25,7 @@ export interface Product {
         iceLevel?: IceLevel[];
         sugarLevel?: SugarLevel[];
         addOns?: AddOn[];
+        sizes?: { name: string; price: number }[];
         isBundle?: boolean;
         bundleGroups?: BundleGroup[];
         freeShipping?: boolean;
@@ -67,8 +68,10 @@ export interface CartItem {
     quantity: number;
     iceLevel: IceLevel;
     sugarLevel: SugarLevel;
+    size?: string;
+    sizePrice?: number;
     addOns: AddOn[];
-    totalPrice: number;  // (basePrice + addOns) * quantity
+    totalPrice: number;  // (basePrice + sizePrice + addOns) * quantity
     isBundle?: boolean;
     bundleSelections?: SelectedBundleItem[];
 }

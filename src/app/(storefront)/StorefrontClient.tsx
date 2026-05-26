@@ -141,13 +141,15 @@ export default function StorefrontClient({
     return () => clearInterval(timer);
   }, [displayBanners]);
 
-  const spesialProducts = useMemo(() => {
-    const bestSellers = products.filter(p => p.badge === 'best-seller');
-    const bundles = products.filter(p => p.modifiers?.isBundle === true);
-    const combined = [...bundles, ...bestSellers];
-    const unique = combined.filter((item, index) => combined.findIndex(p => p.id === item.id) === index);
-    const list = unique.length > 0 ? unique : products.slice(0, 4);
+  const comboProducts = useMemo(() => {
+    const list = products.filter(p => p.modifiers?.isBundle === true);
     return [...list].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
+  }, [products]);
+
+  const spesialProducts = useMemo(() => {
+    const list = products.filter(p => p.badge === 'best-seller' && p.modifiers?.isBundle !== true);
+    const baseList = list.length > 0 ? list : products.slice(0, 4).filter(p => p.modifiers?.isBundle !== true);
+    return [...baseList].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
   }, [products]);
 
   const baruProducts = useMemo(() => {
@@ -336,13 +338,78 @@ export default function StorefrontClient({
           transition={{ delay: 0.2, duration: 0.7 }}
           className="max-w-6xl mx-auto px-4 sm:px-6 mt-8 space-y-8 relative z-10"
         >
+          {/* Paket Combo */}
+          {comboProducts.length > 0 && (
+            <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-serif font-black text-base md:text-lg text-gray-900 tracking-tight flex items-center gap-1.5">
+                  <ShoppingBag className="w-5 h-5 text-[#2E5A44]" /> Paket Combo Hemat
+                </h3>
+                <span onClick={() => setSearchOpen(true)} className="text-[10px] md:text-xs text-[#946F48] font-bold flex items-center gap-0.5 cursor-pointer hover:text-[#B48A5E] transition-colors uppercase tracking-wider select-none">
+                  Semua Combo <ChevronRight className="w-3.5 h-3.5" />
+                </span>
+              </div>
+
+              <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
+                {comboProducts.map((p) => {
+                  const isSoldOut = p.badge === 'sold-out';
+                  return (
+                    <div 
+                      key={p.id}
+                      onClick={() => handleProductClick(p)}
+                      className={`w-[145px] md:w-[175px] shrink-0 bg-white/70 backdrop-blur-md border border-[#D4A574]/15 shadow-[0_8px_30px_rgba(0,0,0,0.025)] transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden ${
+                        isSoldOut
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'hover:border-[#B48A5E]/40 hover:shadow-[0_12px_40px_rgba(180,138,94,0.12)] hover:-translate-y-1.5 cursor-pointer'
+                      }`}
+                    >
+                      {p.image && (
+                        <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-white mb-2.5 border border-[#EADFC9]/20 shadow-sm">
+                          <Image
+                            src={p.image}
+                            alt={p.name}
+                            fill
+                            sizes="(max-width: 768px) 120px, 150px"
+                            className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
+                              isSoldOut ? 'grayscale brightness-50' : ''
+                            }`}
+                          />
+                          {isSoldOut ? (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                              <span className="bg-black/80 text-white font-extrabold text-[8px] px-2 py-0.5 rounded-md tracking-wider uppercase">
+                                Habis
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-white/90 backdrop-blur-md text-[#D4A574] text-[8px] font-black shadow-sm flex items-center gap-0.5 leading-none">
+                              <Star className="w-3 h-3 fill-[#D4A574] stroke-none" /> 4.9
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex-grow flex flex-col justify-between">
+                        <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-[#2E5A44] transition-colors">
+                          {p.name}
+                        </p>
+                        <p className="font-bold text-xs text-[#B48A5E] leading-none mt-2">
+                          {formatRupiah(p.price)}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Spesial Hari Ini */}
           <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-serif font-black text-base md:text-lg text-gray-900 tracking-tight flex items-center gap-1.5">
                 <Flame className="w-5 h-5 text-amber-500 fill-amber-500/20" /> Spesial Hari Ini
               </h3>
-              <span className="text-[10px] md:text-xs text-[#946F48] font-bold flex items-center gap-0.5 cursor-pointer hover:text-[#B48A5E] transition-colors uppercase tracking-wider select-none">
+              <span onClick={() => setSearchOpen(true)} className="text-[10px] md:text-xs text-[#946F48] font-bold flex items-center gap-0.5 cursor-pointer hover:text-[#B48A5E] transition-colors uppercase tracking-wider select-none">
                 Semua Menu <ChevronRight className="w-3.5 h-3.5" />
               </span>
             </div>
@@ -367,7 +434,7 @@ export default function StorefrontClient({
                           alt={p.name}
                           fill
                           sizes="(max-width: 768px) 120px, 150px"
-                          className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
+                          className={`object-cover group-hover:scale-105 transition-transform duration-555 ease-out ${
                             isSoldOut ? 'grayscale brightness-50' : ''
                           }`}
                         />
@@ -392,9 +459,6 @@ export default function StorefrontClient({
                       <div className="mt-2 flex items-baseline justify-between">
                         <span className="font-bold text-xs text-[#B48A5E]">
                           {formatRupiah(p.price)}
-                        </span>
-                        <span className="text-[8px] font-black uppercase text-[#2E5A44] bg-[#E8F5E9] px-1.5 py-0.5 rounded">
-                          Combo
                         </span>
                       </div>
                     </div>

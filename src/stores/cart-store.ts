@@ -21,7 +21,8 @@ function generateCartItemId(
     sugarLevel: SugarLevel,
     addOns: AddOn[],
     isBundle?: boolean,
-    bundleSelections?: any[]
+    bundleSelections?: any[],
+    size?: string
 ): string {
     if (isBundle && bundleSelections) {
         const selectionSignature = bundleSelections
@@ -31,7 +32,7 @@ function generateCartItemId(
         return `${productId}__bundle__${selectionSignature}`;
     }
     const addOnIds = addOns.map((a) => a.id).sort().join(',');
-    return `${productId}__${iceLevel}__${sugarLevel}__${addOnIds}`;
+    return `${productId}__${iceLevel}__${sugarLevel}__${size || 'Normal'}__${addOnIds}`;
 }
 
 function calcItemTotal(item: { 
@@ -40,13 +41,15 @@ function calcItemTotal(item: {
     quantity: number;
     isBundle?: boolean;
     bundleSelections?: any[];
+    sizePrice?: number;
 }): number {
     if (item.isBundle && item.bundleSelections) {
         const adjustments = item.bundleSelections.reduce((sum, a) => sum + (a.priceAdjustment || 0), 0);
         return (item.basePrice + adjustments) * item.quantity;
     }
     const addOnTotal = item.addOns.reduce((sum, a) => sum + a.price, 0);
-    return (item.basePrice + addOnTotal) * item.quantity;
+    const sizeAdj = item.sizePrice || 0;
+    return (item.basePrice + sizeAdj + addOnTotal) * item.quantity;
 }
 
 export const useCartStore = create<CartState>()(
@@ -61,7 +64,8 @@ export const useCartStore = create<CartState>()(
                     item.sugarLevel,
                     item.addOns,
                     item.isBundle,
-                    item.bundleSelections
+                    item.bundleSelections,
+                    item.size
                 );
 
                 set((state) => {
@@ -98,7 +102,8 @@ export const useCartStore = create<CartState>()(
                     item.sugarLevel,
                     item.addOns,
                     item.isBundle,
-                    item.bundleSelections
+                    item.bundleSelections,
+                    item.size
                 );
 
                 set((state) => {

@@ -87,6 +87,15 @@ export async function POST(req: Request) {
                 }
                 secureItemPrice += secureBundleAdjustments;
             } else {
+                // Securely calculate size price
+                let secureSizePrice = 0
+                if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+                    const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+                    if (validSize) {
+                        secureSizePrice = validSize.price
+                    }
+                }
+
                 // Calculate Add-Ons total
                 let addOnsTotal = 0
                 if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
@@ -97,7 +106,7 @@ export async function POST(req: Request) {
                         }
                     }
                 }
-                secureItemPrice += addOnsTotal;
+                secureItemPrice += secureSizePrice + addOnsTotal;
             }
 
             const secureItemTotal = secureItemPrice * item.quantity
@@ -228,9 +237,43 @@ export async function POST(req: Request) {
                     } else if (template.type === 'FREE_DRINK') {
                         voucherDiscount = Math.min(template.discountValue || 25000, validProductsSubtotal)
                     } else if (template.type === 'FREE_TOPPING') {
-                        voucherDiscount = Math.min(template.discountValue || 3000, validProductsSubtotal)
+                        let maxToppingPrice = 0
+                        for (const item of body.items) {
+                            if (isProductValidForVoucher(item.productId, template.validProductIds)) {
+                                const dbProduct = dbProducts.find(p => p.id === item.productId)
+                                let dbModifiers: any = {}
+                                if (dbProduct?.modifiers) {
+                                    try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
+                                }
+                                if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+                                    for (const addOnId of item.addOnIds) {
+                                        const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                                        if (validAddOn && validAddOn.price > maxToppingPrice) {
+                                            maxToppingPrice = validAddOn.price
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        voucherDiscount = maxToppingPrice
                     } else if (template.type === 'UPGRADE_SIZE') {
-                        voucherDiscount = Math.min(template.discountValue || 5000, validProductsSubtotal)
+                        let maxSizePrice = 0
+                        for (const item of body.items) {
+                            if (isProductValidForVoucher(item.productId, template.validProductIds)) {
+                                const dbProduct = dbProducts.find(p => p.id === item.productId)
+                                let dbModifiers: any = {}
+                                if (dbProduct?.modifiers) {
+                                    try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
+                                }
+                                if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+                                    const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+                                    if (validSize && validSize.price > maxSizePrice) {
+                                        maxSizePrice = validSize.price
+                                    }
+                                }
+                            }
+                        }
+                        voucherDiscount = maxSizePrice
                     } else if (template.type === 'GRATIS_ONGKIR') {
                         if (!hasFreeShippingBundle) ongkirDiscount = deliveryFee
                     } else {
@@ -239,8 +282,42 @@ export async function POST(req: Request) {
                 } else {
                     // Fallback to legacy hardcoded rules for legacy vouchers without template
                     if (voucher.type === 'FREE_DRINK') voucherDiscount = 25000
-                    else if (voucher.type === 'FREE_TOPPING') voucherDiscount = 3000
-                    else if (voucher.type === 'UPGRADE_SIZE') voucherDiscount = 5000
+                    else if (voucher.type === 'FREE_TOPPING') {
+                        let maxToppingPrice = 0
+                        for (const item of body.items) {
+                            const dbProduct = dbProducts.find(p => p.id === item.productId)
+                            let dbModifiers: any = {}
+                            if (dbProduct?.modifiers) {
+                                try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
+                            }
+                            if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+                                for (const addOnId of item.addOnIds) {
+                                    const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                                    if (validAddOn && validAddOn.price > maxToppingPrice) {
+                                        maxToppingPrice = validAddOn.price
+                                    }
+                                }
+                            }
+                        }
+                        voucherDiscount = maxToppingPrice
+                    }
+                    else if (voucher.type === 'UPGRADE_SIZE') {
+                        let maxSizePrice = 0
+                        for (const item of body.items) {
+                            const dbProduct = dbProducts.find(p => p.id === item.productId)
+                            let dbModifiers: any = {}
+                            if (dbProduct?.modifiers) {
+                                try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
+                            }
+                            if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+                                const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+                                if (validSize && validSize.price > maxSizePrice) {
+                                    maxSizePrice = validSize.price
+                                }
+                            }
+                        }
+                        voucherDiscount = maxSizePrice
+                    }
                     else if (voucher.type === 'REFERRAL_REWARD') voucherDiscount = 25000
                     else if (voucher.type === 'GRATIS_ONGKIR') {
                         if (!hasFreeShippingBundle) ongkirDiscount = deliveryFee

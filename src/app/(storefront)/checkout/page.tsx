@@ -332,6 +332,14 @@ export default function CheckoutPage() {
 
   const subtotal = totalPrice();
 
+  const toppingTotal = useMemo(() => {
+    return items.reduce((sum, item) => sum + (item.addOns ? item.addOns.reduce((s, a) => s + a.price, 0) * item.quantity : 0), 0);
+  }, [items]);
+
+  const sizeUpgradeTotal = useMemo(() => {
+    return items.reduce((sum, item) => sum + ((item.sizePrice || 0) * item.quantity), 0);
+  }, [items]);
+
   const filteredUserVouchers = useMemo(() => {
     return userVouchers.filter(v => {
       if (voucherSearchQuery) {
@@ -401,6 +409,21 @@ export default function CheckoutPage() {
   const voucherDiscount = useMemo(() => {
     if (!appliedVoucher) return 0;
     if (appliedVoucher.type === 'GRATIS_ONGKIR' || appliedVoucher.type === 'DISKON_ONGKIR') return 0;
+
+    if (appliedVoucher.type === 'FREE_TOPPING') {
+      const allAddOns = items.flatMap(item => item.addOns || []);
+      if (allAddOns.length === 0) return 0;
+      const highestToppingPrice = Math.max(...allAddOns.map(a => a.price));
+      return highestToppingPrice > 0 ? highestToppingPrice : 0;
+    }
+
+    if (appliedVoucher.type === 'UPGRADE_SIZE') {
+      const maxSizeUpgrade = items.reduce((max, item) => {
+        const itemSizePrice = item.sizePrice || 0;
+        return itemSizePrice > max ? itemSizePrice : max;
+      }, 0);
+      return maxSizeUpgrade;
+    }
     
     // Resolve discount value from either discountAmount or template.discountValue
     const discountVal = (appliedVoucher.discountAmount !== undefined && appliedVoucher.discountAmount !== null && appliedVoucher.discountAmount > 0)
@@ -420,13 +443,11 @@ export default function CheckoutPage() {
     }
     switch (appliedVoucher.type) {
       case 'FREE_DRINK': return 25000;
-      case 'FREE_TOPPING': return 3000;
-      case 'UPGRADE_SIZE': return 5000;
       case 'REFERRAL_REWARD': return 25000;
       case 'DISCOUNT_RP': return 10000;
       default: return 10000;
     }
-  }, [appliedVoucher, subtotal]);
+  }, [appliedVoucher, subtotal, items]);
 
   const pointsDiscount = usePoints ? pointsToUse * pointValue : 0;
   const grandTotal = Math.max(0, subtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, shippingFee - ongkirDiscount);
@@ -576,9 +597,11 @@ export default function CheckoutPage() {
           quantity: item.quantity,
           price: item.basePrice,
           totalPrice: item.totalPrice,
+          size: item.size || 'Normal',
+          sizePrice: item.sizePrice || 0,
           modsString: item.isBundle && item.bundleSelections
             ? item.bundleSelections.map(s => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
-            : `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map(a => a.name).join(', +') : ''}`,
+            : `${item.size || 'Normal'}, ${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map(a => a.name).join(', +') : ''}`,
           addOnIds: item.isBundle ? [] : item.addOns.map(a => a.id),
           isBundle: item.isBundle || false,
           bundleSelections: item.isBundle ? item.bundleSelections : undefined
@@ -1022,7 +1045,7 @@ export default function CheckoutPage() {
                     <p className="text-[11px] text-gray-400 font-medium leading-relaxed truncate mt-0.5">
                       {item.isBundle && item.bundleSelections
                         ? item.bundleSelections.map((s: any) => `${s.productName}`).join(' · ')
-                        : `${item.iceLevel} · ${item.sugarLevel}${item.addOns.length > 0 ? ` · +${item.addOns.map(a => a.name).join(', ')}` : ''}`
+                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.addOns.length > 0 ? ` · +${item.addOns.map(a => a.name).join(', ')}` : ''}`
                       }
                     </p>
                     <div className="flex items-center gap-2 mt-1">
@@ -1226,6 +1249,18 @@ export default function CheckoutPage() {
                   <span className="font-medium">Subtotal</span>
                   <span className="text-gray-800">{formatRupiah(subtotal)}</span>
                 </div>
+                {toppingTotal > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="font-medium">Total Topping/Add-on</span>
+                    <span className="text-gray-800">{formatRupiah(toppingTotal)}</span>
+                  </div>
+                )}
+                {sizeUpgradeTotal > 0 && (
+                  <div className="flex justify-between text-xs">
+                    <span className="font-medium">Total Upgrade Ukuran</span>
+                    <span className="text-gray-850">{formatRupiah(sizeUpgradeTotal)}</span>
+                  </div>
+                )}
                 {orderType === 'PICKUP' && pickupTime && (
                   <div className="flex justify-between items-center bg-[#FFFDF9] border border-[#EADFC9]/20 p-2.5 rounded-xl">
                     <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-[#B48A5E]" /> Waktu Ambil</span>

@@ -66,14 +66,14 @@ export function LoginBottomSheet({ isOpen, onClose }: { isOpen: boolean, onClose
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/40 z-50 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/40 z-[100] backdrop-blur-sm"
           />
           <motion.div
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 z-[60] bg-white rounded-t-3xl pt-2 pb-safe shadow-2xl max-h-[90vh] overflow-y-auto"
+            className="fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-3xl pt-2 pb-safe shadow-2xl max-h-[90vh] overflow-y-auto"
           >
             {/* Grabber handle */}
             <div className="w-full flex justify-center mb-4">

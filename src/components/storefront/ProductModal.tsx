@@ -35,6 +35,8 @@ export function ProductModal({
   const [iceLevel, setIceLevel] = useState<IceLevel>('Normal Ice');
   const [sugarLevel, setSugarLevel] = useState<SugarLevel>('Normal Sugar');
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>([]);
+  const [size, setSize] = useState<string>('Normal');
+  const [sizePrice, setSizePrice] = useState<number>(0);
   const [quantity, setQuantity] = useState(1);
   const [isDesktop, setIsDesktop] = useState(false);
   
@@ -57,6 +59,8 @@ export function ProductModal({
         setIceLevel(initialData.iceLevel || 'Normal Ice');
         setSugarLevel(initialData.sugarLevel || 'Normal Sugar');
         setSelectedAddOns(initialData.addOns || []);
+        setSize(initialData.size || 'Normal');
+        setSizePrice(initialData.sizePrice || 0);
         setQuantity(initialData.quantity || 1);
         if (initialData.bundleSelections) {
           const loaded: { [groupId: string]: any } = {};
@@ -69,6 +73,8 @@ export function ProductModal({
         setIceLevel('Normal Ice');
         setSugarLevel('Normal Sugar');
         setSelectedAddOns([]);
+        setSize('Normal');
+        setSizePrice(0);
         setQuantity(1);
 
         if (product?.modifiers?.isBundle && product.modifiers.bundleGroups) {
@@ -102,6 +108,8 @@ export function ProductModal({
       setIceLevel('Normal Ice');
       setSugarLevel('Normal Sugar');
       setSelectedAddOns([]);
+      setSize('Normal');
+      setSizePrice(0);
       setQuantity(1);
       setBundleSelections({});
     }
@@ -123,7 +131,7 @@ export function ProductModal({
 
   const unitPrice = product?.modifiers?.isBundle
     ? ((product.price ?? 0) + bundleAdjustmentsTotal)
-    : ((product?.price ?? 0) + addOnTotal);
+    : ((product?.price ?? 0) + sizePrice + addOnTotal);
   
   const totalPrice = unitPrice * quantity;
 
@@ -183,6 +191,8 @@ export function ProductModal({
       quantity,
       iceLevel: product.modifiers?.isBundle ? 'Normal Ice' as const : iceLevel,
       sugarLevel: product.modifiers?.isBundle ? 'Normal Sugar' as const : sugarLevel,
+      size: product.modifiers?.isBundle ? 'Normal' : size,
+      sizePrice: product.modifiers?.isBundle ? 0 : sizePrice,
       addOns: product.modifiers?.isBundle ? [] : selectedAddOns,
       isBundle: product.modifiers?.isBundle || false,
       bundleSelections: product.modifiers?.isBundle ? (bundleSelectionsArray as any[]) : undefined
@@ -201,6 +211,7 @@ export function ProductModal({
   const hasIceOption = product?.modifiers?.iceLevel && product.modifiers.iceLevel.length > 0;
   const hasSugarOption = product?.modifiers?.sugarLevel && product.modifiers.sugarLevel.length > 0;
   const hasAddOns = product?.modifiers?.addOns && product.modifiers.addOns.length > 0;
+  const hasSizeOption = product?.modifiers?.sizes && product.modifiers.sizes.length > 0;
   const isBundleProduct = product?.modifiers?.isBundle === true;
 
   return (
@@ -397,6 +408,36 @@ export function ProductModal({
                 ) : (
                   /* ── Standard Customization ── */
                   <>
+                    {/* Ukuran */}
+                    {hasSizeOption && (
+                      <div>
+                        <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2.5">
+                          Ukuran
+                        </h3>
+                        <div className="flex gap-2 flex-wrap">
+                          {product.modifiers?.sizes?.map((sz: any) => (
+                            <button
+                              key={sz.name}
+                              type="button"
+                              onClick={() => {
+                                setSize(sz.name);
+                                setSizePrice(sz.price);
+                              }}
+                              className={`px-4 py-2 rounded-full text-sm font-medium 
+                                transition-all touch-target border
+                                ${
+                                  size === sz.name
+                                    ? 'bg-brand-700 text-white border-brand-700 shadow-sm'
+                                    : 'bg-card text-foreground border-border hover:border-brand-400'
+                                }`}
+                            >
+                              {sz.name} {sz.price > 0 ? `(+${formatRupiah(sz.price)})` : ''}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Ice Level */}
                     {hasIceOption && (
                       <div>

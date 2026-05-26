@@ -10,7 +10,7 @@ export function BottomNav() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { openSearch, openQR, setSearchOpen } = useStorefrontContext();
+  const { openSearch, openQR, setSearchOpen, searchOpen } = useStorefrontContext();
   const currentSection = searchParams.get('section');
 
   const navItems = [
@@ -18,13 +18,13 @@ export function BottomNav() {
       label: 'Beranda',
       icon: Home,
       href: '/',
-      active: pathname === '/',
+      active: pathname === '/' && !searchOpen,
     },
     {
       label: 'Menu',
       icon: BookOpen,
       onClick: openSearch,
-      active: false,
+      active: !!searchOpen,
     },
     {
       label: 'Voucher',
