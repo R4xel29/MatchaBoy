@@ -213,7 +213,7 @@ export function ProductModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
             onClick={onClose}
           />
 
@@ -229,7 +229,7 @@ export function ProductModal({
             onDragEnd={(_, { offset }) => {
               if (!isDesktop && offset.y > 150) onClose();
             }}
-            className={`fixed z-[61] bg-card shadow-2xl flex flex-col overflow-hidden
+            className={`fixed z-[101] bg-card shadow-2xl flex flex-col overflow-hidden
               ${isDesktop 
                 ? 'top-1/2 left-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl max-h-[85vh]' 
                 : 'bottom-0 left-0 right-0 rounded-t-3xl max-h-[90vh]'
