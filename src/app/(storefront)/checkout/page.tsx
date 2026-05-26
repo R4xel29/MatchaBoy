@@ -55,7 +55,7 @@ export default function CheckoutPage() {
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [tempPickupTime, setTempPickupTime] = useState<string>('Sekarang');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('TRANSFER');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [showPickupWarning, setShowPickupWarning] = useState(false);
 
   // Tumbler state
@@ -165,10 +165,6 @@ export default function CheckoutPage() {
       .then(r => r.json())
       .then(d => {
         setPaymentConfig(d);
-        if (d.qris?.enabled) setPaymentMethod('QRIS');
-        else if (d.transfer?.enabled) setPaymentMethod('TRANSFER');
-        else if (d.doku?.enabled) setPaymentMethod('DOKU');
-        else if (d.cod?.enabled) setPaymentMethod('COD');
       })
       .catch(() => {})
       .finally(() => setPaymentConfigLoading(false));
@@ -528,8 +524,9 @@ export default function CheckoutPage() {
     if (items.length === 0) return false;
     if (orderType === 'PICKUP' && (!pickupDate || !pickupTime)) return false;
     if (orderType === 'DELIVERY' && !deliveryAddress) return false;
+    if (!paymentMethod) return false;
     return true;
-  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress]);
+  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod]);
 
   const onSubmit = async (data: CheckoutFormData) => {
     if (!canSubmit) return;
@@ -1216,9 +1213,16 @@ export default function CheckoutPage() {
                 )}
               </div>
               
-              <div className="border-t border-dashed border-gray-200 pt-4 flex items-baseline justify-between">
-                <span className="font-serif font-black text-gray-900 text-sm">Total Pembayaran</span>
-                <span className="font-serif font-black text-2xl text-[#B48A5E] tracking-tight">{formatRupiah(grandTotal)}</span>
+              <div className="border-t border-dashed border-gray-200 pt-4 flex flex-col gap-1">
+                <div className="flex items-baseline justify-between">
+                  <span className="font-serif font-black text-gray-900 text-sm">Total Pembayaran</span>
+                  <span className="font-serif font-black text-2xl text-[#B48A5E] tracking-tight">{formatRupiah(grandTotal)}</span>
+                </div>
+                {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
+                  <p className="text-right text-[11px] font-bold text-emerald-600">
+                    (Kamu hemat {formatRupiah(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount)})
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1252,6 +1256,8 @@ export default function CheckoutPage() {
                   'Tentukan Waktu Pengambilan'
                 ) : orderType === 'DELIVERY' && !deliveryAddress ? (
                   'Tentukan Alamat Kirim'
+                ) : !paymentMethod ? (
+                  'Pilih Metode Pembayaran'
                 ) : (
                   `Buat Pesanan · ${formatRupiah(grandTotal)}`
                 )}
@@ -1278,7 +1284,7 @@ export default function CheckoutPage() {
             initial={{ opacity: 0, y: -40, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: -40, x: '-50%' }}
-            className={`fixed top-6 left-1/2 z-[100] max-w-sm w-[90vw] px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border ${
+            className={`fixed top-6 left-1/2 z-[200] max-w-sm w-[90vw] px-5 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border ${
               toast.type === 'error'
                 ? 'bg-red-50 border-red-200 text-red-800'
                 : 'bg-emerald-50 border-emerald-200 text-emerald-800'
@@ -1314,6 +1320,11 @@ export default function CheckoutPage() {
                 </span>
               )}
             </div>
+            {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
+              <span className="text-[9px] font-extrabold text-[#1E7D44] mt-0.5">
+                (Kamu hemat {formatRupiah(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount)})
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -1344,11 +1355,17 @@ export default function CheckoutPage() {
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4.5 h-4.5 animate-spin" />
                   <span>Memproses...</span>
                 </>
-              ) : (
+              ) : orderType === 'PICKUP' && (!pickupDate || !pickupTime) ? (
+                'Jadwalkan Ambil'
+              ) : orderType === 'DELIVERY' && !deliveryAddress ? (
+                'Tentukan Alamat'
+              ) : !paymentMethod ? (
                 'Pilih Pembayaran'
+              ) : (
+                'Bayar'
               )}
             </button>
           </div>

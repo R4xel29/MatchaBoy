@@ -102,7 +102,9 @@ export async function POST(req: Request) {
       validProductIds,
       terms,
       expiresAt,
-      usageLimit
+      usageLimit,
+      targetNewUserOnly,
+      hideFromVoucherPack
     } = body
 
     if (!code || !title || !description || !type || !terms) {
@@ -130,7 +132,9 @@ export async function POST(req: Request) {
         validProductIds: validProductIds ? JSON.stringify(validProductIds) : null,
         terms,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
-        usageLimit: Number(usageLimit) || 0
+        usageLimit: Number(usageLimit) || 0,
+        targetNewUserOnly: Boolean(targetNewUserOnly),
+        hideFromVoucherPack: Boolean(hideFromVoucherPack)
       }
     })
 
@@ -163,7 +167,9 @@ export async function PUT(req: Request) {
       validProductIds,
       terms,
       expiresAt,
-      usageLimit
+      usageLimit,
+      targetNewUserOnly,
+      hideFromVoucherPack
     } = body
 
     if (!id || !code || !title || !description || !type || !terms) {
@@ -192,7 +198,9 @@ export async function PUT(req: Request) {
         validProductIds: validProductIds ? JSON.stringify(validProductIds) : null,
         terms,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
-        usageLimit: Number(usageLimit) || 0
+        usageLimit: Number(usageLimit) || 0,
+        targetNewUserOnly: Boolean(targetNewUserOnly),
+        hideFromVoucherPack: Boolean(hideFromVoucherPack)
       }
     })
 

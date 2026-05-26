@@ -32,6 +32,17 @@ export async function GET(req: Request) {
       .filter((id): id is string => !!id)
 
     const now = new Date()
+
+    // Get user's registration date
+    const dbUser = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { createdAt: true }
+    })
+
+    const isNewUser = dbUser
+      ? (now.getTime() - new Date(dbUser.createdAt).getTime()) <= 14 * 24 * 60 * 60 * 1000
+      : false
+
     const claimableTemplates = await prisma.voucherTemplate.findMany({
       where: {
         id: {
@@ -40,7 +51,9 @@ export async function GET(req: Request) {
         OR: [
           { expiresAt: null },
           { expiresAt: { gt: now } }
-        ]
+        ],
+        hideFromVoucherPack: false,
+        ...(isNewUser ? {} : { targetNewUserOnly: false })
       },
       orderBy: {
         createdAt: 'desc'

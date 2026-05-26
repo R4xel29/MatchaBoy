@@ -29,6 +29,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Kode voucher tidak valid atau tidak ditemukan' }, { status: 404 })
     }
 
+    // 1b. Validate new user targeting
+    if (template.targetNewUserOnly) {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { createdAt: true }
+      })
+      if (dbUser) {
+        const now = new Date()
+        const diffTime = now.getTime() - new Date(dbUser.createdAt).getTime()
+        const diffDays = diffTime / (1000 * 60 * 60 * 24)
+        if (diffDays > 14) {
+          return NextResponse.json({ error: 'Voucher ini hanya berlaku untuk pengguna baru (terdaftar kurang dari 14 hari)' }, { status: 400 })
+        }
+      }
+    }
+
     // 2. Validate template expiration
     if (template.expiresAt && template.expiresAt < new Date()) {
       return NextResponse.json({ error: 'Masa berlaku voucher ini sudah habis' }, { status: 400 })

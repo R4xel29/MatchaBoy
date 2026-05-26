@@ -7,7 +7,7 @@ import { XCircle, RefreshCw, ShoppingBag, Home, AlertTriangle } from 'lucide-rea
 import { formatRupiah } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 
-export default function PaymentFailedClient({ order }: { order: any }) {
+export default function PaymentFailedClient({ order, isStaticQris }: { order: any; isStaticQris?: boolean }) {
   const router = useRouter()
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -78,14 +78,16 @@ export default function PaymentFailedClient({ order }: { order: any }) {
 
         {/* Primary actions */}
         <div className="space-y-3 pt-2">
-          <button
-            onClick={handleRepay}
-            disabled={loading}
-            className="w-full py-4.5 bg-[#B48A5E] hover:bg-[#946F48] disabled:opacity-50 text-white font-bold rounded-2xl shadow-xl shadow-[#B48A5E]/10 transition-all flex items-center justify-center gap-2.5 active:scale-[0.98] text-sm"
-          >
-            {loading ? <RefreshCw className="w-4.5 h-4.5 animate-spin" /> : <RefreshCw className="w-4.5 h-4.5" />}
-            <span>Ulangi Pembayaran QRIS</span>
-          </button>
+          {!(isCancelled && order.paymentMethod === 'QRIS' && isStaticQris) && (
+            <button
+              onClick={handleRepay}
+              disabled={loading}
+              className="w-full py-4.5 bg-[#B48A5E] hover:bg-[#946F48] disabled:opacity-50 text-white font-bold rounded-2xl shadow-xl shadow-[#B48A5E]/10 transition-all flex items-center justify-center gap-2.5 active:scale-[0.98] text-sm"
+            >
+              {loading ? <RefreshCw className="w-4.5 h-4.5 animate-spin" /> : <RefreshCw className="w-4.5 h-4.5" />}
+              <span>Ulangi Pembayaran QRIS</span>
+            </button>
+          )}
 
           <button
             onClick={() => router.push('/')}

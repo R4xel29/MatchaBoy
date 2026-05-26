@@ -400,6 +400,9 @@ model VoucherTemplate {
   expiresAt       DateTime? // Tanggal kadaluarsa voucher template (kapan voucher tidak bisa diklaim lagi)
   usageLimit      Int       @default(0) // 0 berarti tidak terbatas. Kuota klaim maksimum voucher.
   usageCount      Int       @default(0) // Jumlah kuota yang sudah diklaim
+  
+  targetNewUserOnly   Boolean   @default(false) // Hanya untuk pengguna baru (< 14 hari)
+  hideFromVoucherPack Boolean   @default(false) // Sembunyikan dari daftar voucher pack
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

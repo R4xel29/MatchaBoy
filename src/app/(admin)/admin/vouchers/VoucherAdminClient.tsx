@@ -37,6 +37,8 @@ interface VoucherTemplateShape {
   expiresAt: string | null
   usageLimit: number
   usageCount: number
+  targetNewUserOnly: boolean
+  hideFromVoucherPack: boolean
   createdAt: string
 }
 
@@ -78,6 +80,8 @@ export default function VoucherAdminClient({
   const [minPurchase, setMinPurchase] = useState(0)
   const [maxDiscount, setMaxDiscount] = useState<number | null>(null)
   const [terms, setTerms] = useState('')
+  const [targetNewUserOnly, setTargetNewUserOnly] = useState(false)
+  const [hideFromVoucherPack, setHideFromVoucherPack] = useState(false)
   const [expiresAt, setExpiresAt] = useState('')
   const [usageLimit, setUsageLimit] = useState(100)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([])
@@ -405,6 +409,8 @@ export default function VoucherAdminClient({
     setMaxDiscount(null)
     setTerms('')
     setUsageLimit(100)
+    setTargetNewUserOnly(false)
+    setHideFromVoucherPack(false)
     
     // Default expiry (next month)
     const nextMonth = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -425,6 +431,8 @@ export default function VoucherAdminClient({
     setMinPurchase(t.minPurchase)
     setMaxDiscount(t.maxDiscount)
     setTerms(t.terms)
+    setTargetNewUserOnly(t.targetNewUserOnly || false)
+    setHideFromVoucherPack(t.hideFromVoucherPack || false)
     setExpiresAt(t.expiresAt ? new Date(t.expiresAt).toISOString().split('T')[0] : '')
     setUsageLimit(t.usageLimit)
     const parsed = t.validProductIds ? JSON.parse(t.validProductIds) : []
@@ -527,7 +535,9 @@ export default function VoucherAdminClient({
       terms,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       usageLimit: Number(usageLimit),
-      validProductIds: selectedProductIds
+      validProductIds: selectedProductIds,
+      targetNewUserOnly,
+      hideFromVoucherPack
     }
 
     setIsSaving(true)
@@ -935,6 +945,17 @@ export default function VoucherAdminClient({
                                   : 'Selamanya'}
                               </p>
                             </div>
+                            <div className="bg-white p-4 rounded-2xl border border-gray-100">
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Target & Visibilitas</span>
+                              <div className="mt-1 text-xs font-bold space-y-0.5">
+                                <p className={detailData.targetNewUserOnly ? 'text-amber-600' : 'text-gray-600'}>
+                                  🎯 {detailData.targetNewUserOnly ? 'Khusus Pengguna Baru' : 'Semua Pengguna'}
+                                </p>
+                                <p className={detailData.hideFromVoucherPack ? 'text-red-500' : 'text-emerald-600'}>
+                                  👁️ {detailData.hideFromVoucherPack ? 'Tersembunyi dari List' : 'Tampil di Voucher Pack'}
+                                </p>
+                              </div>
+                            </div>
                           </div>
 
                           {/* Applicable Products */}
@@ -1299,7 +1320,7 @@ export default function VoucherAdminClient({
                   <h3 className="font-bold text-xs uppercase tracking-wider text-gray-400 border-b border-gray-50 pb-2">
                     Tipe Diskon & Nilai
                   </h3>
-                  <div className={`grid grid-cols-1 ${type === 'DISCOUNT_PCT' ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 mb-1.5">Tipe Voucher *</label>
                       <select
@@ -1363,35 +1384,35 @@ export default function VoucherAdminClient({
                         </p>
                       )}
                     </div>
-                    {type === 'DISCOUNT_PCT' && (
-                      <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1.5">Batas Diskon Maksimal (Rp)</label>
-                        <input
-                          type="number"
-                          id="maxDiscount"
-                          name="maxDiscount"
-                          min={0}
-                          value={maxDiscount !== null ? maxDiscount : ''}
-                          onChange={(e) => { 
-                            const val = e.target.value;
-                            setMaxDiscount(val === '' ? null : Number(val));
-                            clearError('maxDiscount');
-                          }}
-                          placeholder="Tanpa batas"
-                          className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
-                            errors.maxDiscount 
-                              ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
-                              : 'border-gray-250 focus:border-[#B48A5E]'
-                          }`}
-                        />
-                        {errors.maxDiscount && (
-                          <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
-                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                            {errors.maxDiscount}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Batas Diskon Maksimal (Rp)</label>
+                      <input
+                        type="number"
+                        id="maxDiscount"
+                        name="maxDiscount"
+                        min={0}
+                        disabled={type !== 'DISCOUNT_PCT'}
+                        value={type === 'DISCOUNT_PCT' ? (maxDiscount !== null ? maxDiscount : '') : ''}
+                        onChange={(e) => { 
+                          const val = e.target.value;
+                          setMaxDiscount(val === '' ? null : Number(val));
+                          clearError('maxDiscount');
+                        }}
+                        placeholder={type === 'DISCOUNT_PCT' ? 'Tanpa batas' : 'Hanya untuk tipe Persentase (%)'}
+                        className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
+                          type !== 'DISCOUNT_PCT' ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' :
+                          errors.maxDiscount 
+                            ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
+                            : 'border-gray-250 focus:border-[#B48A5E]'
+                        }`}
+                      />
+                      {errors.maxDiscount && type === 'DISCOUNT_PCT' && (
+                        <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                          {errors.maxDiscount}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -1433,6 +1454,44 @@ export default function VoucherAdminClient({
                         onChange={(e) => setExpiresAt(e.target.value)}
                         className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E]"
                       />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                    <div 
+                      className="flex items-center gap-3 px-4 py-3 bg-gray-50 border border-gray-200/50 rounded-2xl cursor-pointer select-none hover:bg-gray-100/50 transition-colors" 
+                      onClick={() => setTargetNewUserOnly(!targetNewUserOnly)}
+                    >
+                      <input
+                        type="checkbox"
+                        id="targetNewUserOnly"
+                        checked={targetNewUserOnly}
+                        onChange={(e) => setTargetNewUserOnly(e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4.5 h-4.5 accent-[#B48A5E] cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="targetNewUserOnly" className="block text-xs font-bold text-gray-800 cursor-pointer">Hanya Pengguna Baru</label>
+                        <span className="text-[10px] text-gray-400 font-semibold leading-none">Khusus akun terdaftar &lt; 14 hari</span>
+                      </div>
+                    </div>
+
+                    <div 
+                      className="flex items-center gap-3 px-4 py-3 bg-gray-50 border border-gray-200/50 rounded-2xl cursor-pointer select-none hover:bg-gray-100/50 transition-colors" 
+                      onClick={() => setHideFromVoucherPack(!hideFromVoucherPack)}
+                    >
+                      <input
+                        type="checkbox"
+                        id="hideFromVoucherPack"
+                        checked={hideFromVoucherPack}
+                        onChange={(e) => setHideFromVoucherPack(e.target.checked)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4.5 h-4.5 accent-[#B48A5E] cursor-pointer"
+                      />
+                      <div>
+                        <label htmlFor="hideFromVoucherPack" className="block text-xs font-bold text-gray-800 cursor-pointer">Sembunyikan dari Voucher Pack</label>
+                        <span className="text-[10px] text-gray-400 font-semibold leading-none">Hanya bisa diklaim manual via Kode/QR</span>
+                      </div>
                     </div>
                   </div>
 

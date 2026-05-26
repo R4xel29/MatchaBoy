@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import {
   ArrowLeft,
   Copy,
@@ -194,6 +194,24 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     }
   };
 
+
+  const swipeContainerRef = useRef<HTMLDivElement>(null);
+  const [swipeDragWidth, setSwipeDragWidth] = useState(0);
+  const swipeX = useMotionValue(0);
+  const swipeTextOpacity = useTransform(swipeX, [0, 150], [1, 0]);
+  const swipeBgWidth = useTransform(swipeX, (value) => `${value + 48}px`);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (swipeContainerRef.current) {
+        setSwipeDragWidth(swipeContainerRef.current.offsetWidth - 56);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
   const handleConfirmDelivery = async () => {
     setIsConfirming(true);
     setConfirmError('');
@@ -204,11 +222,22 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
       } else {
         const data = await res.json();
         setConfirmError(data.error || 'Gagal konfirmasi pesanan.');
+        swipeX.set(0);
       }
     } catch (e) {
       setConfirmError('Terjadi kesalahan. Silakan coba lagi.');
+      swipeX.set(0);
     } finally {
       setIsConfirming(false);
+    }
+  };
+
+  const handleDragEnd = async () => {
+    if (swipeX.get() >= swipeDragWidth * 0.9) {
+      swipeX.set(swipeDragWidth);
+      await handleConfirmDelivery();
+    } else {
+      swipeX.set(0);
     }
   };
 
@@ -222,7 +251,13 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border/50">
         <div className="flex items-center gap-3 px-4 py-3 max-w-6xl mx-auto">
           <button
-            onClick={() => router.back()}
+            onClick={() => {
+              if (currentStatus !== 'PENDING_PAYMENT') {
+                router.push('/profile?section=orders')
+              } else {
+                router.back()
+              }
+            }}
             className="w-10 h-10 flex items-center justify-center rounded-full 
               hover:bg-muted transition-colors touch-target"
             aria-label="Back"
@@ -391,22 +426,44 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                </h2>
                <LeafletTracking orderId={orderId} />
 
-               {/* Swipe to Confirm Button (Simulated with standard button for accessibility) */}
+               {/* Swipe to Confirm Button (Framer Motion drag-to-confirm) */}
                <div className="pt-4">
-                 <p className="text-xs text-center text-muted-foreground mb-3 font-medium">Pesanan sudah sampai?</p>
-                 <button
-                    onClick={handleConfirmDelivery}
-                    disabled={isConfirming}
-                    className="w-full relative overflow-hidden bg-white border-2 border-emerald-500 rounded-2xl p-1 h-14 group transition-all shadow-sm active:scale-[0.98] disabled:opacity-70 disabled:active:scale-100"
+                 <p className="text-xs text-center text-muted-foreground mb-3 font-medium">Pesanan sudah sampai? Geser untuk mengonfirmasi</p>
+                 <div 
+                   ref={swipeContainerRef}
+                   className="w-full relative overflow-hidden bg-emerald-50 border border-emerald-200 rounded-full p-1 h-14 shadow-inner flex items-center select-none"
                  >
-                    <div className="absolute inset-0 bg-emerald-50 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="relative z-10 flex items-center justify-between px-2 h-full">
-                       <div className="w-10 h-10 rounded-xl bg-emerald-500 flex items-center justify-center text-white shadow-sm shrink-0">
-                          {isConfirming ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ChevronRight className="w-6 h-6" />}
-                       </div>
-                       <span className="font-bold text-emerald-700 text-sm flex-1 text-center pr-10">Konfirmasi Pesanan Diterima</span>
-                    </div>
-                 </button>
+                    {/* Animated green progress background */}
+                    <motion.div 
+                      className="absolute left-1 top-1 bottom-1 bg-emerald-500 rounded-full"
+                      style={{ width: swipeBgWidth }}
+                    />
+                    
+                    {/* Centered instruction text */}
+                    <motion.div 
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                      style={{ opacity: swipeTextOpacity }}
+                    >
+                      <span className="font-bold text-emerald-700 text-sm">Geser untuk Konfirmasi</span>
+                    </motion.div>
+
+                    {/* Drag Handle */}
+                    <motion.div
+                      drag="x"
+                      dragConstraints={{ left: 0, right: swipeDragWidth }}
+                      dragElastic={0.05}
+                      dragMomentum={false}
+                      onDragEnd={handleDragEnd}
+                      style={{ x: swipeX }}
+                      className="w-12 h-12 rounded-full bg-white border border-emerald-300 flex items-center justify-center text-emerald-600 shadow-md cursor-grab active:cursor-grabbing z-10 shrink-0"
+                    >
+                      {isConfirming ? (
+                        <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
+                      ) : (
+                        <ChevronRight className="w-6 h-6 text-emerald-500" />
+                      )}
+                    </motion.div>
+                 </div>
                  {confirmError && <p className="text-xs text-red-500 text-center mt-2">{confirmError}</p>}
                </div>
             </div>

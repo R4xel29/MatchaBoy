@@ -12,9 +12,12 @@ export default async function OrderPaymentFailedPage({ params }: { params: Promi
     redirect('/login')
   }
 
-  const order = await prisma.order.findUnique({
-    where: { id },
-  })
+  const [order, paymentSettings] = await Promise.all([
+    prisma.order.findUnique({
+      where: { id },
+    }),
+    prisma.paymentSettings.findFirst()
+  ])
 
   if (!order) {
     notFound()
@@ -34,11 +37,15 @@ export default async function OrderPaymentFailedPage({ params }: { params: Promi
     id: order.id,
     total: order.total,
     status: order.status,
+    paymentMethod: order.paymentMethod,
   }
+
+  const isStaticQris = !!paymentSettings?.qrisImage && paymentSettings?.qrisEnabled
 
   return (
     <PaymentFailedClient 
       order={mappedOrder}
+      isStaticQris={isStaticQris}
     />
   )
 }

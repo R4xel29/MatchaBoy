@@ -108,12 +108,21 @@ export default function PaymentClient({
         const res = await fetch(`/api/orders/${order.id}/status`)
         if (res.ok) {
           const data = await res.json()
+          
+          // Check if user came from order details page to break back button redirect loops
+          if (typeof document !== 'undefined' && document.referrer && document.referrer.includes(`/orders/${order.id}`)) {
+            if (data.status !== 'PENDING_PAYMENT') {
+              router.replace('/profile?section=orders')
+              return
+            }
+          }
+
           if (data.status === 'CANCELLED') {
             showToast('Pesanan ditolak/dibatalkan oleh admin.', 'error')
-            router.push(`/orders/${order.id}/payment-failed?reason=cancelled`)
+            router.replace(`/orders/${order.id}/payment-failed?reason=cancelled`)
           } else if (data.status !== 'PENDING_PAYMENT') {
             showToast('Pembayaran berhasil diverifikasi!', 'success')
-            router.push(`/orders/${order.id}`)
+            router.replace(`/orders/${order.id}`)
           }
         }
       } catch (err) {
@@ -121,6 +130,7 @@ export default function PaymentClient({
       }
     }
 
+    checkPaymentStatus() // Run immediately on mount
     const interval = setInterval(checkPaymentStatus, 5000)
     return () => clearInterval(interval)
   }, [order.id, router, showToast])
@@ -233,7 +243,7 @@ export default function PaymentClient({
       if (res.ok) {
         setShowSuccessModal(true);
         setTimeout(() => {
-          router.push(`/orders/${order.id}`);
+          router.replace(`/orders/${order.id}`);
         }, 3000);
       } else {
         showToast('Gagal memverifikasi bukti pembayaran. Silakan coba lagi.', 'error');
