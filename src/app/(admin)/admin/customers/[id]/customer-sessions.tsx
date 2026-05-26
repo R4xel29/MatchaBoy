@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { 
   Laptop, 
   Smartphone, 
@@ -10,11 +10,12 @@ import {
   LogOut, 
   ShieldAlert, 
   Clock,
-  Sparkles
+  Sparkles,
+  MapPin
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { id as localeId } from 'date-fns/locale'
-import { revokeSessionAction, revokeAllSessionsAction } from '@/app/actions/admin'
+import { revokeSessionAction, revokeAllSessionsAction, getIpLocationAction } from '@/app/actions/admin'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 
 interface Session {
@@ -40,6 +41,25 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null)
   const [loadingAll, setLoadingAll] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [locations, setLocations] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    sessions.forEach(async (session) => {
+      if (session.ipAddress && !locations[session.id]) {
+        try {
+          const res = await getIpLocationAction(session.ipAddress)
+          if (res.success && res.location) {
+            setLocations(prev => ({ ...prev, [session.id]: res.location }))
+          } else {
+            setLocations(prev => ({ ...prev, [session.id]: 'Lokasi tidak diketahui' }))
+          }
+        } catch (e) {
+          console.error(e)
+          setLocations(prev => ({ ...prev, [session.id]: 'Gagal memuat lokasi' }))
+        }
+      }
+    })
+  }, [sessions])
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -208,6 +228,15 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
                           <Globe className="w-3.5 h-3.5" />
                           IP: {session.ipAddress || 'Unknown IP'}
                         </span>
+                        {session.ipAddress && (
+                          <>
+                            <span className="w-1 h-1 rounded-full bg-muted-foreground/30 hidden sm:inline-block"></span>
+                            <span className="flex items-center gap-1 text-brand-700">
+                              <MapPin className="w-3.5 h-3.5 text-brand-500" />
+                              {locations[session.id] || 'Mencari lokasi...'}
+                            </span>
+                          </>
+                        )}
                         <span className="w-1 h-1 rounded-full bg-muted-foreground/30 hidden sm:inline-block"></span>
                         <span className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5" />

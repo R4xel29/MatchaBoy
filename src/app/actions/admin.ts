@@ -142,3 +142,51 @@ export async function revokeAllSessionsAction(targetUserId: string) {
   }
 }
 
+export async function getIpLocationAction(ip: string) {
+  const session = await auth()
+  
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return { success: false, error: 'Unauthorized', location: '' }
+  }
+
+  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+    return { success: true, location: 'Localhost / Jaringan Lokal' }
+  }
+
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}`, { next: { revalidate: 86400 } })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.status === 'success') {
+        const city = data.city || ''
+        const region = data.regionName || ''
+        const country = data.country || ''
+        const parts = [city, region, country].filter(Boolean)
+        return { success: true, location: parts.join(', ') }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to get IP location:', error)
+  }
+
+  // Fallback to ipapi.co
+  try {
+    const res = await fetch(`https://ipapi.co/${ip}/json/`, { next: { revalidate: 86400 } })
+    if (res.ok) {
+      const data = await res.json()
+      if (!data.error) {
+        const city = data.city || ''
+        const region = data.region || ''
+        const country = data.country_name || ''
+        const parts = [city, region, country].filter(Boolean)
+        return { success: true, location: parts.join(', ') }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to get IP location fallback:', error)
+  }
+
+  return { success: false, location: 'Lokasi tidak diketahui' }
+}
+
+
