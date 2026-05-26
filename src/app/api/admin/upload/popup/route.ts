@@ -30,14 +30,14 @@ export async function POST(request: NextRequest) {
             .toLowerCase()
             .slice(0, 50);
         
-        const filename = `${safeName}-${timestamp}.avif`;
+        const filename = `${safeName}-${timestamp}.webp`;
 
         // Buffer and process with sharp (in-memory, no filesystem write)
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
         const processedBuffer = await sharp(buffer)
-            .avif({ quality: 80, effort: 4 })
+            .webp({ quality: 80 })
             .toBuffer();
 
         // Upload to Supabase Storage
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
             'popups',
             filename,
             processedBuffer,
-            'image/avif'
+            'image/webp'
         );
 
         return NextResponse.json({ url: publicUrl });
