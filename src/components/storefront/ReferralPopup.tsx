@@ -11,9 +11,6 @@ interface ReferralPopupProps {
 }
 
 export function ReferralPopup({ referralCode }: ReferralPopupProps) {
-  // Temporarily disabled per user request
-  return null;
-
   const { data: session, status } = useSession();
   const router = useRouter();
   const [showBig, setShowBig] = useState(false);
@@ -63,7 +60,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
       return;
     }
     const text = encodeURIComponent(
-      `Cobain Arus! 🍵 Matcha premium yang enak banget. Daftar pakai link ini dan dapatkan reward spesial:\n${getReferralUrl()}`
+      `Cobain Matchaboy! 🍵 Matcha premium yang enak banget. Daftar pakai link ini dan dapatkan diskon langsung Rp3.000 tanpa batas belanja:\n${getReferralUrl()}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
@@ -103,7 +100,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
                   </div>
                   <h3 className="font-serif text-xl font-bold mb-1">Ajak Teman, Dapat Reward!</h3>
                   <p className="text-sm text-white/70 leading-relaxed">
-                    Bagikan kode referral kamu. Kamu dan temanmu akan mendapat <strong className="text-white">1 Minuman Gratis</strong> setelah teman pertama kali memesan! 🎉
+                    Bagikan kode referral kamu. Temanmu akan mendapat <strong className="text-white">Diskon Rp3.000</strong> tanpa batas belanja. Kamu juga akan mendapat <strong className="text-white">Poin / Voucher diskon</strong> setelah teman memesan! 🎉
                   </p>
                 </div>
               </div>
@@ -169,7 +166,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
                 <Gift className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-bold">Ajak teman, dapat minuman gratis!</p>
+                <p className="text-[13px] font-bold">Ajak teman, dapat poin & voucher!</p>
                 <button
                   onClick={() => { 
                     if (isLoggedIn) {

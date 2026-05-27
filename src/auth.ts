@@ -119,14 +119,87 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 });
 
                 if (!user) {
+                    // Cek pending referral code dari cookie
+                    let referredById: string | undefined = undefined;
+                    try {
+                        const reqHeaders = await headers();
+                        const cookieHeader = reqHeaders.get("cookie") || "";
+                        const match = cookieHeader.match(/pending_referral_code=([^;]+)/);
+                        if (match) {
+                            const pendingRef = decodeURIComponent(match[1]);
+                            const referrer = await prisma.user.findUnique({
+                                where: { referralCode: pendingRef },
+                                select: { id: true }
+                            });
+                            if (referrer) {
+                                referredById = referrer.id;
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[AUTH] Error checking pending referral cookie:", e);
+                    }
+
                     user = await prisma.user.create({
                         data: {
                             phone,
                             phoneVerified: true,
                             role: "CUSTOMER",
-                            name: null
+                            name: null,
+                            ...(referredById ? { referredById } : {}),
                         }
                     });
+
+                    // Buat voucher selamat datang berdasarkan template yang dikonfigurasi admin
+                    // Kode template dibaca dari LoyaltySettings.welcomeVoucherCode (default: 'WELCOME')
+                    const loyaltySettings = await prisma.loyaltySettings.findFirst();
+                    const welcomeCode = (loyaltySettings as any)?.welcomeVoucherCode || 'WELCOME';
+                    
+                    let welcomeTemplate = await prisma.voucherTemplate.findUnique({
+                        where: { code: welcomeCode }
+                    });
+                    if (!welcomeTemplate) {
+                        try {
+                            welcomeTemplate = await prisma.voucherTemplate.create({
+                                data: {
+                                    code: welcomeCode,
+                                    title: "Diskon Pengguna Baru",
+                                    description: "Diskon Rp3.000 untuk pesanan pertama Anda!",
+                                    type: "DISCOUNT_RP",
+                                    discountValue: 3000,
+                                    minPurchase: 30000,
+                                    terms: "Minimum transaksi Rp30.000\nBerlaku 7 hari sejak diterima\nHanya untuk pengguna baru",
+                                    targetNewUserOnly: true,
+                                    hideFromVoucherPack: true
+                                }
+                            });
+                        } catch (e) {
+                            console.error("[AUTH] Gagal membuat voucher template welcome:", e);
+                        }
+                    }
+
+                    // Generate Welcome Discount Voucher menggunakan nilai dari template
+                    const generatedCode = `${welcomeCode}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                    const discountAmount = welcomeTemplate?.discountValue ?? 3000;
+                    const minPurchaseVal = welcomeTemplate?.minPurchase ?? 30000;
+                    const expiryDays = 7;
+                    await prisma.voucher.create({
+                        data: {
+                            userId: user.id,
+                            code: generatedCode,
+                            type: welcomeTemplate?.type ?? "DISCOUNT_RP",
+                            description: welcomeTemplate?.description ?? "Diskon Rp3.000 (Hadiah Pengguna Baru)",
+                            discountAmount,
+                            minPurchase: minPurchaseVal,
+                            templateId: welcomeTemplate?.id || null,
+                            expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
+                        }
+                    });
+                    if (welcomeTemplate) {
+                        await prisma.voucherTemplate.update({
+                            where: { id: welcomeTemplate.id },
+                            data: { usageCount: { increment: 1 } }
+                        }).catch(() => {});
+                    }
                 } else if (!user.phoneVerified) {
                     user = await prisma.user.update({
                         where: { id: user.id },

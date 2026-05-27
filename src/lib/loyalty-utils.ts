@@ -241,12 +241,12 @@ export async function awardTumblerBonus(userId: string, orderId?: string) {
   });
 
   // 2. Berikan voucher jika diaktifkan oleh admin
+  // Menggunakan kode template yang dikonfigurasi admin (tumblerVoucherCode2 → TUMBLER_REWARD)
   let voucherRes = null;
   if ((settings as any).tumblerVoucherEnabled) {
-    const voucherType = (settings as any).tumblerVoucherType || 'UPGRADE_SIZE';
+    const tumblerCode = (settings as any).tumblerVoucherCode2 || (settings as any).tumblerVoucherType || 'TUMBLER_REWARD';
     const voucherDesc = (settings as any).tumblerVoucherDesc || 'Eco-Reward: Free Upgrade Size (Bawa Tumbler)';
-
-    voucherRes = await createVoucherForUser(userId, voucherType, voucherDesc, 14);
+    voucherRes = await createVoucherForUser(userId, tumblerCode, voucherDesc, 14);
   }
 
   return { pointsRes, voucherRes };
@@ -267,12 +267,13 @@ export async function processReferralBonus(refereeUserId: string) {
 
   if (!referee?.referredById || referee.referralBonusPaid) return null;
 
-  // Cek apakah ini pembelian pertama referee
-  const orderCount = await prisma.order.count({
+  // Cek order pertama referee yang sukses (COMPLETED)
+  const firstCompletedOrder = await prisma.order.findFirst({
     where: { userId: refereeUserId, status: 'COMPLETED' },
+    orderBy: { createdAt: 'asc' },
   });
 
-  if (orderCount > 1) return null; // Bukan pembelian pertama (sudah > 1 termasuk yang baru)
+  if (!firstCompletedOrder) return null;
 
   // Tandai bonus sudah diberikan
   await prisma.user.update({
@@ -282,19 +283,30 @@ export async function processReferralBonus(refereeUserId: string) {
 
   const referrerId = referee.referredById;
 
-  if (settings.referralRewardType === 'POINTS') {
-    // Berikan poin ke referrer
-    return awardPoints({
+  // Gunakan kode template yang dikonfigurasi admin di Pengaturan Loyalty
+  // Field: referralVoucherCode (default: 'REFERRAL_REWARD')
+  const referralVoucherCode = (settings as any).referralVoucherCode || 'REFERRAL_REWARD';
+  const referralRewardType = settings.referralRewardType || 'VOUCHER';
+  const referralRewardPoints = settings.referralRewardPoints || 5;
+
+  if (referralRewardType === 'POINTS') {
+    await awardPoints({
       userId: referrerId,
-      pointsToAdd: settings.referralRewardPoints,
+      pointsToAdd: referralRewardPoints,
       type: 'EARN_REFERRAL',
-      description: `Bonus referral: teman yang diajak telah melakukan pembelian pertama`,
+      description: `Bonus referral: teman melakukan pembelian pertama (+${referralRewardPoints} poin)`,
     });
+    return { type: 'points', reward: `${referralRewardPoints} Poin` };
   } else {
-    // Berikan voucher ke referrer
-    const v = await createVoucherForUser(referrerId, settings.referralRewardVoucher, settings.referralRewardDesc, 30, {
-      fromReferralUserId: refereeUserId
-    });
+    // Berikan voucher dari template yang dikonfigurasi admin
+    const rewardDesc = settings.referralRewardDesc || 'Reward Referral (Ajak Teman)';
+    const v = await createVoucherForUser(
+      referrerId,
+      referralVoucherCode,
+      rewardDesc,
+      30,
+      { fromReferralUserId: refereeUserId }
+    );
     return { type: 'voucher', reward: v.description };
   }
 }

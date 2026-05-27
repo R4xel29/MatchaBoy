@@ -46,7 +46,8 @@ import {
   Fingerprint,
   AlertTriangle,
   Building2,
-  ClipboardList
+  ClipboardList,
+  Users
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import 'leaflet/dist/leaflet.css';
@@ -2437,6 +2438,97 @@ function SettingsSection({ user, onUpdate }: { user: UserShape, onUpdate: (user:
   );
 }
 
+function ManualReferralInput({ user }: { user: UserShape }) {
+  const [code, setCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [alreadyReferred, setAlreadyReferred] = useState(false);
+
+  // Check if user already has a referrer on mount
+  useEffect(() => {
+    fetch('/api/user/referral-status')
+      .then(r => r.json())
+      .then(d => { if (d.hasReferrer) setAlreadyReferred(true); })
+      .catch(() => {});
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true);
+    setMsg(null);
+    try {
+      const res = await fetch('/api/user/apply-referral', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referralCode: code.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMsg({ type: 'success', text: data.message || 'Kode referral berhasil diterapkan! Diskon Rp3.000 sudah ditambahkan ke akun Anda.' });
+        setAlreadyReferred(true);
+        setCode('');
+      } else {
+        setMsg({ type: 'error', text: data.error || 'Gagal menerapkan kode referral.' });
+      }
+    } catch {
+      setMsg({ type: 'error', text: 'Terjadi kesalahan jaringan.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (alreadyReferred) {
+    return (
+      <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-5 flex items-center gap-3">
+        <div className="w-9 h-9 rounded-2xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
+          <Check className="w-5 h-5 text-emerald-600" />
+        </div>
+        <div>
+          <h4 className="text-[13px] font-black text-emerald-800">Kode Referral Sudah Terhubung</h4>
+          <p className="text-[11px] text-emerald-600 font-medium">Akun Anda sudah memiliki referrer. Voucher welcome Rp3.000 telah ditambahkan.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-3">
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-2xl bg-[#2E5A44]/8 flex items-center justify-center border border-[#2E5A44]/15 text-[#2E5A44] flex-shrink-0">
+          <Users className="w-4 h-4" />
+        </div>
+        <div>
+          <h4 className="text-[14px] font-black text-gray-900">Punya Kode dari Teman?</h4>
+          <p className="text-[11px] text-gray-500 font-medium">Masukkan kode referral teman & dapatkan diskon <span className="text-[#2E5A44] font-bold">Rp3.000</span> <span className="text-gray-400">(min. belanja Rp30.000)</span></p>
+        </div>
+      </div>
+      <form onSubmit={handleSubmit} className="flex gap-2">
+        <input
+          type="text"
+          value={code}
+          onChange={e => setCode(e.target.value.toUpperCase())}
+          placeholder="Masukkan kode teman..."
+          className="flex-1 px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#2E5A44]/40 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
+          disabled={loading}
+        />
+        <button
+          type="submit"
+          disabled={loading || !code.trim()}
+          className="px-5 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:bg-gray-100 disabled:text-gray-400 text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md"
+        >
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Pakai'}
+        </button>
+      </form>
+      {msg && (
+        <p className={`text-xs font-bold px-1 ${msg.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>
+          {msg.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function LoyaltySection({ user, milestones }: { user: UserShape; milestones: MilestoneInfo | null }) {
   const [copied, setCopied] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -2604,6 +2696,9 @@ function LoyaltySection({ user, milestones }: { user: UserShape; milestones: Mil
           </button>
         </div>
       </div>
+
+      {/* Masukkan Kode Referral Teman */}
+      <ManualReferralInput user={user} />
 
       {/* Cara Mendapatkan Poin */}
       <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
