@@ -80,6 +80,8 @@ export async function PUT(request: Request) {
         referralRewardPoints: body.referralRewardPoints !== undefined ? Number(body.referralRewardPoints) : undefined,
         referralRewardVoucher: body.referralRewardVoucher !== undefined ? body.referralRewardVoucher : undefined,
         referralRewardDesc: body.referralRewardDesc !== undefined ? body.referralRewardDesc : undefined,
+        referralMinPurchase: body.referralMinPurchase !== undefined ? Number(body.referralMinPurchase) : undefined,
+        referralMaxClaims: body.referralMaxClaims !== undefined ? Number(body.referralMaxClaims) : undefined,
         pointMode: body.pointMode !== undefined ? body.pointMode : undefined,
         pointPerTransaction: body.pointPerTransaction !== undefined ? Number(body.pointPerTransaction) : undefined,
         pointPerAmount: body.pointPerAmount !== undefined ? Number(body.pointPerAmount) : undefined,

@@ -547,18 +547,6 @@ model BankAccount {
   updatedAt     DateTime @updatedAt
 }
 
-// Referral Tiers — tiered referral rewards
-model ReferralTier {
-  id             String   @id @default(cuid())
-  tierNumber     Int      // 1, 2, 3...
-  targetInvites  Int      // Jumlah orang yang harus diajak
-  rewardType     String   // VOUCHER, POINTS, CUSTOM
-  rewardValue    String   // Jenis voucher atau jumlah poin
-  rewardDesc     String   // Deskripsi hadiah
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-}
 
 // Referral Events — event/promo-based referral campaigns
 model ReferralEvent {

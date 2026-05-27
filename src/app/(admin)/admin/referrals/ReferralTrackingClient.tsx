@@ -5,7 +5,7 @@ import {
   ShoppingBag, Gift, Search, Settings
 } from 'lucide-react';
 import { useState } from 'react';
-import ReferralSettingsClient from '../referral-settings/ReferralSettingsClient';
+import ReferralSettingsClient from './ReferralSettingsClient';
 
 interface ReferralData {
   referee: { id: string; name: string | null; email: string | null; phone: string | null };
