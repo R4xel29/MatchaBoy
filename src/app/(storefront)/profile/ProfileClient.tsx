@@ -2521,7 +2521,7 @@ function ManualReferralInput({ user }: { user: UserShape }) {
           disabled={loading || !code.trim()}
           className="px-5 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md cursor-pointer"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Pakai'}
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Use'}
         </button>
       </form>
       {msg && (
@@ -2829,12 +2829,12 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
             </div>
             <button
               onClick={copyReferralCodeOnly}
-              className={`px-4 py-3 rounded-2xl text-[12px] font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 ${
+              className={`p-3.5 rounded-2xl flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0 ${
                 copiedCode ? 'bg-emerald-50 text-emerald-600 border border-green-200' : 'bg-[#B48A5E] text-white hover:bg-[#946F48] shadow-md shadow-[#B48A5E]/10'
               }`}
+              title={copiedCode ? 'Disalin!' : 'Salin Kode'}
             >
-              {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedCode ? 'Disalin!' : 'Salin Kode'}
+              {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
             </button>
           </div>
         </div>
