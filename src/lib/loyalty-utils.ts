@@ -356,8 +356,8 @@ export async function processOrderCompletion(orderId: string) {
     tumblerResult = await awardTumblerBonus(order.userId, orderId);
   }
 
-  // 3. Cek referral
-  const referralResult = await processReferralBonus(order.userId);
+  // 3. Cek referral (sekarang diklaim manual oleh referrer di profil)
+  const referralResult = null;
 
   // 4. Tandai order sudah diberi poin
   const tumblerBonus = order.hasTumbler ? settings.tumblerBonusPoints : 0;

@@ -2712,18 +2712,64 @@ function LoyaltySection({ user, milestones }: { user: UserShape; milestones: Mil
 }
 
 function ReferralSection({ user }: { user: UserShape }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [origin, setOrigin] = useState('');
+  const [referees, setReferees] = useState<any[]>([]);
+  const [loadingReferees, setLoadingReferees] = useState(true);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const fetchedRef = useRef(false);
+
+  const fetchReferees = async () => {
+    setLoadingReferees(true);
+    try {
+      const res = await fetch('/api/user/referrals');
+      if (res.ok) {
+        const data = await res.json();
+        setReferees(data.referrals || []);
+      }
+    } catch (e) {
+      console.error('Error fetching referees:', e);
+    } finally {
+      setLoadingReferees(false);
+    }
+  };
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    if (!fetchedRef.current) {
+      fetchedRef.current = true;
+      fetchReferees();
+    }
   }, []);
 
-  const copyReferralCode = () => {
-    const referralUrl = `${window.location.origin}/register?ref=${user.referralCode}`;
-    navigator.clipboard.writeText(referralUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyReferralCodeOnly = () => {
+    navigator.clipboard.writeText(user.referralCode);
+    setCopiedCode(true);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const handleClaim = async (refereeId: string) => {
+    setClaimingId(refereeId);
+    try {
+      const res = await fetch('/api/user/referrals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refereeId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message, 'success');
+        fetchReferees();
+      } else {
+        showToast(data.error || 'Gagal mengklaim voucher', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Terjadi kesalahan jaringan', 'error');
+    } finally {
+      setClaimingId(null);
+    }
   };
 
   const handleShare = async () => {
@@ -2762,7 +2808,7 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
       exit={{ opacity: 0, y: 20 }}
       className="space-y-4 animate-in fade-in duration-300"
     >
-      {/* Referral Code */}
+      {/* Referral Code & WhatsApp sharing */}
       <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
@@ -2770,22 +2816,27 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
           </div>
           <div>
             <h4 className="text-[14px] font-black text-gray-850">Ajak Teman, Dapat Reward!</h4>
-            <p className="text-[11px] text-gray-500 font-medium">Bagikan link pendaftaran Anda di bawah</p>
+            <p className="text-[11px] text-gray-500 font-medium">Bagikan kode Anda atau bagikan langsung lewat WhatsApp</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 px-3.5 py-3 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/15 text-[12px] font-mono text-gray-650 truncate shadow-inner">
-            {origin ? `${origin}/register?ref=${user.referralCode}` : user.referralCode}
+
+        {/* Kode Referral */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Kode Referral</label>
+          <div className="flex items-center gap-2">
+            <div className="flex-1 px-3.5 py-3 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/15 text-[14px] font-mono font-bold text-gray-800 shadow-inner">
+              {user.referralCode}
+            </div>
+            <button
+              onClick={copyReferralCodeOnly}
+              className={`px-4 py-3 rounded-2xl text-[12px] font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 ${
+                copiedCode ? 'bg-emerald-50 text-emerald-600 border border-green-200' : 'bg-[#B48A5E] text-white hover:bg-[#946F48] shadow-md shadow-[#B48A5E]/10'
+              }`}
+            >
+              {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCode ? 'Disalin!' : 'Salin Kode'}
+            </button>
           </div>
-          <button
-            onClick={copyReferralCode}
-            className={`px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 ${
-              copied ? 'bg-emerald-50 text-emerald-600 border border-green-200' : 'bg-[#B48A5E] text-white hover:bg-[#946F48] shadow-md shadow-[#B48A5E]/10'
-            }`}
-          >
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? 'Disalin!' : 'Salin'}
-          </button>
         </div>
 
         <div className="pt-1">
@@ -2794,9 +2845,74 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
             className="w-full py-3.5 px-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black rounded-2xl text-[13px] flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-800/10 active:scale-95 cursor-pointer font-sans"
           >
             <Share2 className="w-4 h-4" />
-            <span>Bagikan Link Referral</span>
+            <span>Bagikan via WhatsApp</span>
           </button>
         </div>
+      </div>
+
+      {/* Daftar Teman yang Diajak */}
+      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
+            <Users className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-[14px] font-black text-gray-850">Teman yang Diajak</h4>
+            <p className="text-[11px] text-gray-500 font-medium">Pantau progress teman dan klaim voucher Anda</p>
+          </div>
+        </div>
+
+        {loadingReferees ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" />
+          </div>
+        ) : referees.length === 0 ? (
+          <div className="text-center py-6 text-gray-400 text-xs font-semibold">
+            Belum ada teman yang mendaftar menggunakan kode Anda.
+          </div>
+        ) : (
+          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+            {referees.map((ref) => (
+              <div key={ref.id} className="flex items-center justify-between p-3.5 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/10">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-gray-800">{ref.name}</p>
+                  <p className="text-[10px] text-gray-400 font-medium">
+                    Gabung: {new Date(ref.joinedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className={`inline-block w-2 h-2 rounded-full ${ref.hasCompletedOrder ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                    <span className="text-[10px] font-bold text-gray-500">
+                      {ref.hasCompletedOrder ? 'Selesai Order Pertama' : 'Baru Mendaftar'}
+                    </span>
+                  </div>
+                </div>
+
+                {ref.bonusClaimed ? (
+                  <span className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-450 text-xs font-bold">
+                    Sudah Diklaim
+                  </span>
+                ) : ref.hasCompletedOrder ? (
+                  <button
+                    disabled={claimingId === ref.id}
+                    onClick={() => handleClaim(ref.id)}
+                    className="px-4 py-2 bg-[#B48A5E] hover:bg-[#946F48] text-white text-xs font-black rounded-xl shadow-md shadow-[#B48A5E]/10 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    {claimingId === ref.id ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Gift className="w-3.5 h-3.5" />
+                    )}
+                    Klaim Voucher
+                  </button>
+                ) : (
+                  <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 text-[11px] font-bold">
+                    Menunggu Order
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Masukkan Kode Referral Teman */}

@@ -38,7 +38,14 @@ export async function generateMetadata(): Promise<Metadata> {
     console.error("Error fetching loyalty settings for OG image:", e);
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  let appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (!appUrl) {
+    if (process.env.VERCEL_URL) {
+      appUrl = `https://${process.env.VERCEL_URL}`;
+    } else {
+      appUrl = "http://localhost:3000";
+    }
+  }
 
   return {
     metadataBase: new URL(appUrl),
