@@ -10,6 +10,7 @@ export default function ReferralSettingsClient() {
   const [saving, setSaving] = useState(false);
   const [settings, setSettings] = useState<any>({});
   const [referralTemplate, setReferralTemplate] = useState<any>(null);
+  const [creatingTemplate, setCreatingTemplate] = useState(false);
 
   useEffect(() => {
     fetchSettings();
@@ -22,17 +23,51 @@ export default function ReferralSettingsClient() {
       const data = await res.json();
       setSettings(data || {});
       
-      // Ambil template voucher referral
-      const code = data?.referralVoucherCode || 'REFERRAL_REWARD';
-      const tmplRes = await fetch(`/api/admin/vouchers/templates?code=${code}`);
+      // Ambil template voucher referral via system voucher endpoint
+      const tmplRes = await fetch('/api/admin/vouchers/system');
       const tmplData = await tmplRes.json();
-      if (tmplData && tmplData.length > 0) {
-        setReferralTemplate(tmplData[0]);
+      const code = data?.referralVoucherCode || 'REFERRAL_REWARD';
+      
+      const systemVoucher = tmplData?.systemVouchers?.find((sv: any) => sv.activeCode === code || sv.key === 'referralVoucherCode');
+      if (systemVoucher && systemVoucher.isCreated && systemVoucher.template) {
+        setReferralTemplate(systemVoucher.template);
+      } else {
+        // Jika tidak ada di system voucher, cari manual dari daftar template
+        const allRes = await fetch('/api/admin/vouchers');
+        const allTemplates = await allRes.json();
+        const found = allTemplates.find((t: any) => t.code === code);
+        if (found) {
+          setReferralTemplate(found);
+        } else {
+          setReferralTemplate(null);
+        }
       }
     } catch (err) {
       showToast('Gagal memuat pengaturan', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateTemplate = async () => {
+    try {
+      setCreatingTemplate(true);
+      const res = await fetch('/api/admin/vouchers/system', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'referralVoucherCode' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Template voucher referral berhasil dibuat!', 'success');
+        fetchSettings();
+      } else {
+        showToast(data.error || 'Gagal membuat template voucher', 'error');
+      }
+    } catch (err) {
+      showToast('Terjadi kesalahan koneksi', 'error');
+    } finally {
+      setCreatingTemplate(false);
     }
   };
 
@@ -227,9 +262,22 @@ export default function ReferralSettingsClient() {
       )}
 
       {settings.referralRewardType === 'VOUCHER' && !referralTemplate && (
-        <div className="bg-rose-50 rounded-2xl border border-rose-200 p-4 flex gap-3 text-rose-700">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          <p className="text-sm">Template voucher referral (kode: REFERRAL_REWARD) tidak ditemukan di database. Pastikan template telah dibuat di menu Voucher agar sistem bisa mencetak hadiah.</p>
+        <div className="bg-rose-50 rounded-2xl border border-rose-200 p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 text-rose-700">
+          <div className="flex gap-3">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="font-semibold">Template voucher referral (kode: REFERRAL_REWARD) belum dibuat.</p>
+              <p className="text-xs text-rose-600/80 mt-0.5">Sistem membutuhkan template voucher ini agar dapat mencetak hadiah untuk pengundang secara otomatis.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCreateTemplate}
+            disabled={creatingTemplate}
+            className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-lg shadow-sm transition-colors shrink-0 disabled:opacity-50"
+          >
+            {creatingTemplate ? 'Membuat...' : 'Buat Template Sekarang'}
+          </button>
         </div>
       )}
 
