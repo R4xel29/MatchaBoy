@@ -372,7 +372,37 @@ export default function StorefrontClient({
           </div>
         </motion.div>
 
-
+        {/* Welcome & Referral Widget Banner (Only shown for authenticated users, completely hidden for guests) */}
+        {status === 'authenticated' && (
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
+            <motion.div 
+              onClick={() => window.location.href = '/profile?section=loyalty'}
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.15 }}
+              className="bg-gradient-to-br from-[#2E5A44]/15 via-[#FAF8F5] to-[#EADFC9]/25 border border-[#2E5A44]/20 p-4.5 rounded-3xl shadow-sm flex items-center justify-between gap-4 backdrop-blur-md relative overflow-hidden cursor-pointer hover:shadow-md transition-all group"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4A574]/5 rounded-full blur-2xl pointer-events-none" />
+              <div className="flex items-center gap-4.5">
+                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A574] to-[#B48A5E] flex items-center justify-center text-white shadow-md flex-shrink-0">
+                  <Sparkles className="w-5.5 h-5.5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-black text-xs md:text-sm text-gray-900 leading-snug">
+                    Ajak Teman, Dapat Reward Voucher! 🤝
+                  </h3>
+                  <p className="text-[10px] text-gray-500 font-semibold mt-0.5 max-w-xl">
+                    Temanmu dapat diskon <span className="font-bold text-gray-800">Rp3.000</span>, kamu mendapat <span className="font-bold text-[#2E5A44]">Poin / Voucher</span> reward menarik!
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 text-[#B48A5E] text-[11px] font-bold group-hover:translate-x-1 transition-transform flex-shrink-0">
+                <span>Undang Teman</span>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </motion.div>
+          </div>
+        )}
 
         {/* Content Sections */}
         <motion.div 
@@ -635,64 +665,6 @@ export default function StorefrontClient({
 
         </motion.div>
 
-        {/* Welcome & Referral Widget Banner */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
-          {status !== 'authenticated' ? (
-            <motion.div 
-              onClick={openLogin}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.15 }}
-              className="bg-gradient-to-br from-[#EADFC9]/25 to-[#FAF8F5] border border-[#EADFC9]/50 p-4.5 rounded-3xl shadow-sm flex items-center justify-between gap-4 backdrop-blur-md relative overflow-hidden cursor-pointer hover:shadow-md transition-all group"
-            >
-              <div className="absolute top-0 right-0 w-24 h-24 bg-[#2E5A44]/5 rounded-full blur-xl pointer-events-none" />
-              <div className="flex items-center gap-4.5">
-                <div className="w-11 h-11 rounded-2xl bg-[#2E5A44] flex items-center justify-center text-white shadow-md flex-shrink-0">
-                  <Gift className="w-5.5 h-5.5" />
-                </div>
-                <div>
-                  <h3 className="font-serif font-black text-xs md:text-sm text-gray-900 leading-snug">
-                    Spesial Pengguna Baru! 🎁
-                  </h3>
-                  <p className="text-[10px] text-gray-500 font-semibold mt-0.5 max-w-xl">
-                    Daftar instan via WhatsApp sekarang dan dapatkan potongan langsung <span className="text-[#2E5A44] font-bold">Rp3.000</span> (min. belanja Rp30.000)
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 text-[#2E5A44] text-[11px] font-bold group-hover:translate-x-1 transition-transform flex-shrink-0">
-                <span>Daftar Instan</span>
-                <ChevronRight className="w-4 h-4" />
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div 
-              onClick={() => window.location.href = '/profile?section=loyalty'}
-              initial={{ y: 20, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.15 }}
-              className="bg-gradient-to-br from-[#2E5A44]/15 via-[#FAF8F5] to-[#EADFC9]/25 border border-[#2E5A44]/20 p-4.5 rounded-3xl shadow-sm flex items-center justify-between gap-4 backdrop-blur-md relative overflow-hidden cursor-pointer hover:shadow-md transition-all group"
-            >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4A574]/5 rounded-full blur-2xl pointer-events-none" />
-              <div className="flex items-center gap-4.5">
-                <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#D4A574] to-[#B48A5E] flex items-center justify-center text-white shadow-md flex-shrink-0">
-                  <Sparkles className="w-5.5 h-5.5" />
-                </div>
-                <div>
-                  <h3 className="font-serif font-black text-xs md:text-sm text-gray-900 leading-snug">
-                    Ajak Teman, Dapat Reward Voucher! 🤝
-                  </h3>
-                  <p className="text-[10px] text-gray-500 font-semibold mt-0.5 max-w-xl">
-                    Temanmu dapat diskon <span className="font-bold text-gray-800">Rp3.000</span>, kamu mendapat <span className="font-bold text-[#2E5A44]">Poin / Voucher</span> reward menarik!
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-1 text-[#B48A5E] text-[11px] font-bold group-hover:translate-x-1 transition-transform flex-shrink-0">
-                <span>Undang Teman</span>
-                <ChevronRight className="w-4 h-4" />
-              </div>
-            </motion.div>
-          )}
-        </div>
 
         {/* Join CTA for unauthenticated users */}
         {status === 'unauthenticated' && (
