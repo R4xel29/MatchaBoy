@@ -127,8 +127,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                         const match = cookieHeader.match(/pending_referral_code=([^;]+)/);
                         if (match) {
                             const pendingRef = decodeURIComponent(match[1]);
-                            const referrer = await prisma.user.findUnique({
-                                where: { referralCode: pendingRef },
+                            const referrer = await prisma.user.findFirst({
+                                where: {
+                                    referralCode: {
+                                        equals: pendingRef,
+                                        mode: 'insensitive'
+                                    }
+                                },
                                 select: { id: true }
                             });
                             if (referrer) {
@@ -219,8 +224,87 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             if (account?.provider === 'google') {
                 const dbUser = await prisma.user.findUnique({
                     where: { email: user.email as string },
-                    select: { id: true, phone: true, phoneVerified: true, password: true, role: true }
+                    select: { id: true, phone: true, phoneVerified: true, password: true, role: true, referredById: true }
                 });
+
+                // Check pending referral code from cookie if user doesn't have referredById yet
+                if (dbUser && !dbUser.referredById) {
+                    try {
+                        const reqHeaders = await headers();
+                        const cookieHeader = reqHeaders.get("cookie") || "";
+                        const refMatch = cookieHeader.match(/pending_referral_code=([^;]+)/);
+                        if (refMatch) {
+                            const pendingRef = decodeURIComponent(refMatch[1]);
+                            const referrer = await prisma.user.findFirst({
+                                where: {
+                                    referralCode: {
+                                        equals: pendingRef,
+                                        mode: 'insensitive'
+                                    }
+                                },
+                                select: { id: true }
+                            });
+                            if (referrer) {
+                                await prisma.user.update({
+                                    where: { id: dbUser.id },
+                                    data: { referredById: referrer.id }
+                                });
+                                
+                                // Grant welcome voucher if they don't have one
+                                const loyaltySettings = await prisma.loyaltySettings.findFirst();
+                                const welcomeCode = (loyaltySettings as any)?.welcomeVoucherCode || 'WELCOME';
+                                const existingVoucher = await prisma.voucher.findFirst({
+                                    where: { userId: dbUser.id, code: { startsWith: welcomeCode } }
+                                });
+                                if (!existingVoucher) {
+                                    let welcomeTemplate = await prisma.voucherTemplate.findUnique({
+                                        where: { code: welcomeCode }
+                                    });
+                                    if (!welcomeTemplate) {
+                                        try {
+                                            welcomeTemplate = await prisma.voucherTemplate.create({
+                                                data: {
+                                                    code: welcomeCode,
+                                                    title: "Diskon Pengguna Baru",
+                                                    description: "Diskon Rp3.000 untuk pesanan pertama Anda!",
+                                                    type: "DISCOUNT_RP",
+                                                    discountValue: 3000,
+                                                    minPurchase: 30000,
+                                                    terms: "Minimum transaksi Rp30.000\nBerlaku 7 hari sejak diterima\nHanya untuk pengguna baru",
+                                                    targetNewUserOnly: true,
+                                                    hideFromVoucherPack: true
+                                                }
+                                            });
+                                        } catch (e) {}
+                                    }
+                                    const generatedCode = `${welcomeCode}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+                                    const discountAmount = welcomeTemplate?.discountValue ?? 3000;
+                                    const minPurchaseVal = welcomeTemplate?.minPurchase ?? 30000;
+                                    await prisma.voucher.create({
+                                        data: {
+                                            userId: dbUser.id,
+                                            code: generatedCode,
+                                            type: welcomeTemplate?.type ?? "DISCOUNT_RP",
+                                            description: welcomeTemplate?.description ?? "Diskon Rp3.000 (Hadiah Pengguna Baru)",
+                                            discountAmount,
+                                            minPurchase: minPurchaseVal,
+                                            templateId: welcomeTemplate?.id || null,
+                                            expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+                                        }
+                                    });
+                                    if (welcomeTemplate) {
+                                        await prisma.voucherTemplate.update({
+                                            where: { id: welcomeTemplate.id },
+                                            data: { usageCount: { increment: 1 } }
+                                        }).catch(() => {});
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error("[AUTH] Error setting referral from cookie for Google sign-in:", e);
+                    }
+                }
 
                 // Admin, Cashier, and Driver accounts created by administrators do not need to verify phone via storefront cookie
                 const isStaff = dbUser && (dbUser.role === 'ADMIN' || dbUser.role === 'CASHIER' || dbUser.role === 'DRIVER');

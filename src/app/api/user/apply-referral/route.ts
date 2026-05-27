@@ -14,6 +14,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Kode referral tidak boleh kosong' }, { status: 400 });
     }
 
+    let cleanedCode = referralCode.trim();
+    if (cleanedCode.includes('ref=')) {
+      try {
+        const url = new URL(cleanedCode);
+        const refParam = url.searchParams.get('ref');
+        if (refParam) cleanedCode = refParam;
+      } catch (e) {
+        const match = cleanedCode.match(/[?&]ref=([^&]+)/);
+        if (match) {
+          cleanedCode = match[1];
+        }
+      }
+    }
+
     const userId = session.user.id;
 
     // Cek apakah user sudah punya referrer
@@ -31,13 +45,18 @@ export async function POST(req: Request) {
     }
 
     // Cegah self-referral
-    if (currentUser.referralCode === referralCode.trim()) {
+    if (currentUser.referralCode.toLowerCase() === cleanedCode.toLowerCase()) {
       return NextResponse.json({ error: 'Anda tidak dapat menggunakan kode referral milik sendiri' }, { status: 400 });
     }
 
-    // Cari referrer berdasarkan kode
-    const referrer = await prisma.user.findUnique({
-      where: { referralCode: referralCode.trim() },
+    // Cari referrer berdasarkan kode (case-insensitive)
+    const referrer = await prisma.user.findFirst({
+      where: {
+        referralCode: {
+          equals: cleanedCode,
+          mode: 'insensitive',
+        },
+      },
       select: { id: true },
     });
 

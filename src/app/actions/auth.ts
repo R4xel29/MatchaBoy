@@ -26,8 +26,27 @@ export async function registerUser(formData: FormData) {
     // Cek referral code jika ada
     let referrerId: string | undefined = undefined
     if (referralCode) {
-        const referrer = await prisma.user.findUnique({
-            where: { referralCode },
+        let cleanedCode = referralCode.trim();
+        if (cleanedCode.includes('ref=')) {
+            try {
+                const url = new URL(cleanedCode);
+                const refParam = url.searchParams.get('ref');
+                if (refParam) cleanedCode = refParam;
+            } catch (e) {
+                const match = cleanedCode.match(/[?&]ref=([^&]+)/);
+                if (match) {
+                    cleanedCode = match[1];
+                }
+            }
+        }
+
+        const referrer = await prisma.user.findFirst({
+            where: {
+                referralCode: {
+                    equals: cleanedCode,
+                    mode: 'insensitive'
+                }
+            },
             select: { id: true }
         })
         if (referrer) {
