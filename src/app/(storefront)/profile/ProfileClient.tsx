@@ -2685,13 +2685,13 @@ function ManualReferralInput({ user }: { user: UserShape }) {
           value={code}
           onChange={e => setCode(e.target.value.toUpperCase())}
           placeholder="Masukkan kode teman..."
-          className="flex-1 px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#2E5A44]/40 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
+          className="flex-1 min-w-0 px-3 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#2E5A44]/40 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
           disabled={loading}
         />
         <button
           type="submit"
           disabled={loading || !code.trim()}
-          className="px-5 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md cursor-pointer"
+          className="px-4.5 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md cursor-pointer"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Use'}
         </button>
@@ -3233,13 +3233,13 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
                 value={claimCode}
                 onChange={(e) => setClaimCode(e.target.value)}
                 placeholder="Contoh: MATCHABOYBARU"
-                className="flex-1 px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E]/60 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
+                className="flex-1 min-w-0 px-3.5 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E]/60 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
                 disabled={claiming}
               />
               <button
                 type="submit"
                 disabled={claiming || !claimCode.trim()}
-                className="px-6 py-3.5 bg-[#B48A5E] hover:bg-[#946F48] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md shadow-[#B48A5E]/10 cursor-pointer"
+                className="px-4.5 py-3.5 bg-[#B48A5E] hover:bg-[#946F48] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md shadow-[#B48A5E]/10 cursor-pointer"
               >
                 {claiming ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Klaim'}
               </button>
