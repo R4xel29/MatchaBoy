@@ -27,6 +27,12 @@ export function BottomNav() {
     }
   };
 
+  useEffect(() => {
+    router.prefetch('/');
+    router.prefetch('/profile');
+    router.prefetch('/profile?section=loyalty&tab=vouchers');
+  }, [router]);
+
   const navItems = [
     {
       label: 'Beranda',
@@ -70,6 +76,7 @@ export function BottomNav() {
           {navItems.slice(0, 2).map((item) => (
             <button
               key={item.label}
+              onMouseEnter={() => item.href && router.prefetch(item.href)}
               onClick={() => {
                 if (item.onClick) {
                   item.onClick();
@@ -117,6 +124,7 @@ export function BottomNav() {
           {navItems.slice(2).map((item) => (
             <button
               key={item.label}
+              onMouseEnter={() => item.href && router.prefetch(item.href)}
               onClick={() => {
                 if (item.onClick) {
                   item.onClick();
