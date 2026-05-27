@@ -18,50 +18,61 @@ interface ActivePopup {
 export function PromoPopup() {
   const router = useRouter();
   const [popup, setPopup] = useState<ActivePopup | null>(null);
+  const [popupQueue, setPopupQueue] = useState<ActivePopup[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Client-side only checks to avoid SSR hydration mismatches
-    const fetchActivePopup = async () => {
+    const fetchActivePopups = async () => {
       try {
         const res = await fetch('/api/promo-popup/active');
         if (!res.ok) return;
         
         const data = await res.json();
-        if (data && data.id) {
-          const freq = data.displayFrequency || 'ONCE';
-          let shouldShow = false;
+        if (Array.isArray(data)) {
+          const queue: ActivePopup[] = [];
+          
+          for (const item of data) {
+            if (!item || !item.id) continue;
+            const freq = item.displayFrequency || 'ONCE';
+            let shouldShow = false;
 
-          if (freq === 'ONCE') {
-            const isSeen = localStorage.getItem(`matchaboy_promo_popup_seen_${data.id}`);
-            if (!isSeen) shouldShow = true;
-          } else if (freq === 'EVERY_SESSION') {
-            const isSeenSession = sessionStorage.getItem(`matchaboy_promo_popup_seen_session_${data.id}`);
-            if (!isSeenSession) shouldShow = true;
-          } else {
-            // Time-based frequencies: EVERY_5_MIN, EVERY_10_MIN, EVERY_20_MIN, EVERY_30_MIN, EVERY_DAY
-            const lastSeenStr = localStorage.getItem(`matchaboy_promo_popup_last_seen_${data.id}`);
-            if (!lastSeenStr) {
-              shouldShow = true;
+            if (freq === 'ONCE') {
+              const isSeen = localStorage.getItem(`matchaboy_promo_popup_seen_${item.id}`);
+              if (!isSeen) shouldShow = true;
+            } else if (freq === 'EVERY_SESSION') {
+              const isSeenSession = sessionStorage.getItem(`matchaboy_promo_popup_seen_session_${item.id}`);
+              if (!isSeenSession) shouldShow = true;
             } else {
-              const lastSeen = parseInt(lastSeenStr, 10);
-              const now = Date.now();
-              let cooldownMs = 24 * 60 * 60 * 1000; // default EVERY_DAY: 1 day
-
-              if (freq === 'EVERY_5_MIN') cooldownMs = 5 * 60 * 1000;
-              else if (freq === 'EVERY_10_MIN') cooldownMs = 10 * 60 * 1000;
-              else if (freq === 'EVERY_20_MIN') cooldownMs = 20 * 60 * 1000;
-              else if (freq === 'EVERY_30_MIN') cooldownMs = 30 * 60 * 1000;
-
-              if (now - lastSeen > cooldownMs) {
+              // Time-based frequencies: EVERY_5_MIN, EVERY_10_MIN, EVERY_20_MIN, EVERY_30_MIN, EVERY_DAY
+              const lastSeenStr = localStorage.getItem(`matchaboy_promo_popup_last_seen_${item.id}`);
+              if (!lastSeenStr) {
                 shouldShow = true;
+              } else {
+                const lastSeen = parseInt(lastSeenStr, 10);
+                const now = Date.now();
+                let cooldownMs = 24 * 60 * 60 * 1000; // default EVERY_DAY: 1 day
+
+                if (freq === 'EVERY_5_MIN') cooldownMs = 5 * 60 * 1000;
+                else if (freq === 'EVERY_10_MIN') cooldownMs = 10 * 60 * 1000;
+                else if (freq === 'EVERY_20_MIN') cooldownMs = 20 * 60 * 1000;
+                else if (freq === 'EVERY_30_MIN') cooldownMs = 30 * 60 * 1000;
+
+                if (now - lastSeen > cooldownMs) {
+                  shouldShow = true;
+                }
               }
+            }
+
+            if (shouldShow) {
+              queue.push(item);
             }
           }
 
-          if (shouldShow) {
-            setPopup(data);
+          if (queue.length > 0) {
+            setPopupQueue(queue);
+            setPopup(queue[0]);
             // Delay slightly for smoother visual entry after loading
             setTimeout(() => {
               setIsOpen(true);
@@ -69,45 +80,54 @@ export function PromoPopup() {
           }
         }
       } catch (error) {
-        console.error('Failed to load active promo popup:', error);
+        console.error('Failed to load active promo popups:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchActivePopup();
+    fetchActivePopups();
   }, []);
+
+  const markAsSeen = (currPopup: ActivePopup) => {
+    const freq = currPopup.displayFrequency || 'ONCE';
+    const nowStr = Date.now().toString();
+
+    if (freq === 'ONCE') {
+      localStorage.setItem(`matchaboy_promo_popup_seen_${currPopup.id}`, 'true');
+    } else if (freq === 'EVERY_SESSION') {
+      sessionStorage.setItem(`matchaboy_promo_popup_seen_session_${currPopup.id}`, 'true');
+    } else {
+      localStorage.setItem(`matchaboy_promo_popup_last_seen_${currPopup.id}`, nowStr);
+    }
+  };
 
   const handleClose = () => {
     if (popup) {
-      const freq = popup.displayFrequency || 'ONCE';
-      const nowStr = Date.now().toString();
-
-      if (freq === 'ONCE') {
-        localStorage.setItem(`matchaboy_promo_popup_seen_${popup.id}`, 'true');
-      } else if (freq === 'EVERY_SESSION') {
-        sessionStorage.setItem(`matchaboy_promo_popup_seen_session_${popup.id}`, 'true');
-      } else {
-        localStorage.setItem(`matchaboy_promo_popup_last_seen_${popup.id}`, nowStr);
-      }
+      markAsSeen(popup);
     }
     setIsOpen(false);
+
+    // If there is more in the queue, show the next one after a delay
+    if (popupQueue.length > 1) {
+      setTimeout(() => {
+        const nextQueue = popupQueue.slice(1);
+        setPopupQueue(nextQueue);
+        setPopup(nextQueue[0]);
+        setTimeout(() => {
+          setIsOpen(true);
+        }, 500); // Wait for fade in
+      }, 400); // Wait for previous modal close transition to complete
+    } else {
+      setPopupQueue([]);
+      setPopup(null);
+    }
   };
 
   const handleImageClick = () => {
     if (!popup) return;
     
-    const freq = popup.displayFrequency || 'ONCE';
-    const nowStr = Date.now().toString();
-
-    // Mark as seen so they don't see it again on return
-    if (freq === 'ONCE') {
-      localStorage.setItem(`matchaboy_promo_popup_seen_${popup.id}`, 'true');
-    } else if (freq === 'EVERY_SESSION') {
-      sessionStorage.setItem(`matchaboy_promo_popup_seen_session_${popup.id}`, 'true');
-    } else {
-      localStorage.setItem(`matchaboy_promo_popup_last_seen_${popup.id}`, nowStr);
-    }
+    markAsSeen(popup);
     setIsOpen(false);
 
     if (popup.linkUrl) {
@@ -116,6 +136,21 @@ export function PromoPopup() {
       } else {
         window.location.href = popup.linkUrl;
       }
+    }
+
+    // Process next in queue
+    if (popupQueue.length > 1) {
+      setTimeout(() => {
+        const nextQueue = popupQueue.slice(1);
+        setPopupQueue(nextQueue);
+        setPopup(nextQueue[0]);
+        setTimeout(() => {
+          setIsOpen(true);
+        }, 500);
+      }, 400);
+    } else {
+      setPopupQueue([]);
+      setPopup(null);
     }
   };
 

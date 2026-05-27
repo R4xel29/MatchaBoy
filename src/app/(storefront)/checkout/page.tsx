@@ -240,12 +240,37 @@ export default function CheckoutPage() {
     return dates;
   }, [storeSettings.operationalDays, storeSettings.disabledDates, storeSettings.openTime, storeSettings.closeTime, storeSettings.customHours]);
 
+  // Synchronize pickupDate and pickupTime when availableDates changes
   useEffect(() => {
-    if (availableDates.length > 0 && !pickupDate) {
-      setPickupDate(availableDates[0].value);
-      setTempPickupDate(availableDates[0].value);
+    if (availableDates.length > 0) {
+      const isCurrentPickupDateAvailable = availableDates.some(ad => ad.value === pickupDate);
+      if (!pickupDate || !isCurrentPickupDateAvailable) {
+        const firstDate = availableDates[0];
+        setPickupDate(firstDate.value);
+        setTempPickupDate(firstDate.value);
+        
+        // If today is not open, clear the 'Sekarang' pickupTime so the user is forced to schedule
+        if (!firstDate.isToday) {
+          setPickupTime(null);
+          setTempPickupTime('');
+        } else {
+          setPickupTime('Sekarang');
+          setTempPickupTime('Sekarang');
+        }
+      } else {
+        const matched = availableDates.find(d => d.value === pickupDate);
+        if (matched) {
+          if (!matched.isToday && pickupTime === 'Sekarang') {
+            setPickupTime(null);
+            setTempPickupTime('');
+          }
+        }
+      }
+    } else {
+      setPickupDate(null);
+      setPickupTime(null);
     }
-  }, [availableDates, pickupDate]);
+  }, [availableDates, pickupDate, pickupTime]);
 
   // Automatically reset tumbler option when shipping method changes to DELIVERY
   useEffect(() => {
@@ -595,6 +620,15 @@ export default function CheckoutPage() {
       ? eligibleItems.reduce((sum, item) => sum + item.totalPrice, 0)
       : subtotal;
 
+    const maxSingleUnitEligiblePrice = eligibleItems.length > 0
+      ? Math.max(...eligibleItems.map(item => {
+          const singleUnit = item.isBundle && item.bundleSelections
+            ? (item.basePrice + item.bundleSelections.reduce((sum, a: any) => sum + (a.priceAdjustment || 0), 0))
+            : (item.basePrice + (item.sizePrice || 0) + (item.addOns ? item.addOns.reduce((s, a) => s + a.price, 0) : 0));
+          return singleUnit;
+        }))
+      : 0;
+
     if (appliedVoucher.type === 'FREE_TOPPING') {
       const allAddOns = eligibleItems.flatMap(item => item.addOns || []);
       if (allAddOns.length === 0) return 0;
@@ -624,11 +658,14 @@ export default function CheckoutPage() {
         }
         return rawDiscount;
       }
+      if (appliedVoucher.type === 'FREE_DRINK' || appliedVoucher.type === 'REFERRAL_REWARD') {
+        return Math.min(maxSingleUnitEligiblePrice, discountVal);
+      }
       return Math.min(eligibleSubtotal, discountVal);
     }
     switch (appliedVoucher.type) {
-      case 'FREE_DRINK': return Math.min(eligibleSubtotal, 25000);
-      case 'REFERRAL_REWARD': return Math.min(eligibleSubtotal, 25000);
+      case 'FREE_DRINK': return Math.min(maxSingleUnitEligiblePrice, 25000);
+      case 'REFERRAL_REWARD': return Math.min(maxSingleUnitEligiblePrice, 25000);
       case 'DISCOUNT_RP': return Math.min(eligibleSubtotal, 10000);
       default: return Math.min(eligibleSubtotal, 10000);
     }
@@ -805,13 +842,24 @@ export default function CheckoutPage() {
     }
   };
 
+  const isStoreClosedToday = useMemo(() => {
+    if (availableDates.length === 0) return true;
+    return !availableDates[0].isToday;
+  }, [availableDates]);
+
   const canSubmit = useMemo(() => {
     if (items.length === 0) return false;
-    if (orderType === 'PICKUP' && (!pickupDate || !pickupTime)) return false;
-    if (orderType === 'DELIVERY' && !deliveryAddress) return false;
+    if (orderType === 'PICKUP') {
+      if (!pickupDate || !pickupTime) return false;
+      if (pickupTime === 'Sekarang' && isStoreClosedToday) return false;
+    }
+    if (orderType === 'DELIVERY') {
+      if (!deliveryAddress) return false;
+      if (isStoreClosedToday) return false;
+    }
     if (!paymentMethod) return false;
     return true;
-  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod]);
+  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod, isStoreClosedToday]);
 
   const onSubmit = async (data: CheckoutFormData) => {
     if (!canSubmit) return;
@@ -1071,6 +1119,30 @@ export default function CheckoutPage() {
                 </div>
               </button>
             </div>
+
+            {orderType === 'PICKUP' && isStoreClosedToday && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 text-red-800">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-extrabold text-gray-900">Toko Tutup Hari Ini</p>
+                  <p className="text-xs text-red-700 leading-relaxed font-semibold">
+                    Maaf, toko kami tutup hari ini. Silakan jadwalkan waktu pengambilan Anda di tanggal buka lain yang tersedia di bawah.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {orderType === 'DELIVERY' && isStoreClosedToday && (
+              <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 text-red-800">
+                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-sm font-extrabold text-gray-900">Pengiriman Tidak Tersedia</p>
+                  <p className="text-xs text-red-700 leading-relaxed font-semibold">
+                    Maaf, gerai kami hari ini sedang tutup / libur. Layanan pesan-antar (delivery) tidak tersedia saat ini.
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
 
           {/* ── 2. Delivery Address (Leaflet Map) ────────────────────────────────── */}
@@ -1532,7 +1604,14 @@ export default function CheckoutPage() {
                   <div className="flex justify-between items-center bg-[#FFFDF9] border border-[#EADFC9]/20 p-2.5 rounded-xl">
                     <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-[#B48A5E]" /> Waktu Ambil</span>
                     <span className="font-bold text-[#B48A5E]">
-                      {pickupTime === 'Sekarang' ? 'Pickup Sekarang (~15 mnt)' : `Hari Ini, ${pickupTime} - ${getEndTime(pickupTime)}`}
+                      {(() => {
+                        if (pickupTime === 'Sekarang') {
+                          return 'Pickup Sekarang (~15 mnt)';
+                        }
+                        const matchedDate = availableDates.find(d => d.value === pickupDate);
+                        const dayLabel = matchedDate ? `${matchedDate.dayLabel}, ${matchedDate.label}` : pickupDate;
+                        return `${dayLabel} @ ${pickupTime} - ${getEndTime(pickupTime)}`;
+                      })()}
                     </span>
                   </div>
                 )}
@@ -1628,6 +1707,8 @@ export default function CheckoutPage() {
                   </div>
                 ) : orderType === 'PICKUP' && (!pickupDate || !pickupTime) ? (
                   'Tentukan Waktu Pengambilan'
+                ) : orderType === 'DELIVERY' && isStoreClosedToday ? (
+                  'Toko Tutup Hari Ini'
                 ) : orderType === 'DELIVERY' && !deliveryAddress ? (
                   'Tentukan Alamat Kirim'
                 ) : !paymentMethod ? (
@@ -1890,6 +1971,8 @@ export default function CheckoutPage() {
                 </>
               ) : orderType === 'PICKUP' && (!pickupDate || !pickupTime) ? (
                 'Jadwalkan Ambil'
+              ) : orderType === 'DELIVERY' && isStoreClosedToday ? (
+                'Toko Tutup'
               ) : orderType === 'DELIVERY' && !deliveryAddress ? (
                 'Tentukan Alamat'
               ) : !paymentMethod ? (

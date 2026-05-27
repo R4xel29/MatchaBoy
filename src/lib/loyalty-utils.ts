@@ -71,6 +71,78 @@ export async function awardPoints({
 }
 
 /**
+ * Helper to create a personal voucher cloned from a template (if exists) or fallback to legacy settings.
+ */
+async function createVoucherForUser(
+  userId: string,
+  rewardTypeOrCode: string,
+  fallbackDesc: string,
+  defaultExpiryDays = 30,
+  extraFields: any = {}
+) {
+  const template = await prisma.voucherTemplate.findFirst({
+    where: {
+      OR: [
+        { id: rewardTypeOrCode },
+        { code: rewardTypeOrCode }
+      ]
+    }
+  });
+
+  if (template) {
+    const userVoucherCode = `${template.code}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    let expiresAt = template.expiresAt;
+    if (!expiresAt) {
+      const d = new Date();
+      d.setDate(d.getDate() + defaultExpiryDays);
+      expiresAt = d;
+    }
+    let discountAmount = template.discountValue;
+    if (template.type === 'FREE_DRINK' && !discountAmount) {
+      discountAmount = 25000;
+    } else if (template.type === 'FREE_TOPPING' && !discountAmount) {
+      discountAmount = 3000;
+    } else if (template.type === 'UPGRADE_SIZE' && !discountAmount) {
+      discountAmount = 5000;
+    }
+
+    return prisma.voucher.create({
+      data: {
+        userId,
+        code: userVoucherCode,
+        type: template.type,
+        description: template.description,
+        discountAmount,
+        expiresAt,
+        templateId: template.id,
+        isUsed: false,
+        ...extraFields
+      }
+    });
+  } else {
+    let discountAmount = 10000;
+    if (rewardTypeOrCode === 'FREE_DRINK' || rewardTypeOrCode === 'REFERRAL_REWARD') discountAmount = 25000;
+    else if (rewardTypeOrCode === 'FREE_TOPPING') discountAmount = 3000;
+    else if (rewardTypeOrCode === 'UPGRADE_SIZE') discountAmount = 5000;
+
+    const legacyCode = `${rewardTypeOrCode}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    return prisma.voucher.create({
+      data: {
+        userId,
+        code: legacyCode,
+        type: rewardTypeOrCode,
+        description: fallbackDesc,
+        discountAmount,
+        expiresAt: new Date(Date.now() + defaultExpiryDays * 24 * 60 * 60 * 1000),
+        isUsed: false,
+        ...extraFields
+      },
+    });
+  }
+}
+
+/**
  * Cek apakah user telah melewati milestone dan berikan voucher.
  * Logika: Setelah milestone 3 tercapai, poin dikurangi (reset) jika diaktifkan.
  */
@@ -95,14 +167,8 @@ async function checkAndAwardMilestones(
         : (currentP % settings.milestone3Points) === settings.milestone1Points;
       
       if (isHit) {
-        await prisma.voucher.create({
-          data: {
-            userId,
-            type: settings.milestone1Reward,
-            description: settings.milestone1Desc,
-          },
-        });
-        vouchersCreated.push({ type: settings.milestone1Reward, description: settings.milestone1Desc });
+        const v = await createVoucherForUser(userId, settings.milestone1Reward, settings.milestone1Desc);
+        vouchersCreated.push({ type: v.type, description: v.description });
       }
     }
 
@@ -113,14 +179,8 @@ async function checkAndAwardMilestones(
         : (currentP % settings.milestone3Points) === settings.milestone2Points;
       
       if (isHit) {
-        await prisma.voucher.create({
-          data: {
-            userId,
-            type: settings.milestone2Reward,
-            description: settings.milestone2Desc,
-          },
-        });
-        vouchersCreated.push({ type: settings.milestone2Reward, description: settings.milestone2Desc });
+        const v = await createVoucherForUser(userId, settings.milestone2Reward, settings.milestone2Desc);
+        vouchersCreated.push({ type: v.type, description: v.description });
       }
     }
 
@@ -131,14 +191,8 @@ async function checkAndAwardMilestones(
         : (currentP % settings.milestone3Points) === 0;
       
       if (isHit) {
-        await prisma.voucher.create({
-          data: {
-            userId,
-            type: settings.milestone3Reward,
-            description: settings.milestone3Desc,
-          },
-        });
-        vouchersCreated.push({ type: settings.milestone3Reward, description: settings.milestone3Desc });
+        const v = await createVoucherForUser(userId, settings.milestone3Reward, settings.milestone3Desc);
+        vouchersCreated.push({ type: v.type, description: v.description });
 
         if (settings.milestone3ResetPoints) {
           pointsToDeduct += settings.milestone3Points;
@@ -192,24 +246,7 @@ export async function awardTumblerBonus(userId: string, orderId?: string) {
     const voucherType = (settings as any).tumblerVoucherType || 'UPGRADE_SIZE';
     const voucherDesc = (settings as any).tumblerVoucherDesc || 'Eco-Reward: Free Upgrade Size (Bawa Tumbler)';
 
-    let discountAmount = 5000;
-    if (voucherType === 'FREE_DRINK') discountAmount = 25000;
-    else if (voucherType === 'FREE_TOPPING') discountAmount = 3000;
-    else if (voucherType === 'UPGRADE_SIZE') discountAmount = 5000;
-    else discountAmount = 10000;
-
-    const ecoCode = `ECO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-
-    voucherRes = await prisma.voucher.create({
-      data: {
-        userId,
-        code: ecoCode,
-        type: voucherType,
-        description: voucherDesc,
-        discountAmount,
-        expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // Berlaku 14 hari
-      },
-    });
+    voucherRes = await createVoucherForUser(userId, voucherType, voucherDesc, 14);
   }
 
   return { pointsRes, voucherRes };
@@ -255,15 +292,10 @@ export async function processReferralBonus(refereeUserId: string) {
     });
   } else {
     // Berikan voucher ke referrer
-    await prisma.voucher.create({
-      data: {
-        userId: referrerId,
-        type: settings.referralRewardVoucher,
-        description: settings.referralRewardDesc,
-        fromReferralUserId: refereeUserId,
-      },
+    const v = await createVoucherForUser(referrerId, settings.referralRewardVoucher, settings.referralRewardDesc, 30, {
+      fromReferralUserId: refereeUserId
     });
-    return { type: 'voucher', reward: settings.referralRewardDesc };
+    return { type: 'voucher', reward: v.description };
   }
 }
 

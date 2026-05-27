@@ -235,7 +235,50 @@ export async function POST(req: Request) {
                     } else if (template.type === 'DISCOUNT_RP') {
                         voucherDiscount = Math.min(template.discountValue, validProductsSubtotal)
                     } else if (template.type === 'FREE_DRINK') {
-                        voucherDiscount = Math.min(template.discountValue || 25000, validProductsSubtotal)
+                        let maxSingleUnitEligiblePrice = 0
+                        for (const item of body.items) {
+                            if (isProductValidForVoucher(item.productId, template.validProductIds)) {
+                                const dbProduct = dbProducts.find(p => p.id === item.productId)
+                                if (dbProduct) {
+                                    let secureItemPrice = dbProduct.price
+                                    let dbModifiers: any = {}
+                                    if (dbProduct.modifiers) {
+                                        try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
+                                    }
+                                    if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
+                                        let secureBundleAdjustments = 0
+                                        for (const sel of item.bundleSelections) {
+                                            const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId)
+                                            if (group) {
+                                                const option = group.options?.find((o: any) => o.productId === sel.productId)
+                                                if (option) secureBundleAdjustments += option.priceAdjustment || 0
+                                            }
+                                        }
+                                        secureItemPrice += secureBundleAdjustments
+                                    } else {
+                                        let secureSizePrice = 0
+                                        if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+                                            const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+                                            if (validSize) {
+                                                secureSizePrice = validSize.price
+                                            }
+                                        }
+                                        let addOnsTotal = 0
+                                        if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+                                            for (const addOnId of item.addOnIds) {
+                                                const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                                                if (validAddOn) addOnsTotal += validAddOn.price
+                                            }
+                                        }
+                                        secureItemPrice += secureSizePrice + addOnsTotal
+                                    }
+                                    if (secureItemPrice > maxSingleUnitEligiblePrice) {
+                                        maxSingleUnitEligiblePrice = secureItemPrice
+                                    }
+                                }
+                            }
+                        }
+                        voucherDiscount = Math.min(template.discountValue || 25000, maxSingleUnitEligiblePrice)
                     } else if (template.type === 'FREE_TOPPING') {
                         let maxToppingPrice = 0
                         for (const item of body.items) {
@@ -280,8 +323,50 @@ export async function POST(req: Request) {
                         voucherDiscount = template.discountValue || 10000
                     }
                 } else {
-                    // Fallback to legacy hardcoded rules for legacy vouchers without template
-                    if (voucher.type === 'FREE_DRINK') voucherDiscount = 25000
+                    if (voucher.type === 'FREE_DRINK') {
+                        let maxSingleUnitEligiblePrice = 0
+                        for (const item of body.items) {
+                            const dbProduct = dbProducts.find(p => p.id === item.productId)
+                            if (dbProduct) {
+                                let secureItemPrice = dbProduct.price
+                                let dbModifiers: any = {}
+                                if (dbProduct.modifiers) {
+                                    try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
+                                }
+                                if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
+                                    let secureBundleAdjustments = 0
+                                    for (const sel of item.bundleSelections) {
+                                        const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId)
+                                        if (group) {
+                                            const option = group.options?.find((o: any) => o.productId === sel.productId)
+                                            if (option) secureBundleAdjustments += option.priceAdjustment || 0
+                                        }
+                                    }
+                                    secureItemPrice += secureBundleAdjustments
+                                } else {
+                                    let secureSizePrice = 0
+                                    if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+                                        const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+                                        if (validSize) {
+                                            secureSizePrice = validSize.price
+                                        }
+                                    }
+                                    let addOnsTotal = 0
+                                    if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+                                        for (const addOnId of item.addOnIds) {
+                                            const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                                            if (validAddOn) addOnsTotal += validAddOn.price
+                                        }
+                                    }
+                                    secureItemPrice += secureSizePrice + addOnsTotal
+                                }
+                                if (secureItemPrice > maxSingleUnitEligiblePrice) {
+                                    maxSingleUnitEligiblePrice = secureItemPrice
+                                }
+                            }
+                        }
+                        voucherDiscount = Math.min(25000, maxSingleUnitEligiblePrice)
+                    }
                     else if (voucher.type === 'FREE_TOPPING') {
                         let maxToppingPrice = 0
                         for (const item of body.items) {
@@ -318,7 +403,50 @@ export async function POST(req: Request) {
                         }
                         voucherDiscount = maxSizePrice
                     }
-                    else if (voucher.type === 'REFERRAL_REWARD') voucherDiscount = 25000
+                    else if (voucher.type === 'REFERRAL_REWARD') {
+                        let maxSingleUnitEligiblePrice = 0
+                        for (const item of body.items) {
+                            const dbProduct = dbProducts.find(p => p.id === item.productId)
+                            if (dbProduct) {
+                                let secureItemPrice = dbProduct.price
+                                let dbModifiers: any = {}
+                                if (dbProduct.modifiers) {
+                                    try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
+                                }
+                                if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
+                                    let secureBundleAdjustments = 0
+                                    for (const sel of item.bundleSelections) {
+                                        const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId)
+                                        if (group) {
+                                            const option = group.options?.find((o: any) => o.productId === sel.productId)
+                                            if (option) secureBundleAdjustments += option.priceAdjustment || 0
+                                        }
+                                    }
+                                    secureItemPrice += secureBundleAdjustments
+                                } else {
+                                    let secureSizePrice = 0
+                                    if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+                                        const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+                                        if (validSize) {
+                                            secureSizePrice = validSize.price
+                                        }
+                                    }
+                                    let addOnsTotal = 0
+                                    if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+                                        for (const addOnId of item.addOnIds) {
+                                            const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                                            if (validAddOn) addOnsTotal += validAddOn.price
+                                        }
+                                    }
+                                    secureItemPrice += secureSizePrice + addOnsTotal
+                                }
+                                if (secureItemPrice > maxSingleUnitEligiblePrice) {
+                                    maxSingleUnitEligiblePrice = secureItemPrice
+                                }
+                            }
+                        }
+                        voucherDiscount = Math.min(25000, maxSingleUnitEligiblePrice)
+                    }
                     else if (voucher.type === 'GRATIS_ONGKIR') {
                         if (!hasFreeShippingBundle) ongkirDiscount = deliveryFee
                     }
