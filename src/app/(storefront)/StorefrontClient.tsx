@@ -589,38 +589,6 @@ export default function StorefrontClient({
             </div>
           </section>
 
-          {/* Help Center */}
-          <section className="bg-white border border-gray-100 rounded-[2rem] p-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-            <a 
-              href="https://wa.me/6281270756865"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full md:w-auto md:min-w-[340px] py-4 px-5 bg-gradient-to-r from-emerald-50/50 via-green-50/30 to-transparent border border-emerald-150 rounded-2xl flex items-center justify-start gap-3.5 hover:shadow-sm hover:border-[#25D366]/40 transition-all duration-300 active:scale-[0.99] group"
-            >
-              <div className="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center text-xl group-hover:scale-105 transition-transform text-[#25D366]">
-                <MessageCircle className="w-5.5 h-5.5 fill-current" />
-              </div>
-              <div className="text-left space-y-0.5">
-                <span className="text-xs font-black text-[#128C7E] flex items-center gap-1.5 leading-none">
-                  Hubungi CS Matchaboy
-                  <span className="inline-flex items-center gap-0.5 bg-emerald-100 text-[#128C7E] px-2 py-0.5 rounded text-[8px] font-black uppercase">
-                    Online
-                  </span>
-                </span>
-                <p className="text-[10px] text-emerald-700/60 font-semibold leading-none pt-0.5">Tanya-tanya via WhatsApp Chat</p>
-              </div>
-            </a>
-
-            <div className="text-[9.5px] text-left text-gray-400 leading-relaxed max-w-xl border-l border-gray-100 pl-5 space-y-1.5 select-none font-medium">
-              <p className="font-bold text-gray-500 flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5 text-gray-300" /> Perlindungan Konsumen Republik Indonesia
-              </p>
-              <p className="leading-relaxed">
-                Direktorat Jenderal Perlindungan Konsumen dan Tertib Niaga, Kementerian Perdagangan RI, Whatsapp Ditjen PKTN: <span className="font-bold text-gray-500">0853-1111-1010</span>
-              </p>
-            </div>
-          </section>
-
         </motion.div>
 
         {/* Join CTA for unauthenticated users */}
