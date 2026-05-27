@@ -243,7 +243,7 @@ export default function StorefrontClient({
             borderBottomLeftRadius: "2.5rem",
             borderBottomRightRadius: "2.5rem",
           }}
-          className="md:hidden absolute top-0 left-0 right-0 z-20 border-b shadow-md pointer-events-none select-none overflow-hidden border-sky-100/60"
+          className="md:hidden absolute top-0 left-0 right-0 z-20 border-b-[3px] border-white shadow-md pointer-events-none select-none overflow-hidden"
         />
 
         {/* Header interaktif yang bisa di-drag */}
@@ -331,7 +331,7 @@ export default function StorefrontClient({
           initial={{ y: 30, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.1, duration: 0.6 }}
-          className="max-w-6xl mx-auto px-4 sm:px-6 mt-2 md:mt-6 relative z-10"
+          className="max-w-6xl mx-auto px-4 sm:px-6 mt-10 md:mt-6 relative z-10"
         >
           <div className="relative w-full aspect-[2.1/1] md:aspect-[3.6/1] overflow-hidden rounded-[2rem] bg-white shadow-md border border-[#EADFC9]/30 group">
             <Image

@@ -23,7 +23,8 @@ export function BottomNav() {
     {
       label: 'Menu',
       icon: BookOpen,
-      onClick: openSearch,
+      onClick: pathname === '/' ? openSearch : undefined,
+      href: pathname === '/' ? undefined : '/?openMenu=true',
       active: !!searchOpen,
     },
     {

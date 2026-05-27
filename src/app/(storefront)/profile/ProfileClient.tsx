@@ -157,6 +157,8 @@ export default function ProfileClient({
       if (sectionParam === 'loyalty' && tab === 'vouchers') {
         setActiveSection('vouchers');
       }
+    } else {
+      setActiveSection('menu');
     }
   }, [sectionParam, searchParams]);
 
@@ -1022,14 +1024,145 @@ function OrdersSection({ orders, router }: { orders: OrderShape[], router: any }
   );
 }
 
+function SectionSkeleton({ type }: { type: 'favorites' | 'addresses' | 'notifications' | 'referral' | 'vouchers' | 'tickets' | 'help-center' }) {
+  if (type === 'vouchers') {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white rounded-3xl p-5 border border-[#D4A574]/15 flex gap-4 animate-pulse">
+            <div className="w-16 h-16 rounded-2xl bg-gray-200/50 shrink-0" />
+            <div className="flex-1 space-y-2.5 py-1">
+              <div className="h-4 bg-gray-200/50 rounded-lg w-1/3" />
+              <div className="h-3 bg-gray-200/50 rounded-lg w-3/4" />
+              <div className="h-3 bg-gray-200/50 rounded-lg w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === 'addresses') {
+    return (
+      <div className="space-y-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="bg-white rounded-3xl p-5 border border-gray-100 space-y-4 animate-pulse">
+            <div className="flex justify-between items-start">
+              <div className="space-y-2 w-2/3">
+                <div className="h-4.5 bg-gray-200/50 rounded-lg w-1/2" />
+                <div className="h-3.5 bg-gray-200/50 rounded-lg w-full" />
+              </div>
+              <div className="w-16 h-6 bg-gray-200/50 rounded-full" />
+            </div>
+            <div className="h-px bg-gray-100" />
+            <div className="flex justify-between items-center">
+              <div className="h-3.5 bg-gray-200/50 rounded-lg w-1/3" />
+              <div className="flex gap-2">
+                <div className="w-8 h-8 bg-gray-200/50 rounded-full" />
+                <div className="w-8 h-8 bg-gray-200/50 rounded-full" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === 'notifications') {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-white rounded-2xl p-4 border border-gray-100 flex gap-3 animate-pulse">
+            <div className="w-9 h-9 rounded-xl bg-gray-200/50 shrink-0" />
+            <div className="flex-1 space-y-2 py-0.5">
+              <div className="h-3.5 bg-gray-200/50 rounded-lg w-1/4" />
+              <div className="h-3 bg-gray-200/50 rounded-lg w-5/6" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === 'referral') {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 space-y-4 animate-pulse">
+          <div className="h-4 bg-gray-200/50 rounded-lg w-1/3" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-14 bg-gray-200/50 rounded-2xl" />
+            <div className="h-14 bg-gray-200/50 rounded-2xl" />
+          </div>
+        </div>
+        <div className="bg-white rounded-3xl p-5 border border-gray-100 space-y-3 animate-pulse">
+          <div className="h-4.5 bg-gray-200/50 rounded-lg w-1/4" />
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex justify-between items-center py-2">
+              <div className="space-y-1.5 w-1/3">
+                <div className="h-3.5 bg-gray-200/50 rounded-lg w-full" />
+                <div className="h-2.5 bg-gray-200/50 rounded-lg w-2/3" />
+              </div>
+              <div className="w-20 h-6 bg-gray-200/50 rounded-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (type === 'tickets') {
+    return (
+      <div className="space-y-4">
+        {[1, 2].map((i) => (
+          <div key={i} className="bg-white rounded-2xl p-5 border border-[#D4A574]/15 space-y-3 animate-pulse">
+            <div className="flex justify-between">
+              <div className="h-4 bg-gray-200/50 rounded-lg w-1/4" />
+              <div className="w-16 h-5 bg-gray-200/50 rounded-full" />
+            </div>
+            <div className="h-3 bg-gray-200/50 rounded-lg w-full" />
+            <div className="h-3 bg-gray-200/50 rounded-lg w-3/4" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === 'help-center') {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-white rounded-2xl p-4.5 border border-[#D4A574]/15 flex justify-between items-center animate-pulse">
+            <div className="h-4 bg-gray-200/50 rounded-lg w-1/2" />
+            <div className="w-5 h-5 bg-gray-200/50 rounded-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // Favorites / Fallback
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="bg-white rounded-3xl p-3 border border-[#D4A574]/15 space-y-3 animate-pulse">
+          <div className="w-full aspect-square bg-gray-200/50 rounded-2xl" />
+          <div className="h-3.5 bg-gray-200/50 rounded-lg w-3/4" />
+          <div className="h-3.5 bg-gray-200/50 rounded-lg w-1/3" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function FavoritesSection() {
+  const { showToast } = useToast();
   const [favorites, setFavorites] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch('/api/user/favorites')
-      .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setFavorites(data); })
+      .then(res => res.json())
+      .then(data => setFavorites(data || []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -1042,11 +1175,7 @@ function FavoritesSection() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" />
-      </div>
-    );
+    return <SectionSkeleton type="favorites" />;
   }
 
   return (
@@ -1665,11 +1794,7 @@ function AddressesSection({ user }: { user: UserShape }) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" />
-      </div>
-    );
+    return <SectionSkeleton type="addresses" />;
   }
 
   return (
@@ -2310,7 +2435,7 @@ function NotificationsSection({
       )}
 
       {loading ? (
-        <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" /></div>
+        <SectionSkeleton type="notifications" />
       ) : notifs.length === 0 ? (
         <div className="text-center py-12 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
           <Bell className="w-10 h-10 text-gray-300 mx-auto mb-3" />
@@ -2884,9 +3009,7 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
         </div>
 
         {loadingReferees ? (
-          <div className="flex justify-center py-6">
-            <Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" />
-          </div>
+          <SectionSkeleton type="referral" />
         ) : referees.length === 0 ? (
           <div className="text-center py-6 text-gray-400 text-xs font-semibold">
             Belum ada teman yang mendaftar menggunakan kode Anda.
@@ -3223,9 +3346,7 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
         /* Voucher Pack (Templates list) */
         <div className="space-y-4">
           {loading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" />
-            </div>
+            <SectionSkeleton type="vouchers" />
           ) : claimableTemplates.length === 0 ? (
             <div className="text-center py-12 px-6 bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm">
               <Gift className="w-12 h-12 text-[#B48A5E] mx-auto mb-3" />
@@ -3467,10 +3588,7 @@ function TicketsSection({ user, showToast }: { user: UserShape; showToast: any }
       ) : (
         <div className="space-y-4">
           {historyLoading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E] mb-2" />
-              <p className="text-sm text-gray-400 font-bold">Memuat riwayat...</p>
-            </div>
+            <SectionSkeleton type="tickets" />
           ) : history.length === 0 ? (
             <div className="bg-white/80 rounded-[32px] border border-[#D4A574]/15 p-12 text-center">
               <ClipboardList className="w-12 h-12 text-[#B48A5E]/40 mx-auto mb-3" />
@@ -3606,10 +3724,7 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
       {/* Help Articles Accordion */}
       <div className="space-y-3">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E] mb-2" />
-            <p className="text-sm text-gray-400 font-bold">Memuat pusat bantuan...</p>
-          </div>
+          <SectionSkeleton type="help-center" />
         ) : filteredArticles.length === 0 ? (
           <div className="bg-white/80 rounded-[32px] border border-[#D4A574]/15 p-12 text-center">
             <HelpCircle className="w-12 h-12 text-[#B48A5E]/40 mx-auto mb-3" />
