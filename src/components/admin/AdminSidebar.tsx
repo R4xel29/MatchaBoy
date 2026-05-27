@@ -17,6 +17,7 @@ import {
   X,
   ChevronRight,
   ClipboardList,
+  HelpCircle,
   Image as ImageIcon,
   MonitorSmartphone,
   Clock,
@@ -67,6 +68,8 @@ const SETTING_ITEMS = [
   { label: 'Pengaturan Toko', href: '/admin/store-settings', icon: Store },
   { label: 'Metode Pembayaran', href: '/admin/payment-settings', icon: CreditCard },
   { label: 'Notifikasi', href: '/admin/notifications', icon: Bell },
+  { label: 'Pusat Bantuan FAQ', href: '/admin/help-center', icon: HelpCircle },
+  { label: 'Laporan & Tiket', href: '/admin/tickets', icon: ClipboardList },
 ];
 
 const LOYALTY_ITEMS = [

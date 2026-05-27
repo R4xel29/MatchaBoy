@@ -37,6 +37,8 @@ export async function GET() {
       operationalDays: settings.operationalDays || "[0,1,2,3,4,5,6]",
       disabledDates: settings.disabledDates || "[]",
       customHours: settings.customHours || "{}",
+      whatsappNumber: settings.whatsappNumber || "",
+      whatsappMessage: settings.whatsappMessage || "Halo Matchaboy, saya ingin bertanya...",
     })
   } catch {
     return NextResponse.json({
@@ -53,6 +55,8 @@ export async function GET() {
       operationalDays: "[0,1,2,3,4,5,6]",
       disabledDates: "[]",
       customHours: "{}",
+      whatsappNumber: "",
+      whatsappMessage: "Halo Matchaboy, saya ingin bertanya...",
     })
   }
 }
@@ -93,6 +97,8 @@ export async function PUT(req: Request) {
           operationalDays: body.operationalDays !== undefined ? body.operationalDays : existing.operationalDays,
           disabledDates: body.disabledDates !== undefined ? body.disabledDates : existing.disabledDates,
           customHours: body.customHours !== undefined ? body.customHours : existing.customHours,
+          whatsappNumber: body.whatsappNumber !== undefined ? body.whatsappNumber : existing.whatsappNumber,
+          whatsappMessage: body.whatsappMessage !== undefined ? body.whatsappMessage : existing.whatsappMessage,
         },
       })
       return NextResponse.json(updated)
@@ -112,6 +118,8 @@ export async function PUT(req: Request) {
           operationalDays: body.operationalDays || '[0,1,2,3,4,5,6]',
           disabledDates: body.disabledDates || '[]',
           customHours: body.customHours || '{}',
+          whatsappNumber: body.whatsappNumber || '',
+          whatsappMessage: body.whatsappMessage || 'Halo Matchaboy, saya ingin bertanya...',
         },
       })
       return NextResponse.json(created)

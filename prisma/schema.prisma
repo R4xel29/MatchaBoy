@@ -52,6 +52,7 @@ model User {
   vouchers        Voucher[]
   authenticators  Authenticator[]
   pushSubscriptions PushSubscription[]
+  supportTickets  SupportTicket[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -501,6 +502,8 @@ model StoreSettings {
   operationalDays     String   @default("[0,1,2,3,4,5,6]") // 0=Sunday, 1=Monday, etc.
   disabledDates       String   @default("[]") // JSON array of YYYY-MM-DD strings
   customHours         String   @default("{}") // JSON string of custom hours overrides
+  whatsappNumber      String   @default("")
+  whatsappMessage     String   @default("Halo Matchaboy, saya ingin bertanya...")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -675,5 +678,32 @@ model WaBotSession {
   value String?
 
   @@map("wa_bot_session")
+}
+
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // "BUG", "ISSUE", "QUESTION", "PARTNERSHIP"
+  name        String   // Sender name
+  email       String?  // Sender email
+  phone       String?  // Sender phone number
+  title       String
+  description String
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED, CLOSED
+  adminNotes  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model HelpArticle {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   // Article content (Markdown or plain text)
+  category  String   // e.g., "Pemesanan", "Pembayaran", "Akun", "Voucher", "Lainnya"
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 

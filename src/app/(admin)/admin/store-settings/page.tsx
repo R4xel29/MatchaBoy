@@ -24,6 +24,8 @@ export default function StoreSettingsPage() {
     weekdays?: { [key: string]: { openTime: string; closeTime: string } };
     dates?: { [key: string]: { openTime: string; closeTime: string } };
   }>({});
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [whatsappMessage, setWhatsappMessage] = useState('Halo Matchaboy, saya ingin bertanya...');
 
   // State for Calendar Navigation
   const [currentCalendarDate, setCurrentCalendarDate] = useState(() => new Date());
@@ -195,6 +197,8 @@ export default function StoreSettingsPage() {
             setCustomHours({});
           }
         }
+        if (d.whatsappNumber !== undefined) setWhatsappNumber(d.whatsappNumber);
+        if (d.whatsappMessage !== undefined) setWhatsappMessage(d.whatsappMessage);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -296,7 +300,9 @@ export default function StoreSettingsPage() {
           storeLng,
           operationalDays: JSON.stringify(operationalDays),
           disabledDates: JSON.stringify(disabledDates),
-          customHours: JSON.stringify(customHours)
+          customHours: JSON.stringify(customHours),
+          whatsappNumber,
+          whatsappMessage,
         }),
       });
       if (res.ok) {
@@ -630,6 +636,27 @@ export default function StoreSettingsPage() {
               <input type="number" min="1" value={maxDeliveryDistance} onChange={e => setMaxDeliveryDistance(Number(e.target.value))}
                 className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
               <p className="text-xs text-muted-foreground mt-2">Pelanggan di luar radius ini tidak bisa memesan via Delivery.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-border pt-6">
+          <h3 className="font-bold text-foreground mb-4">Layanan WhatsApp CS</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Nomor WhatsApp CS</label>
+              <input type="text" value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)}
+                placeholder="Contoh: 628123456789"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
+              <p className="text-xs text-muted-foreground mt-2">Nomor WhatsApp customer service toko (gunakan format kode negara tanpa +, contoh: 628123456789).</p>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Pesan Default</label>
+              <textarea value={whatsappMessage} onChange={e => setWhatsappMessage(e.target.value)}
+                rows={3}
+                placeholder="Pesan default saat pembeli mengklik WhatsApp..."
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500 resize-none" />
+              <p className="text-xs text-muted-foreground mt-2">Pesan otomatis yang akan terisi di chat WhatsApp pelanggan saat mereka menghubungi Anda.</p>
             </div>
           </div>
         </div>

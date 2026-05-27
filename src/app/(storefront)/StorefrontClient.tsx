@@ -63,7 +63,7 @@ export default function StorefrontClient({
 
   const [isNight, setIsNight] = useState(false);
   const dragY = useMotionValue(0);
-  const stretchHeight = useTransform(dragY, [0, 150], ["124px", "320px"]);
+  const stretchHeight = useTransform(dragY, [0, 150], ["78px", "320px"]);
 
   // Custom drag motion value
   const [easterEggConfig, setEasterEggConfig] = useState<{ enabled: boolean; discount: number; quota: number; hasClaimed: boolean } | null>(null);
@@ -263,7 +263,7 @@ export default function StorefrontClient({
             animate(dragY, 0, { type: "spring", stiffness: 350, damping: 28 });
           }}
           style={{ y: dragY, touchAction: 'pan-y' }}
-          className={`md:hidden relative z-30 px-6 py-7 cursor-pointer transition-all duration-300 select-none bg-transparent shadow-none border-transparent ${
+          className={`md:hidden relative z-30 px-6 pt-3 pb-1 cursor-pointer transition-all duration-300 select-none bg-transparent shadow-none border-transparent ${
             isNight ? 'text-white' : 'text-[#2A1F16]'
           }`}
         >

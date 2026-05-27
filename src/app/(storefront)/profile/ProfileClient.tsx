@@ -39,6 +39,7 @@ import {
   Coins,
   Cake,
   MessageCircle,
+  HelpCircle,
   Mail,
   Search,
   Star,
@@ -101,7 +102,7 @@ type MilestoneInfo = {
   milestone3: { target: number; reward: string; enabled: boolean };
 };
 
-type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral';
+type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral' | 'tickets' | 'help-center';
 
 export default function ProfileClient({
   user: initialUser,
@@ -137,13 +138,18 @@ export default function ProfileClient({
   const [origin, setOrigin] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isLoginSheetOpen, setIsLoginSheetOpen] = useState(false);
+  const [storeSettings, setStoreSettings] = useState<any>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    fetch('/api/admin/store-settings')
+      .then(res => res.json())
+      .then(data => setStoreSettings(data))
+      .catch(err => console.error(err));
   }, []);
 
   useEffect(() => {
-    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral'].includes(sectionParam)) {
+    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral', 'tickets', 'help-center'].includes(sectionParam)) {
       setActiveSection(sectionParam);
       
       // If it's loyalty and there's a tab, we might want to scroll
@@ -184,10 +190,11 @@ export default function ProfileClient({
     { icon: Share2, label: 'Referral Teman', id: 'referral', badge: null },
     { icon: Ticket, label: 'Voucher Saya', id: 'vouchers', badge: vouchers.filter(v => !v.isUsed).length > 0 ? vouchers.filter(v => !v.isUsed).length.toString() : null },
     { icon: Package, label: 'Pesanan Saya', id: 'orders', badge: activeOrdersCount > 0 ? activeOrdersCount.toString() : null },
-    { icon: Heart, label: 'Favorit', id: 'favorites', badge: null },
     { icon: MapPin, label: 'Alamat Tersimpan', id: 'addresses', badge: null },
     { icon: Bell, label: 'Notifikasi', id: 'notifications', badge: unreadCount > 0 ? unreadCount.toString() : null },
-    { icon: Settings, label: 'Pengaturan', id: 'settings', badge: null },
+    { icon: ClipboardList, label: 'Lapor Masalah', id: 'tickets', badge: null },
+    { icon: MessageCircle, label: 'Layanan WhatsApp', id: 'whatsapp', badge: null },
+    { icon: HelpCircle, label: 'Bantuan & FAQ', id: 'help-center', badge: null },
   ];
 
   const handleBack = () => {
@@ -208,6 +215,8 @@ export default function ProfileClient({
       case 'loyalty': return 'Poin Saya';
       case 'referral': return 'Referral Teman';
       case 'vouchers': return 'Voucher Saya';
+      case 'tickets': return 'Lapor Masalah';
+      case 'help-center': return 'Pusat Bantuan';
       default: return 'Profile';
     }
   };
@@ -329,7 +338,17 @@ export default function ProfileClient({
                   <button
                     key={item.id}
                     onClick={() => {
-                      router.push(`/profile?section=${item.id}`);
+                      if (item.id === 'whatsapp') {
+                        if (storeSettings?.whatsappNumber) {
+                          const cleanNumber = storeSettings.whatsappNumber.replace(/[^0-9]/g, '');
+                          const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Matchaboy, saya ingin bertanya...')}`;
+                          window.open(waUrl, '_blank');
+                        } else {
+                          showToast("Layanan WhatsApp sedang tidak aktif", "error");
+                        }
+                      } else {
+                        router.push(`/profile?section=${item.id}`);
+                      }
                     }}
                     className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-[#B48A5E]/5 rounded-2xl transition-all active:scale-[0.99] group"
                   >
@@ -398,6 +417,8 @@ export default function ProfileClient({
             />
           )}
           {activeSection === 'settings' && <SettingsSection user={user} onUpdate={(u) => setUser({...user, ...u})} />}
+          {activeSection === 'tickets' && <TicketsSection user={user} showToast={showToast} />}
+          {activeSection === 'help-center' && <HelpCenterSection storeSettings={storeSettings} showToast={showToast} />}
 
         </AnimatePresence>
       </div>
@@ -3253,6 +3274,406 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
           )}
         </div>
       )}
+    </motion.section>
+  );
+}
+
+function TicketsSection({ user, showToast }: { user: UserShape; showToast: any }) {
+  const [activeTab, setActiveTab] = useState<'submit' | 'history'>('submit');
+  const [type, setType] = useState('BUG');
+  const [name, setName] = useState(user.isGuest ? '' : user.name || '');
+  const [email, setEmail] = useState(user.isGuest ? '' : user.email || '');
+  const [phone, setPhone] = useState(user.isGuest ? '' : user.phone || '');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [history, setHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !title || !description) {
+      showToast('Harap isi semua kolom wajib', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch('/api/user/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, name, email, phone, title, description }),
+      });
+      if (res.ok) {
+        showToast('Laporan berhasil dikirim!', 'success');
+        setTitle('');
+        setDescription('');
+        if (!user.isGuest) {
+          setActiveTab('history');
+          fetchHistory();
+        }
+      } else {
+        const errData = await res.json();
+        showToast(errData.error || 'Gagal mengirim laporan', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Kesalahan jaringan', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchHistory = async () => {
+    if (user.isGuest) return;
+    setHistoryLoading(true);
+    try {
+      const res = await fetch('/api/user/tickets');
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data.tickets || []);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetchHistory();
+    }
+  }, [activeTab]);
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -15 }}
+      className="space-y-6"
+    >
+      {!user.isGuest && (
+        <div className="flex bg-[#FFFBF7] p-1 rounded-2xl border border-[#D4A574]/20 shadow-sm max-w-xs mx-auto">
+          <button
+            onClick={() => setActiveTab('submit')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+              activeTab === 'submit'
+                ? 'bg-[#B48A5E] text-white shadow-md'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Kirim Laporan
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+              activeTab === 'history'
+                ? 'bg-[#B48A5E] text-white shadow-md'
+                : 'text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Riwayat Laporan
+          </button>
+        </div>
+      )}
+
+      {activeTab === 'submit' ? (
+        <div className="bg-white/80 backdrop-blur-md rounded-[32px] border border-[#D4A574]/15 shadow-sm p-6 space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Tipe Laporan</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-800 focus:border-[#B48A5E]"
+              >
+                <option value="BUG">Bug / Masalah Aplikasi</option>
+                <option value="ISSUE">Kendala Transaksi / Toko</option>
+                <option value="QUESTION">Pertanyaan / Saran</option>
+                <option value="PARTNERSHIP">Kemitraan / Partnership</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Nama Pengirim *</label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Masukkan nama Anda"
+                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Email Pengirim</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@domain.com"
+                  className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">No. Telepon/WA</label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="08123456789"
+                  className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Judul Laporan *</label>
+              <input
+                type="text"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Contoh: Gagal memasukkan voucher"
+                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Deskripsi Masalah / Pertanyaan *</label>
+              <textarea
+                required
+                rows={5}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Tuliskan secara lengkap detail masalah, pertanyaan, atau penawaran partnership Anda di sini..."
+                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E] resize-none"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full py-4 bg-[#B48A5E] text-white rounded-2xl text-base font-bold shadow-md hover:bg-[#946F48] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading && <Loader2 className="w-5 h-5 animate-spin" />}
+              Kirim Laporan
+            </button>
+          </form>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {historyLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E] mb-2" />
+              <p className="text-sm text-gray-400 font-bold">Memuat riwayat...</p>
+            </div>
+          ) : history.length === 0 ? (
+            <div className="bg-white/80 rounded-[32px] border border-[#D4A574]/15 p-12 text-center">
+              <ClipboardList className="w-12 h-12 text-[#B48A5E]/40 mx-auto mb-3" />
+              <h4 className="font-serif text-base text-gray-800 mb-1 font-bold">Tidak Ada Laporan</h4>
+              <p className="text-xs text-gray-400 font-medium">Anda belum pernah mengirimkan laporan masalah.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {history.map((ticket) => (
+                <div key={ticket.id} className="bg-white border border-[#D4A574]/15 rounded-2xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ${
+                      ticket.type === 'BUG' ? 'bg-red-50 text-red-500 border border-red-100' :
+                      ticket.type === 'ISSUE' ? 'bg-orange-50 text-orange-500 border border-orange-100' :
+                      ticket.type === 'QUESTION' ? 'bg-blue-50 text-blue-500 border border-blue-100' :
+                      'bg-purple-50 text-purple-500 border border-purple-100'
+                    }`}>
+                      {ticket.type}
+                    </span>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider ${
+                      ticket.status === 'OPEN' ? 'bg-[#B48A5E]/10 text-[#B48A5E]' :
+                      ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' :
+                      ticket.status === 'RESOLVED' ? 'bg-green-100 text-green-700' :
+                      'bg-gray-100 text-gray-500'
+                    }`}>
+                      {ticket.status}
+                    </span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-800 text-[15px]">{ticket.title}</h4>
+                    <p className="text-xs text-gray-500 mt-1 leading-relaxed whitespace-pre-wrap">{ticket.description}</p>
+                  </div>
+                  {ticket.adminNotes && (
+                    <div className="bg-[#FFFBF7] border-l-2 border-[#B48A5E] p-3 rounded-r-xl">
+                      <p className="text-[10px] text-gray-400 font-bold uppercase">Catatan Admin</p>
+                      <p className="text-xs text-gray-700 font-medium mt-0.5 leading-relaxed">{ticket.adminNotes}</p>
+                    </div>
+                  )}
+                  <p className="text-[10px] text-gray-400 text-right">
+                    Dikirim pada {new Date(ticket.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </motion.section>
+  );
+}
+
+function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; showToast: any }) {
+  const [articles, setArticles] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/help-articles')
+      .then(res => res.json())
+      .then(data => {
+        setArticles(data.articles || []);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        setLoading(false);
+      });
+  }, []);
+
+  const categories = ['Semua', ...Array.from(new Set(articles.map(a => a.category)))];
+
+  const filteredArticles = articles.filter(art => {
+    const matchesSearch = art.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          art.content.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory = selectedCategory === 'Semua' || art.category === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const toggleExpand = (id: string) => {
+    setExpandedId(prev => prev === id ? null : id);
+  };
+
+  const handleWAContact = () => {
+    if (storeSettings?.whatsappNumber) {
+      const cleanNumber = storeSettings.whatsappNumber.replace(/[^0-9]/g, '');
+      const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Matchaboy, saya butuh bantuan...')}`;
+      window.open(waUrl, '_blank');
+    } else {
+      showToast('Layanan WhatsApp tidak tersedia.', 'error');
+    }
+  };
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 15 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -15 }}
+      className="space-y-6"
+    >
+      {/* Search Input */}
+      <div className="relative group">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Cari solusi atau pertanyaan..."
+          className="w-full pl-12 pr-4 py-3.5 bg-white border border-[#D4A574]/20 rounded-2xl focus:border-[#B48A5E] focus:ring-2 focus:ring-[#B48A5E]/10 transition-all outline-none text-[15px] font-semibold text-gray-800 shadow-sm"
+        />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#B48A5E] transition-colors" />
+      </div>
+
+      {/* Category Tabs */}
+      {articles.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-4 py-2 text-xs font-black rounded-full border shrink-0 transition-all ${
+                selectedCategory === cat
+                  ? 'bg-[#B48A5E] text-white border-[#B48A5E] shadow-sm'
+                  : 'bg-white text-gray-500 border-[#D4A574]/15 hover:bg-[#B48A5E]/5'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Help Articles Accordion */}
+      <div className="space-y-3">
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E] mb-2" />
+            <p className="text-sm text-gray-400 font-bold">Memuat pusat bantuan...</p>
+          </div>
+        ) : filteredArticles.length === 0 ? (
+          <div className="bg-white/80 rounded-[32px] border border-[#D4A574]/15 p-12 text-center">
+            <HelpCircle className="w-12 h-12 text-[#B48A5E]/40 mx-auto mb-3" />
+            <h4 className="font-serif text-base text-gray-800 mb-1 font-bold">Tidak Menemukan Solusi?</h4>
+            <p className="text-xs text-gray-400 font-medium">Coba ganti kata kunci pencarian Anda atau langsung hubungi admin.</p>
+          </div>
+        ) : (
+          filteredArticles.map((art) => (
+            <div
+              key={art.id}
+              className="bg-white border border-[#D4A574]/15 rounded-2xl shadow-sm overflow-hidden transition-all duration-300"
+            >
+              <button
+                onClick={() => toggleExpand(art.id)}
+                className="w-full flex items-center justify-between gap-4 p-5 hover:bg-[#B48A5E]/5 transition-colors text-left"
+              >
+                <div>
+                  <span className="text-[10px] font-black text-[#B48A5E] uppercase tracking-wider bg-[#B48A5E]/5 px-2 py-0.5 rounded-md">
+                    {art.category}
+                  </span>
+                  <h4 className="font-bold text-gray-800 text-[15px] mt-1.5">{art.title}</h4>
+                </div>
+                <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+                  expandedId === art.id ? 'rotate-90 text-[#B48A5E]' : ''
+                }`} />
+              </button>
+              
+              <AnimatePresence>
+                {expandedId === art.id && (
+                  <motion.div
+                    initial={{ height: 0 }}
+                    animate={{ height: 'auto' }}
+                    exit={{ height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-5 pb-5 pt-1 text-xs text-gray-600 border-t border-gray-100/50 leading-relaxed whitespace-pre-wrap">
+                      {art.content}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* WhatsApp Help CTA */}
+      <div className="bg-[#FFFBF5] rounded-[32px] border border-[#D4A574]/20 p-6 text-center space-y-4 shadow-sm">
+        <div className="w-12 h-12 rounded-2xl bg-white border border-[#D4A574]/20 flex items-center justify-center mx-auto text-[#B48A5E] shadow-sm">
+          <MessageCircle className="w-6 h-6" />
+        </div>
+        <div className="space-y-1">
+          <h4 className="font-serif text-base text-gray-800 font-bold">Masih Butuh Bantuan?</h4>
+          <p className="text-xs text-gray-500 font-medium max-w-xs mx-auto">
+            Tim customer service kami siap membantu kendala Anda langsung melalui WhatsApp.
+          </p>
+        </div>
+        <button
+          onClick={handleWAContact}
+          className="inline-flex items-center gap-2 px-6 py-3 bg-[#1E3F20] hover:bg-[#152e16] text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95"
+        >
+          Hubungi Customer Service
+        </button>
+      </div>
     </motion.section>
   );
 }
