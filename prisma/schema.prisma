@@ -150,6 +150,8 @@ model Location {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Category {
@@ -178,6 +180,8 @@ model Product {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   Favorite  Favorite[]
+
+  @@index([categoryId])
 }
 
 model Order {
@@ -236,6 +240,9 @@ model Order {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }
 
 model OrderItem {
@@ -252,6 +259,9 @@ model OrderItem {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
 }
 
 model Favorite {
@@ -283,6 +293,8 @@ model Notification {
   data     String? // JSON metadata
 
   createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model ActivityLog {
@@ -380,6 +392,9 @@ model Voucher {
   fromReferralUserId String? // ID user yang diajak (referee)
 
   createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([templateId])
 }
 
 // Master Template Voucher yang dibuat oleh Admin
