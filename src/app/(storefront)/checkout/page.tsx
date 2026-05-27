@@ -56,6 +56,8 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState('');
   const [showPickupWarning, setShowPickupWarning] = useState(false);
   const [showTumblerWarning, setShowTumblerWarning] = useState(false);
+  const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  const [tempFormData, setTempFormData] = useState<CheckoutFormData | null>(null);
 
   // Voucher restore tracking
   const [isVoucherRestored, setIsVoucherRestored] = useState(false);
@@ -688,10 +690,11 @@ export default function CheckoutPage() {
     // Check if selected date is today in local timezone
     const isToday = tempPickupDate === now.toLocaleDateString('en-CA');
 
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const minSlot = isToday ? currentMinutes + 15 : openMinutes;
+    const currentMinutes = now.getHours() * 65 + now.getMinutes();
+    const minSlot = isToday ? (now.getHours() * 60 + now.getMinutes()) + 15 : openMinutes;
 
-    const startMinutes = Math.max(openMinutes, minSlot);
+    const deliveryMinSlot = orderType === 'DELIVERY' ? openMinutes + 30 : openMinutes;
+    const startMinutes = Math.max(deliveryMinSlot, minSlot);
     const slots: string[] = [];
     const interval = storeSettings.pickupSlotInterval || 15;
 
@@ -704,7 +707,7 @@ export default function CheckoutPage() {
       slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
     }
     return slots;
-  }, [storeSettings.openTime, storeSettings.closeTime, storeSettings.pickupSlotInterval, tempPickupDate, storeSettings.customHours]);
+  }, [storeSettings.openTime, storeSettings.closeTime, storeSettings.pickupSlotInterval, tempPickupDate, storeSettings.customHours, orderType]);
 
   // Automatic payment switches to COD and QRIS/Transfer cannot be selected when grandTotal reaches 0
   useEffect(() => {
@@ -771,7 +774,7 @@ export default function CheckoutPage() {
       }
       setTempPickupDate(pickupDate || (availableDates.length > 0 ? availableDates[0].value : null));
     }
-  }, [isScheduleModalOpen, pickupTime, pickupDate, availableDates, modalTimeSlots]);
+  }, [isScheduleModalOpen]);
 
   const [tempHour, tempMin] = useMemo(() => {
     if (!tempPickupTime || tempPickupTime === 'Sekarang') {
@@ -861,15 +864,22 @@ export default function CheckoutPage() {
     return true;
   }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod, isStoreClosedToday]);
 
-  const onSubmit = async (data: CheckoutFormData) => {
+  const onSubmit = (data: CheckoutFormData) => {
     if (!canSubmit) return;
+    setTempFormData(data);
+    setShowPaymentConfirmation(true);
+  };
+
+  const confirmAndSubmitOrder = async () => {
+    if (!tempFormData || !canSubmit) return;
     setIsSubmitting(true);
+    setShowPaymentConfirmation(false);
 
     try {
       const payload = {
-        name: data.name,
-        phone: data.phone,
-        notes: data.notes,
+        name: tempFormData.name,
+        phone: tempFormData.phone,
+        notes: tempFormData.notes,
         orderType,
         hasTumbler,
         voucherCode: appliedVoucher?.code || undefined,
@@ -1600,9 +1610,9 @@ export default function CheckoutPage() {
                     <span className="text-gray-850">{formatRupiah(sizeUpgradeTotal)}</span>
                   </div>
                 )}
-                {orderType === 'PICKUP' && pickupTime && (
+                {pickupTime && (pickupTime !== 'Sekarang' || orderType === 'PICKUP') && (
                   <div className="flex justify-between items-center bg-[#FFFDF9] border border-[#EADFC9]/20 p-2.5 rounded-xl">
-                    <span className="flex items-center gap-1.5"><Clock className="w-4 h-4 text-[#B48A5E]" /> Waktu Ambil</span>
+                    <span className="flex items-center gap-1.5 text-gray-500"><Clock className="w-4 h-4 text-[#B48A5E]" /> {orderType === 'PICKUP' ? 'Waktu Ambil' : 'Waktu Kirim'}</span>
                     <span className="font-bold text-[#B48A5E]">
                       {(() => {
                         if (pickupTime === 'Sekarang') {
@@ -1670,26 +1680,26 @@ export default function CheckoutPage() {
             </div>
 
             <div className="px-6 pb-6 pt-3 bg-gray-50/40 border-t border-gray-50">
-              {orderType === 'PICKUP' && (
-                <button
-                  type="button"
-                  onClick={() => setIsScheduleModalOpen(true)}
-                  className="w-full mb-3.5 py-4 rounded-2xl border-2 border-[#946F48] text-[#946F48] font-bold text-xs bg-white hover:bg-[#FAF6EE]/50 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Clock className="w-4.5 h-4.5 text-[#946F48]" />
-                  {(() => {
-                    if (pickupTime === 'Sekarang') {
-                      return 'Ambil Sekarang';
-                    }
-                    if (!pickupDate || !pickupTime) {
-                      return 'Jadwalkan Waktu Ambil';
-                    }
-                    const matchedDate = availableDates.find(d => d.value === pickupDate);
-                    const dayLabel = matchedDate ? `${matchedDate.dayLabel}, ${matchedDate.label}` : pickupDate;
-                    return `Jadwal Ambil: ${dayLabel} @ ${pickupTime}`;
-                  })()}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setIsScheduleModalOpen(true)}
+                className="w-full mb-3.5 py-4 rounded-2xl border-2 border-[#946F48] text-[#946F48] font-bold text-xs bg-white hover:bg-[#FAF6EE]/50 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Clock className="w-4.5 h-4.5 text-[#946F48]" />
+                {(() => {
+                  if (pickupTime === 'Sekarang') {
+                    return orderType === 'PICKUP' ? 'Ambil Sekarang' : 'Kirim Sekarang';
+                  }
+                  if (!pickupDate || !pickupTime) {
+                    return orderType === 'PICKUP' ? 'Jadwalkan Waktu Ambil' : 'Jadwalkan Waktu Kirim';
+                  }
+                  const matchedDate = availableDates.find(d => d.value === pickupDate);
+                  const dayLabel = matchedDate ? `${matchedDate.dayLabel}, ${matchedDate.label}` : pickupDate;
+                  return orderType === 'PICKUP'
+                    ? `Jadwal Ambil: ${dayLabel} @ ${pickupTime} - ${getEndTime(pickupTime)}`
+                    : `Jadwal Kirim: ${dayLabel} @ ${pickupTime} - ${getEndTime(pickupTime)}`;
+                })()}
+              </button>
 
               <motion.button
                 type="submit"
@@ -1705,8 +1715,8 @@ export default function CheckoutPage() {
                     <Loader2 className="w-4.5 h-4.5 animate-spin" />
                     <span>Memproses...</span>
                   </div>
-                ) : orderType === 'PICKUP' && (!pickupDate || !pickupTime) ? (
-                  'Tentukan Waktu Pengambilan'
+                ) : (!pickupDate || !pickupTime) ? (
+                  orderType === 'PICKUP' ? 'Tentukan Waktu Pengambilan' : 'Tentukan Waktu Pengiriman'
                 ) : orderType === 'DELIVERY' && isStoreClosedToday ? (
                   'Toko Tutup Hari Ini'
                 ) : orderType === 'DELIVERY' && !deliveryAddress ? (
@@ -1939,16 +1949,18 @@ export default function CheckoutPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {orderType === 'PICKUP' && (
-              <button
-                type="button"
-                onClick={() => setIsScheduleModalOpen(true)}
-                className="flex items-center justify-center gap-1 px-3 py-3.5 rounded-xl border border-gray-200 text-[#8C7864] font-bold text-xs bg-white active:scale-95 transition-all"
-              >
-                <Clock className="w-4 h-4 text-[#8C7864]" />
-                <span>{pickupTime === 'Sekarang' ? 'Jadwal' : pickupTime}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => setIsScheduleModalOpen(true)}
+              className="flex items-center justify-center gap-1 px-3 py-3.5 rounded-xl border border-gray-200 text-[#8C7864] font-bold text-xs bg-white active:scale-95 transition-all cursor-pointer"
+            >
+              <Clock className="w-4 h-4 text-[#8C7864]" />
+              <span>
+                {pickupTime === 'Sekarang'
+                  ? 'Jadwal'
+                  : `${pickupTime} - ${getEndTime(pickupTime)}`}
+              </span>
+            </button>
             
             <button
               type="button"
@@ -1969,8 +1981,8 @@ export default function CheckoutPage() {
                   <Loader2 className="w-4.5 h-4.5 animate-spin" />
                   <span>Memproses...</span>
                 </>
-              ) : orderType === 'PICKUP' && (!pickupDate || !pickupTime) ? (
-                'Jadwalkan Ambil'
+              ) : (!pickupDate || !pickupTime) ? (
+                orderType === 'PICKUP' ? 'Jadwalkan Ambil' : 'Jadwalkan Kirim'
               ) : orderType === 'DELIVERY' && isStoreClosedToday ? (
                 'Toko Tutup'
               ) : orderType === 'DELIVERY' && !deliveryAddress ? (
@@ -2558,6 +2570,58 @@ export default function CheckoutPage() {
             deliveryFeePerKm={storeSettings.deliveryFeePerKm}
             maxDeliveryDistance={storeSettings.maxDeliveryDistance}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Payment/Location Confirmation Dialog */}
+      <AnimatePresence>
+        {showPaymentConfirmation && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm select-none">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white w-full max-w-sm rounded-[2.5rem] border border-gray-100 p-6 shadow-2xl space-y-4"
+            >
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-[#FFFDF0] border border-[#EADFC9]/30 flex items-center justify-center">
+                <AlertTriangle className="w-7 h-7 text-[#B48A5E]" />
+              </div>
+
+              <div className="text-center space-y-1.5">
+                <h3 className="font-serif font-black text-lg text-gray-900">
+                  {orderType === 'PICKUP' ? 'Konfirmasi Pengambilan' : 'Konfirmasi Pengiriman'}
+                </h3>
+                <p className="text-xs text-gray-500 leading-relaxed font-semibold">
+                  {orderType === 'PICKUP' ? (
+                    <>
+                      Harap diingat bahwa untuk pickup, lokasi pengambilan pesanan Anda berada di <strong className="text-[#B48A5E] font-black">sekolah / ASD (sebelah BC)</strong>.
+                    </>
+                  ) : (
+                    <>
+                      Harap diingat bahwa layanan pengiriman (delivery) hanya berlaku untuk lokasi <strong className="text-red-650 font-black">selain SMKN 1 Probolinggo</strong>.
+                    </>
+                  )}
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentConfirmation(false)}
+                  className="flex-1 py-3.5 border border-gray-200 bg-white text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-2xl text-xs font-extrabold transition-all active:scale-95 cursor-pointer text-center"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmAndSubmitOrder}
+                  className="flex-1 py-3.5 bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white rounded-2xl text-xs font-extrabold hover:opacity-95 shadow-md shadow-[#946F48]/10 transition-all active:scale-[0.98] cursor-pointer text-center animate-pulse"
+                >
+                  Bayar
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
