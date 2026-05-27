@@ -100,7 +100,7 @@ type MilestoneInfo = {
   milestone3: { target: number; reward: string; enabled: boolean };
 };
 
-type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers';
+type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral';
 
 export default function ProfileClient({
   user: initialUser,
@@ -142,7 +142,7 @@ export default function ProfileClient({
   }, []);
 
   useEffect(() => {
-    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers'].includes(sectionParam)) {
+    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral'].includes(sectionParam)) {
       setActiveSection(sectionParam);
       
       // If it's loyalty and there's a tab, we might want to scroll
@@ -180,6 +180,7 @@ export default function ProfileClient({
 
   const menuItems = [
     { icon: Coins, label: 'Poin Saya', id: 'loyalty', badge: null },
+    { icon: Share2, label: 'Referral Teman', id: 'referral', badge: null },
     { icon: Ticket, label: 'Voucher Saya', id: 'vouchers', badge: vouchers.filter(v => !v.isUsed).length > 0 ? vouchers.filter(v => !v.isUsed).length.toString() : null },
     { icon: Package, label: 'Pesanan Saya', id: 'orders', badge: activeOrdersCount > 0 ? activeOrdersCount.toString() : null },
     { icon: Heart, label: 'Favorit', id: 'favorites', badge: null },
@@ -204,6 +205,7 @@ export default function ProfileClient({
       case 'notifications': return 'Notifikasi';
       case 'settings': return 'Pengaturan';
       case 'loyalty': return 'Poin Saya';
+      case 'referral': return 'Referral Teman';
       case 'vouchers': return 'Voucher Saya';
       default: return 'Profile';
     }
@@ -381,6 +383,7 @@ export default function ProfileClient({
 
           {/* Render Sections */}
           {activeSection === 'loyalty' && <LoyaltySection user={user} milestones={milestones} />}
+          {activeSection === 'referral' && <ReferralSection user={user} />}
           {activeSection === 'vouchers' && <VouchersSection vouchers={vouchers} />}
           {activeSection === 'orders' && <OrdersSection orders={orders} router={router} />}
           {activeSection === 'favorites' && <FavoritesSection />}
@@ -2670,35 +2673,6 @@ function LoyaltySection({ user, milestones }: { user: UserShape; milestones: Mil
         </div>
       )}
 
-      {/* Referral Code */}
-      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5">
-        <div className="flex items-center gap-3.5 mb-4">
-          <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
-            <Share2 className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="text-[14px] font-black text-gray-850">Ajak Teman, Dapat Reward!</h4>
-            <p className="text-[11px] text-gray-500 font-medium">Bagikan link pendaftaran Anda di bawah</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex-1 px-3.5 py-3 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/15 text-[12px] font-mono text-gray-600 truncate shadow-inner">
-            {origin ? `${origin}/register?ref=${user.referralCode}` : user.referralCode}
-          </div>
-          <button
-            onClick={copyReferralCode}
-            className={`px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-1.5 transition-all active:scale-95 ${
-              copied ? 'bg-emerald-50 text-emerald-600 border border-green-200' : 'bg-[#B48A5E] text-white hover:bg-[#946F48] shadow-md shadow-[#B48A5E]/10'
-            }`}
-          >
-            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? 'Disalin!' : 'Salin'}
-          </button>
-        </div>
-      </div>
-
-      {/* Masukkan Kode Referral Teman */}
-      <ManualReferralInput user={user} />
 
       {/* Cara Mendapatkan Poin */}
       <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
@@ -2735,6 +2709,63 @@ function LoyaltySection({ user, milestones }: { user: UserShape; milestones: Mil
     </motion.section>
   );
 }
+
+function ReferralSection({ user }: { user: UserShape }) {
+  const [copied, setCopied] = useState(false);
+  const [origin, setOrigin] = useState('');
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const copyReferralCode = () => {
+    const referralUrl = `${window.location.origin}/register?ref=${user.referralCode}`;
+    navigator.clipboard.writeText(referralUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <motion.section
+      key="referral"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="space-y-4 animate-in fade-in duration-300"
+    >
+      {/* Referral Code */}
+      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5">
+        <div className="flex items-center gap-3.5 mb-4">
+          <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
+            <Share2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-[14px] font-black text-gray-850">Ajak Teman, Dapat Reward!</h4>
+            <p className="text-[11px] text-gray-500 font-medium">Bagikan link pendaftaran Anda di bawah</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex-1 px-3.5 py-3 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/15 text-[12px] font-mono text-gray-600 truncate shadow-inner">
+            {origin ? `${origin}/register?ref=${user.referralCode}` : user.referralCode}
+          </div>
+          <button
+            onClick={copyReferralCode}
+            className={`px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-1.5 transition-all active:scale-95 ${
+              copied ? 'bg-emerald-50 text-emerald-600 border border-green-200' : 'bg-[#B48A5E] text-white hover:bg-[#946F48] shadow-md shadow-[#B48A5E]/10'
+            }`}
+          >
+            {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? 'Disalin!' : 'Salin'}
+          </button>
+        </div>
+      </div>
+
+      {/* Masukkan Kode Referral Teman */}
+      <ManualReferralInput user={user} />
+    </motion.section>
+  );
+}
+
 
 function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: VoucherShape[] }) {
   const router = useRouter();

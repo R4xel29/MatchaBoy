@@ -376,7 +376,7 @@ export default function StorefrontClient({
         {status === 'authenticated' && (
           <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
             <motion.div 
-              onClick={() => window.location.href = '/profile?section=loyalty'}
+              onClick={() => window.location.href = '/profile?section=referral'}
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.15 }}
