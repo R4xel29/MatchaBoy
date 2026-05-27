@@ -33,10 +33,117 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Nama dan nomor HP wajib diisi' }, { status: 400 })
         }
 
+        // Fetch store settings early
+        const storeSettings = await prisma.storeSettings.findFirst()
+
         // Validate pickup fields
         const orderType = body.orderType || 'PICKUP'
         if (orderType === 'PICKUP' && (!body.pickupDate || !body.pickupTime)) {
             return NextResponse.json({ error: 'Tanggal dan jam pengambilan wajib diisi' }, { status: 400 })
+        }
+
+        // Validate pickup/delivery date and time against store settings
+        if (storeSettings) {
+            // Function to check store hours for a specific date
+            const getStoreHoursForDate = (dateStr: string) => {
+                let openT = storeSettings.openTime;
+                let closeT = storeSettings.closeTime;
+                try {
+                    const custom = typeof storeSettings.customHours === 'string'
+                        ? JSON.parse(storeSettings.customHours || '{}')
+                        : storeSettings.customHours || {};
+
+                    if (custom?.dates?.[dateStr]) {
+                        openT = custom.dates[dateStr].openTime;
+                        closeT = custom.dates[dateStr].closeTime;
+                    } else {
+                        const dayIdx = String(new Date(dateStr).getDay());
+                        if (custom?.weekdays?.[dayIdx]) {
+                            openT = custom.weekdays[dayIdx].openTime;
+                            closeT = custom.weekdays[dayIdx].closeTime;
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error parsing customHours:", e);
+                }
+                return { openTime: openT, closeTime: closeT };
+            };
+
+            const now = new Date();
+            // Get current date/time in Jakarta timezone (store local time)
+            const getJakartaDateString = (date: Date) => {
+                return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(date);
+            };
+            const getJakartaTimeString = (date: Date) => {
+                return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }).format(date);
+            };
+
+            const todayStr = getJakartaDateString(now);
+            const targetDateStr = body.pickupDate ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(new Date(body.pickupDate)) : todayStr;
+            
+            // 1. Check operational days
+            let openDays: number[] = [0,1,2,3,4,5,6];
+            try {
+                openDays = JSON.parse(storeSettings.operationalDays || '[0,1,2,3,4,5,6]');
+            } catch {}
+            
+            // Safely parse date components to avoid timezone shift on new Date(targetDateStr)
+            const [yr, mo, dy] = targetDateStr.split('-').map(Number);
+            const targetDayOfWeek = new Date(yr, mo - 1, dy).getDay();
+            
+            if (!openDays.includes(targetDayOfWeek)) {
+                return NextResponse.json({ error: 'Toko tutup pada hari yang dipilih' }, { status: 400 });
+            }
+
+            // 2. Check disabled dates/holidays
+            let closedDates: string[] = [];
+            try {
+                closedDates = JSON.parse(storeSettings.disabledDates || '[]');
+            } catch {}
+            if (closedDates.includes(targetDateStr)) {
+                return NextResponse.json({ error: 'Toko tutup pada tanggal yang dipilih (hari libur/khusus)' }, { status: 400 });
+            }
+
+            const { openTime, closeTime } = getStoreHoursForDate(targetDateStr);
+            const [openH, openM] = openTime.split(':').map(Number);
+            const [closeH, closeM] = closeTime.split(':').map(Number);
+            const openMinutes = openH * 60 + openM;
+            const closeMinutes = closeH * 60 + closeM;
+
+            if (body.pickupTime === 'Sekarang') {
+                if (targetDateStr !== todayStr) {
+                    return NextResponse.json({ error: 'Pengambilan "Sekarang" hanya berlaku untuk hari ini' }, { status: 400 });
+                }
+                const currentJakartaTime = getJakartaTimeString(now);
+                const [curH, curM] = currentJakartaTime.split(':').map(Number);
+                const currentMinutes = curH * 60 + curM;
+
+                if (currentMinutes < openMinutes || currentMinutes >= closeMinutes - 15) {
+                    return NextResponse.json({ error: 'Toko saat ini sedang tutup. Silakan jadwalkan waktu pengambilan lain.' }, { status: 400 });
+                }
+            } else if (body.pickupTime) {
+                const [pickH, pickM] = body.pickupTime.split(':').map(Number);
+                const pickMinutes = pickH * 60 + pickM;
+
+                // Validate scheduled delivery/pickup time
+                const deliveryMinMinutes = orderType === 'DELIVERY' ? openMinutes + 30 : openMinutes;
+                
+                if (pickMinutes < deliveryMinMinutes || pickMinutes >= closeMinutes) {
+                    return NextResponse.json({ 
+                        error: `Jam pengambilan di luar jam operasional toko untuk ${orderType === 'DELIVERY' ? 'pengiriman' : 'pengambilan'} (${orderType === 'DELIVERY' ? 'mulai ' + String(Math.floor(deliveryMinMinutes/60)).padStart(2, '0') + ':' + String(deliveryMinMinutes%60).padStart(2, '0') : openTime} - ${closeTime})` 
+                    }, { status: 400 });
+                }
+
+                // If scheduled for today, it must be in the future (at least 15 min buffer)
+                if (targetDateStr === todayStr) {
+                    const currentJakartaTime = getJakartaTimeString(now);
+                    const [curH, curM] = currentJakartaTime.split(':').map(Number);
+                    const currentMinutes = curH * 60 + curM;
+                    if (pickMinutes < currentMinutes + 15) {
+                        return NextResponse.json({ error: 'Jam pengambilan harus minimal 15 menit dari sekarang' }, { status: 400 });
+                    }
+                }
+            }
         }
 
         // --- SECURE SERVER-SIDE PRICE CALCULATION ---
@@ -124,8 +231,7 @@ export async function POST(req: Request) {
             })
         }
 
-        // Fetch store settings for delivery fee
-        const storeSettings = await prisma.storeSettings.findFirst()
+        // Re-use store settings fetched above for delivery fee
         const perKmFee = storeSettings?.deliveryFeePerKm ?? 2000
         const maxDist = storeSettings?.maxDeliveryDistance ?? 10
         

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useStorefrontContext } from '@/app/(storefront)/layout';
@@ -183,6 +183,66 @@ export default function CheckoutPage() {
     return { openTime: openT, closeTime: closeT };
   };
 
+  const getTimeSlotsForDate = useCallback((dateStr: string, type: OrderType) => {
+    const { openTime: targetOpenTime, closeTime: targetCloseTime } = getStoreHoursForDate(dateStr);
+    const [openH, openM] = targetOpenTime.split(':').map(Number);
+    const [closeH, closeM] = targetCloseTime.split(':').map(Number);
+
+    const openMinutes = openH * 60 + openM;
+    const closeMinutes = closeH * 60 + closeM;
+
+    const now = new Date();
+    const isToday = dateStr === now.toLocaleDateString('en-CA');
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const minSlot = isToday ? currentMinutes + 15 : openMinutes;
+
+    const deliveryMinSlot = type === 'DELIVERY' ? openMinutes + 30 : openMinutes;
+    const startMinutes = Math.max(deliveryMinSlot, minSlot);
+    const slots: string[] = [];
+    const interval = storeSettings.pickupSlotInterval || 15;
+
+    const remainder = startMinutes % interval;
+    const alignedStart = remainder === 0 ? startMinutes : startMinutes + (interval - remainder);
+
+    for (let m = alignedStart; m < closeMinutes; m += interval) {
+      const h = Math.floor(m / 60) % 24;
+      const min = m % 60;
+      slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
+    }
+    return slots;
+  }, [storeSettings, getStoreHoursForDate]);
+
+  const isStoreCurrentlyOpen = useMemo(() => {
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('en-CA');
+    
+    let openDays: number[] = [0,1,2,3,4,5,6];
+    try {
+      openDays = JSON.parse(storeSettings.operationalDays || '[0,1,2,3,4,5,6]');
+    } catch {}
+    let closedDates: string[] = [];
+    try {
+      closedDates = JSON.parse(storeSettings.disabledDates || '[]');
+    } catch {}
+    
+    const dayOfWeek = now.getDay();
+    const isOpenDay = openDays.includes(dayOfWeek);
+    const isHoliday = closedDates.includes(todayStr);
+    
+    if (!isOpenDay || isHoliday) return false;
+    
+    const { openTime, closeTime } = getStoreHoursForDate(todayStr);
+    const [openH, openM] = openTime.split(':').map(Number);
+    const [closeH, closeM] = closeTime.split(':').map(Number);
+    
+    const openMinutes = openH * 60 + openM;
+    const closeMinutes = closeH * 60 + closeM;
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    return currentMinutes >= openMinutes && currentMinutes < closeMinutes - 15;
+  }, [storeSettings, getStoreHoursForDate]);
+
   const availableDates = useMemo(() => {
     const dates: { value: string; label: string; dayLabel: string; isToday: boolean }[] = [];
     let openDays: number[] = [0,1,2,3,4,5,6];
@@ -244,10 +304,12 @@ export default function CheckoutPage() {
         setPickupDate(firstDate.value);
         setTempPickupDate(firstDate.value);
         
-        // If today is not open, clear the 'Sekarang' pickupTime so the user is forced to schedule
-        if (!firstDate.isToday) {
-          setPickupTime(null);
-          setTempPickupTime('');
+        // If today is not open or not currently open, set default schedule slot
+        if (!firstDate.isToday || !isStoreCurrentlyOpen) {
+          const slots = getTimeSlotsForDate(firstDate.value, orderType);
+          const defaultSlot = slots[0] || null;
+          setPickupTime(defaultSlot);
+          setTempPickupTime(defaultSlot || '');
         } else {
           setPickupTime('Sekarang');
           setTempPickupTime('Sekarang');
@@ -255,9 +317,11 @@ export default function CheckoutPage() {
       } else {
         const matched = availableDates.find(d => d.value === pickupDate);
         if (matched) {
-          if (!matched.isToday && pickupTime === 'Sekarang') {
-            setPickupTime(null);
-            setTempPickupTime('');
+          if ((!matched.isToday || !isStoreCurrentlyOpen) && pickupTime === 'Sekarang') {
+            const slots = getTimeSlotsForDate(matched.value, orderType);
+            const defaultSlot = slots[0] || null;
+            setPickupTime(defaultSlot);
+            setTempPickupTime(defaultSlot || '');
           }
         }
       }
@@ -265,7 +329,7 @@ export default function CheckoutPage() {
       setPickupDate(null);
       setPickupTime(null);
     }
-  }, [availableDates, pickupDate, pickupTime]);
+  }, [availableDates, pickupDate, pickupTime, isStoreCurrentlyOpen, orderType, getTimeSlotsForDate]);
 
   // Automatically reset tumbler option when shipping method changes to DELIVERY
   useEffect(() => {
@@ -691,35 +755,8 @@ export default function CheckoutPage() {
 
   const modalTimeSlots = useMemo(() => {
     const targetDate = tempPickupDate || new Date().toLocaleDateString('en-CA');
-    const { openTime: targetOpenTime, closeTime: targetCloseTime } = getStoreHoursForDate(targetDate);
-    const [openH, openM] = targetOpenTime.split(':').map(Number);
-    const [closeH, closeM] = targetCloseTime.split(':').map(Number);
-
-    const openMinutes = openH * 60 + openM;
-    const closeMinutes = closeH * 60 + closeM;
-
-    const now = new Date();
-    // Check if selected date is today in local timezone
-    const isToday = tempPickupDate === now.toLocaleDateString('en-CA');
-
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
-    const minSlot = isToday ? currentMinutes + 15 : openMinutes;
-
-    const deliveryMinSlot = orderType === 'DELIVERY' ? openMinutes + 30 : openMinutes;
-    const startMinutes = Math.max(deliveryMinSlot, minSlot);
-    const slots: string[] = [];
-    const interval = storeSettings.pickupSlotInterval || 15;
-
-    const remainder = startMinutes % interval;
-    const alignedStart = remainder === 0 ? startMinutes : startMinutes + (interval - remainder);
-
-    for (let m = alignedStart; m < closeMinutes; m += interval) {
-      const h = Math.floor(m / 60) % 24;
-      const min = m % 60;
-      slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
-    }
-    return slots;
-  }, [storeSettings.openTime, storeSettings.closeTime, storeSettings.pickupSlotInterval, tempPickupDate, storeSettings.customHours, orderType]);
+    return getTimeSlotsForDate(targetDate, orderType);
+  }, [tempPickupDate, orderType, getTimeSlotsForDate]);
 
   // Automatic payment switches to COD and QRIS/Transfer cannot be selected when grandTotal reaches 0
   useEffect(() => {
@@ -870,7 +907,7 @@ export default function CheckoutPage() {
     const now = new Date();
     const isToday = tempPickupDate === now.toLocaleDateString('en-CA');
     
-    if (isToday) {
+    if (isToday && isStoreCurrentlyOpen) {
       if (!tempPickupTime) {
         setTempPickupTime('Sekarang');
       }
@@ -883,7 +920,7 @@ export default function CheckoutPage() {
         }
       }
     }
-  }, [tempPickupDate, modalTimeSlots]);
+  }, [tempPickupDate, modalTimeSlots, isStoreCurrentlyOpen]);
 
   const handleScroll = (container: HTMLDivElement, isHour: boolean) => {
     if (isScrollingProgrammatically.current) return;
@@ -961,17 +998,36 @@ export default function CheckoutPage() {
 
   const canSubmit = useMemo(() => {
     if (items.length === 0) return false;
+    
+    // Check if selecting "Sekarang" but store is currently closed/not open
+    if (pickupTime === 'Sekarang' && (!isStoreCurrentlyOpen || isStoreClosedToday)) {
+      return false;
+    }
+
     if (orderType === 'PICKUP') {
       if (!pickupDate || !pickupTime) return false;
-      if (pickupTime === 'Sekarang' && isStoreClosedToday) return false;
+      
+      // If scheduled time, validate against valid slots
+      if (pickupTime !== 'Sekarang' && pickupDate) {
+        const slots = getTimeSlotsForDate(pickupDate, 'PICKUP');
+        if (!slots.includes(pickupTime)) return false;
+      }
     }
     if (orderType === 'DELIVERY') {
       if (!deliveryAddress) return false;
+      
+      // If scheduled time, validate against valid slots
+      if (pickupTime && pickupTime !== 'Sekarang') {
+        const targetDate = pickupDate || new Date().toLocaleDateString('en-CA');
+        const slots = getTimeSlotsForDate(targetDate, 'DELIVERY');
+        if (!slots.includes(pickupTime)) return false;
+      }
+      
       if (isStoreClosedToday) return false;
     }
     if (!paymentMethod) return false;
     return true;
-  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod, isStoreClosedToday]);
+  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod, isStoreClosedToday, isStoreCurrentlyOpen, getTimeSlotsForDate]);
 
   const onSubmit = (data: CheckoutFormData) => {
     if (!canSubmit) return;
@@ -2252,7 +2308,7 @@ export default function CheckoutPage() {
               </div>
 
               <div className="space-y-2.5">
-                {tempPickupDate === new Date().toLocaleDateString('en-CA') && (
+                {tempPickupDate === new Date().toLocaleDateString('en-CA') && isStoreCurrentlyOpen && (
                   <button
                     type="button"
                     onClick={() => {
