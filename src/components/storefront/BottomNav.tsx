@@ -12,20 +12,34 @@ export function BottomNav() {
   const searchParams = useSearchParams();
   const { openSearch, openQR, setSearchOpen, searchOpen } = useStorefrontContext();
   const currentSection = searchParams.get('section');
+  const isMenuOpen = !!searchOpen || searchParams.get('openMenu') === 'true';
+
+  const navigateTo = (href: string) => {
+    if (href === '/') {
+      setSearchOpen?.(false);
+      router.push(href);
+    } else if (pathname?.startsWith('/profile') && href.startsWith('/profile')) {
+      setSearchOpen?.(false);
+      window.history.pushState(null, '', href);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    } else {
+      router.push(href);
+    }
+  };
 
   const navItems = [
     {
       label: 'Beranda',
       icon: Home,
       href: '/',
-      active: pathname === '/' && !searchOpen,
+      active: pathname === '/' && !isMenuOpen,
     },
     {
       label: 'Menu',
       icon: BookOpen,
       onClick: pathname === '/' ? openSearch : undefined,
       href: pathname === '/' ? undefined : '/?openMenu=true',
-      active: !!searchOpen,
+      active: isMenuOpen,
     },
     {
       label: 'Voucher',
@@ -60,8 +74,7 @@ export function BottomNav() {
                 if (item.onClick) {
                   item.onClick();
                 } else {
-                  setSearchOpen?.(false);
-                  router.push(item.href!);
+                  navigateTo(item.href!);
                 }
               }}
               className="flex flex-col items-center justify-center py-2 px-2 relative group"
@@ -108,8 +121,7 @@ export function BottomNav() {
                 if (item.onClick) {
                   item.onClick();
                 } else {
-                  setSearchOpen?.(false);
-                  router.push(item.href!);
+                  navigateTo(item.href!);
                 }
               }}
               className="flex flex-col items-center justify-center py-2 px-2 relative group"

@@ -2,7 +2,7 @@
 
 import { useState, useRef, createContext, useContext, useEffect, Suspense } from 'react';
 import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { AppHeader } from '@/components/storefront/AppHeader';
 import { BottomNav } from '@/components/storefront/BottomNav';
@@ -41,12 +41,24 @@ export default function StorefrontLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const [searchOpen, setSearchOpen] = useState(false);
+  const pathname = usePathname();
+  const [searchOpen, setSearchOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('openMenu') === 'true';
+    }
+    return false;
+  });
   const [qrOpen, setQrOpen] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const { data: session, status } = useSession();
   const [setupChecked, setSetupChecked] = useState(false);
   const setupCheckRef = useRef(false);
+
+  useEffect(() => {
+    if (pathname !== '/') {
+      setSearchOpen(false);
+    }
+  }, [pathname]);
 
   // Check if logged-in user has pin and name (runs once per auth)
   useEffect(() => {

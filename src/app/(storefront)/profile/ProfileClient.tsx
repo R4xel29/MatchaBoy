@@ -104,6 +104,17 @@ type MilestoneInfo = {
 
 type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral' | 'tickets' | 'help-center';
 
+const profileCache: {
+  favorites?: any[];
+  addresses?: any[];
+  storeSettings?: any;
+  referees?: any[];
+  vouchers?: any[];
+  claimableTemplates?: any[];
+  tickets?: any[];
+  helpArticles?: any[];
+} = {};
+
 export default function ProfileClient({
   user: initialUser,
   orders,
@@ -202,6 +213,8 @@ export default function ProfileClient({
   const handleBack = () => {
     if (activeSection !== 'menu') {
       setActiveSection('menu');
+      window.history.pushState(null, '', '/profile');
+      window.dispatchEvent(new PopStateEvent('popstate'));
     } else {
       router.push('/');
     }
@@ -349,7 +362,9 @@ export default function ProfileClient({
                           showToast("Layanan WhatsApp sedang tidak aktif", "error");
                         }
                       } else {
-                        router.push(`/profile?section=${item.id}`);
+                        const targetUrl = `/profile?section=${item.id}`;
+                        window.history.pushState(null, '', targetUrl);
+                        window.dispatchEvent(new PopStateEvent('popstate'));
                       }
                     }}
                     className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-[#B48A5E]/5 rounded-2xl transition-all active:scale-[0.99] group"
@@ -1156,13 +1171,17 @@ function SectionSkeleton({ type }: { type: 'favorites' | 'addresses' | 'notifica
 
 function FavoritesSection() {
   const { showToast } = useToast();
-  const [favorites, setFavorites] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState<any[]>(profileCache.favorites || []);
+  const [loading, setLoading] = useState(!profileCache.favorites);
 
   useEffect(() => {
     fetch('/api/user/favorites')
       .then(res => res.json())
-      .then(data => setFavorites(data || []))
+      .then(data => {
+        const favs = data || [];
+        setFavorites(favs);
+        profileCache.favorites = favs;
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -1285,8 +1304,8 @@ function AddressesSection({ user }: { user: UserShape }) {
     message: '',
     onConfirm: () => {},
   });
-  const [addresses, setAddresses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [addresses, setAddresses] = useState<any[]>(profileCache.addresses || []);
+  const [loading, setLoading] = useState(!profileCache.addresses);
   const [step, setStep] = useState<'LIST' | 'MAP' | 'DETAIL'>('LIST');
   const [mapCameFrom, setMapCameFrom] = useState<'LIST' | 'DETAIL'>('LIST');
   const [saving, setSaving] = useState(false);
@@ -1303,8 +1322,9 @@ function AddressesSection({ user }: { user: UserShape }) {
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapAddress, setMapAddress] = useState('');
   const [mapAddressTitle, setMapAddressTitle] = useState('');
-  const [mapLat, setMapLat] = useState(-7.756928);
-  const [mapLng, setMapLng] = useState(113.211502);
+  const cachedSettings = profileCache.storeSettings || {};
+  const [mapLat, setMapLat] = useState(cachedSettings.storeLat || -7.756928);
+  const [mapLng, setMapLng] = useState(cachedSettings.storeLng || 113.211502);
   const [reverseGeocoding, setReverseGeocoding] = useState(false);
   const [isMapMoving, setIsMapMoving] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -1321,21 +1341,27 @@ function AddressesSection({ user }: { user: UserShape }) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const ignoreMoveEndRef = useRef(true);
 
-  const [storeLat, setStoreLat] = useState(-7.756928);
-  const [storeLng, setStoreLng] = useState(113.211502);
-  const [maxDeliveryDistance, setMaxDeliveryDistance] = useState(10);
-  const [deliveryFeePerKm, setDeliveryFeePerKm] = useState(2000);
+  const [storeLat, setStoreLat] = useState(cachedSettings.storeLat || -7.756928);
+  const [storeLng, setStoreLng] = useState(cachedSettings.storeLng || 113.211502);
+  const [maxDeliveryDistance, setMaxDeliveryDistance] = useState(cachedSettings.maxDeliveryDistance !== undefined ? cachedSettings.maxDeliveryDistance : 10);
+  const [deliveryFeePerKm, setDeliveryFeePerKm] = useState(cachedSettings.deliveryFeePerKm !== undefined ? cachedSettings.deliveryFeePerKm : 2000);
 
   useEffect(() => {
     fetch('/api/user/locations')
       .then(r => r.json())
-      .then(data => { if (Array.isArray(data)) setAddresses(data); })
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAddresses(data);
+          profileCache.addresses = data;
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
 
     fetch('/api/admin/store-settings')
       .then(r => r.json())
       .then(d => {
+        profileCache.storeSettings = d;
         if (d.storeLat && d.storeLng) {
           setStoreLat(d.storeLat);
           setStoreLng(d.storeLng);
@@ -2860,19 +2886,20 @@ function LoyaltySection({ user, milestones }: { user: UserShape; milestones: Mil
 function ReferralSection({ user }: { user: UserShape }) {
   const [copiedCode, setCopiedCode] = useState(false);
   const [origin, setOrigin] = useState('');
-  const [referees, setReferees] = useState<any[]>([]);
-  const [loadingReferees, setLoadingReferees] = useState(true);
+  const [referees, setReferees] = useState<any[]>(profileCache.referees || []);
+  const [loadingReferees, setLoadingReferees] = useState(!profileCache.referees);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const { showToast } = useToast();
   const fetchedRef = useRef(false);
 
   const fetchReferees = async () => {
-    setLoadingReferees(true);
     try {
       const res = await fetch('/api/user/referrals');
       if (res.ok) {
         const data = await res.json();
-        setReferees(data.referrals || []);
+        const refs = data.referrals || [];
+        setReferees(refs);
+        profileCache.referees = refs;
       }
     } catch (e) {
       console.error('Error fetching referees:', e);
@@ -3068,9 +3095,9 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
 
 function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: VoucherShape[] }) {
   const router = useRouter();
-  const [vouchers, setVouchers] = useState<VoucherShape[]>(initialVouchers);
-  const [claimableTemplates, setClaimableTemplates] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [vouchers, setVouchers] = useState<VoucherShape[]>(profileCache.vouchers || initialVouchers);
+  const [claimableTemplates, setClaimableTemplates] = useState<any[]>(profileCache.claimableTemplates || []);
+  const [loading, setLoading] = useState(!profileCache.vouchers);
   const [claimCode, setClaimCode] = useState('');
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState('');
@@ -3087,8 +3114,12 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
       const res = await fetch('/api/user/vouchers');
       if (res.ok) {
         const data = await res.json();
-        setVouchers(data.vouchers || []);
-        setClaimableTemplates(data.templates || []);
+        const vcs = data.vouchers || [];
+        const tps = data.templates || [];
+        setVouchers(vcs);
+        setClaimableTemplates(tps);
+        profileCache.vouchers = vcs;
+        profileCache.claimableTemplates = tps;
       }
     } catch (e) {
       console.error('Error fetching vouchers:', e);
@@ -3408,8 +3439,8 @@ function TicketsSection({ user, showToast }: { user: UserShape; showToast: any }
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<any[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [history, setHistory] = useState<any[]>(profileCache.tickets || []);
+  const [historyLoading, setHistoryLoading] = useState(!user.isGuest && !profileCache.tickets);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -3446,12 +3477,13 @@ function TicketsSection({ user, showToast }: { user: UserShape; showToast: any }
 
   const fetchHistory = async () => {
     if (user.isGuest) return;
-    setHistoryLoading(true);
     try {
       const res = await fetch('/api/user/tickets');
       if (res.ok) {
         const data = await res.json();
-        setHistory(data.tickets || []);
+        const tix = data.tickets || [];
+        setHistory(tix);
+        profileCache.tickets = tix;
       }
     } catch (err) {
       console.error(err);
@@ -3641,8 +3673,8 @@ function TicketsSection({ user, showToast }: { user: UserShape; showToast: any }
 }
 
 function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; showToast: any }) {
-  const [articles, setArticles] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [articles, setArticles] = useState<any[]>(profileCache.helpArticles || []);
+  const [loading, setLoading] = useState(!profileCache.helpArticles);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Semua');
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -3651,7 +3683,9 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
     fetch('/api/help-articles')
       .then(res => res.json())
       .then(data => {
-        setArticles(data.articles || []);
+        const arts = data.articles || [];
+        setArticles(arts);
+        profileCache.helpArticles = arts;
         setLoading(false);
       })
       .catch(err => {
