@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Share2, Users, Plus, Trash2, Save, Loader2, CheckCircle2,
   Target, Gift, Calendar, Award, ToggleLeft, ToggleRight,
-  Sparkles, Trophy
+  Sparkles, Trophy, Upload
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -53,6 +53,7 @@ export default function ReferralSettingsClient() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
   
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -211,6 +212,38 @@ export default function ReferralSettingsClient() {
     await saveGeneralSettings(newVal, referralShareImage);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 500 * 1024) {
+      showToast('File terlalu besar. Maksimal 500KB.', 'error');
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setReferralShareImage(data.url);
+        showToast('Gambar berhasil diunggah! Klik Simpan untuk memperbarui pengaturan.', 'success');
+      } else {
+        showToast(data.error || 'Gagal mengunggah gambar', 'error');
+      }
+    } catch {
+      showToast('Gagal mengunggah gambar', 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   if (loading) {
     return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-violet-600" /></div>;
   }
@@ -307,6 +340,17 @@ export default function ReferralSettingsClient() {
                 placeholder="Contoh: /brand/og-preview.png"
                 className="flex-1 px-3 py-2 text-sm bg-white border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20"
               />
+              <label className="px-3 py-2 border border-border hover:bg-gray-50 text-muted-foreground rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer">
+                {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                Upload
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
               <button
                 onClick={() => saveGeneralSettings(referralEnabled, referralShareImage)}
                 disabled={saving}
@@ -317,7 +361,7 @@ export default function ReferralSettingsClient() {
               </button>
             </div>
             <p className="text-[10px] text-muted-foreground">
-              Gunakan path gambar relatif (cth: <code>/brand/og-preview.png</code>) atau link gambar absolut. Rasio rekomendasi 1200x630 piksel.
+              Gunakan upload di atas untuk mengunggah gambar baru secara permanen ke Supabase, atau isi manual link gambar Anda. Rasio rekomendasi 1200x630 piksel.
             </p>
             {referralShareImage && (
               <div className="mt-2 relative w-full max-w-[240px] aspect-[1200/630] rounded-xl border border-border overflow-hidden bg-gray-50 flex items-center justify-center">
