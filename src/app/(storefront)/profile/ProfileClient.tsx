@@ -2518,7 +2518,7 @@ function ManualReferralInput({ user }: { user: UserShape }) {
         <button
           type="submit"
           disabled={loading || !code.trim()}
-          className="px-5 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:bg-gray-100 disabled:text-gray-400 text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md"
+          className="px-5 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md cursor-pointer"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Pakai'}
         </button>
@@ -2725,6 +2725,41 @@ function ReferralSection({ user }: { user: UserShape }) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const shareWhatsApp = () => {
+    const referralUrl = `${window.location.origin}/register?ref=${user.referralCode}`;
+    const text = `Selamat datang di Matchaboy! Kamu dapat Voucher Diskon Rp3.000, untuk pembelian minuman non-promo.
+
+Yuk, simak cara pakainya di bawah ini:
+
+[A] Sebutkan nomor WhatsApp ini ke barista Matchaboy. Request pemakaian voucher di kasir.
+
+[B] ATAU langsung Pakai vouchernya di Aplikasi Matchaboy 👇
+${referralUrl}
+
+Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vouchernya sekarang!`;
+    
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  const shareNative = async () => {
+    const referralUrl = `${window.location.origin}/register?ref=${user.referralCode}`;
+    const shareData = {
+      title: 'Matchaboy Referral',
+      text: 'Gabung Matchaboy dan dapatkan voucher diskon Rp3.000!',
+      url: referralUrl
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      copyReferralCode();
+    }
+  };
+
   return (
     <motion.section
       key="referral"
@@ -2734,8 +2769,8 @@ function ReferralSection({ user }: { user: UserShape }) {
       className="space-y-4 animate-in fade-in duration-300"
     >
       {/* Referral Code */}
-      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5">
-        <div className="flex items-center gap-3.5 mb-4">
+      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
+        <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
             <Share2 className="w-5 h-5" />
           </div>
@@ -2750,12 +2785,29 @@ function ReferralSection({ user }: { user: UserShape }) {
           </div>
           <button
             onClick={copyReferralCode}
-            className={`px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-1.5 transition-all active:scale-95 ${
+            className={`px-5 py-3 rounded-2xl text-[12px] font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shrink-0 ${
               copied ? 'bg-emerald-50 text-emerald-600 border border-green-200' : 'bg-[#B48A5E] text-white hover:bg-[#946F48] shadow-md shadow-[#B48A5E]/10'
             }`}
           >
             {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? 'Disalin!' : 'Salin'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <button
+            onClick={shareWhatsApp}
+            className="py-3 px-4 bg-[#25D366] hover:bg-[#20bd5a] text-white font-black rounded-2xl text-[12px] flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/10 active:scale-95 cursor-pointer"
+          >
+            <MessageCircle className="w-4 h-4 fill-white stroke-none" />
+            <span>Bagikan WA</span>
+          </button>
+          <button
+            onClick={shareNative}
+            className="py-3 px-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black rounded-2xl text-[12px] flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-800/10 active:scale-95 cursor-pointer"
+          >
+            <Share2 className="w-4 h-4" />
+            <span>Share Teman</span>
           </button>
         </div>
       </div>
@@ -2869,7 +2921,7 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
       <div className="flex border-b border-gray-100 bg-white/40 rounded-t-3xl p-1">
         <button
           onClick={() => setActiveTab('my-vouchers')}
-          className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all ${
+          className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all cursor-pointer ${
             activeTab === 'my-vouchers'
               ? 'bg-[#B48A5E] text-white shadow-md'
               : 'text-gray-500 hover:text-gray-800'
@@ -2879,7 +2931,7 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
         </button>
         <button
           onClick={() => setActiveTab('voucher-pack')}
-          className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
             activeTab === 'voucher-pack'
               ? 'bg-[#B48A5E] text-white shadow-md'
               : 'text-gray-500 hover:text-gray-800'
@@ -2909,7 +2961,7 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
               <button
                 type="submit"
                 disabled={claiming || !claimCode.trim()}
-                className="px-6 py-3.5 bg-[#B48A5E] hover:bg-[#946F48] disabled:bg-gray-100 disabled:text-gray-400 text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md shadow-[#B48A5E]/10"
+                className="px-6 py-3.5 bg-[#B48A5E] hover:bg-[#946F48] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md shadow-[#B48A5E]/10 cursor-pointer"
               >
                 {claiming ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Klaim'}
               </button>
