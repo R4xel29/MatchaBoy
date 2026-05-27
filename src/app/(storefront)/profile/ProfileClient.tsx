@@ -38,6 +38,7 @@ import {
   X,
   Coins,
   Cake,
+  MessageCircle,
   Mail,
   Search,
   Star,
