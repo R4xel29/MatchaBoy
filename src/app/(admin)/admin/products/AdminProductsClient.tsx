@@ -145,6 +145,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [formData, setFormData] = useState({ name: '', description: '', price: '', categoryId: '', image: '' });
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Image upload state
   const [uploading, setUploading] = useState(false);
@@ -588,11 +589,18 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    setDeleting(true);
     try {
       const res = await fetch(`/api/admin/products/${deleteTarget.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed');
-      setDeleteTarget(null); router.refresh();
-    } catch { showToast('Gagal menghapus produk', 'error'); }
+      showToast(`Produk "${deleteTarget.name}" berhasil dihapus`, 'success');
+      setDeleteTarget(null); 
+      router.refresh();
+    } catch { 
+      showToast('Gagal menghapus produk', 'error'); 
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const getModifierSummary = (modStr: string | null): string => {
@@ -1243,7 +1251,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
       {/* ═══════ Delete Confirm ═══════ */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setDeleteTarget(null)}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !deleting && setDeleteTarget(null)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center mx-auto mb-4">
               <Trash2 className="w-5 h-5 text-rose-500" />
@@ -1251,8 +1259,27 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
             <h3 className="text-base font-bold mb-1">Delete Product?</h3>
             <p className="text-sm text-muted-foreground mb-5"><strong>{deleteTarget.name}</strong> will be permanently removed.</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
-              <button onClick={handleDelete} className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors">Delete</button>
+              <button 
+                onClick={() => setDeleteTarget(null)} 
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDelete} 
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
+              </button>
             </div>
           </div>
         </div>
