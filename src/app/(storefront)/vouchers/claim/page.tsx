@@ -65,6 +65,12 @@ export default async function VoucherClaimPage({ searchParams }: PageProps) {
 
   // Fetch all products to match against applicable voucher product IDs
   const dbProducts = await prisma.product.findMany({
+    where: {
+      OR: [
+        { badge: null },
+        { badge: { not: 'archived' } }
+      ]
+    },
     orderBy: { name: 'asc' }
   })
 

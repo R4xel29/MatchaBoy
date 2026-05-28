@@ -10,6 +10,12 @@ export default async function StorefrontPage() {
       orderBy: { createdAt: 'asc' }
     }),
     prisma.product.findMany({
+      where: {
+        OR: [
+          { badge: null },
+          { badge: { not: 'archived' } }
+        ]
+      },
       orderBy: { createdAt: 'desc' } // Newest first
     }),
     prisma.heroBanner.findMany({

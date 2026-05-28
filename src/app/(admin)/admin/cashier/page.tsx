@@ -6,7 +6,17 @@ export const revalidate = 0;
 export default async function AdminCashierPage() {
   const [products, categories] = await Promise.all([
     prisma.product.findMany({
-      where: { badge: { not: 'sold-out' } },
+      where: {
+        AND: [
+          { badge: { not: 'sold-out' } },
+          {
+            OR: [
+              { badge: null },
+              { badge: { not: 'archived' } }
+            ]
+          }
+        ]
+      },
       include: { category: true },
       orderBy: { name: 'asc' },
     }),

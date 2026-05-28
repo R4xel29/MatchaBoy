@@ -18,6 +18,12 @@ export default async function AdminVouchersPage() {
 
   // Fetch all products for selector in the creation/editing form
   const products = await prisma.product.findMany({
+    where: {
+      OR: [
+        { badge: null },
+        { badge: { not: 'archived' } }
+      ]
+    },
     select: {
       id: true,
       name: true,
