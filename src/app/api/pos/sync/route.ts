@@ -52,6 +52,16 @@ export async function POST(req: Request) {
               badge: 'new'
             }
           });
+        } else {
+          // JIKA MENU SUDAH ADA, UPDATE HARGANYA DENGAN YANG TERBARU DARI APLIKASI POS!
+          if (product.price !== Math.round(lp.price)) {
+            product = await prisma.product.update({
+              where: { id: product.id },
+              data: {
+                price: Math.round(lp.price)
+              }
+            });
+          }
         }
 
         createdProducts.push({
