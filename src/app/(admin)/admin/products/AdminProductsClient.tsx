@@ -6,7 +6,7 @@ import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import {
   Search, Plus, Edit2, Trash2, Power, PowerOff, X, Save, Loader2,
-  ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus, History
+  ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus, History, Archive, ArchiveRestore
 } from 'lucide-react';
 
 // ── Types ──
@@ -69,6 +69,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isUpdating, setIsUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<'products' | 'combos'>('products');
+  const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
     if (categoryParam) {
@@ -146,6 +147,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
 
   // Image upload state
   const [uploading, setUploading] = useState(false);
@@ -301,6 +303,10 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const filteredProducts = initialProducts.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
     const isCombo = isProductBundle(p);
+    const isArchived = p.badge === 'archived';
+
+    // Filter archived products
+    if (!showArchived && isArchived) return false;
 
     if (activeTab === 'combos') {
       if (!isCombo) return false;
@@ -322,6 +328,24 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       router.refresh();
     } catch { showToast('Gagal memperbarui produk', 'error'); }
     finally { setIsUpdating(false); }
+  };
+
+  const toggleArchive = async (productId: string, currentBadge: string | null) => {
+    setArchivingId(productId);
+    try {
+      const isArchived = currentBadge === 'archived';
+      await fetch(`/api/admin/products/${productId}`, {
+        method: 'PATCH', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ badge: isArchived ? null : 'archived' })
+      });
+      showToast(isArchived ? 'Produk berhasil dikembalikan' : 'Produk berhasil diarsipkan', 'success');
+      router.refresh();
+    } catch { 
+      showToast('Gagal mengarsipkan produk', 'error'); 
+    } finally {
+      setArchivingId(null);
+    }
   };
 
   const openModal = (product?: ProductItem) => {
@@ -371,9 +395,20 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
     const reader = new FileReader();
     reader.onload = () => {
-      setCropImageSrc(reader.result as string);
-      setCropZoom(1);
-      setCropOffset({ x: 0, y: 0 });
+      const img = new Image();
+      img.onload = () => {
+        // Calculate initial zoom to fit image in viewport
+        const viewportWidth = 420; // max-w-[420px]
+        const viewportHeight = viewportWidth / 1.6; // aspect-[16/10]
+        const scaleX = viewportWidth / img.width;
+        const scaleY = viewportHeight / img.height;
+        const initialZoom = Math.min(Math.max(scaleX, scaleY), 1); // Fit to viewport, max 1
+        
+        setCropImageSrc(reader.result as string);
+        setCropZoom(initialZoom);
+        setCropOffset({ x: 0, y: 0 });
+      };
+      img.src = reader.result as string;
     };
     reader.readAsDataURL(file);
   }, []);
@@ -656,6 +691,17 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
               {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
           )}
+          <button 
+            onClick={() => setShowArchived(!showArchived)}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all shadow-sm whitespace-nowrap ${
+              showArchived 
+                ? 'bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200' 
+                : 'bg-white text-muted-foreground border border-border/40 hover:bg-muted/30'
+            }`}
+          >
+            <Archive className="w-4 h-4" /> 
+            {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
           <button onClick={() => openModal()}
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md shadow-brand-700/15 active:scale-[0.98] whitespace-nowrap">
             <Plus className="w-4 h-4" /> {activeTab === 'combos' ? 'Tambah Combo' : 'Add'}
@@ -686,6 +732,14 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
               className="px-3 py-1.5 bg-white border border-brand-200 text-brand-750 hover:bg-brand-50 text-[10px] font-bold rounded-lg transition-all shadow-sm"
             >
               Set Sold Out
+            </button>
+            <button
+              type="button"
+              onClick={() => handleBulkAction('availability', 'archived')}
+              disabled={isUpdating}
+              className="px-3 py-1.5 bg-amber-100 border border-amber-200 text-amber-700 hover:bg-amber-200 text-[10px] font-bold rounded-lg transition-all shadow-sm flex items-center gap-1"
+            >
+              <Archive className="w-3 h-3" /> Archive
             </button>
             <select
               onChange={(e) => {
@@ -739,8 +793,9 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
           <tbody className="divide-y divide-border/30">
             {filteredProducts.map((product) => {
               const isSoldOut = product.badge === 'sold-out';
+              const isArchived = product.badge === 'archived';
               return (
-                <tr key={product.id} className={`group hover:bg-muted/20 transition-colors ${isSoldOut ? 'opacity-60' : ''}`}>
+                <tr key={product.id} className={`group hover:bg-muted/20 transition-colors ${isArchived ? 'opacity-50 grayscale' : ''}`}>
                   <td className="w-10 px-5 py-3">
                     <input 
                       type="checkbox" 
@@ -781,6 +836,18 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                   </td>
                   <td className="px-5 py-3 text-right">
                     <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => toggleArchive(product.id, product.badge)} 
+                        disabled={isUpdating}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          product.badge === 'archived'
+                            ? 'hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600'
+                            : 'hover:bg-amber-50 text-muted-foreground hover:text-amber-600'
+                        }`}
+                        title={product.badge === 'archived' ? 'Restore' : 'Archive'}
+                      >
+                        {product.badge === 'archived' ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
+                      </button>
                       <button onClick={() => openModal(product)} className="p-1.5 hover:bg-blue-50 rounded-lg text-muted-foreground hover:text-blue-600 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
                       <button onClick={() => setDeleteTarget(product)} className="p-1.5 hover:bg-rose-50 rounded-lg text-muted-foreground hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
@@ -805,8 +872,9 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
           </div>
         ) : filteredProducts.map((product) => {
           const isSoldOut = product.badge === 'sold-out';
+          const isArchived = product.badge === 'archived';
           return (
-            <div key={product.id} className={`bg-white rounded-2xl border border-border/40 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] relative ${isSoldOut ? 'opacity-60' : ''}`}>
+            <div key={product.id} className={`bg-white rounded-2xl border border-border/40 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] relative ${isArchived ? 'opacity-50 grayscale' : ''}`}>
               <div className="absolute top-4 right-4 z-10">
                 <input 
                   type="checkbox" 
@@ -836,6 +904,18 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                     ${isSoldOut ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
                   {isSoldOut ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
                   {isSoldOut ? 'Sold Out' : 'Available'}
+                </button>
+                <button 
+                  onClick={() => toggleArchive(product.id, product.badge)} 
+                  disabled={isUpdating}
+                  className={`p-2 rounded-lg transition-colors ${
+                    product.badge === 'archived'
+                      ? 'hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600'
+                      : 'hover:bg-amber-50 text-muted-foreground hover:text-amber-600'
+                  }`}
+                  title={product.badge === 'archived' ? 'Restore' : 'Archive'}
+                >
+                  {product.badge === 'archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                 </button>
                 <button onClick={() => openModal(product)} className="p-2 hover:bg-blue-50 rounded-lg text-muted-foreground hover:text-blue-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
                 <button onClick={() => setDeleteTarget(product)} className="p-2 hover:bg-rose-50 rounded-lg text-muted-foreground hover:text-rose-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
@@ -1548,17 +1628,31 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
               {/* Zoom controls */}
               <div className="w-full max-w-[420px] flex items-center gap-3 mt-5 px-1">
-                <CircleMinus className="w-4 h-4 text-muted-foreground" />
+                <button
+                  type="button"
+                  onClick={() => setCropZoom(Math.max(0.5, cropZoom - 0.1))}
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors"
+                  title="Zoom Out"
+                >
+                  <CircleMinus className="w-4 h-4 text-muted-foreground" />
+                </button>
                 <input
                   type="range"
-                  min="1"
+                  min="0.5"
                   max="3"
-                  step="0.02"
+                  step="0.05"
                   value={cropZoom}
                   onChange={(e) => setCropZoom(parseFloat(e.target.value))}
                   className="flex-1 accent-brand-600 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
                 />
-                <CirclePlus className="w-4 h-4 text-muted-foreground" />
+                <button
+                  type="button"
+                  onClick={() => setCropZoom(Math.min(3, cropZoom + 0.1))}
+                  className="p-1.5 hover:bg-muted rounded-lg transition-colors"
+                  title="Zoom In"
+                >
+                  <CirclePlus className="w-4 h-4 text-muted-foreground" />
+                </button>
                 <span className="text-xs font-bold text-muted-foreground w-10 text-right">
                   {Math.round(cropZoom * 100)}%
                 </span>
@@ -1569,7 +1663,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
             <div className="px-6 py-4 border-t border-border/20 flex justify-end gap-2 bg-muted/5 sticky bottom-0">
               <button 
                 type="button"
-                onClick={() => { setCropZoom(1); setCropOffset({ x: 0, y: 0 }); }}
+                onClick={() => { setCropZoom(0.5); setCropOffset({ x: 0, y: 0 }); }}
                 className="px-4 py-2 text-xs font-medium rounded-xl hover:bg-muted transition-colors mr-auto"
               >
                 Reset
@@ -1597,6 +1691,22 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                 )}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ Archive Progress Modal ═══════ */}
+      {archivingId && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
+            <div className="flex justify-center mb-6">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-4 border-brand-100"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-600 border-r-brand-600 animate-spin"></div>
+              </div>
+            </div>
+            <h3 className="text-base font-bold mb-2">Processing...</h3>
+            <p className="text-sm text-muted-foreground">Mengarsipkan produk, mohon tunggu...</p>
           </div>
         </div>
       )}

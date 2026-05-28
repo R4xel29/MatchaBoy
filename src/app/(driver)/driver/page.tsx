@@ -12,6 +12,7 @@ import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { useSession, signOut, signIn } from 'next-auth/react';
 import dynamic from 'next/dynamic';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 
 const DriverNavigationMap = dynamic(() => import('@/components/driver/DriverNavigationMap').then(m => m.DriverNavigationMap), { ssr: false });
 
@@ -207,6 +208,10 @@ export default function DriverDashboardPage() {
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Image crop states
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState('');
 
   // Fetch initial profile & orders
   const fetchData = async () => {
@@ -440,15 +445,28 @@ export default function DriverDashboardPage() {
     }
   };
 
-  // Photo upload handler
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Photo select handler
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Create temporary URL for cropping
+    const reader = new FileReader();
+    reader.onload = () => {
+      setTempImageUrl(reader.result as string);
+      setShowCropModal(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle crop complete
+  const handleCropComplete = async (croppedImageBlob: Blob) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', croppedImageBlob, 'driver-profile.jpg');
 
     setUploadingPhoto(true);
+    setShowCropModal(false);
+    
     try {
       const res = await fetch('/api/driver/upload', {
         method: 'POST',
@@ -467,6 +485,7 @@ export default function DriverDashboardPage() {
       showToast('Gagal mengunggah foto profil', 'error');
     } finally {
       setUploadingPhoto(false);
+      setTempImageUrl('');
     }
   };
 
@@ -932,7 +951,7 @@ export default function DriverDashboardPage() {
                     type="file"
                     accept="image/*"
                     ref={fileInputRef}
-                    onChange={handlePhotoUpload}
+                    onChange={handlePhotoSelect}
                     className="hidden"
                   />
                 </div>
@@ -1213,6 +1232,18 @@ export default function DriverDashboardPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Image Crop Modal */}
+      <ImageCropModal
+        isOpen={showCropModal}
+        imageUrl={tempImageUrl}
+        onClose={() => {
+          setShowCropModal(false);
+          setTempImageUrl('');
+        }}
+        onCropComplete={handleCropComplete}
+        aspectRatio={1}
+      />
     </div>
   );
 }

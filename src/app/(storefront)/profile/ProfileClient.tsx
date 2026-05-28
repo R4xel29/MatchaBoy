@@ -6,6 +6,7 @@ import { signIn, signOut } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import {
   ArrowLeft,
   User,
@@ -495,6 +496,10 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
   const [requestingDelete, setRequestingDelete] = useState(false);
   const [deletionPollingInterval, setDeletionPollingInterval] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Image crop states
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [tempImageUrl, setTempImageUrl] = useState('');
 
   // Sync state if user prop changes (e.g. after connecting Google)
   useEffect(() => {
@@ -506,14 +511,26 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
     setImageUrl(user.image || '');
   }, [user]);
 
-  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Create temporary URL for cropping
+    const reader = new FileReader();
+    reader.onload = () => {
+      setTempImageUrl(reader.result as string);
+      setShowCropModal(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCropComplete = async (croppedImageBlob: Blob) => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', croppedImageBlob, 'profile.jpg');
 
     setUploadingPhoto(true);
+    setShowCropModal(false);
+    
     try {
       const res = await fetch('/api/user/upload', {
         method: 'POST',
@@ -532,6 +549,7 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
       showToast('Gagal mengunggah foto profil', 'error');
     } finally {
       setUploadingPhoto(false);
+      setTempImageUrl('');
     }
   };
 
@@ -657,7 +675,7 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
                 type="file"
                 accept="image/*"
                 ref={fileInputRef}
-                onChange={handlePhotoUpload}
+                onChange={handlePhotoSelect}
                 className="hidden"
               />
             </div>
@@ -1015,6 +1033,18 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
           )}
         </AnimatePresence>
       </div>
+
+      {/* Image Crop Modal */}
+      <ImageCropModal
+        isOpen={showCropModal}
+        imageUrl={tempImageUrl}
+        onClose={() => {
+          setShowCropModal(false);
+          setTempImageUrl('');
+        }}
+        onCropComplete={handleCropComplete}
+        aspectRatio={1}
+      />
     </motion.div>
   );
 }
