@@ -20,6 +20,13 @@ interface IngredientItem { id: string; name: string; unit: string; costPerUnit: 
 interface Props { initialProducts: ProductItem[]; categories: CategoryItem[]; ingredients: IngredientItem[]; }
 
 interface AddOnItem { id: string; name: string; price: number; }
+interface ProductPromo {
+  promoPrice: number;
+  startDate: string;
+  endDate: string;
+  isActive: boolean;
+}
+
 interface ModifiersData {
   iceLevel?: string[];
   sugarLevel?: string[];
@@ -30,6 +37,7 @@ interface ModifiersData {
   discountType?: 'fixed' | 'nominal' | 'percent';
   discountValue?: number;
   originalPrice?: number;
+  promo?: ProductPromo;
 }
 
 const ALL_ICE_LEVELS = ['Normal Ice', 'Less Ice', 'No Ice'];
@@ -61,6 +69,21 @@ function compressToWebP(file: File, maxSize = 800, quality = 0.8): Promise<Blob>
     img.onerror = () => reject(new Error('Failed to load image'));
     img.src = URL.createObjectURL(file);
   });
+}
+
+function formatDateTimeLocal(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '';
+  
+  const pad = (num: number) => num.toString().padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
 export default function AdminProductsClient({ initialProducts, categories, ingredients }: Props) {
@@ -182,6 +205,12 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [discountType, setDiscountType] = useState<'fixed' | 'nominal' | 'percent'>('fixed');
   const [discountValue, setDiscountValue] = useState<string>('');
 
+  // Promo Countdown states (Marketplace Style Promo)
+  const [promoActive, setPromoActive] = useState<boolean>(false);
+  const [promoPrice, setPromoPrice] = useState<string>('');
+  const [promoStartDate, setPromoStartDate] = useState<string>('');
+  const [promoEndDate, setPromoEndDate] = useState<string>('');
+
   const getRegularTotalPrice = useCallback(() => {
     let total = 0;
     bundleGroups.forEach(group => {
@@ -225,6 +254,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   useEffect(() => {
     if (discountType === 'fixed') return;
     const regularTotal = getRegularTotalPrice();
+    if (regularTotal === 0) return; // Skip updating price if bundle has no items configured yet
     if (discountType === 'percent') {
       const pct = Number(discountValue || 0);
       const finalPrice = Math.max(0, regularTotal * (1 - pct / 100));
@@ -371,6 +401,12 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setFreeShipping(mods.freeShipping || false);
       setDiscountType(mods.discountType || 'fixed');
       setDiscountValue(mods.discountValue ? mods.discountValue.toString() : '');
+
+      // Promo properties
+      setPromoActive(mods.promo?.isActive || false);
+      setPromoPrice(mods.promo?.promoPrice ? mods.promo.promoPrice.toString() : '');
+      setPromoStartDate(mods.promo?.startDate ? formatDateTimeLocal(mods.promo.startDate) : '');
+      setPromoEndDate(mods.promo?.endDate ? formatDateTimeLocal(mods.promo.endDate) : '');
     } else {
       setEditingProduct(null);
       setFormData({ name: '', description: '', price: '', categoryId: categories[0]?.id || '', image: '' });
@@ -383,6 +419,12 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setFreeShipping(false);
       setDiscountType('fixed');
       setDiscountValue('');
+
+      // Reset promo properties
+      setPromoActive(false);
+      setPromoPrice('');
+      setPromoStartDate('');
+      setPromoEndDate('');
     }
     setNewAddOnName('');
     setNewAddOnPrice('');
@@ -607,6 +649,15 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       if (modIce.length > 0) modifiers.iceLevel = modIce;
       if (modSugar.length > 0) modifiers.sugarLevel = modSugar;
       if (modAddOns.length > 0) modifiers.addOns = modAddOns;
+    }
+
+    if (promoActive) {
+      modifiers.promo = {
+        isActive: true,
+        promoPrice: Number(promoPrice || 0),
+        startDate: promoStartDate ? new Date(promoStartDate).toISOString() : new Date().toISOString(),
+        endDate: promoEndDate ? new Date(promoEndDate).toISOString() : new Date(Date.now() + 86400000).toISOString(),
+      };
     }
 
     const hasModifiers = Object.keys(modifiers).length > 0;
@@ -1002,6 +1053,60 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                     {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
                   </select>
                 </div>
+              </div>
+
+              {/* ── Promo & Countdown (Flash Sale) ── */}
+              <div className="pt-4 border-t border-border/30">
+                <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-200 bg-amber-50/20 mb-4">
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
+                      🔥 Promo & Countdown (Flash Sale)
+                    </h4>
+                    <p className="text-[10px] text-amber-700/80 mt-0.5">Aktifkan promo dengan batas waktu dan hitung mundur ala e-commerce.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPromoActive(!promoActive)}
+                    className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${promoActive ? 'bg-amber-500' : 'bg-gray-200'}`}
+                  >
+                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${promoActive ? 'left-[18px]' : 'left-0.5'}`} />
+                  </button>
+                </div>
+
+                {promoActive && (
+                  <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/10 space-y-4 mb-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">Harga Promo (Rp) *</label>
+                        <input
+                          type="number"
+                          value={promoPrice}
+                          onChange={(e) => setPromoPrice(e.target.value)}
+                          placeholder="e.g. 7000"
+                          className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">Waktu Mulai *</label>
+                        <input
+                          type="datetime-local"
+                          value={promoStartDate}
+                          onChange={(e) => setPromoStartDate(e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-muted-foreground"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">Waktu Selesai *</label>
+                        <input
+                          type="datetime-local"
+                          value={promoEndDate}
+                          onChange={(e) => setPromoEndDate(e.target.value)}
+                          className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-muted-foreground"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* ── Combo / Bundle Toggle ── */}

@@ -13,6 +13,13 @@ export interface BundleGroup {
     options: BundleOption[];
 }
 
+export interface ProductPromo {
+    promoPrice: number;
+    startDate: string; // ISO datetime string
+    endDate: string; // ISO datetime string
+    isActive: boolean;
+}
+
 export interface Product {
     id: string;
     name: string;
@@ -32,6 +39,7 @@ export interface Product {
         discountType?: 'fixed' | 'nominal' | 'percent';
         discountValue?: number;
         originalPrice?: number;
+        promo?: ProductPromo;
     };
 }
 

@@ -4,7 +4,8 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import type { Product } from '@/types';
-import { formatRupiah, cn } from '@/lib/utils';
+import { formatRupiah, cn, getActivePromo } from '@/lib/utils';
+import { PromoCountdown } from './PromoCountdown';
 
 interface ProductCardProps {
   product: Product;
@@ -21,6 +22,10 @@ const badgeStyles: Record<string, { bg: string; text: string; label: string }> =
 export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
   const isSoldOut = product.badge === 'sold-out';
   const badge = product.badge ? badgeStyles[product.badge] : null;
+
+  const promo = getActivePromo(product);
+  const displayPrice = promo ? promo.promoPrice : product.price;
+  const originalPrice = promo ? product.price : (product.modifiers?.originalPrice || null);
 
   return (
     <motion.article
@@ -55,9 +60,15 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
           }}
         />
 
+        {/* Promo Timer Overlay */}
+        {promo && !isSoldOut && (
+          <div className="absolute top-2 right-2 z-20">
+            <PromoCountdown endDate={promo.endDate} compact />
+          </div>
+        )}
 
         {/* Badge */}
-        {badge && (
+        {badge && !promo && (
           <motion.span
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -69,6 +80,17 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
             )}
           >
             {badge.label}
+          </motion.span>
+        )}
+
+        {/* Promo Badge if has active promo */}
+        {promo && !isSoldOut && (
+          <motion.span
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase bg-rose-500 text-white shadow-md flex items-center gap-0.5"
+          >
+            🔥 Promo
           </motion.span>
         )}
 
@@ -93,13 +115,13 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
 
         <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border/40">
           <div className="flex flex-col">
-            {product.modifiers?.originalPrice && product.modifiers.originalPrice > product.price && (
+            {originalPrice && originalPrice > displayPrice && (
               <span className="text-[10px] text-muted-foreground line-through leading-none mb-0.5">
-                {formatRupiah(product.modifiers.originalPrice)}
+                {formatRupiah(originalPrice)}
               </span>
             )}
             <span className="font-body font-bold text-sm text-brand-700">
-              {formatRupiah(product.price)}
+              {formatRupiah(displayPrice)}
             </span>
           </div>
 
