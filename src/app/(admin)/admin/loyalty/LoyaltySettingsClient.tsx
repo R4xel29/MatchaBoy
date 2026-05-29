@@ -127,7 +127,7 @@ export default function LoyaltySettingsClient({ initialSettings, voucherTemplate
             Loyalty Settings
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Atur milestone poin, bonus tumbler, dan reward referral. Semua bisa diubah tanpa coding.
+            Atur milestone poin, bonus tumbler, dan nilai poin. Semua bisa diubah tanpa coding.
           </p>
         </div>
         <button
@@ -294,117 +294,68 @@ export default function LoyaltySettingsClient({ initialSettings, voucherTemplate
             </div>
           </div>
  
-          {/* Tumbler & Referral */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* Tumbler Bonus */}
-            <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
-                    <Recycle className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">Bonus Tumbler / Wadah Sendiri</h3>
-                    <p className="text-[10px] text-muted-foreground">Kurangi plastik, beri bonus poin</p>
-                  </div>
+          {/* Tumbler Bonus */}
+          <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
+                  <Recycle className="w-5 h-5" />
                 </div>
-                <ToggleButton enabled={settings.tumblerBonusEnabled} onChange={(v) => update('tumblerBonusEnabled', v)} />
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Bonus Tumbler / Wadah Sendiri</h3>
+                  <p className="text-[10px] text-muted-foreground">Kurangi plastik, beri bonus poin</p>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <ToggleButton enabled={settings.tumblerBonusEnabled} onChange={(v) => update('tumblerBonusEnabled', v)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Extra Poin</label>
+                <input type="number" value={settings.tumblerBonusPoints} onChange={(e) => update('tumblerBonusPoints', parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Diskon (%)</label>
+                <input type="number" value={settings.tumblerDiscountPct} onChange={(e) => update('tumblerDiscountPct', parseInt(e.target.value) || 0)}
+                  min={0} max={100}
+                  className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+              </div>
+            </div>
+            
+            {/* Tumbler Eco-Voucher Settings */}
+            <div className="border-t border-border/40 mt-4 pt-4 space-y-3">
+              <div className="flex items-center justify-between">
                 <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Extra Poin</label>
-                  <input type="number" value={settings.tumblerBonusPoints} onChange={(e) => update('tumblerBonusPoints', parseInt(e.target.value) || 0)}
-                    className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+                  <h4 className="text-xs font-bold text-foreground">Hadiah Voucher Eco-Reward</h4>
+                  <p className="text-[10px] text-muted-foreground">Berikan voucher otomatis jika membawa tumbler</p>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Diskon (%)</label>
-                  <input type="number" value={settings.tumblerDiscountPct} onChange={(e) => update('tumblerDiscountPct', parseInt(e.target.value) || 0)}
-                    min={0} max={100}
-                    className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
-                </div>
+                <ToggleButton enabled={settings.tumblerVoucherEnabled} onChange={(v) => update('tumblerVoucherEnabled', v)} />
               </div>
               
-              {/* Tumbler Eco-Voucher Settings */}
-              <div className="border-t border-border/40 mt-4 pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground">Hadiah Voucher Eco-Reward</h4>
-                    <p className="text-[10px] text-muted-foreground">Berikan voucher otomatis jika membawa tumbler</p>
-                  </div>
-                  <ToggleButton enabled={settings.tumblerVoucherEnabled} onChange={(v) => update('tumblerVoucherEnabled', v)} />
-                </div>
-                
-                {settings.tumblerVoucherEnabled && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Jenis Voucher</label>
-                      <select value={settings.tumblerVoucherType || 'UPGRADE_SIZE'} onChange={(e) => update('tumblerVoucherType', e.target.value)}
-                        className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20">
-                        {dynamicRewardTypes.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Deskripsi Voucher</label>
-                      <input type="text" value={settings.tumblerVoucherDesc || ''} onChange={(e) => update('tumblerVoucherDesc', e.target.value)}
-                        className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                        placeholder="Eco-Reward: Free Upgrade Size (Bawa Tumbler)" />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <p className="text-[10px] text-muted-foreground mt-3">
-                💡 Setiap pelanggan yang bawa tumbler/wadah sendiri mendapat {settings.tumblerBonusPoints} poin extra
-                {settings.tumblerDiscountPct > 0 && ` + diskon ${settings.tumblerDiscountPct}%`}.
-                {settings.tumblerVoucherEnabled && ` Pelanggan juga akan secara otomatis menerima Voucher Eco-Reward!`}
-              </p>
-            </div>
-
-            {/* Referral Settings */}
-            <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl bg-violet-50 text-violet-600">
-                    <Share2 className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">Referral Reward</h3>
-                    <p className="text-[10px] text-muted-foreground">Bonus untuk yang mengajak teman</p>
-                  </div>
-                </div>
-                <ToggleButton enabled={settings.referralEnabled} onChange={(v) => update('referralEnabled', v)} />
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Jenis Reward Referrer</label>
-                  <select value={settings.referralRewardType} onChange={(e) => update('referralRewardType', e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20">
-                    <option value="VOUCHER">Voucher</option>
-                    <option value="POINTS">Poin</option>
-                  </select>
-                </div>
-                {settings.referralRewardType === 'POINTS' ? (
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Jumlah Poin</label>
-                    <input type="number" value={settings.referralRewardPoints} onChange={(e) => update('referralRewardPoints', parseInt(e.target.value) || 0)}
-                      className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
-                  </div>
-                ) : (
+              {settings.tumblerVoucherEnabled && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
                   <div>
                     <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Jenis Voucher</label>
-                    <select value={settings.referralRewardVoucher} onChange={(e) => update('referralRewardVoucher', e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20">
+                    <select value={settings.tumblerVoucherType || 'UPGRADE_SIZE'} onChange={(e) => update('tumblerVoucherType', e.target.value)}
+                      className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20">
                       {dynamicRewardTypes.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
-                )}
-                <div>
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Deskripsi Reward</label>
-                  <input type="text" value={settings.referralRewardDesc} onChange={(e) => update('referralRewardDesc', e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20" />
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Deskripsi Voucher</label>
+                    <input type="text" value={settings.tumblerVoucherDesc || ''} onChange={(e) => update('tumblerVoucherDesc', e.target.value)}
+                      className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20"
+                      placeholder="Eco-Reward: Free Upgrade Size (Bawa Tumbler)" />
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
+
+            <p className="text-[10px] text-muted-foreground mt-3">
+              💡 Setiap pelanggan yang bawa tumbler/wadah sendiri mendapat {settings.tumblerBonusPoints} poin extra
+              {settings.tumblerDiscountPct > 0 && ` + diskon ${settings.tumblerDiscountPct}%`}.
+              {settings.tumblerVoucherEnabled && ` Pelanggan juga akan secara otomatis menerima Voucher Eco-Reward!`}
+            </p>
           </div>
 
           {/* Easter Egg Settings */}
