@@ -62,8 +62,8 @@ export function BottomNav() {
     },
   ];
 
-  // Don't show on checkout or if pathname is missing
-  if (pathname?.startsWith('/checkout')) return null;
+  // Don't show on checkout, order detail pages, or if pathname is missing
+  if (pathname?.startsWith('/checkout') || pathname?.startsWith('/orders')) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[90] md:hidden">

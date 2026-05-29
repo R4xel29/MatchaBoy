@@ -329,7 +329,7 @@ export function LeafletTracking({
       </div>
 
       {/* Floating Bottom Card (Gojek/Grab style sheet) */}
-      <div className="z-10 bg-white rounded-t-[36px] shadow-[0_-10px_35px_rgba(0,0,0,0.12)] border-t border-gray-150 p-6 max-h-[85vh] overflow-y-auto max-w-md mx-auto w-full flex flex-col space-y-4 animate-in slide-in-from-bottom duration-300">
+      <div className="z-10 bg-white rounded-t-[36px] shadow-[0_-10px_35px_rgba(0,0,0,0.12)] border-t border-gray-150 p-6 pb-10 max-h-[85vh] overflow-y-auto max-w-md mx-auto w-full flex flex-col space-y-4 animate-in slide-in-from-bottom duration-300">
         
         {/* Drag Handle Decorator */}
         <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto shrink-0 mb-1" />

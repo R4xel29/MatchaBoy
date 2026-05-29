@@ -78,15 +78,6 @@ export async function GET(req: Request) {
     const baseLat = lat ? parseFloat(lat) : -7.756928
     const baseLng = lng ? parseFloat(lng) : 113.211502
 
-    // 1. Perform Local POI matching to bypass key requirements for local Probolinggo tests
-    let localMatches: any[] = []
-    if (mode === 'forward' && query) {
-      const normQuery = query.toLowerCase().trim()
-      localMatches = LOCAL_POIS.filter(poi => {
-        return poi.aliases.some(alias => normQuery.includes(alias) || alias.includes(normQuery))
-      })
-    }
-
     // API keys from environment
     const googleKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
     const mapboxKey = process.env.MAPBOX_ACCESS_TOKEN
@@ -95,6 +86,16 @@ export async function GET(req: Request) {
     const isGoogleActive = googleKey && googleKey !== 'YOUR_WAKTU_INI_KEY' && googleKey.trim() !== ''
     const isMapboxActive = mapboxKey && mapboxKey.trim() !== ''
     const isHereActive = hereKey && hereKey.trim() !== ''
+    const isAnyApiActive = isGoogleActive || isMapboxActive || isHereActive
+
+    // 1. Perform Local POI matching to bypass key requirements for local Probolinggo tests
+    let localMatches: any[] = []
+    if (!isAnyApiActive && mode === 'forward' && query) {
+      const normQuery = query.toLowerCase().trim()
+      localMatches = LOCAL_POIS.filter(poi => {
+        return poi.aliases.some(alias => normQuery.includes(alias) || alias.includes(normQuery))
+      })
+    }
 
     // ==========================================
     // ENGINE 1: GOOGLE MAPS PLATFORM

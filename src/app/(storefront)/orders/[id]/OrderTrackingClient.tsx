@@ -218,7 +218,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   const steps = getOrderSteps(order.orderType, currentStatus);
   const isFinished = ['COMPLETED', 'DELIVERED'].includes(currentStatus);
 
-  const isOngoingDelivery = order.orderType === 'DELIVERY' && ['ASSIGNED', 'PICKED_UP', 'ON_DELIVERY'].includes(currentStatus);
+  const isOngoingDelivery = order.orderType === 'DELIVERY' && ['PICKED_UP', 'ON_DELIVERY'].includes(currentStatus);
 
   if (isOngoingDelivery) {
     return (
