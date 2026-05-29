@@ -61,7 +61,7 @@ const getCategoryIcon = (slug: string, name: string) => {
 
 // Formatter for IDR
 const formatIDR = (price: number) => {
-  return new Intl.NumberFormat('id-IDR', {
+  return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
@@ -111,7 +111,7 @@ export default function TVMenuBoard() {
     // Clock update interval
     const clockInterval = setInterval(() => {
       const now = new Date();
-      setTimeString(now.toLocaleTimeString('id-IDR', { 
+      setTimeString(now.toLocaleTimeString('id-ID', { 
         hour: '2-digit', 
         minute: '2-digit', 
         second: '2-digit',
@@ -245,7 +245,7 @@ export default function TVMenuBoard() {
               {isOnline ? 'LIVE SYNCED' : 'OFFLINE MODE'}
             </span>
             <span className="text-xs font-sans text-[#FFFBF5]/40 ml-2">
-              Last: {lastSynced.toLocaleTimeString('id-IDR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+              Last: {lastSynced.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
             </span>
           </div>
 
