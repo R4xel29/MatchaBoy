@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { sendTemplatedNotification } from './notification-service';
 
 // =============================================================================
 // LOYALTY UTILITIES
@@ -10,10 +11,11 @@ import { prisma } from './prisma';
  * Ambil settings loyalty dari database (singleton).
  * Jika belum ada, buat default.
  */
-export async function getLoyaltySettings() {
-  let settings = await prisma.loyaltySettings.findFirst();
+export async function getLoyaltySettings(tx?: any) {
+  const client = tx || prisma;
+  let settings = await client.loyaltySettings.findFirst();
   if (!settings) {
-    settings = await prisma.loyaltySettings.create({
+    settings = await client.loyaltySettings.create({
       data: { id: 'default-loyalty-settings' },
     });
   }
@@ -44,17 +46,18 @@ export async function awardPoints({
   type: string; // EARN_ORDER, EARN_CASHIER, EARN_TUMBLER, EARN_REFERRAL, ADMIN_ADJUST
   description: string;
   orderId?: string;
-}) {
-  const settings = await getLoyaltySettings();
+}, tx?: any) {
+  const client = tx || prisma;
+  const settings = await getLoyaltySettings(tx);
 
   // 1. Tambah poin ke user
-  const user = await prisma.user.update({
+  const user = await client.user.update({
     where: { id: userId },
     data: { points: { increment: pointsToAdd } },
   });
 
   // 2. Catat ke history
-  await prisma.pointHistory.create({
+  await client.pointHistory.create({
     data: {
       userId,
       amount: pointsToAdd,
@@ -65,7 +68,7 @@ export async function awardPoints({
   });
 
   // 3. Cek milestone & generate voucher
-  const newVouchers = await checkAndAwardMilestones(userId, user.points - pointsToAdd, pointsToAdd, settings);
+  const newVouchers = await checkAndAwardMilestones(userId, user.points - pointsToAdd, pointsToAdd, settings, tx);
 
   return { newPoints: user.points, newVouchers };
 }
@@ -78,9 +81,11 @@ async function createVoucherForUser(
   rewardTypeOrCode: string,
   fallbackDesc: string,
   defaultExpiryDays = 30,
-  extraFields: any = {}
+  extraFields: any = {},
+  tx?: any
 ) {
-  const template = await prisma.voucherTemplate.findFirst({
+  const client = tx || prisma;
+  const template = await client.voucherTemplate.findFirst({
     where: {
       OR: [
         { id: rewardTypeOrCode },
@@ -90,7 +95,8 @@ async function createVoucherForUser(
   });
 
   if (template) {
-    const userVoucherCode = `${template.code}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    // SECURITY FIX #M9: Extend unique suffix length to 10 characters to prevent collisions
+    const userVoucherCode = `${template.code}-${Math.random().toString(36).substring(2, 12).toUpperCase()}`;
     let expiresAt = template.expiresAt;
     if (!expiresAt) {
       const d = new Date();
@@ -106,7 +112,7 @@ async function createVoucherForUser(
       discountAmount = 5000;
     }
 
-    return prisma.voucher.create({
+    return client.voucher.create({
       data: {
         userId,
         code: userVoucherCode,
@@ -125,9 +131,10 @@ async function createVoucherForUser(
     else if (rewardTypeOrCode === 'FREE_TOPPING') discountAmount = 3000;
     else if (rewardTypeOrCode === 'UPGRADE_SIZE') discountAmount = 5000;
 
-    const legacyCode = `${rewardTypeOrCode}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+    // SECURITY FIX #M9: Extend unique suffix length to 10 characters to prevent collisions
+    const legacyCode = `${rewardTypeOrCode}-${Math.random().toString(36).substring(2, 12).toUpperCase()}`;
 
-    return prisma.voucher.create({
+    return client.voucher.create({
       data: {
         userId,
         code: legacyCode,
@@ -150,12 +157,15 @@ async function checkAndAwardMilestones(
   userId: string,
   oldPoints: number,
   pointsToAdd: number,
-  settings: Awaited<ReturnType<typeof getLoyaltySettings>>
+  settings: Awaited<ReturnType<typeof getLoyaltySettings>>,
+  tx?: any
 ) {
+  const client = tx || prisma;
   const vouchersCreated: { type: string; description: string }[] = [];
   let pointsToDeduct = 0;
 
   let currentP = oldPoints;
+  const m3Points = settings.milestone3Points || 10; // Fallback to 10 to avoid division by zero / NaN
 
   for (let i = 1; i <= pointsToAdd; i++) {
     currentP++;
@@ -164,10 +174,10 @@ async function checkAndAwardMilestones(
     if (settings.milestone1Enabled) {
       const isHit = settings.milestone3ResetPoints 
         ? currentP === settings.milestone1Points
-        : (currentP % settings.milestone3Points) === settings.milestone1Points;
+        : (currentP % m3Points) === settings.milestone1Points;
       
       if (isHit) {
-        const v = await createVoucherForUser(userId, settings.milestone1Reward, settings.milestone1Desc);
+        const v = await createVoucherForUser(userId, settings.milestone1Reward, settings.milestone1Desc, 30, {}, tx);
         vouchersCreated.push({ type: v.type, description: v.description });
       }
     }
@@ -176,10 +186,10 @@ async function checkAndAwardMilestones(
     if (settings.milestone2Enabled) {
       const isHit = settings.milestone3ResetPoints
         ? currentP === settings.milestone2Points
-        : (currentP % settings.milestone3Points) === settings.milestone2Points;
+        : (currentP % m3Points) === settings.milestone2Points;
       
       if (isHit) {
-        const v = await createVoucherForUser(userId, settings.milestone2Reward, settings.milestone2Desc);
+        const v = await createVoucherForUser(userId, settings.milestone2Reward, settings.milestone2Desc, 30, {}, tx);
         vouchersCreated.push({ type: v.type, description: v.description });
       }
     }
@@ -187,16 +197,16 @@ async function checkAndAwardMilestones(
     // Check Milestone 3
     if (settings.milestone3Enabled) {
       const isHit = settings.milestone3ResetPoints
-        ? currentP === settings.milestone3Points
-        : (currentP % settings.milestone3Points) === 0;
+        ? currentP === m3Points
+        : (currentP % m3Points) === 0;
       
       if (isHit) {
-        const v = await createVoucherForUser(userId, settings.milestone3Reward, settings.milestone3Desc);
+        const v = await createVoucherForUser(userId, settings.milestone3Reward, settings.milestone3Desc, 30, {}, tx);
         vouchersCreated.push({ type: v.type, description: v.description });
 
         if (settings.milestone3ResetPoints) {
-          pointsToDeduct += settings.milestone3Points;
-          currentP -= settings.milestone3Points;
+          pointsToDeduct += m3Points;
+          currentP -= m3Points;
         }
       }
     }
@@ -204,17 +214,17 @@ async function checkAndAwardMilestones(
 
   // Deduct poin jika milestone 3 tercapai
   if (pointsToDeduct > 0) {
-    await prisma.user.update({
+    await client.user.update({
       where: { id: userId },
       data: { points: { decrement: pointsToDeduct } },
     });
 
-    await prisma.pointHistory.create({
+    await client.pointHistory.create({
       data: {
         userId,
         amount: -pointsToDeduct,
         type: 'REDEEM_MILESTONE',
-        description: `Poin direset setelah mencapai kelipatan ${settings.milestone3Points} poin`,
+        description: `Poin direset setelah mencapai kelipatan ${m3Points} poin`,
       },
     });
   }
@@ -225,8 +235,9 @@ async function checkAndAwardMilestones(
 /**
  * Proses bonus tumbler: tambah poin extra jika pelanggan bawa tumbler.
  */
-export async function awardTumblerBonus(userId: string, orderId?: string) {
-  const settings = await getLoyaltySettings();
+export async function awardTumblerBonus(userId: string, orderId?: string, tx?: any) {
+  const client = tx || prisma;
+  const settings = await getLoyaltySettings(client);
   if (!settings.tumblerBonusEnabled || settings.tumblerBonusPoints <= 0) {
     return null;
   }
@@ -238,7 +249,7 @@ export async function awardTumblerBonus(userId: string, orderId?: string) {
     type: 'EARN_TUMBLER',
     description: `Bonus tumbler/wadah sendiri (+${settings.tumblerBonusPoints} poin)`,
     orderId,
-  });
+  }, client);
 
   // 2. Berikan voucher jika diaktifkan oleh admin
   // Menggunakan kode template yang dikonfigurasi admin (tumblerVoucherCode2 → TUMBLER_REWARD)
@@ -246,7 +257,7 @@ export async function awardTumblerBonus(userId: string, orderId?: string) {
   if ((settings as any).tumblerVoucherEnabled) {
     const tumblerCode = (settings as any).tumblerVoucherCode2 || (settings as any).tumblerVoucherType || 'TUMBLER_REWARD';
     const voucherDesc = (settings as any).tumblerVoucherDesc || 'Eco-Reward: Free Upgrade Size (Bawa Tumbler)';
-    voucherRes = await createVoucherForUser(userId, tumblerCode, voucherDesc, 14);
+    voucherRes = await createVoucherForUser(userId, tumblerCode, voucherDesc, 14, {}, client);
   }
 
   return { pointsRes, voucherRes };
@@ -255,12 +266,13 @@ export async function awardTumblerBonus(userId: string, orderId?: string) {
 /**
  * Proses referral bonus: berikan reward ke referrer saat referee melakukan pembelian pertama.
  */
-export async function processReferralBonus(refereeUserId: string) {
-  const settings = await getLoyaltySettings();
+export async function processReferralBonus(refereeUserId: string, tx?: any) {
+  const client = tx || prisma;
+  const settings = await getLoyaltySettings(client);
   if (!settings.referralEnabled) return null;
 
   // Cek apakah referee punya referrer
-  const referee = await prisma.user.findUnique({
+  const referee = await client.user.findUnique({
     where: { id: refereeUserId },
     select: { id: true, referredById: true, referralBonusPaid: true },
   });
@@ -268,7 +280,7 @@ export async function processReferralBonus(refereeUserId: string) {
   if (!referee?.referredById || referee.referralBonusPaid) return null;
 
   // Cek order pertama referee yang sukses (COMPLETED)
-  const firstCompletedOrder = await prisma.order.findFirst({
+  const firstCompletedOrder = await client.order.findFirst({
     where: { userId: refereeUserId, status: 'COMPLETED' },
     orderBy: { createdAt: 'asc' },
   });
@@ -286,7 +298,7 @@ export async function processReferralBonus(refereeUserId: string) {
   // Cek batas maksimum klaim jika diaktifkan (referralMaxClaims > 0)
   const maxClaims = (settings as any).referralMaxClaims ?? 0;
   if (maxClaims > 0) {
-    const claimedCount = await prisma.voucher.count({
+    const claimedCount = await client.voucher.count({
       where: {
         userId: referrerId,
         fromReferralUserId: { not: null },
@@ -298,7 +310,7 @@ export async function processReferralBonus(refereeUserId: string) {
   }
 
   // Tandai bonus sudah diberikan
-  await prisma.user.update({
+  await client.user.update({
     where: { id: refereeUserId },
     data: { referralBonusPaid: true },
   });
@@ -315,7 +327,7 @@ export async function processReferralBonus(refereeUserId: string) {
       pointsToAdd: referralRewardPoints,
       type: 'EARN_REFERRAL',
       description: `Bonus referral: teman melakukan pembelian pertama (+${referralRewardPoints} poin)`,
-    });
+    }, client);
     return { type: 'points', reward: `${referralRewardPoints} Poin` };
   } else {
     // Berikan voucher dari template yang dikonfigurasi admin
@@ -325,7 +337,8 @@ export async function processReferralBonus(refereeUserId: string) {
       referralVoucherCode,
       rewardDesc,
       30,
-      { fromReferralUserId: refereeUserId }
+      { fromReferralUserId: refereeUserId },
+      client
     );
     return { type: 'voucher', reward: v.description };
   }
@@ -336,59 +349,90 @@ export async function processReferralBonus(refereeUserId: string) {
  * 1. Hitung poin dari jumlah cup
  * 2. Bonus tumbler jika ada
  * 3. Cek referral bonus
+ * Wrap semuanya dalam Prisma $transaction untuk keamanan integritas data.
  */
 export async function processOrderCompletion(orderId: string) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { items: true },
+  // SECURITY FIX #L4: wrap database writes inside a single Prisma $transaction
+  const result = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+
+    if (!order || !order.userId || order.pointsAwarded) return null;
+
+    const settings = await getLoyaltySettings(tx);
+    const cups = calculateCupsFromItems(order.items);
+
+    // Calculate points based on configured mode
+    let pointsToAdd = cups; // default: 1 point per cup
+    
+    if ((settings as any).pointMode === 'PER_TRANSACTION') {
+      pointsToAdd = (settings as any).pointPerTransaction || 1;
+    } else if ((settings as any).pointMode === 'PER_AMOUNT') {
+      const perAmount = (settings as any).pointPerAmount || 10000;
+      pointsToAdd = Math.floor(order.total / perAmount);
+    }
+
+    if (pointsToAdd <= 0) pointsToAdd = 1; // minimum 1 poin
+
+    // 1. Award poin
+    const awardResult = await awardPoints({
+      userId: order.userId,
+      pointsToAdd,
+      type: 'EARN_ORDER',
+      description: `Pesanan selesai: ${pointsToAdd} poin${cups > 1 ? ` (${cups} cup)` : ''}`,
+      orderId,
+    }, tx);
+
+    // 2. Bonus tumbler
+    let tumblerResult = null;
+    if (order.hasTumbler) {
+      tumblerResult = await awardTumblerBonus(order.userId, orderId, tx);
+    }
+
+    // 3. Cek referral (sekarang diklaim manual oleh referrer di profil)
+    const referralResult = null;
+
+    // 4. Tandai order sudah diberi poin
+    const tumblerBonus = order.hasTumbler ? settings.tumblerBonusPoints : 0;
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        pointsAwarded: true,
+        pointsEarned: pointsToAdd + tumblerBonus,
+      },
+    });
+
+    return { 
+      cups, 
+      pointsToAdd, 
+      newPoints: awardResult.newPoints, 
+      tumblerResult, 
+      referralResult, 
+      customerName: order.customerName, 
+      userId: order.userId,
+      orderShortId: order.id.slice(0, 8).toUpperCase()
+    };
   });
 
-  if (!order || !order.userId || order.pointsAwarded) return null;
-
-  const settings = await getLoyaltySettings();
-  const cups = calculateCupsFromItems(order.items);
-
-  // Calculate points based on configured mode
-  let pointsToAdd = cups; // default: 1 point per cup
-  
-  if ((settings as any).pointMode === 'PER_TRANSACTION') {
-    pointsToAdd = (settings as any).pointPerTransaction || 1;
-  } else if ((settings as any).pointMode === 'PER_AMOUNT') {
-    const perAmount = (settings as any).pointPerAmount || 10000;
-    pointsToAdd = Math.floor(order.total / perAmount);
+  // Kirim notifikasi secara asynchronous di luar transaksi agar tidak memblokir commit DB
+  if (result) {
+    try {
+      await sendTemplatedNotification({
+        userId: result.userId,
+        trigger: 'POINTS_EARNED',
+        variables: {
+          name: result.customerName,
+          points: result.pointsToAdd.toString(),
+          orderNo: result.orderShortId,
+        },
+        linkUrl: '/profile',
+      });
+    } catch (err) {
+      console.error('Failed to send points notification after order completion:', err);
+    }
   }
-  // If pointMode is not set, fall back to cups
 
-  if (pointsToAdd <= 0) pointsToAdd = 1; // minimum 1 poin
-
-  // 1. Award poin
-  const result = await awardPoints({
-    userId: order.userId,
-    pointsToAdd,
-    type: 'EARN_ORDER',
-    description: `Pesanan selesai: ${pointsToAdd} poin${cups > 1 ? ` (${cups} cup)` : ''}`,
-    orderId,
-  });
-
-  // 2. Bonus tumbler
-  let tumblerResult = null;
-  if (order.hasTumbler) {
-    tumblerResult = await awardTumblerBonus(order.userId, orderId);
-  }
-
-  // 3. Cek referral (sekarang diklaim manual oleh referrer di profil)
-  const referralResult = null;
-
-  // 4. Tandai order sudah diberi poin
-  const tumblerBonus = order.hasTumbler ? settings.tumblerBonusPoints : 0;
-  await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      pointsAwarded: true,
-      pointsEarned: pointsToAdd + tumblerBonus,
-    },
-  });
-
-  return { cups, pointsToAdd, result, tumblerResult, referralResult };
+  return result;
 }
-

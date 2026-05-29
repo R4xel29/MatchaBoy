@@ -143,108 +143,16 @@ export async function calculateOrderPoints(orderTotal: number, hasTumbler: boole
   }
 }
 
-// ─── Award points to user (with milestone check) ────────────────────
+// ─── Award points to user (consolidated) ────────────────────────────
+// Redirects to processOrderCompletion in loyalty-utils.ts to prevent double point awarding.
 export async function awardPointsForOrder(orderId: string) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { user: true },
-  })
-
-  if (!order || !order.userId || order.pointsAwarded) return null
-
-  const { basePoints, tumblerBonus, total } = await calculateOrderPoints(
-    order.total,
-    order.hasTumbler
-  )
-
-  if (total <= 0) return null
-
-  // Transaction: update user points + create history + mark order
-  const result = await prisma.$transaction(async (tx) => {
-    // 1. Update user points
-    const updatedUser = await tx.user.update({
-      where: { id: order.userId! },
-      data: { points: { increment: total } },
-    })
-
-    // 2. Create point history
-    await tx.pointHistory.create({
-      data: {
-        userId: order.userId!,
-        amount: total,
-        type: 'EARN_ORDER',
-        description: `Order ${order.id.slice(0, 8).toUpperCase()} (+${basePoints} poin${tumblerBonus > 0 ? ` +${tumblerBonus} tumbler bonus` : ''})`,
-        orderId: order.id,
-      },
-    })
-
-    // 3. Mark order as awarded
-    await tx.order.update({
-      where: { id: orderId },
-      data: { pointsAwarded: true, pointsEarned: total },
-    })
-
-    // 4. Check milestones
-    const settings = await tx.loyaltySettings.findFirst()
-    if (settings) {
-      const newPoints = updatedUser.points
-      await checkAndAwardMilestones(tx, order.userId!, newPoints, settings)
-    }
-
-    return { userId: order.userId!, pointsEarned: total, newTotal: updatedUser.points }
-  })
-
-  // 5. Send notification
-  await sendTemplatedNotification({
+  const { processOrderCompletion } = await import('./loyalty-utils')
+  const result = await processOrderCompletion(orderId)
+  if (!result) return null
+  return {
     userId: result.userId,
-    trigger: 'POINTS_EARNED',
-    variables: {
-      name: order.customerName,
-      points: result.pointsEarned.toString(),
-      orderNo: order.id.slice(0, 8).toUpperCase(),
-    },
-    linkUrl: '/profile',
-  })
-
-  return result
-}
-
-// ─── Milestone checker ──────────────────────────────────────────────
-async function checkAndAwardMilestones(
-  tx: any,
-  userId: string,
-  currentPoints: number,
-  settings: any
-) {
-  const milestones = [
-    { enabled: settings.milestone1Enabled, target: settings.milestone1Points, reward: settings.milestone1Reward, desc: settings.milestone1Desc },
-    { enabled: settings.milestone2Enabled, target: settings.milestone2Points, reward: settings.milestone2Reward, desc: settings.milestone2Desc },
-    { enabled: settings.milestone3Enabled, target: settings.milestone3Points, reward: settings.milestone3Reward, desc: settings.milestone3Desc },
-  ]
-
-  for (const m of milestones) {
-    if (!m.enabled || m.target <= 0) continue
-    // Check if user just crossed this milestone (previous was below, now at or above)
-    if (currentPoints >= m.target && (currentPoints - 1) < m.target) {
-      // Award voucher
-      await tx.voucher.create({
-        data: {
-          userId,
-          type: m.reward,
-          description: m.desc,
-        },
-      })
-
-      // Send notification
-      // (done outside transaction to avoid complexity)
-    }
-  }
-
-  // Milestone 3 reset
-  if (settings.milestone3ResetPoints && currentPoints >= settings.milestone3Points) {
-    await tx.user.update({
-      where: { id: userId },
-      data: { points: { decrement: settings.milestone3Points } },
-    })
+    pointsEarned: result.pointsToAdd,
+    newTotal: result.newPoints
   }
 }
+

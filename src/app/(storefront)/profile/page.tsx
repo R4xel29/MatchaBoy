@@ -46,7 +46,14 @@ export default async function ProfilePage() {
         take: 10 // Show last 10 orders
       }),
       prisma.voucher.findMany({
-        where: { userId: session.user.id, isUsed: false },
+        where: { 
+          userId: session.user.id, 
+          isUsed: false,
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: new Date() } }
+          ]
+        },
         orderBy: { createdAt: 'desc' },
         include: { template: true },
         take: 10,

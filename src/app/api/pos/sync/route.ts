@@ -10,8 +10,17 @@ export async function POST(req: Request) {
     const { api_key, client, sales_transactions, local_products, opex_items, master_ingredients, recipes } = body;
 
     // 1. Validasi API Key
-    const secretApiKey = process.env.KULABOOTH_API_KEY || 'default_secret_key';
-    if (!api_key || api_key !== secretApiKey) {
+    const secretApiKey = process.env.KULABOOTH_API_KEY;
+    if (!secretApiKey || secretApiKey === 'default_secret_key') {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[SECURITY WARNING] Using default or empty API key in production is blocked!');
+        return NextResponse.json({ error: 'Unauthorized: Secure API Key must be configured in production' }, { status: 401 });
+      } else {
+        console.warn('[SECURITY WARNING] Using fallback default_secret_key. Configure KULABOOTH_API_KEY for production.');
+      }
+    }
+    const finalKey = secretApiKey || 'default_secret_key';
+    if (!api_key || api_key !== finalKey) {
       return NextResponse.json({ error: 'Unauthorized: Invalid API Key' }, { status: 401 });
     }
 
@@ -330,8 +339,17 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const api_key = searchParams.get('api_key');
-    const secretApiKey = process.env.KULABOOTH_API_KEY || 'default_secret_key';
-    if (!api_key || api_key !== secretApiKey) {
+    const secretApiKey = process.env.KULABOOTH_API_KEY;
+    if (!secretApiKey || secretApiKey === 'default_secret_key') {
+      if (process.env.NODE_ENV === 'production') {
+        console.error('[SECURITY WARNING] Using default or empty API key in production is blocked!');
+        return NextResponse.json({ error: 'Unauthorized: Secure API Key must be configured in production' }, { status: 401 });
+      } else {
+        console.warn('[SECURITY WARNING] Using fallback default_secret_key. Configure KULABOOTH_API_KEY for production.');
+      }
+    }
+    const finalKey = secretApiKey || 'default_secret_key';
+    if (!api_key || api_key !== finalKey) {
       return NextResponse.json({ error: 'Unauthorized: Invalid API Key' }, { status: 401 });
     }
 

@@ -4,6 +4,11 @@ import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
 
 export async function GET() {
+  const session = await auth();
+  if (!session?.user || !['ADMIN', 'CASHIER'].includes(session.user.role || '')) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+
   try {
     const banners = await prisma.heroBanner.findMany({
       orderBy: { order: 'asc' },

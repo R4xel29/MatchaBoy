@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
 
 export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id || !['ADMIN', 'CASHIER'].includes(session.user.role || '')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const startDate = req.nextUrl.searchParams.get('startDate');
   const endDate = req.nextUrl.searchParams.get('endDate');
   const type = req.nextUrl.searchParams.get('type') || 'ALL';

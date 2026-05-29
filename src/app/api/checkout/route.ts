@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { rateLimit, getClientId } from '@/lib/rate-limit'
+import { rateLimit, getClientId } from '@/lib/rate-limit-redis'
 import { calculateDeliveryFee } from '@/lib/delivery-utils'
 import { getActivePromo } from '@/lib/utils'
 import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors'
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
 
         // Rate limit: 10 requests per minute per user
         const clientId = getClientId(req, session.user.id)
-        const { success, remaining } = rateLimit(`checkout:${clientId}`, { maxRequests: 10, windowMs: 60_000 })
+        const { success, remaining } = await rateLimit(`checkout:${clientId}`, { maxRequests: 10, windowMs: 60_000 })
         if (!success) {
             throw new ValidationError('Terlalu banyak percobaan. Coba lagi dalam 1 menit.', 'RATE_LIMIT');
         }
@@ -610,6 +610,8 @@ export async function POST(req: Request) {
         // Wrap database operations in a single interactive transaction to ensure data atomicity
         // ✅ BUG FIX #4 & #5: Added row-level locking and atomic operations
         const order = await prisma.$transaction(async (tx) => {
+            // Acquire a transaction-level advisory lock to serialize queue number generation and other concurrent checkout writes
+            await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(424242);');
             // 1. ✅ FIX: Use atomic update with WHERE condition for points
             if (pointsUsed > 0) {
                 // Atomic decrement with condition check

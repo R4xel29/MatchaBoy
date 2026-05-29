@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
 import { expireOrder, cleanupOldPaymentProofs } from '@/lib/order-utils';
 
 export async function GET(
@@ -7,6 +8,26 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Get the order first to check ownership and existence
+  const dbOrder = await prisma.order.findUnique({
+    where: { id },
+    select: { userId: true }
+  });
+
+  if (!dbOrder) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+  }
+
+  const isStaff = ['ADMIN', 'CASHIER', 'DRIVER'].includes(session.user.role || '');
+  if (dbOrder.userId !== session.user.id && !isStaff) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
   // Auto-expire order if past payment deadline
   await expireOrder(id);

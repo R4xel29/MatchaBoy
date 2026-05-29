@@ -6,6 +6,7 @@ import {
   Upload, CheckCircle, MessageCircle, Loader2, X,
   QrCode, Banknote, Building2, CreditCard, Copy, Check, Download
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 interface BankAccount {
   id: string;
@@ -34,13 +35,23 @@ const formatRupiah = (n: number) =>
   new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
 export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPaymentMethodChange, selectedMethod }: PaymentUploadProps) {
+  const { showToast } = useToast();
   const [config, setConfig] = useState<PaymentConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
   const [copiedBank, setCopiedBank] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const transferFileRef = useRef<HTMLInputElement>(null);
+  const qrisFileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Reset local upload states when payment method changes
+    setPreview(null);
+    setUploaded(false);
+    setUploading(false);
+    onProofUploaded('');
+  }, [selectedMethod]);
 
   useEffect(() => {
     fetch('/api/payment-methods')
@@ -131,10 +142,14 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
         const data = await res.json();
         onProofUploaded(data.url);
         setUploaded(true);
+      } else {
+        throw new Error('Gagal unggah');
       }
-    } catch {
-      onProofUploaded('pending-review');
-      setUploaded(true);
+    } catch (err) {
+      showToast('Gagal mengunggah bukti pembayaran. Silakan coba lagi.', 'error');
+      setPreview(null);
+      setUploaded(false);
+      onProofUploaded('');
     } finally {
       setUploading(false);
     }
@@ -299,12 +314,12 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
                 Upload Bukti Pembayaran
               </label>
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+              <input ref={transferFileRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
 
               {!preview ? (
                 <button
                   type="button"
-                  onClick={() => fileRef.current?.click()}
+                  onClick={() => transferFileRef.current?.click()}
                   className="w-full py-8 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center gap-2
                     hover:border-[#B48A5E]/40 hover:bg-[#B48A5E]/5 transition-all active:scale-[0.98]"
                 >
@@ -398,12 +413,12 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
                 Upload Bukti Pembayaran
               </label>
-              <input ref={fileRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+              <input ref={qrisFileRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
 
               {!preview ? (
                 <button
                   type="button"
-                  onClick={() => fileRef.current?.click()}
+                  onClick={() => qrisFileRef.current?.click()}
                   className="w-full py-6 border-2 border-dashed border-gray-300 rounded-2xl flex flex-col items-center gap-2
                     hover:border-purple-400 hover:bg-purple-50/50 transition-all active:scale-[0.98]"
                 >

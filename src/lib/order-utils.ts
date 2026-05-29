@@ -18,6 +18,8 @@ export async function expireOrder(orderId: string, force: boolean = false) {
   try {
     console.log(`[Order Expiry] Processing order ${orderId}. Force: ${force}`);
     
+    let shouldRestoreStock = false;
+    
     const result = await prisma.$transaction(async (tx) => {
       // ✅ FIX: Query order INSIDE transaction (no pre-check outside)
       const order = await tx.order.findUnique({
@@ -65,6 +67,7 @@ export async function expireOrder(orderId: string, force: boolean = false) {
         return await tx.order.findUnique({ where: { id: orderId } });
       }
 
+      shouldRestoreStock = true;
       console.log(`[Order Expiry] Order ${orderId} cancelled successfully, processing refunds`);
 
       // 2. Restore points if any
@@ -121,6 +124,15 @@ export async function expireOrder(orderId: string, force: boolean = false) {
       // Return updated order
       return await tx.order.findUnique({ where: { id: orderId } });
     });
+    
+    if (shouldRestoreStock) {
+      try {
+        const { restoreStockForOrder } = await import('./inventory-utils');
+        await restoreStockForOrder(orderId);
+      } catch (stockErr) {
+        console.error(`[Order Expiry Stock Restore Error] Failed to restore stock for order ${orderId}:`, stockErr);
+      }
+    }
     
     return result;
   } catch (e) {

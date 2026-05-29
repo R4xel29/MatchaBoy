@@ -160,6 +160,23 @@ export default function ProfileClient({
       .then(res => res.json())
       .then(data => setStoreSettings(data))
       .catch(err => console.error(err));
+
+    // Refresh user profile/points on mount to ensure freshness (M8)
+    fetch('/api/user/profile')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.points !== undefined) {
+          setUser(prev => ({
+            ...prev,
+            points: data.points,
+            name: data.name || prev.name,
+            phone: data.phone || prev.phone,
+            image: data.image || prev.image,
+            email: data.email || prev.email,
+          }));
+        }
+      })
+      .catch(err => console.error("Error refreshing profile on mount:", err));
   }, []);
 
   useEffect(() => {

@@ -95,6 +95,27 @@ export default function CheckoutPage() {
   const [pointsToUse, setPointsToUse] = useState(0);
   const [pointValue, setPointValue] = useState(1000);
 
+  // Reset voucher search query when modal is closed (M3)
+  useEffect(() => {
+    if (!isVoucherModalOpen) {
+      setVoucherSearchQuery('');
+    }
+  }, [isVoucherModalOpen]);
+
+  // Keep user points updated on client navigation mount (M8)
+  useEffect(() => {
+    if (session?.user) {
+      fetch('/api/user/profile')
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.points !== undefined) {
+            setUserPoints(data.points);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [session?.user?.id]);
+
   // Toast state
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
 
@@ -159,13 +180,38 @@ export default function CheckoutPage() {
     customHours: '{}'
   });
 
-  const getStoreHoursForDate = (dateStr: string) => {
-    let openT = storeSettings.openTime;
-    let closeT = storeSettings.closeTime;
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [isStoreCurrentlyOpen, setIsStoreCurrentlyOpen] = useState(false);
+  const [pickupWarningShown, setPickupWarningShown] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem('matchaboy_pickup_warning_shown') === 'true';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const {
+    openTime: storeOpenTime,
+    closeTime: storeCloseTime,
+    pickupSlotInterval: storePickupSlotInterval,
+    operationalDays: storeOperationalDays,
+    disabledDates: storeDisabledDates,
+    customHours: storeCustomHours
+  } = storeSettings;
+
+  const getStoreHoursForDate = useCallback((dateStr: string) => {
+    let openT = storeOpenTime;
+    let closeT = storeCloseTime;
     try {
-      const custom = typeof storeSettings.customHours === 'string'
-        ? JSON.parse(storeSettings.customHours || '{}')
-        : storeSettings.customHours || {};
+      const custom = typeof storeCustomHours === 'string'
+        ? JSON.parse(storeCustomHours || '{}')
+        : storeCustomHours || {};
 
       if (custom?.dates?.[dateStr]) {
         openT = custom.dates[dateStr].openTime;
@@ -181,7 +227,7 @@ export default function CheckoutPage() {
       console.error("Error parsing customHours:", e);
     }
     return { openTime: openT, closeTime: closeT };
-  };
+  }, [storeOpenTime, storeCloseTime, storeCustomHours]);
 
   const getTimeSlotsForDate = useCallback((dateStr: string, type: OrderType) => {
     const { openTime: targetOpenTime, closeTime: targetCloseTime } = getStoreHoursForDate(dateStr);
@@ -200,7 +246,7 @@ export default function CheckoutPage() {
     const deliveryMinSlot = type === 'DELIVERY' ? openMinutes + 30 : openMinutes;
     const startMinutes = Math.max(deliveryMinSlot, minSlot);
     const slots: string[] = [];
-    const interval = storeSettings.pickupSlotInterval || 15;
+    const interval = storePickupSlotInterval || 15;
 
     const remainder = startMinutes % interval;
     const alignedStart = remainder === 0 ? startMinutes : startMinutes + (interval - remainder);
@@ -211,26 +257,29 @@ export default function CheckoutPage() {
       slots.push(`${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`);
     }
     return slots;
-  }, [storeSettings, getStoreHoursForDate]);
+  }, [getStoreHoursForDate, storePickupSlotInterval]);
 
-  const isStoreCurrentlyOpen = useMemo(() => {
-    const now = new Date();
+  useEffect(() => {
+    const now = currentTime;
     const todayStr = now.toLocaleDateString('en-CA');
     
     let openDays: number[] = [0,1,2,3,4,5,6];
     try {
-      openDays = JSON.parse(storeSettings.operationalDays || '[0,1,2,3,4,5,6]');
+      openDays = JSON.parse(storeOperationalDays || '[0,1,2,3,4,5,6]');
     } catch {}
     let closedDates: string[] = [];
     try {
-      closedDates = JSON.parse(storeSettings.disabledDates || '[]');
+      closedDates = JSON.parse(storeDisabledDates || '[]');
     } catch {}
     
     const dayOfWeek = now.getDay();
     const isOpenDay = openDays.includes(dayOfWeek);
     const isHoliday = closedDates.includes(todayStr);
     
-    if (!isOpenDay || isHoliday) return false;
+    if (!isOpenDay || isHoliday) {
+      setIsStoreCurrentlyOpen(false);
+      return;
+    }
     
     const { openTime, closeTime } = getStoreHoursForDate(todayStr);
     const [openH, openM] = openTime.split(':').map(Number);
@@ -240,26 +289,28 @@ export default function CheckoutPage() {
     const closeMinutes = closeH * 60 + closeM;
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
     
-    return currentMinutes >= openMinutes && currentMinutes < closeMinutes - 15;
-  }, [storeSettings, getStoreHoursForDate]);
+    setIsStoreCurrentlyOpen(currentMinutes >= openMinutes && currentMinutes < closeMinutes - 15);
+  }, [currentTime, storeOperationalDays, storeDisabledDates, getStoreHoursForDate]);
 
   const availableDates = useMemo(() => {
     const dates: { value: string; label: string; dayLabel: string; isToday: boolean }[] = [];
     let openDays: number[] = [0,1,2,3,4,5,6];
     try {
-      openDays = JSON.parse(storeSettings.operationalDays || '[0,1,2,3,4,5,6]');
+      openDays = JSON.parse(storeOperationalDays || '[0,1,2,3,4,5,6]');
     } catch {}
     let closedDates: string[] = [];
     try {
-      closedDates = JSON.parse(storeSettings.disabledDates || '[]');
+      closedDates = JSON.parse(storeDisabledDates || '[]');
     } catch {}
     
     const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-    let d = new Date();
+    const now = new Date();
+    const baseDate = new Date(now.getTime());
     let iterations = 0;
     while (dates.length < 3 && iterations < 30) {
+      const d = new Date(baseDate.getTime() + iterations * 24 * 60 * 60 * 1000);
       iterations++;
       const dayOfWeek = d.getDay();
       const dateString = d.toLocaleDateString('en-CA');
@@ -269,7 +320,6 @@ export default function CheckoutPage() {
       
       let isAvailable = isOpenDay && !isHoliday;
       
-      const now = new Date();
       const isToday = dateString === now.toLocaleDateString('en-CA');
       if (isToday && isAvailable) {
         const { closeTime: todayCloseTime } = getStoreHoursForDate(dateString);
@@ -289,11 +339,9 @@ export default function CheckoutPage() {
           isToday
         });
       }
-      
-      d.setDate(d.getDate() + 1);
     }
     return dates;
-  }, [storeSettings.operationalDays, storeSettings.disabledDates, storeSettings.openTime, storeSettings.closeTime, storeSettings.customHours]);
+  }, [storeOperationalDays, storeDisabledDates, getStoreHoursForDate]);
 
   // Synchronize pickupDate and pickupTime when availableDates changes
   useEffect(() => {
@@ -560,7 +608,12 @@ export default function CheckoutPage() {
   }, [items]);
 
   const filteredUserVouchers = useMemo(() => {
+    const now = new Date();
     return userVouchers.filter(v => {
+      // SECURITY FIX #L6: Filter out expired vouchers from active checkout selection
+      const isExpired = v.expiresAt ? new Date(v.expiresAt) < now : false;
+      if (isExpired) return false;
+
       if (voucherSearchQuery) {
         const q = voucherSearchQuery.toLowerCase();
         const codeMatch = v.code?.toLowerCase().includes(q);
@@ -749,7 +802,19 @@ export default function CheckoutPage() {
     }
   }, [appliedVoucher, subtotal, items]);
 
-  const pointsDiscount = usePoints ? pointsToUse * pointValue : 0;
+  const maxPointsAllowed = useMemo(() => {
+    const remainingAmount = Math.max(0, subtotal - tumblerDiscount - voucherDiscount);
+    return Math.min(userPoints, Math.floor(remainingAmount / pointValue));
+  }, [userPoints, subtotal, tumblerDiscount, voucherDiscount, pointValue]);
+
+  const pointsDiscount = usePoints ? Math.min(pointsToUse, maxPointsAllowed) * pointValue : 0;
+
+  useEffect(() => {
+    if (usePoints && pointsToUse > maxPointsAllowed) {
+      setPointsToUse(maxPointsAllowed);
+    }
+  }, [usePoints, pointsToUse, maxPointsAllowed]);
+
   const grandTotal = Math.max(0, subtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, shippingFee - ongkirDiscount);
   const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
 
@@ -1015,11 +1080,11 @@ export default function CheckoutPage() {
     }
     if (orderType === 'DELIVERY') {
       if (!deliveryAddress) return false;
+      if (!pickupDate || !pickupTime) return false;
       
       // If scheduled time, validate against valid slots
-      if (pickupTime && pickupTime !== 'Sekarang') {
-        const targetDate = pickupDate || new Date().toLocaleDateString('en-CA');
-        const slots = getTimeSlotsForDate(targetDate, 'DELIVERY');
+      if (pickupTime !== 'Sekarang' && pickupDate) {
+        const slots = getTimeSlotsForDate(pickupDate, 'DELIVERY');
         if (!slots.includes(pickupTime)) return false;
       }
       
@@ -1037,6 +1102,10 @@ export default function CheckoutPage() {
 
   const confirmAndSubmitOrder = async () => {
     if (!tempFormData || !canSubmit) return;
+    if (orderType === 'DELIVERY' && (!pickupDate || !pickupTime)) {
+      setToast({ message: 'Waktu pengiriman harus ditentukan', type: 'error' });
+      return;
+    }
     setIsSubmitting(true);
     setShowPaymentConfirmation(false);
 
@@ -1048,7 +1117,7 @@ export default function CheckoutPage() {
         orderType,
         hasTumbler,
         voucherCode: appliedVoucher?.code || undefined,
-        pointsUsed: usePoints ? pointsToUse : 0,
+        pointsUsed: usePoints ? Math.min(pointsToUse, maxPointsAllowed) : 0,
         pickupDate: pickupDate || undefined,
         pickupTime: pickupTime || undefined,
         paymentMethod,
@@ -1085,6 +1154,8 @@ export default function CheckoutPage() {
         sessionStorage.removeItem('matchaboy_pickup_warning_shown');
       }
       
+      setIsSubmitting(false);
+      
       // COD redirects straight to Order Tracking, online methods redirect to Payment detail page
       if (paymentMethod === 'COD') {
         router.push(`/orders/${responseData.orderId}`);
@@ -1117,12 +1188,12 @@ export default function CheckoutPage() {
     setIsProductModalOpen(true);
   };
 
-  // Show pickup reminder when time is selected
+  // Show pickup reminder when time is selected (Only once!)
   useEffect(() => {
-    if (pickupTime) {
+    if (pickupTime && !pickupWarningShown) {
       setShowPickupWarning(true);
     }
-  }, [pickupTime]);
+  }, [pickupTime, pickupWarningShown]);
 
   // Auth Guard
   if (status === 'loading') {
@@ -1203,6 +1274,7 @@ export default function CheckoutPage() {
                 type="button"
                 onClick={() => {
                   setShowPickupWarning(false);
+                  setPickupWarningShown(true);
                   if (typeof window !== 'undefined') {
                     sessionStorage.setItem('matchaboy_pickup_warning_shown', 'true');
                   }
@@ -1713,9 +1785,12 @@ export default function CheckoutPage() {
               </h2>
               <button
                 type="button"
-                onClick={() => { setUsePoints(!usePoints); if (!usePoints) setPointsToUse(Math.min(userPoints, Math.floor(subtotal / pointValue))); }}
+                disabled={maxPointsAllowed === 0 && !usePoints}
+                onClick={() => { setUsePoints(!usePoints); if (!usePoints) setPointsToUse(maxPointsAllowed); }}
                 className={`w-full flex items-center gap-3.5 p-4.5 rounded-2xl border-2 transition-all text-left active:scale-[0.98] ${
-                  usePoints ? 'border-amber-400 bg-amber-50/20 shadow-sm' : 'border-gray-150 bg-white hover:border-gray-250'
+                  maxPointsAllowed === 0 && !usePoints
+                    ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
+                    : usePoints ? 'border-amber-400 bg-amber-50/20 shadow-sm' : 'border-gray-150 bg-white hover:border-gray-250'
                 }`}
               >
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
@@ -1737,18 +1812,24 @@ export default function CheckoutPage() {
               </button>
               {usePoints && (
                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
-                  <div className="flex items-center gap-3 px-1 pt-2">
-                    <span className="text-[10px] font-bold text-gray-400">1p</span>
-                    <input
-                      type="range"
-                      min={1}
-                      max={Math.min(userPoints, Math.floor(subtotal / pointValue))}
-                      value={pointsToUse}
-                      onChange={(e) => setPointsToUse(parseInt(e.target.value))}
-                      className="flex-1 accent-amber-500 h-1.5 bg-gray-150 rounded-lg cursor-pointer"
-                    />
-                    <span className="text-[10px] font-bold text-gray-400">{Math.min(userPoints, Math.floor(subtotal / pointValue))}p</span>
-                  </div>
+                  {maxPointsAllowed === 0 ? (
+                    <p className="text-xs text-amber-600 font-semibold px-1 pt-2">
+                      Semua tagihan sudah tercover oleh diskon lain.
+                    </p>
+                  ) : (
+                    <div className="flex items-center gap-3 px-1 pt-2">
+                      <span className="text-[10px] font-bold text-gray-400">1p</span>
+                      <input
+                        type="range"
+                        min={1}
+                        max={maxPointsAllowed}
+                        value={pointsToUse > maxPointsAllowed ? maxPointsAllowed : pointsToUse}
+                        onChange={(e) => setPointsToUse(Math.min(maxPointsAllowed, parseInt(e.target.value)))}
+                        className="flex-1 accent-amber-500 h-1.5 bg-gray-150 rounded-lg cursor-pointer"
+                      />
+                      <span className="text-[10px] font-bold text-gray-400">{maxPointsAllowed}p</span>
+                    </div>
+                  )}
                 </motion.div>
               )}
             </section>
@@ -2400,8 +2481,17 @@ export default function CheckoutPage() {
                   value={voucherSearchQuery}
                   onChange={(e) => setVoucherSearchQuery(e.target.value)}
                   placeholder="Masukkan kode voucher ..."
-                  className="w-full pl-12 pr-24 py-4 rounded-2xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] shadow-sm"
+                  className="w-full pl-12 pr-32 py-4 rounded-2xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] shadow-sm"
                 />
+                {voucherSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setVoucherSearchQuery('')}
+                    className="absolute right-20 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={async () => {

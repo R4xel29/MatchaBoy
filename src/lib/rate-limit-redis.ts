@@ -66,7 +66,7 @@ export async function rateLimit(
 
     if (count >= config.maxRequests) {
       // Get the oldest timestamp to calculate reset time
-      const oldest = await redis.zrange(redisKey, 0, 0, { withScores: true });
+      const oldest: any = await redis.zrange(redisKey, 0, 0, { withScores: true });
       const resetTime = oldest.length > 0 
         ? Math.ceil((oldest[0].score + config.windowMs) / 1000) 
         : Math.ceil((now + config.windowMs) / 1000);

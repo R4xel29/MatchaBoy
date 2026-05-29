@@ -1,8 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
+
+const ALLOWED_ROLES = ['ADMIN', 'CASHIER'];
+
+async function verifyAuth() {
+  const session = await auth();
+  if (!session?.user?.id || !ALLOWED_ROLES.includes(session.user.role || '')) {
+    return false;
+  }
+  return true;
+}
 
 // GET — list all bank accounts
 export async function GET() {
+  if (!(await verifyAuth())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const banks = await prisma.bankAccount.findMany({
     orderBy: { order: 'asc' },
   });
@@ -11,6 +26,10 @@ export async function GET() {
 
 // POST — create bank account
 export async function POST(req: NextRequest) {
+  if (!(await verifyAuth())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const bank = await prisma.bankAccount.create({
@@ -31,6 +50,10 @@ export async function POST(req: NextRequest) {
 
 // PUT — update bank account
 export async function PUT(req: NextRequest) {
+  if (!(await verifyAuth())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const bank = await prisma.bankAccount.update({
@@ -52,6 +75,10 @@ export async function PUT(req: NextRequest) {
 
 // DELETE — delete bank account
 export async function DELETE(req: NextRequest) {
+  if (!(await verifyAuth())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const id = req.nextUrl.searchParams.get('id');
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 });

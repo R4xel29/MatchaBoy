@@ -28,11 +28,11 @@ export default function QrisClient({ order }: { order: any }) {
   // Countdown timer logic
   useEffect(() => {
     const expiry = new Date(order.paymentExpiredAt).getTime()
-    const nowTime = new Date().getTime()
-    const totalDuration = 15 * 60 * 1000 // 15 mins default
+    const start = order.createdAt ? new Date(order.createdAt).getTime() : expiry - 15 * 60 * 1000
+    const totalDuration = Math.max(expiry - start, 1000)
     
     const updateTimer = () => {
-      const now = new Date().getTime()
+      const now = Date.now()
       const diff = expiry - now
 
       if (diff <= 0) {
@@ -58,7 +58,7 @@ export default function QrisClient({ order }: { order: any }) {
     updateTimer()
     const timer = setInterval(updateTimer, 1000)
     return () => clearInterval(timer)
-  }, [order.paymentExpiredAt, order.id, router])
+  }, [order.paymentExpiredAt, order.createdAt, order.id, router])
 
   // Handle file upload
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,8 +88,10 @@ export default function QrisClient({ order }: { order: any }) {
         throw new Error('Gagal unggah');
       }
     } catch {
-      setPaymentProofUrl('pending-review');
-      setUploaded(true);
+      showToast('Gagal mengunggah bukti pembayaran. Silakan coba lagi.', 'error');
+      setPreview(null);
+      setUploaded(false);
+      setPaymentProofUrl(null);
     } finally {
       setUploading(false);
     }
@@ -162,12 +164,23 @@ export default function QrisClient({ order }: { order: any }) {
       <div className="max-w-md mx-auto px-4 py-6 space-y-6 relative z-10">
         
         {/* Countdown Info Card */}
-        <div className="flex items-center justify-between bg-white border border-gray-100 shadow-sm rounded-2xl px-5 py-4">
-          <div className="flex items-center gap-2 select-none">
-            <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
-            <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Masa Berlaku QRIS</span>
+        <div className="bg-white border border-gray-100 shadow-sm rounded-2xl px-5 py-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 select-none">
+              <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+              <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Masa Berlaku QRIS</span>
+            </div>
+            <span className="font-mono text-base font-black text-gray-900">{timeLeft}</span>
           </div>
-          <span className="font-mono text-base font-black text-gray-900">{timeLeft}</span>
+          {/* Visual Progress Bar */}
+          <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-1000 rounded-full ${
+                percentLeft > 50 ? 'bg-emerald-500' : percentLeft > 20 ? 'bg-amber-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${percentLeft}%` }}
+            />
+          </div>
         </div>
 
         {/* Realistic GPN/QRIS Merchant Frame */}

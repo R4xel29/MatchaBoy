@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
 
 export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id || !['ADMIN', 'CASHIER'].includes(session.user.role || '')) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const phone = req.nextUrl.searchParams.get('phone');
   if (!phone || phone.length < 8) {
     return NextResponse.json({ found: false });

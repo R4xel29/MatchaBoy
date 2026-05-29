@@ -133,7 +133,7 @@ export default function PaymentClient({
     checkPaymentStatus() // Run immediately on mount
     const interval = setInterval(checkPaymentStatus, 5000)
     return () => clearInterval(interval)
-  }, [order.id, router, showToast])
+  }, [order.id, router])
 
   // Copy helper
   const handleCopy = (text: string, id: string) => {
@@ -221,9 +221,11 @@ export default function PaymentClient({
       } else {
         throw new Error('Gagal unggah');
       }
-    } catch {
-      setPaymentProofUrl('pending-review');
-      setUploaded(true);
+    } catch (err) {
+      showToast('Gagal mengunggah bukti pembayaran. Silakan coba lagi.', 'error');
+      setPreview(null);
+      setUploaded(false);
+      setPaymentProofUrl(null);
     } finally {
       setUploading(false);
     }

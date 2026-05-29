@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
 import { processOrderCompletion } from '@/lib/loyalty-utils';
-import { deductStockForOrder } from '@/lib/inventory-utils';
+import { deductStockForOrder, restoreStockForOrder } from '@/lib/inventory-utils';
 
 export async function PATCH(
     request: Request,
@@ -17,7 +17,7 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { status } = body;
+        const { status, reason } = body;
 
         const validStatuses = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED', 'ASSIGNED', 'TO_STORE', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED', 'CANCELLED'];
         if (!validStatuses.includes(status)) {
@@ -31,6 +31,9 @@ export async function PATCH(
                 id: true,
                 status: true,
                 customerName: true,
+                userId: true,
+                notes: true,
+                voucherCode: true,
                 paymentMethod: true,
                 paymentProofUrl: true
             }
@@ -50,16 +53,70 @@ export async function PATCH(
             return new NextResponse('Bukti transaksi belum diunggah. Silakan terima pembayaran (Accept) terlebih dahulu atau tolak/batalkan pesanan.', { status: 400 });
         }
 
-        const order = await prisma.order.update({
-            where: {
-                id,
-            },
-            data: {
-                status,
-                paymentProofUrl: (status === 'PENDING' && existingOrder.status === 'PENDING_PAYMENT' && !existingOrder.paymentProofUrl)
-                    ? '/verified-cashier.svg'
-                    : undefined
-            },
+        // Update order status (with point/voucher refund if cancelled)
+        const order = await prisma.$transaction(async (tx) => {
+            const cancelReason = reason || 'Dibatalkan oleh Admin';
+            // 1. Update status
+            const updated = await tx.order.update({
+                where: { id },
+                data: {
+                    status,
+                    cancelReason: status === 'CANCELLED' ? cancelReason : undefined,
+                    notes: status === 'CANCELLED'
+                        ? (existingOrder.notes ? `${existingOrder.notes}\n[Batal] ${cancelReason}` : `[Batal] ${cancelReason}`)
+                        : existingOrder.notes,
+                    paymentProofUrl: (status === 'PENDING' && existingOrder.status === 'PENDING_PAYMENT' && !existingOrder.paymentProofUrl)
+                        ? '/verified-cashier.svg'
+                        : undefined
+                }
+            });
+
+            if (status === 'CANCELLED') {
+                // 2. Restore points if any
+                const pointHistories = await tx.pointHistory.findMany({
+                    where: {
+                        orderId: id,
+                        amount: { lt: 0 } // Negative points (redeemed)
+                    }
+                });
+
+                for (const ph of pointHistories) {
+                    const refundAmount = Math.abs(ph.amount);
+                    if (existingOrder.userId) {
+                        await tx.user.update({
+                            where: { id: existingOrder.userId },
+                            data: { points: { increment: refundAmount } }
+                        });
+                        await tx.pointHistory.create({
+                            data: {
+                                userId: existingOrder.userId,
+                                amount: refundAmount,
+                                type: 'ADMIN_ADJUST',
+                                description: `Pengembalian ${refundAmount} poin karena pesanan #${id.slice(0, 8).toUpperCase()} dibatalkan admin`,
+                                orderId: id
+                            }
+                        });
+                    }
+                }
+
+                // 3. Restore used voucher if any
+                if (existingOrder.voucherCode) {
+                    const voucher = await tx.voucher.findUnique({
+                        where: { code: existingOrder.voucherCode }
+                    });
+                    if (voucher && voucher.isUsed) {
+                        await tx.voucher.update({
+                            where: { id: voucher.id },
+                            data: {
+                                isUsed: false,
+                                usedAt: null
+                            }
+                        });
+                    }
+                }
+            }
+
+            return updated;
         });
 
         await logAdminAction({
@@ -74,6 +131,13 @@ export async function PATCH(
         if (status === 'PREPARING') {
             // Non-blocking
             deductStockForOrder(id).catch(err => console.error('Stock deduction error:', err));
+        }
+
+        // Restore stock if cancelled
+        if (status === 'CANCELLED') {
+            restoreStockForOrder(id).catch(err =>
+                console.error('Stock restoration error (non-blocking):', err)
+            );
         }
 
         // Otomatis tambah poin jika status COMPLETED atau DELIVERED

@@ -25,10 +25,48 @@ async function sendWhatsAppMessage(phone: string, text: string, jid?: string) {
   }
 }
 
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const mode = searchParams.get('hub.mode');
+  const token = searchParams.get('hub.verify_token');
+  const challenge = searchParams.get('hub.challenge');
+
+  const expectedToken = process.env.WA_BOT_API_KEY;
+
+  if (mode && token) {
+    if (mode === 'subscribe' && token === expectedToken) {
+      console.log('WHATSAPP_WEBHOOK verified successfully!');
+      return new Response(challenge, { status: 200 });
+    } else {
+      return new Response('Forbidden', { status: 403 });
+    }
+  }
+
+  // Generic token check for GET testing
+  const apiToken = req.headers.get("x-api-key") || searchParams.get("token");
+  if (expectedToken && apiToken === expectedToken) {
+    return NextResponse.json({ status: "ok" });
+  }
+
+  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const requestUrl = new URL(req.url);
+
+    // Verify WhatsApp Webhook request authentication
+    const token = req.headers.get("x-api-key") || 
+                  req.headers.get("Authorization")?.replace("Bearer ", "") ||
+                  requestUrl.searchParams.get("token") ||
+                  body.secret;
+                  
+    const expectedToken = process.env.WA_BOT_API_KEY;
+    if (!expectedToken || token !== expectedToken) {
+      console.warn(`[WHATSAPP_WEBHOOK] Unauthorized webhook attempt.`);
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     let appUrl = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin;
     
     // SAFETY OVERRIDE: Cegah link localhost di Vercel akibat salah setting Environment Variables

@@ -14,6 +14,50 @@ export default auth((req) => {
     const { pathname } = req.nextUrl
     const role = req.auth?.user?.role
 
+    const isApiRoute = pathname.startsWith('/api')
+
+    // Separate protection for API routes (Defense-in-Depth)
+    if (isApiRoute) {
+        if (pathname.startsWith('/api/admin')) {
+            if (!isLoggedIn) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+            }
+            if (role !== 'ADMIN' && role !== 'CASHIER') {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+            }
+            if (role === 'CASHIER') {
+                const cashierAllowed = ['/api/admin/reports', '/api/admin/bank-accounts', '/api/admin/store-settings']
+                const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
+                if (!isAllowed) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+                }
+            }
+        }
+
+        if (pathname.startsWith('/api/driver')) {
+            // Exclude register route from driver auth since anyone can register
+            if (!pathname.startsWith('/api/driver/register')) {
+                if (!isLoggedIn) {
+                    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+                }
+                if (role !== 'DRIVER' && role !== 'ADMIN') {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+                }
+            }
+        }
+
+        if (pathname.startsWith('/api/cashier')) {
+            if (!isLoggedIn) {
+                return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+            }
+            if (role !== 'ADMIN' && role !== 'CASHIER') {
+                return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+            }
+        }
+        
+        return NextResponse.next()
+    }
+
     // Redirect authenticated users away from auth pages
     if (authRoutes.some(route => pathname.startsWith(route))) {
         if (isLoggedIn) {
@@ -78,5 +122,5 @@ export default auth((req) => {
 })
 
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|favicon.ico|products/|icons/|manifest.json).*)'],
+    matcher: ['/((?!_next/static|_next/image|favicon.ico|products/|icons/|manifest.json).*)'],
 }

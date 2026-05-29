@@ -1,29 +1,10 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { rateLimit, getClientId } from '@/lib/rate-limit-redis'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-
-// Rate limiting helper (simple in-memory, production should use Redis)
-const claimAttempts = new Map<string, { count: number; resetAt: number }>()
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now()
-  const userAttempts = claimAttempts.get(userId)
-  
-  if (!userAttempts || now > userAttempts.resetAt) {
-    claimAttempts.set(userId, { count: 1, resetAt: now + 60000 }) // 1 minute window
-    return true
-  }
-  
-  if (userAttempts.count >= 10) { // Max 3 claims per minute
-    return false
-  }
-  
-  userAttempts.count++
-  return true
-}
 
 // POST: Claim a voucher code
 export async function POST(req: Request) {
@@ -33,8 +14,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Login diperlukan untuk mengklaim voucher' }, { status: 401 })
     }
 
-    // SECURITY FIX #4: Rate limiting
-    if (!checkRateLimit(session.user.id)) {
+    // SECURITY FIX #L7-L8: Rate limiting aligned to 3/min using Redis-based sliding window rate limiter
+    const clientKey = getClientId(req, session.user.id)
+    const rateLimitResult = await rateLimit(`voucher_claim:${clientKey}`, {
+      maxRequests: 3,
+      windowMs: 60_000,
+    })
+
+    if (!rateLimitResult.success) {
       return NextResponse.json({ error: 'Terlalu banyak percobaan klaim. Tunggu 1 menit.' }, { status: 429 })
     }
 
@@ -154,8 +141,8 @@ export async function POST(req: Request) {
         discountAmount = lockedTemplate.discountValue || 5000
       }
 
-      // Generate a unique voucher instance code for user
-      const userVoucherCode = `${lockedTemplate.code}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
+      // Generate a unique voucher instance code with a longer suffix to prevent collisions (M9)
+      const userVoucherCode = `${lockedTemplate.code}-${Math.random().toString(36).substring(2, 12).toUpperCase()}`
 
       // Create personal voucher
       return tx.voucher.create({

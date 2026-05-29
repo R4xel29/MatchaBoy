@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/auth';
 
 // GET — fetch payment settings (singleton)
 export async function GET() {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   let settings = await prisma.paymentSettings.findFirst();
   
   if (!settings) {
@@ -19,6 +25,11 @@ export async function GET() {
 
 // PUT — update payment settings
 export async function PUT(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id || session.user.role !== 'ADMIN') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     

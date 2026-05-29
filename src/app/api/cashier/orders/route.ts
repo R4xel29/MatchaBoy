@@ -96,7 +96,7 @@ export async function POST(req: Request) {
     })
 
     let secureSubtotal = 0
-    const orderItemsToCreate = []
+    const orderItemsToCreate: any[] = []
 
     for (const item of body.items) {
       const dbProduct = dbProducts.find(p => p.id === item.productId)
@@ -179,6 +179,8 @@ export async function POST(req: Request) {
 
     // Create the order with sequential queue number in a transaction
     const order = await prisma.$transaction(async (tx) => {
+      // Acquire a transaction-level advisory lock to serialize queue number generation and other concurrent POS checkout writes
+      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(424242);');
       const startOfDay = new Date()
       startOfDay.setHours(0, 0, 0, 0)
       const countToday = await tx.order.count({

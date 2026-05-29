@@ -123,6 +123,35 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   const statusRef = useRef(currentStatus);
   statusRef.current = currentStatus;
 
+  // Live Cancel Timer
+  const [timeLeftSeconds, setTimeLeftSeconds] = useState<number>(0);
+
+  useEffect(() => {
+    if (!order.cancellationTimeLimit || !order.createdAtRaw) return;
+    const deadline = new Date(order.createdAtRaw).getTime() + order.cancellationTimeLimit * 60 * 1000;
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const remainingMs = deadline - now;
+      if (remainingMs <= 0) {
+        setTimeLeftSeconds(0);
+        setShowCancelConfirm(false);
+      } else {
+        setTimeLeftSeconds(Math.ceil(remainingMs / 1000));
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [order.cancellationTimeLimit, order.createdAtRaw]);
+
+  const formatTimeLeft = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   // Auto-redirect to payment page removed to prevent back button navigation loop
 
   // Cancel dialog states
@@ -544,26 +573,15 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         </button>
 
         {/* Cancel Button */}
-        {order.paymentMethod === 'COD' && (currentStatus === 'PENDING' || currentStatus === 'PENDING_PAYMENT') && order.cancellationTimeLimit && order.cancellationTimeLimit > 0 && order.createdAtRaw && (
-          (() => {
-            const orderTime = new Date(order.createdAtRaw).getTime();
-            const now = new Date().getTime();
-            const diffMinutes = (now - orderTime) / (1000 * 60);
-            
-            if (diffMinutes <= order.cancellationTimeLimit) {
-              return (
-                <button
-                  onClick={() => setShowCancelConfirm(true)}
-                  className="w-full py-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600
-                    font-semibold text-sm flex items-center justify-center gap-2
-                    hover:bg-red-100 transition-colors touch-target"
-                >
-                  Batalkan Pesanan
-                </button>
-              );
-            }
-            return null;
-          })()
+        {order.paymentMethod === 'COD' && (currentStatus === 'PENDING' || currentStatus === 'PENDING_PAYMENT') && timeLeftSeconds > 0 && (
+          <button
+            onClick={() => setShowCancelConfirm(true)}
+            className="w-full py-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600
+              font-semibold text-sm flex items-center justify-center gap-2
+              hover:bg-red-100 transition-colors touch-target animate-in fade-in zoom-in duration-250"
+          >
+            Batalkan Pesanan ({formatTimeLeft(timeLeftSeconds)})
+          </button>
         )}
         </div> {/* END RIGHT COLUMN */}
       </div>
@@ -641,7 +659,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   </button>
                   <button
                     onClick={handleCancelOrder}
-                    disabled={isCancelling || (selectedCancelReason === 'Lainnya' && !customCancelReason.trim())}
+                    disabled={isCancelling || timeLeftSeconds <= 0 || (selectedCancelReason === 'Lainnya' && !customCancelReason.trim())}
                     className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center"
                   >
                     {isCancelling ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Ya, Batalkan'}

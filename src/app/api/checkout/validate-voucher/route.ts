@@ -76,13 +76,18 @@ export async function POST(req: Request) {
                     return NextResponse.json({ error: 'Kuota penukaran voucher ini sudah habis' }, { status: 400 })
                 }
 
-                // Auto-claim the voucher inside a transaction
+                // Auto-claim the voucher inside a transaction with proper row locking
                 voucher = await prisma.$transaction(async (tx) => {
-                    // Verify usage count again under lock/transaction
-                    const t = await tx.voucherTemplate.findUnique({
-                        where: { id: template.id }
-                    })
+                    // Lock template row to prevent race condition (overclaiming)
+                    const templates = await tx.$queryRaw<any[]>`
+                        SELECT * FROM "VoucherTemplate" 
+                        WHERE id = ${template.id} 
+                        FOR UPDATE
+                    `
+                    const t = templates?.[0]
                     if (!t) throw new Error('Template tidak ditemukan')
+
+                    // Re-validate quota after locking
                     if (t.usageLimit > 0 && t.usageCount >= t.usageLimit) {
                         throw new Error('Kuota penukaran voucher ini sudah habis')
                     }
@@ -111,8 +116,8 @@ export async function POST(req: Request) {
                         discountAmount = 5000
                     }
 
-                    // Generate a unique voucher instance code
-                    const userVoucherCode = `${t.code}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`
+                    // Generate a unique voucher instance code with a longer suffix to prevent collisions (M9)
+                    const userVoucherCode = `${t.code}-${Math.random().toString(36).substring(2, 12).toUpperCase()}`
 
                     // Create personal voucher
                     return tx.voucher.create({

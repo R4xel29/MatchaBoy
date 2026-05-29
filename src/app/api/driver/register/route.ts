@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { rateLimit, getClientId } from '@/lib/rate-limit-redis'
 
 export async function POST(req: Request) {
   try {
+    const clientId = getClientId(req)
+    const { success } = await rateLimit(`driver-register:${clientId}`, { maxRequests: 3, windowMs: 60_000 })
+    if (!success) {
+      return NextResponse.json({ error: 'Terlalu banyak percobaan pendaftaran. Silakan coba lagi dalam 1 menit.' }, { status: 429 })
+    }
+
     const { name, email, phone, vehicleType, plateNumber } = await req.json()
 
     if (!name || !email) {
