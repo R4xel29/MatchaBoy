@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useStorefrontContext } from './layout';
 import type { Product, Category } from '@/types';
 import Image from 'next/image';
-import { formatRupiah, getActivePromo } from '@/lib/utils';
+import { formatRupiah, getActivePromo, cn } from '@/lib/utils';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
 import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ShoppingBag, Clock, Gift, Copy, Check, Share2 } from 'lucide-react';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
@@ -23,6 +23,9 @@ interface HeroBanner {
   alt: string;
   headline?: string | null;
   subheadline?: string | null;
+  isFlashSale?: boolean;
+  product?: Product | null;
+  endDate?: string;
 }
 
 export default function StorefrontClient({ 
@@ -170,11 +173,29 @@ export default function StorefrontClient({
   // Mobile Aspect Slider State
   const [currentSlide, setCurrentSlide] = useState(0);
   const displayBanners = useMemo(() => {
-    return banners.length > 0 ? banners : [
+    const flashSaleSlides = products
+      .filter((p: Product) => getActivePromo(p) !== null)
+      .map((p: Product) => {
+        const promo = getActivePromo(p)!;
+        return {
+          id: `flash-sale-${p.id}`,
+          image: p.image || '/hero/hero-1.jpg',
+          alt: `Flash Sale ${p.name}`,
+          headline: `🔥 Flash Sale: ${p.name}`,
+          subheadline: `Nikmati harga spesial hanya ${formatRupiah(promo.promoPrice)} (Hemat ${formatRupiah(p.price - promo.promoPrice)})! Buruan beli sebelum kehabisan!`,
+          isFlashSale: true,
+          product: p,
+          endDate: promo.endDate
+        };
+      });
+
+    const baseBanners = banners.length > 0 ? banners : [
       { id: '1', image: '/hero/hero-1.jpg', alt: 'Kopi Gratis', headline: 'Ajak Teman Bisa Dapat Kopi Gratis', subheadline: 'Buy 1 Get 1' },
       { id: '2', image: '/hero/hero-2.jpg', alt: 'Buy 1 Get 1', headline: 'Nikmati Promo Spesial Hari Ini', subheadline: 'Buy 1 Get 1' },
     ];
-  }, [banners]);
+
+    return [...flashSaleSlides, ...baseBanners];
+  }, [banners, products]);
 
   useEffect(() => {
     if (displayBanners.length <= 1) return;
@@ -364,52 +385,78 @@ export default function StorefrontClient({
           className="max-w-6xl mx-auto px-4 sm:px-6 mt-10 md:mt-6 relative z-10"
         >
           <div className="relative w-full aspect-[2.1/1] md:aspect-[3.6/1] overflow-hidden rounded-[2rem] bg-white shadow-lg border-[3px] border-[#D4A574]/70 group">
-            <Image
-              src={displayBanners[currentSlide].image}
-              alt={displayBanners[currentSlide].alt}
-              fill
-              className="object-cover group-hover:scale-[1.02] transition-transform duration-1000 ease-out"
-              priority
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=1200';
-              }}
-            />
-            
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-5 md:p-8">
-              <div className="relative w-[115px] h-[26px] mb-2.5 select-none flex items-center justify-center">
-                {/* Gold Ribbon SVG background */}
-                <svg className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)]" viewBox="0 0 115 26" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <defs>
-                    <linearGradient id="gold-ribbon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#FEF08A" />
-                      <stop offset="40%" stopColor="#D4A574" />
-                      <stop offset="75%" stopColor="#B48A5E" />
-                      <stop offset="100%" stopColor="#8C6239" />
-                    </linearGradient>
-                  </defs>
-                  {/* Ribbon body with inward tail notch on the right */}
-                  <path d="M0 0 H115 L108 13 L115 26 H0 Z" fill="url(#gold-ribbon-grad)" />
-                  {/* Glowing gold inner border accent */}
-                  <path d="M0 1.5 H111 L105.5 13 L111 24.5 H0" stroke="#FEF08A" strokeWidth="0.8" strokeOpacity="0.8" fill="none" />
-                </svg>
-                {/* Ribbon text centered slightly left to align with notch */}
-                <span className="relative z-10 text-[#2A1F16] text-[8.5px] font-black uppercase tracking-widest leading-none pr-2.5 pt-0.5">
-                  Promo Spesial
-                </span>
-              </div>
-              <h2 className="font-serif text-lg md:text-2xl font-black text-white leading-tight tracking-tight">
-                {displayBanners[currentSlide].headline || displayBanners[currentSlide].alt}
-              </h2>
-              <p className="text-[10px] md:text-[12px] text-neutral-200 mt-1 leading-snug font-semibold max-w-xl">
-                {displayBanners[currentSlide].subheadline}
-              </p>
-            </div>
+            {(() => {
+              const slide = displayBanners[currentSlide] || displayBanners[0];
+              return (
+                <div 
+                  onClick={() => {
+                    if (slide?.isFlashSale && (slide as any).product) {
+                      handleProductClick((slide as any).product);
+                    }
+                  }}
+                  className={cn(
+                    "relative w-full h-full overflow-hidden select-none",
+                    slide?.isFlashSale && "cursor-pointer active:scale-[0.99] transition-transform duration-300"
+                  )}
+                >
+                  <Image
+                    src={slide?.image || '/hero/hero-1.jpg'}
+                    alt={slide?.alt || 'Promo banner'}
+                    fill
+                    className="object-cover group-hover:scale-[1.02] transition-transform duration-1000 ease-out"
+                    priority
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=1200';
+                    }}
+                  />
+                  
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-5 md:p-8">
+                    <div className="relative w-[115px] h-[26px] mb-2.5 select-none flex items-center justify-center">
+                      {/* Gold Ribbon SVG background */}
+                      <svg className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)]" viewBox="0 0 115 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                          <linearGradient id="gold-ribbon-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor="#FEF08A" />
+                            <stop offset="40%" stopColor="#D4A574" />
+                            <stop offset="75%" stopColor="#B48A5E" />
+                            <stop offset="100%" stopColor="#8C6239" />
+                          </linearGradient>
+                        </defs>
+                        {/* Ribbon body with inward tail notch on the right */}
+                        <path d="M0 0 H115 L108 13 L115 26 H0 Z" fill="url(#gold-ribbon-grad)" />
+                        {/* Glowing gold inner border accent */}
+                        <path d="M0 1.5 H111 L105.5 13 L111 24.5 H0" stroke="#FEF08A" strokeWidth="0.8" strokeOpacity="0.8" fill="none" />
+                      </svg>
+                      {/* Ribbon text centered slightly left to align with notch */}
+                      <span className="relative z-10 text-[#2A1F16] text-[8.5px] font-black uppercase tracking-widest leading-none pr-2.5 pt-0.5">
+                        {slide?.isFlashSale ? "FLASH SALE 🔥" : "Promo Spesial"}
+                      </span>
+                    </div>
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                      <h2 className="font-serif text-lg md:text-2xl font-black text-white leading-tight tracking-tight whitespace-pre-line">
+                        {slide?.headline || slide?.alt}
+                      </h2>
+                      {slide?.isFlashSale && (slide as any).endDate && (
+                        <PromoCountdown endDate={(slide as any).endDate} className="bg-rose-600 text-white font-extrabold shadow-sm border border-rose-500/25 shrink-0 self-start sm:self-auto" />
+                      )}
+                    </div>
+                    <p className="text-[10px] md:text-[12px] text-neutral-200 mt-1 leading-snug font-semibold max-w-xl">
+                      {slide?.subheadline}
+                    </p>
+                  </div>
+                </div>
+              );
+            })()}
 
-            <div className="absolute bottom-5 right-5 flex items-center gap-1.5 select-none">
+            <div className="absolute bottom-5 right-5 flex items-center gap-1.5 select-none z-20">
               {displayBanners.map((_, idx) => (
                 <button
                   key={idx}
-                  onClick={() => setCurrentSlide(idx)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentSlide(idx);
+                  }}
                   className={`h-1.5 rounded-full transition-all duration-500 ease-out ${
                     idx === currentSlide ? 'w-5 bg-[#D4A574]' : 'w-1.5 bg-white/40'
                   }`}

@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { sendTemplatedNotification } from './notification-service';
+import { sendDigitalReceipt } from './receipt-service';
 
 // =============================================================================
 // LOYALTY UTILITIES
@@ -484,6 +485,10 @@ export async function processOrderCompletion(orderId: string) {
     } catch (err) {
       console.error('Failed to send points notification after order completion:', err);
     }
+
+    sendDigitalReceipt(orderId).catch((err) => {
+      console.error('Failed to send digital receipt:', err);
+    });
   }
 
   return result;

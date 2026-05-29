@@ -56,6 +56,7 @@ model User {
   authenticators  Authenticator[]
   pushSubscriptions PushSubscription[]
   supportTickets  SupportTicket[]
+  stockSubscriptions StockNotificationSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -183,6 +184,7 @@ model Product {
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   Favorite  Favorite[]
+  stockSubscriptions StockNotificationSubscription[]
 
   @@index([categoryId])
 }
@@ -725,5 +727,20 @@ model HelpArticle {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model StockNotificationSubscription {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  phone     String?
+  email     String?
+  isSent    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, phone])
 }
 

@@ -42,6 +42,56 @@ export async function PATCH(
             include: { category: true },
         });
 
+        // Trigger restock notifications if badge was updated from 'sold-out' to something else
+        if (badge !== undefined && badge !== 'sold-out' && existingProduct.badge === 'sold-out') {
+            try {
+                const subscriptions = await prisma.stockNotificationSubscription.findMany({
+                    where: {
+                        productId: id,
+                        isSent: false
+                    }
+                });
+
+                if (subscriptions.length > 0) {
+                    const requestUrl = new URL(request.url);
+                    const appUrl = process.env.NEXT_PUBLIC_APP_URL || requestUrl.origin;
+                    const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
+                    const apiKey = process.env.WA_BOT_API_KEY || "";
+
+                    for (const sub of subscriptions) {
+                        if (sub.phone) {
+                            const message = `Kabar gembira! 🍵✨\n\nProduk favoritmu *${product.name}* sudah tersedia kembali di Matchaboy! Yuk, pesan sekarang sebelum kehabisan lagi: ${appUrl}`;
+                            try {
+                                await fetch(waProviderUrl, {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "x-api-key": apiKey
+                                    },
+                                    body: JSON.stringify({ phone: sub.phone, message }),
+                                });
+                            } catch (err) {
+                                console.error(`Failed to send restock WhatsApp to ${sub.phone}:`, err);
+                            }
+                        }
+                    }
+
+                    // Mark subscriptions as sent
+                    await prisma.stockNotificationSubscription.updateMany({
+                        where: {
+                            id: { in: subscriptions.map(s => s.id) }
+                        },
+                        data: {
+                            isSent: true
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error("Error sending restock notifications:", err);
+            }
+        }
+
+
         let detailMessage = `Updated product manually: ${product.name}`;
         
         // Check if only the badge (availability) was updated

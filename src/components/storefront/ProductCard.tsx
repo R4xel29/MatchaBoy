@@ -37,7 +37,7 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
         ease: [0.25, 0.46, 0.45, 0.94],
       }}
       onClick={() => {
-        if (!isSoldOut) onAddClick(product);
+        onAddClick(product);
       }}
       className={cn(
         "group relative flex flex-col bg-card rounded-2xl overflow-hidden shadow-sm",
@@ -125,23 +125,29 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
             </span>
           </div>
 
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!isSoldOut) onAddClick(product);
-            }}
-            disabled={isSoldOut}
-            className={cn(
-              "w-8 h-8 flex items-center justify-center rounded-full transition-colors shadow-sm touch-target",
-              isSoldOut
-                ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                : "bg-brand-700 text-white hover:bg-brand-600 active:bg-brand-800"
-            )}
-            aria-label={`Add ${product.name} to cart`}
-          >
-            <Plus className="w-4 h-4" strokeWidth={2.5} />
-          </motion.button>
+          {isSoldOut ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddClick(product);
+              }}
+              className="text-[10px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors px-2.5 py-1.5 rounded-lg"
+            >
+              Beritahu Saya
+            </button>
+          ) : (
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddClick(product);
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-full transition-colors shadow-sm touch-target bg-brand-700 text-white hover:bg-brand-600 active:bg-brand-800"
+              aria-label={`Add ${product.name} to cart`}
+            >
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+            </motion.button>
+          )}
         </div>
       </div>
     </motion.article>

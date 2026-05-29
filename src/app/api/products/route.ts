@@ -12,6 +12,9 @@ export async function GET() {
           { badge: { not: 'archived' } }
         ]
       },
+      include: {
+        category: true
+      },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -32,14 +35,24 @@ export async function GET() {
         price: p.price,
         image: p.image || undefined,
         category: p.categoryId,
+        categoryName: p.category?.name,
+        categorySlug: p.category?.slug,
         badge: p.badge,
         modifiers
       };
     });
 
-    return NextResponse.json({ products: mappedProducts });
+    const categories = await prisma.category.findMany({
+      orderBy: { name: 'asc' }
+    });
+
+    return NextResponse.json({ 
+      products: mappedProducts,
+      categories: categories
+    });
   } catch (error) {
     console.error('Error fetching all products:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
+
