@@ -233,7 +233,8 @@ async function checkAndAwardMilestones(
 }
 
 /**
- * Proses bonus tumbler: tambah poin extra jika pelanggan bawa tumbler.
+ * Proses bonus tumbler: tambah poin extra jika pelanggan bawa tumbler,
+ * dan lacak kemajuan Milestone Progresif Tumbler serta Sistem Level Arus.
  */
 export async function awardTumblerBonus(userId: string, orderId?: string, tx?: any) {
   const client = tx || prisma;
@@ -242,7 +243,7 @@ export async function awardTumblerBonus(userId: string, orderId?: string, tx?: a
     return null;
   }
 
-  // 1. Tambah poin
+  // 1. Tambah poin loyalitas ramah lingkungan
   const pointsRes = await awardPoints({
     userId,
     pointsToAdd: settings.tumblerBonusPoints,
@@ -251,16 +252,67 @@ export async function awardTumblerBonus(userId: string, orderId?: string, tx?: a
     orderId,
   }, client);
 
-  // 2. Berikan voucher jika diaktifkan oleh admin
-  // Menggunakan kode template yang dikonfigurasi admin (tumblerVoucherCode2 → TUMBLER_REWARD)
+  // 2. Increment tumblerCount dan dapatkan info goal/level saat ini
+  const user = await client.user.update({
+    where: { id: userId },
+    data: { tumblerCount: { increment: 1 } },
+    select: { tumblerCount: true, currentTumblerGoal: true, arusLevel: true }
+  });
+
   let voucherRes = null;
-  if ((settings as any).tumblerVoucherEnabled) {
-    const tumblerCode = (settings as any).tumblerVoucherCode2 || (settings as any).tumblerVoucherType || 'TUMBLER_REWARD';
-    const voucherDesc = (settings as any).tumblerVoucherDesc || 'Eco-Reward: Free Upgrade Size (Bawa Tumbler)';
-    voucherRes = await createVoucherForUser(userId, tumblerCode, voucherDesc, 14, {}, client);
+  let ecoRewardEarned = false;
+  let nextGoal = user.currentTumblerGoal;
+  let nextLevel = user.arusLevel;
+
+  // 3. Cek apakah pengguna mencapai target milestonenya
+  if (user.tumblerCount >= user.currentTumblerGoal) {
+    ecoRewardEarned = true;
+    const tumblerCode = (settings as any).tumblerVoucherCode2 || 'TUMBLER_REWARD';
+    const voucherDesc = `Eco-Milestone: Hadiah bawa tumbler ke-${user.currentTumblerGoal}x! (Free Drink Pilihan)`;
+    
+    voucherRes = await createVoucherForUser(userId, tumblerCode, voucherDesc, 30, {}, client);
+
+    // Tentukan target milestone berikutnya & naik Level Arus
+    if (user.currentTumblerGoal === 10) {
+      nextGoal = 25;
+      nextLevel = 'Ksatria Hijau';
+    } else if (user.currentTumblerGoal === 25) {
+      nextGoal = 45;
+      nextLevel = 'Penjaga Arus';
+    } else {
+      nextGoal = user.currentTumblerGoal + 25;
+    }
+
+    // Update level dan target goal baru di database
+    await client.user.update({
+      where: { id: userId },
+      data: {
+        currentTumblerGoal: nextGoal,
+        arusLevel: nextLevel
+      }
+    });
+
+    // Catat log aktivitas pencapaian ramah lingkungan
+    await client.activityLog.create({
+      data: {
+        userId,
+        action: 'ECO_MILESTONE',
+        entity: 'USER',
+        entityId: userId,
+        details: `Pelanggan mencapai Milestone Ramah Lingkungan ke-${user.currentTumblerGoal}x bawa tumbler. Level naik ke: ${nextLevel}.`
+      }
+    });
   }
 
-  return { pointsRes, voucherRes };
+  return { 
+    pointsRes, 
+    voucherRes,
+    tumblerCount: user.tumblerCount,
+    currentGoal: user.currentTumblerGoal,
+    nextGoal,
+    arusLevel: nextLevel,
+    ecoRewardEarned
+  };
 }
 
 /**

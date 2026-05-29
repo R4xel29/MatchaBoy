@@ -16,6 +16,9 @@ export async function GET() {
                 gender: true, birthDate: true,
                 referralCode: true, points: true, role: true,
                 image: true,
+                tumblerCount: true,
+                currentTumblerGoal: true,
+                arusLevel: true,
                 accounts: {
                     select: { provider: true }
                 },
@@ -48,6 +51,9 @@ export async function GET() {
             referralCode: user.referralCode,
             points: user.points,
             role: user.role,
+            tumblerCount: user.tumblerCount,
+            currentTumblerGoal: user.currentTumblerGoal,
+            arusLevel: user.arusLevel,
             isGoogleConnected,
             driverProfile: user.driverProfile,
             image: user.image

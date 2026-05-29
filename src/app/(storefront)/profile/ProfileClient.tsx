@@ -76,6 +76,9 @@ type UserShape = {
   email: string;
   phone: string;
   points: number;
+  tumblerCount?: number;
+  currentTumblerGoal?: number;
+  arusLevel?: string;
   totalOrders: number;
   memberSince: string;
   referralCode: string;
@@ -173,6 +176,9 @@ export default function ProfileClient({
             phone: data.phone || prev.phone,
             image: data.image || prev.image,
             email: data.email || prev.email,
+            tumblerCount: data.tumblerCount !== undefined ? data.tumblerCount : prev.tumblerCount,
+            currentTumblerGoal: data.currentTumblerGoal !== undefined ? data.currentTumblerGoal : prev.currentTumblerGoal,
+            arusLevel: data.arusLevel || prev.arusLevel,
           }));
         }
       })
@@ -334,11 +340,11 @@ export default function ProfileClient({
                   {/* Level Badge */}
                   <div className="flex-1 sm:flex-initial min-w-[100px] bg-[#FFFBF7] border border-[#D4A574]/25 shadow-sm rounded-2xl px-4 py-2.5 flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-[#1E3F20] flex items-center justify-center shrink-0 shadow-sm">
-                      <Heart className="w-4 h-4 text-[#D4A574] fill-[#D4A574]/20" />
+                      <Leaf className="w-4 h-4 text-[#D4A574]" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider leading-none">Level</p>
-                      <p className="text-xs font-black text-gray-800 leading-none">Silver (0%)</p>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider leading-none">Level Arus</p>
+                      <p className="text-xs font-black text-gray-800 leading-none">{user.isGuest ? '-' : (user.arusLevel || 'Tunas Arus')}</p>
                     </div>
                   </div>
 
@@ -2885,6 +2891,41 @@ function LoyaltySection({ user, milestones }: { user: UserShape; milestones: Mil
           </div>
         </div>
       </div>
+
+      {/* Eco-Friendly Tumbler Tracker Card */}
+      {!user.isGuest && (
+        <div className="bg-white rounded-3xl p-6 border border-emerald-150 shadow-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner">
+              <Leaf className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-gray-800 font-serif">Eco-Matcha Tracker</h4>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider leading-none mt-0.5">
+                Level Arus: <span className="text-emerald-650 font-extrabold">{user.arusLevel || 'Tunas Arus'}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex justify-between text-xs font-semibold">
+              <span className="text-gray-650">Progres Tumbler</span>
+              <span className="text-emerald-650">{user.tumblerCount || 0} / {user.currentTumblerGoal || 10} bawaan</span>
+            </div>
+            <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden p-[2px]">
+              <motion.div
+                className="h-full bg-emerald-500 rounded-full shadow-sm"
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(((user.tumblerCount || 0) / (user.currentTumblerGoal || 10)) * 100, 100)}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+              />
+            </div>
+            <p className="text-[10px] text-gray-450 font-medium leading-tight">
+              Bawa tumbler sendiri ke outlet kami untuk membantu mengurangi sampah plastik. Setiap target tercapai, kamu akan otomatis mendapatkan reward **Minuman Gratis** pilihan! 💚
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* QR Code (toggled) */}
       <AnimatePresence>

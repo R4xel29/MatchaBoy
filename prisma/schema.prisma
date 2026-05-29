@@ -38,6 +38,9 @@ model User {
 
   // Loyalty & Points
   points          Int     @default(0)
+  tumblerCount       Int     @default(0)    // Total transaksi membawa tumbler sendiri
+  currentTumblerGoal Int     @default(10)   // Target milestone tumbler saat ini (dimulai dari 10)
+  arusLevel          String  @default("Tunas Arus") // Tingkat level loyalitas ramah lingkungan
   referralCode    String  @unique @default(cuid())
   referredById    String?
   referredBy      User?   @relation("Referrals", fields: [referredById], references: [id])
