@@ -1,8 +1,27 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, RefreshCw, AlertCircle, Ticket, Gift, DollarSign, Users } from 'lucide-react';
+import { Settings, Save, RefreshCw, AlertCircle, Ticket, Gift, DollarSign, Users, Share2, ToggleLeft, ToggleRight } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+
+// Toggle Button Component
+function ToggleButton({ enabled, onChange }: { enabled: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!enabled)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+        enabled ? 'bg-emerald-600' : 'bg-gray-300'
+      }`}
+    >
+      <span
+        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+          enabled ? 'translate-x-6' : 'translate-x-1'
+        }`}
+      />
+    </button>
+  );
+}
 
 export default function ReferralSettingsClient() {
   const { showToast } = useToast();
@@ -11,6 +30,7 @@ export default function ReferralSettingsClient() {
   const [settings, setSettings] = useState<any>({});
   const [referralTemplate, setReferralTemplate] = useState<any>(null);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [voucherTemplates, setVoucherTemplates] = useState<any[]>([]);
 
   useEffect(() => {
     fetchSettings();
@@ -22,6 +42,11 @@ export default function ReferralSettingsClient() {
       const res = await fetch('/api/admin/loyalty/settings');
       const data = await res.json();
       setSettings(data || {});
+      
+      // Ambil semua template voucher untuk dropdown
+      const vouchersRes = await fetch('/api/admin/vouchers');
+      const vouchersData = await vouchersRes.json();
+      setVoucherTemplates(vouchersData || []);
       
       // Ambil template voucher referral via system voucher endpoint
       const tmplRes = await fetch('/api/admin/vouchers/system');
@@ -76,7 +101,7 @@ export default function ReferralSettingsClient() {
     try {
       setSaving(true);
       
-      // 1. Save loyalty settings
+      // 1. Save loyalty settings dengan semua field referral
       await fetch('/api/admin/loyalty/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -87,6 +112,8 @@ export default function ReferralSettingsClient() {
           referralMaxClaims: Number(settings.referralMaxClaims || 0),
           referralRewardType: settings.referralRewardType || 'VOUCHER',
           referralRewardPoints: Number(settings.referralRewardPoints || 5),
+          referralRewardVoucher: settings.referralRewardVoucher || '',
+          referralRewardDesc: settings.referralRewardDesc || '',
         }),
       });
 
@@ -112,12 +139,52 @@ export default function ReferralSettingsClient() {
     }
   };
 
+  const REWARD_TYPES = [
+    { value: 'FREE_TOPPING', label: 'Gratis Topping' },
+    { value: 'UPGRADE_SIZE', label: 'Free Upgrade Size' },
+    { value: 'FREE_DRINK', label: 'Minuman Gratis' },
+    { value: 'DISKON_ONGKIR', label: 'Diskon Ongkir (Rp 10.000)' },
+    { value: 'GRATIS_ONGKIR', label: 'Gratis Ongkir' },
+    { value: 'DISCOUNT_10', label: 'Diskon 10%' },
+    { value: 'DISCOUNT_20', label: 'Diskon 20%' },
+    { value: 'CUSTOM', label: 'Custom' },
+  ];
+
+  const dynamicRewardTypes = [
+    ...REWARD_TYPES,
+    ...voucherTemplates.map((t) => ({
+      value: t.code,
+      label: `Template: ${t.title} (${t.code})`,
+    })),
+  ];
+
   if (loading) {
     return <div className="flex justify-center p-12"><RefreshCw className="w-8 h-8 animate-spin text-violet-500" /></div>;
   }
 
   return (
     <form onSubmit={handleSave} className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground flex items-center gap-2">
+            <Share2 className="w-6 h-6 text-violet-600" />
+            Kelola Referral
+          </h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Atur program referral, reward untuk pengundang, dan syarat & ketentuan.
+          </p>
+        </div>
+        <button
+          type="submit"
+          disabled={saving}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all active:scale-[0.97] bg-gradient-to-r from-violet-600 to-violet-500 hover:opacity-90 disabled:opacity-50"
+        >
+          {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saving ? 'Menyimpan...' : 'Simpan Pengaturan'}
+        </button>
+      </div>
+
       <div className="bg-white rounded-2xl border border-border/40 p-6 shadow-sm">
         <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
           <Settings className="w-5 h-5 text-violet-600" />
@@ -130,15 +197,10 @@ export default function ReferralSettingsClient() {
               <p className="font-semibold text-foreground">Aktifkan Program Referral</p>
               <p className="text-xs text-muted-foreground">Izinkan pengguna mengundang teman</p>
             </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                className="sr-only peer"
-                checked={settings.referralEnabled || false}
-                onChange={(e) => setSettings({ ...settings, referralEnabled: e.target.checked })}
-              />
-              <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-violet-600"></div>
-            </label>
+            <ToggleButton 
+              enabled={settings.referralEnabled || false} 
+              onChange={(v) => setSettings({ ...settings, referralEnabled: v })} 
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -187,22 +249,68 @@ export default function ReferralSettingsClient() {
         </div>
       </div>
 
-      {settings.referralRewardType === 'POINTS' && (
-        <div className="bg-amber-50/50 rounded-2xl border border-amber-200 p-6">
-          <h2 className="text-lg font-bold text-amber-900 mb-4">Pengaturan Hadiah Poin</h2>
-          <div className="max-w-md space-y-1.5">
-            <label className="text-sm font-semibold text-amber-900">Jumlah Poin yang Diberikan</label>
-            <input
-              type="number"
-              min="1"
-              required
-              className="w-full px-3 py-2 rounded-xl border border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-              value={settings.referralRewardPoints || 5}
-              onChange={(e) => setSettings({ ...settings, referralRewardPoints: e.target.value })}
+      {/* Referral Reward Settings - Dipindahkan dari Loyalty Settings */}
+      <div className="bg-white rounded-2xl border border-border/40 p-6 shadow-sm">
+        <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+          <Gift className="w-5 h-5 text-violet-600" />
+          Pengaturan Reward Referral
+        </h2>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">Jenis Reward Referrer</label>
+            <select 
+              value={settings.referralRewardType || 'VOUCHER'} 
+              onChange={(e) => setSettings({ ...settings, referralRewardType: e.target.value })}
+              className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            >
+              <option value="VOUCHER">Voucher</option>
+              <option value="POINTS">Poin</option>
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">Pilih jenis reward yang akan diberikan kepada pengundang</p>
+          </div>
+
+          {settings.referralRewardType === 'POINTS' ? (
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">Jumlah Poin</label>
+              <input 
+                type="number" 
+                value={settings.referralRewardPoints || 5} 
+                onChange={(e) => setSettings({ ...settings, referralRewardPoints: parseInt(e.target.value) || 0 })}
+                className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20" 
+              />
+              <p className="text-xs text-muted-foreground mt-1">Jumlah poin yang akan diberikan kepada pengundang</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-semibold text-foreground mb-2">Jenis Voucher</label>
+              <select 
+                value={settings.referralRewardVoucher || ''} 
+                onChange={(e) => setSettings({ ...settings, referralRewardVoucher: e.target.value })}
+                className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+              >
+                <option value="">Pilih Jenis Voucher</option>
+                {dynamicRewardTypes.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground mt-1">Pilih template voucher yang akan diberikan</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-semibold text-foreground mb-2">Deskripsi Reward</label>
+            <input 
+              type="text" 
+              value={settings.referralRewardDesc || ''} 
+              onChange={(e) => setSettings({ ...settings, referralRewardDesc: e.target.value })}
+              className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+              placeholder="Contoh: Dapatkan voucher gratis minuman untuk setiap teman yang berbelanja"
             />
+            <p className="text-xs text-muted-foreground mt-1">Deskripsi yang akan ditampilkan kepada pengguna</p>
           </div>
         </div>
-      )}
+      </div>
 
       {settings.referralRewardType === 'VOUCHER' && referralTemplate && (
         <div className="bg-violet-50/50 rounded-2xl border border-violet-200 p-6">
