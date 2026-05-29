@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
       '@simplewebauthn/server',
       'class-variance-authority',
     ],
+    serverComponentsExternalPackages: ['sharp'],
   },
 };
 

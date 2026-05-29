@@ -2,97 +2,131 @@ import { prisma } from './prisma';
 import { supabaseAdmin } from './supabase';
 
 /**
+ * ✅ BUG FIX #6: Fixed race condition in order expiry
+ * 
  * Reusable utility to check, cancel, and refund an order if it is expired,
  * or force-cancel it immediately (e.g. on manual user cancellation).
  * 
  * Automatically refunds points and restores any applied vouchers using a secure transaction.
+ * 
+ * FIXES:
+ * - Removed pre-transaction query that caused race conditions
+ * - All checks now happen inside transaction with atomic updates
+ * - Uses updateMany with WHERE condition for atomic status check
  */
 export async function expireOrder(orderId: string, force: boolean = false) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId }
-  });
+  try {
+    console.log(`[Order Expiry] Processing order ${orderId}. Force: ${force}`);
+    
+    const result = await prisma.$transaction(async (tx) => {
+      // ✅ FIX: Query order INSIDE transaction (no pre-check outside)
+      const order = await tx.order.findUnique({
+        where: { id: orderId }
+      });
 
-  if (!order) return null;
+      if (!order) {
+        console.log(`[Order Expiry] Order ${orderId} not found`);
+        return null;
+      }
 
-  const isExpired = order.status === 'PENDING_PAYMENT' && order.paymentExpiredAt && new Date() > order.paymentExpiredAt;
+      // Check if order is still in PENDING_PAYMENT status
+      if (order.status !== 'PENDING_PAYMENT') {
+        console.log(`[Order Expiry] Order ${orderId} status is ${order.status}, skipping cancellation`);
+        return order;
+      }
 
-  if (isExpired || (force && order.status === 'PENDING_PAYMENT')) {
-    try {
-      console.log(`[Order Expiry] Order ${orderId} is being cancelled. Force: ${force}, Expired: ${isExpired}`);
+      // Check if expired (only if not forced)
+      const isExpired = order.paymentExpiredAt && new Date() > order.paymentExpiredAt;
       
-      const result = await prisma.$transaction(async (tx) => {
-        // Fetch order inside transaction to lock the row
-        const currentOrder = await tx.order.findUnique({
-          where: { id: orderId }
-        });
+      if (!isExpired && !force) {
+        console.log(`[Order Expiry] Order ${orderId} not expired yet and not forced`);
+        return order;
+      }
 
-        if (!currentOrder || currentOrder.status !== 'PENDING_PAYMENT') {
-          return currentOrder;
+      // ✅ FIX: Use updateMany with atomic WHERE condition
+      // This ensures status is still PENDING_PAYMENT at the moment of update
+      const updateResult = await tx.order.updateMany({
+        where: { 
+          id: orderId,
+          status: 'PENDING_PAYMENT' // Atomic check: only update if still PENDING_PAYMENT
+        },
+        data: {
+          status: 'CANCELLED',
+          notes: order.notes 
+            ? `${order.notes}\n[Sistem] Sesi pembayaran berakhir atau dibatalkan.`
+            : '[Sistem] Sesi pembayaran berakhir atau dibatalkan.'
         }
+      });
 
-        // 1. Mark order as CANCELLED
-        const updated = await tx.order.update({
-          where: { id: orderId },
-          data: {
-            status: 'CANCELLED',
-            notes: currentOrder.notes 
-              ? `${currentOrder.notes}\n[Sistem] Sesi pembayaran berakhir atau dibatalkan.`
-              : '[Sistem] Sesi pembayaran berakhir atau dibatalkan.'
-          }
-        });
+      // If updateMany affected 0 rows, status changed between our check and update
+      if (updateResult.count === 0) {
+        console.log(`[Order Expiry] Order ${orderId} status changed during transaction, skipping refund`);
+        // Re-fetch to return current state
+        return await tx.order.findUnique({ where: { id: orderId } });
+      }
 
-        // 2. Restore points if any
-        const pointHistories = await tx.pointHistory.findMany({
-          where: {
-            orderId: orderId,
-            amount: { lt: 0 } // Negative points (redeemed)
-          }
-        });
+      console.log(`[Order Expiry] Order ${orderId} cancelled successfully, processing refunds`);
 
-        for (const ph of pointHistories) {
-          const refundAmount = Math.abs(ph.amount);
+      // 2. Restore points if any
+      const pointHistories = await tx.pointHistory.findMany({
+        where: {
+          orderId: orderId,
+          amount: { lt: 0 } // Negative points (redeemed)
+        }
+      });
+
+      for (const ph of pointHistories) {
+        const refundAmount = Math.abs(ph.amount);
+        
+        if (order.userId) {
           // Return points to user
           await tx.user.update({
-            where: { id: currentOrder.userId || '' },
+            where: { id: order.userId },
             data: { points: { increment: refundAmount } }
           });
+          
           // Log refund in history
           await tx.pointHistory.create({
             data: {
-              userId: currentOrder.userId || '',
+              userId: order.userId,
               amount: refundAmount,
               type: 'ADMIN_ADJUST',
               description: `Pengembalian ${refundAmount} poin karena pesanan #${orderId.slice(0, 8).toUpperCase()} kedaluwarsa/batal`,
               orderId: orderId
             }
           });
+          
+          console.log(`[Order Expiry] Refunded ${refundAmount} points to user ${order.userId}`);
         }
+      }
 
-        // 3. Restore used voucher if any
-        if (currentOrder.voucherCode) {
-          const voucher = await tx.voucher.findUnique({
-            where: { code: currentOrder.voucherCode }
+      // 3. Restore used voucher if any
+      if (order.voucherCode) {
+        const voucher = await tx.voucher.findUnique({
+          where: { code: order.voucherCode }
+        });
+        
+        if (voucher && voucher.isUsed) {
+          await tx.voucher.update({
+            where: { id: voucher.id },
+            data: {
+              isUsed: false,
+              usedAt: null
+            }
           });
-          if (voucher && voucher.isUsed) {
-            await tx.voucher.update({
-              where: { id: voucher.id },
-              data: {
-                isUsed: false,
-                usedAt: null
-              }
-            });
-          }
+          console.log(`[Order Expiry] Restored voucher ${order.voucherCode}`);
         }
+      }
 
-        return updated;
-      });
-      return result;
-    } catch (e) {
-      console.error(`[Order Expiry Error] Failed to expire/refund order ${orderId}:`, e);
-    }
+      // Return updated order
+      return await tx.order.findUnique({ where: { id: orderId } });
+    });
+    
+    return result;
+  } catch (e) {
+    console.error(`[Order Expiry Error] Failed to expire/refund order ${orderId}:`, e);
+    throw e; // Re-throw to let caller handle
   }
-
-  return order;
 }
 
 /**

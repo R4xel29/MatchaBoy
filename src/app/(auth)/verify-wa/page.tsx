@@ -20,14 +20,21 @@ function VerifyWABody() {
       return;
     }
 
-    if (refCode) {
-      document.cookie = `pending_referral_code=${encodeURIComponent(refCode)}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    let activeRefCode = refCode;
+    if (activeRefCode) {
+      document.cookie = `pending_referral_code=${encodeURIComponent(activeRefCode)}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
+    } else if (typeof document !== 'undefined') {
+      const match = document.cookie.match(/pending_referral_code=([^;]+)/);
+      if (match) {
+        activeRefCode = decodeURIComponent(match[1]);
+      }
     }
 
     const verifyToken = async () => {
       try {
         const res = await signIn("whatsapp-link", {
           token,
+          referralCode: activeRefCode || "",
           redirect: false,
         });
 

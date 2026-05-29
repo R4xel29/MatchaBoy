@@ -88,7 +88,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             id: 'whatsapp-link',
             name: "WhatsApp Link",
             credentials: {
-                token: { type: "text" }
+                token: { type: "text" },
+                referralCode: { type: "text" }
             },
             async authorize(credentials) {
                 if (!credentials?.token) return null;
@@ -119,29 +120,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 });
 
                 if (!user) {
-                    // Cek pending referral code dari cookie
+                    // Cek pending referral code dari credentials dahulu, lalu fall back ke cookie
                     let referredById: string | undefined = undefined;
-                    try {
-                        const reqHeaders = await headers();
-                        const cookieHeader = reqHeaders.get("cookie") || "";
-                        const match = cookieHeader.match(/pending_referral_code=([^;]+)/);
-                        if (match) {
-                            const pendingRef = decodeURIComponent(match[1]);
-                            const referrer = await prisma.user.findFirst({
-                                where: {
-                                    referralCode: {
-                                        equals: pendingRef,
-                                        mode: 'insensitive'
-                                    }
-                                },
-                                select: { id: true }
-                            });
-                            if (referrer) {
-                                referredById = referrer.id;
+                    let pendingRef = credentials?.referralCode as string || "";
+
+                    if (!pendingRef) {
+                        try {
+                            const reqHeaders = await headers();
+                            const cookieHeader = reqHeaders.get("cookie") || "";
+                            const match = cookieHeader.match(/pending_referral_code=([^;]+)/);
+                            if (match) {
+                                pendingRef = decodeURIComponent(match[1]);
                             }
+                        } catch (e) {
+                            console.error("[AUTH] Error checking pending referral cookie:", e);
                         }
-                    } catch (e) {
-                        console.error("[AUTH] Error checking pending referral cookie:", e);
+                    }
+
+                    if (pendingRef) {
+                        const referrer = await prisma.user.findFirst({
+                            where: {
+                                referralCode: {
+                                    equals: pendingRef,
+                                    mode: 'insensitive'
+                                }
+                            },
+                            select: { id: true }
+                        });
+                        if (referrer) {
+                            referredById = referrer.id;
+                        }
                     }
 
                     user = await prisma.user.create({

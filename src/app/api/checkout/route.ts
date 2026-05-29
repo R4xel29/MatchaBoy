@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { rateLimit, getClientId } from '@/lib/rate-limit'
 import { calculateDeliveryFee } from '@/lib/delivery-utils'
 import { getActivePromo } from '@/lib/utils'
+import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors'
 
 
 const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`
@@ -15,23 +16,29 @@ export async function POST(req: Request) {
 
         // Must be logged in
         if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Login diperlukan untuk memesan' }, { status: 401 })
+            throw new ValidationError('Login diperlukan untuk memesan', 'UNAUTHORIZED');
         }
 
         // Rate limit: 10 requests per minute per user
         const clientId = getClientId(req, session.user.id)
         const { success, remaining } = rateLimit(`checkout:${clientId}`, { maxRequests: 10, windowMs: 60_000 })
         if (!success) {
-            return NextResponse.json({ error: 'Terlalu banyak percobaan. Coba lagi dalam 1 menit.' }, { status: 429 })
+            throw new ValidationError('Terlalu banyak percobaan. Coba lagi dalam 1 menit.', 'RATE_LIMIT');
         }
 
-        // Server-side validation
+        // ✅ BUG FIX #5: Enhanced server-side validation
         if (!body.items || body.items.length === 0) {
-            return NextResponse.json({ error: 'Keranjang kosong' }, { status: 400 })
+            throw new ValidationError('Keranjang kosong');
         }
 
         if (!body.name || !body.phone) {
-            return NextResponse.json({ error: 'Nama dan nomor HP wajib diisi' }, { status: 400 })
+            throw new ValidationError('Nama dan nomor HP wajib diisi');
+        }
+
+        // Validate phone format
+        const phoneRegex = /^(\+62|62|0)8[0-9]{8,12}$/;
+        if (!phoneRegex.test(body.phone)) {
+            throw new ValidationError('Format nomor HP tidak valid');
         }
 
         // Fetch store settings early
@@ -601,20 +608,68 @@ export async function POST(req: Request) {
             : `${body.address?.label || ''} - ${body.address?.detail || ''} | Detail: ${body.address?.streetDetail || ''} (${body.address?.lat || 0}, ${body.address?.lng || 0})`
 
         // Wrap database operations in a single interactive transaction to ensure data atomicity
+        // ✅ BUG FIX #4 & #5: Added row-level locking and atomic operations
         const order = await prisma.$transaction(async (tx) => {
-            // 1. Double check points if used to prevent race conditions during parallel checkout attempts
+            // 1. ✅ FIX: Use atomic update with WHERE condition for points
             if (pointsUsed > 0) {
-                const user = await tx.user.findUnique({ where: { id: session.user.id } })
-                if (!user || user.points < pointsUsed) {
-                    throw new Error('Poin tidak mencukupi')
+                // Atomic decrement with condition check
+                const updateResult = await tx.user.updateMany({
+                    where: { 
+                        id: session.user.id,
+                        points: { gte: pointsUsed } // Only update if points sufficient
+                    },
+                    data: { points: { decrement: pointsUsed } }
+                });
+
+                if (updateResult.count === 0) {
+                    // Either user not found or insufficient points
+                    const user = await tx.user.findUnique({ 
+                        where: { id: session.user.id },
+                        select: { points: true }
+                    });
+                    
+                    if (!user) {
+                        throw new Error('User tidak ditemukan');
+                    }
+                    throw new Error(`Poin tidak mencukupi. Anda memiliki ${user.points} poin, membutuhkan ${pointsUsed} poin.`);
                 }
             }
 
-            // 2. Double check voucher if used
+            // 2. ✅ FIX: Use atomic update with WHERE condition for voucher
             if (validVoucherId) {
-                const voucher = await tx.voucher.findUnique({ where: { id: validVoucherId } })
-                if (!voucher || voucher.isUsed || (voucher.expiresAt && voucher.expiresAt < new Date())) {
-                    throw new Error('Voucher tidak valid atau sudah digunakan')
+                // Atomic update: only mark as used if currently not used
+                const voucherUpdateResult = await tx.voucher.updateMany({
+                    where: { 
+                        id: validVoucherId,
+                        isUsed: false, // Only update if not used
+                        OR: [
+                            { expiresAt: null },
+                            { expiresAt: { gte: new Date() } }
+                        ]
+                    },
+                    data: { 
+                        isUsed: true,
+                        usedAt: new Date()
+                    }
+                });
+
+                if (voucherUpdateResult.count === 0) {
+                    // Voucher either already used or expired
+                    const voucher = await tx.voucher.findUnique({
+                        where: { id: validVoucherId },
+                        select: { isUsed: true, expiresAt: true }
+                    });
+                    
+                    if (!voucher) {
+                        throw new Error('Voucher tidak ditemukan');
+                    }
+                    if (voucher.isUsed) {
+                        throw new Error('Voucher sudah digunakan oleh transaksi lain');
+                    }
+                    if (voucher.expiresAt && voucher.expiresAt < new Date()) {
+                        throw new Error('Voucher sudah kedaluwarsa');
+                    }
+                    throw new Error('Voucher tidak valid');
                 }
             }
 
@@ -657,20 +712,8 @@ export async function POST(req: Request) {
                 }
             })
 
-            // 4. Mark voucher as used
-            if (validVoucherId) {
-                await tx.voucher.update({
-                    where: { id: validVoucherId },
-                    data: { isUsed: true, usedAt: new Date() }
-                })
-            }
-
-            // 5. Deduct user points and write point history
+            // 4. Write point history (points already deducted above)
             if (pointsUsed > 0) {
-                await tx.user.update({
-                    where: { id: session.user.id },
-                    data: { points: { decrement: pointsUsed } }
-                })
                 await tx.pointHistory.create({
                     data: {
                         userId: session.user.id,
@@ -683,6 +726,10 @@ export async function POST(req: Request) {
             }
 
             return newOrder
+        }, {
+            // ✅ FIX: Set transaction isolation level for better consistency
+            isolationLevel: 'Serializable',
+            timeout: 10000, // 10 second timeout
         })
 
         // Generate QRIS string for QRIS payment method
@@ -772,14 +819,17 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ success: true, orderId: order.id, total: secureTotal, paymentUrl })
     } catch (error) {
-        console.error('Checkout error:', error)
-        // Forward validation errors from transaction as 400 (not generic 500)
-        if (error instanceof Error && (
-            error.message.includes('Poin tidak mencukupi') ||
-            error.message.includes('Voucher tidak valid')
-        )) {
-            return NextResponse.json({ error: error.message }, { status: 400 })
-        }
-        return NextResponse.json({ error: 'Gagal membuat pesanan' }, { status: 500 })
+        // ✅ BUG FIX #7: Proper error handling with safe responses
+        logError(error, {
+            route: 'checkout',
+            userId: (await auth())?.user?.id,
+            timestamp: new Date().toISOString(),
+        });
+
+        const safeError = getSafeErrorResponse(error);
+        return NextResponse.json(
+            { error: safeError.message, code: safeError.code },
+            { status: safeError.statusCode }
+        );
     }
 }
