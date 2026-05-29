@@ -2,6 +2,26 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
+// Rate limiting helper
+const easterEggAttempts = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now()
+  const userAttempts = easterEggAttempts.get(userId)
+  
+  if (!userAttempts || now > userAttempts.resetAt) {
+    easterEggAttempts.set(userId, { count: 1, resetAt: now + 60000 })
+    return true
+  }
+  
+  if (userAttempts.count >= 3) {
+    return false
+  }
+  
+  userAttempts.count++
+  return true
+}
+
 export async function POST() {
     try {
         const session = await auth()
@@ -11,72 +31,97 @@ export async function POST() {
 
         const userId = session.user.id
 
-        // 1. Fetch LoyaltySettings (which contains our Easter Egg configuration)
-        const settings = await prisma.loyaltySettings.findFirst()
-        if (!settings) {
-            return NextResponse.json({ error: 'Pengaturan loyalty tidak ditemukan' }, { status: 404 })
+        // SECURITY FIX #4: Rate limiting
+        if (!checkRateLimit(userId)) {
+            return NextResponse.json({ error: 'Terlalu banyak percobaan. Tunggu 1 menit.' }, { status: 429 })
         }
 
-        const isEnabled = (settings as any).easterEggEnabled !== false
-        const codeBase = (settings as any).easterEggVoucherCode || 'EASTERSTELLAR'
-        const discount = (settings as any).easterEggDiscount || 15000
-        const quota = (settings as any).easterEggQuota || 10
+        // SECURITY FIX #2: Use transaction with proper locking
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Lock settings row to prevent race condition
+            const settings = await tx.$queryRaw<Array<{
+                id: string
+                easterEggEnabled: boolean
+                easterEggVoucherCode: string
+                easterEggDiscount: number
+                easterEggQuota: number
+            }>>`
+                SELECT * FROM "LoyaltySettings"
+                LIMIT 1
+                FOR UPDATE
+            `
 
-        if (!isEnabled) {
-            return NextResponse.json({ error: 'Easter Egg saat ini dinonaktifkan oleh Admin.' }, { status: 400 })
-        }
+            if (!settings || settings.length === 0) {
+                throw new Error('Pengaturan loyalty tidak ditemukan')
+            }
 
-        // Generate the unique user-bound code for the database unique field constraint
-        const uniqueVoucherCode = `${codeBase}-${userId}`
+            const setting = settings[0]
+            const isEnabled = setting.easterEggEnabled !== false
+            const codeBase = setting.easterEggVoucherCode || 'EASTERSTELLAR'
+            const discount = setting.easterEggDiscount || 15000
+            const quota = setting.easterEggQuota || 10
 
-        // 2. Check if user already claimed any Easter Egg voucher
-        const existingVoucher = await prisma.voucher.findFirst({
-            where: {
-                userId,
-                type: 'CUSTOM',
-                description: {
-                    startsWith: 'Easter Egg'
+            if (!isEnabled) {
+                throw new Error('Easter Egg saat ini dinonaktifkan oleh Admin.')
+            }
+
+            // 2. Check if user already claimed (inside transaction)
+            const existingVoucher = await tx.voucher.findFirst({
+                where: {
+                    userId,
+                    type: 'CUSTOM',
+                    description: {
+                        startsWith: 'Easter Egg'
+                    }
                 }
+            })
+
+            if (existingVoucher) {
+                throw new Error('Kamu sudah mengklaim voucher rahasia ini! Cek keranjang belanjamu.')
             }
-        })
 
-        if (existingVoucher) {
-            return NextResponse.json({ error: 'Kamu sudah mengklaim voucher rahasia ini! Cek keranjang belanjamu.' }, { status: 400 })
-        }
-
-        // 3. Check quota (count total vouchers starting with this code prefix)
-        const claimCount = await prisma.voucher.count({
-            where: {
-                code: {
-                    startsWith: `${codeBase}-`
+            // 3. Count and check quota (inside transaction with lock)
+            const claimCount = await tx.voucher.count({
+                where: {
+                    code: {
+                        startsWith: `${codeBase}-`
+                    }
                 }
+            })
+
+            if (claimCount >= quota) {
+                throw new Error('Yah, kuota voucher rahasia ini sudah habis diperebutkan! Coba lagi lain kali.')
             }
-        })
 
-        if (claimCount >= quota) {
-            return NextResponse.json({ error: 'Yah, kuota voucher rahasia ini sudah habis diperebutkan! Coba lagi lain kali.' }, { status: 400 })
-        }
+            // 4. Generate unique code
+            const uniqueVoucherCode = `${codeBase}-${userId}`
 
-        // 4. Create the customer-bound Voucher record in DB
-        await prisma.voucher.create({
-            data: {
-                userId,
-                code: uniqueVoucherCode,
-                type: 'CUSTOM',
-                description: `Easter Egg Stellar Discount (Diskon Rp ${discount.toLocaleString('id-ID')})`,
-                discountAmount: discount,
-                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Valid for 30 days
+            // 5. Create voucher
+            const voucher = await tx.voucher.create({
+                data: {
+                    userId,
+                    code: uniqueVoucherCode,
+                    type: 'CUSTOM',
+                    description: `Easter Egg Stellar Discount (Diskon Rp ${discount.toLocaleString('id-ID')})`,
+                    discountAmount: discount,
+                    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // Valid for 30 days
+                }
+            })
+
+            return {
+                success: true,
+                message: 'Selamat! Voucher rahasia berhasil diklaim!',
+                voucherCode: uniqueVoucherCode,
+                discount
             }
+        }, {
+            maxWait: 5000,
+            timeout: 10000,
         })
 
-        return NextResponse.json({
-            success: true,
-            message: 'Selamat! Voucher rahasia berhasil diklaim!',
-            voucherCode: uniqueVoucherCode,
-            discount
-        })
-    } catch (error) {
+        return NextResponse.json(result)
+    } catch (error: any) {
         console.error('Claim easter egg voucher error:', error)
-        return NextResponse.json({ error: 'Gagal mengklaim voucher rahasia' }, { status: 500 })
+        return NextResponse.json({ error: error.message || 'Gagal mengklaim voucher rahasia' }, { status: 500 })
     }
 }
