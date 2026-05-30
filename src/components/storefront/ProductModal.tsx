@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Minus, Check, Leaf } from 'lucide-react';
+import { X, Plus, Minus, Check } from 'lucide-react';
 import type { Product, IceLevel, SugarLevel, AddOn } from '@/types';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
 import { useCartStore } from '@/stores/cart-store';
@@ -33,27 +33,6 @@ export function ProductModal({
 }: ProductModalProps) {
   const addItem = useCartStore((s) => s.addItem);
   const editItem = useCartStore((s) => s.editItem);
-  const globalHasTumbler = useCartStore((s) => s.hasTumbler);
-  const setGlobalHasTumbler = useCartStore((s) => s.setHasTumbler);
-
-  const [tumblerEnabled, setTumblerEnabled] = useState(false);
-  const [tumblerBonusPoints, setTumblerBonusPoints] = useState(0);
-  const [tumblerDiscountPct, setTumblerDiscountPct] = useState(0);
-
-  useEffect(() => {
-    if (isOpen) {
-      fetch('/api/admin/loyalty/settings')
-        .then(r => r.json())
-        .then(d => {
-          if (d.tumblerBonusEnabled) {
-            setTumblerEnabled(true);
-            setTumblerBonusPoints(d.tumblerBonusPoints || 0);
-            setTumblerDiscountPct(d.tumblerDiscountPct || 0);
-          }
-        })
-        .catch(() => {});
-    }
-  }, [isOpen]);
 
   const [iceLevel, setIceLevel] = useState<IceLevel>('Normal Ice');
   const [sugarLevel, setSugarLevel] = useState<SugarLevel>('Normal Sugar');
@@ -783,56 +762,6 @@ export function ProductModal({
                                 );
                               })}
                             </div>
-                          </div>
-                        )}
-
-                        {/* Tumbler Option inside ProductModal (Eco-friendly choice!) */}
-                        {tumblerEnabled && (
-                          <div className="pt-2">
-                            <button
-                              type="button"
-                              onClick={() => setGlobalHasTumbler(!globalHasTumbler)}
-                              className={`w-full relative overflow-hidden rounded-2xl border-2 p-4 transition-all duration-300 text-left active:scale-[0.98] ${
-                                globalHasTumbler
-                                  ? 'border-emerald-300 bg-emerald-50/30'
-                                  : 'border-border bg-card hover:border-emerald-200'
-                              }`}
-                            >
-                              <div className="relative z-10 flex items-start gap-3">
-                                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-all duration-300 ${
-                                  globalHasTumbler ? 'bg-emerald-500 shadow-md shadow-emerald-400/10 text-white' : 'bg-gray-50 border border-gray-100 text-gray-400'
-                                }`}>
-                                  <Leaf className="w-5 h-5" />
-                                </div>
-
-                                <div className="flex-1 min-w-0 pr-1">
-                                  <div className="flex items-center gap-2 mb-0.5">
-                                    <p className={`text-xs font-bold transition-colors ${globalHasTumbler ? 'text-emerald-800' : 'text-gray-900'}`}>
-                                      Saya Bawa Tumbler Sendiri
-                                    </p>
-                                    {globalHasTumbler && (
-                                      <span className="text-[8px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                                        Aktif ✓
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className={`text-[10px] leading-relaxed transition-colors ${globalHasTumbler ? 'text-emerald-650' : 'text-gray-400 font-medium'}`}>
-                                    Dapatkan <strong>+{tumblerBonusPoints} bonus poin</strong>{tumblerDiscountPct > 0 && <> + <strong>diskon {tumblerDiscountPct}%</strong></>} pada pesanan ini! 🌍
-                                  </p>
-                                </div>
-
-                                {/* Micro toggle switch */}
-                                <div className={`w-10 h-5.5 rounded-full transition-colors duration-300 shrink-0 mt-1.5 relative border ${
-                                  globalHasTumbler ? 'bg-emerald-500 border-emerald-500' : 'bg-gray-100 border-gray-250'
-                                }`}>
-                                  <motion.div
-                                    initial={false}
-                                    animate={{ x: globalHasTumbler ? 18 : 0 }}
-                                    className="absolute left-0.5 top-0.5 w-4 h-4 rounded-full bg-white shadow-sm"
-                                  />
-                                </div>
-                              </div>
-                            </button>
                           </div>
                         )}
                       </>

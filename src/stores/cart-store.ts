@@ -7,8 +7,6 @@ import type { CartItem, IceLevel, SugarLevel, AddOn } from '@/types';
 interface CartState {
     items: CartItem[];
     appliedVoucher: any | null;
-    hasTumbler: boolean;
-    setHasTumbler: (val: boolean) => void;
     addItem: (item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
     editItem: (oldId: string, item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
     removeItem: (id: string) => void;
@@ -64,8 +62,6 @@ export const useCartStore = create<CartState>()(
         (set, get) => ({
             items: [],
             appliedVoucher: null,
-            hasTumbler: false,
-            setHasTumbler: (val) => set({ hasTumbler: val }),
 
             addItem: (item) => {
                 const id = generateCartItemId(
