@@ -27,7 +27,7 @@ export async function PATCH(
       select: { paymentMethod: true, driverId: true }
     })
 
-    if (!order || order.driverId !== session.user.id) {
+    if (!order || (order.driverId !== session.user.id && session.user.role !== 'ADMIN')) {
       return NextResponse.json({ error: 'Order not found or unauthorized' }, { status: 404 })
     }
 

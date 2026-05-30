@@ -332,18 +332,27 @@ export async function processReferralBonus(refereeUserId: string, tx?: any) {
 
   if (!referee?.referredById || referee.referralBonusPaid) return null;
 
-  // Cek order pertama referee yang sukses (COMPLETED)
+  const minPurchaseNeeded = (settings as any).referralMinPurchase ?? 0;
+
+  // Cek order pertama referee yang sukses (COMPLETED) dan memenuhi batas minimal belanja
   const firstCompletedOrder = await client.order.findFirst({
-    where: { userId: refereeUserId, status: 'COMPLETED' },
+    where: { 
+      userId: refereeUserId, 
+      status: 'COMPLETED',
+      total: { gte: minPurchaseNeeded }
+    },
     orderBy: { createdAt: 'asc' },
   });
 
-  if (!firstCompletedOrder) return null;
-
-  // Cek syarat minimal belanja teman yang diajak
-  const minPurchaseNeeded = (settings as any).referralMinPurchase ?? 0;
-  if (firstCompletedOrder.total < minPurchaseNeeded) {
-    return { error: `Pesanan pertama teman Anda (Rp${firstCompletedOrder.total.toLocaleString('id-ID')}) belum memenuhi syarat minimal belanja Rp${minPurchaseNeeded.toLocaleString('id-ID')}` };
+  if (!firstCompletedOrder) {
+    // Cari apakah ada order selesai tapi di bawah nominal
+    const smallOrder = await client.order.findFirst({
+      where: { userId: refereeUserId, status: 'COMPLETED' }
+    });
+    if (smallOrder) {
+      return { error: `Pesanan pertama teman Anda (atau pesanan yang ada) belum memenuhi syarat minimal belanja Rp${minPurchaseNeeded.toLocaleString('id-ID')}. Minimal belanja kumulatif/per-transaksi harus terpenuhi.` };
+    }
+    return null;
   }
 
   const referrerId = referee.referredById;

@@ -190,10 +190,13 @@ export function verifyDokuWebhookSignature({
       digest: calculatedDigest,
     });
 
+    const calculatedBuf = Buffer.from(calculatedSignature);
+    const receivedBuf = Buffer.from(receivedSignature);
+
     // Safe comparison of the first signature (minified body)
-    const isMinifiedValid = crypto.timingSafeEqual(
-      Buffer.from(calculatedSignature),
-      Buffer.from(receivedSignature)
+    const isMinifiedValid = calculatedBuf.length === receivedBuf.length && crypto.timingSafeEqual(
+      calculatedBuf,
+      receivedBuf
     );
 
     if (isMinifiedValid) {
@@ -213,9 +216,10 @@ export function verifyDokuWebhookSignature({
       digest: rawDigest,
     });
 
-    return crypto.timingSafeEqual(
-      Buffer.from(calculatedSignatureRaw),
-      Buffer.from(receivedSignature)
+    const calculatedRawBuf = Buffer.from(calculatedSignatureRaw);
+    return calculatedRawBuf.length === receivedBuf.length && crypto.timingSafeEqual(
+      calculatedRawBuf,
+      receivedBuf
     );
   } catch (e) {
     console.error('[DOKU WEBHOOK VERIFICATION EXCEPTION]', e);

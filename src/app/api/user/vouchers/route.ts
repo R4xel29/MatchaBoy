@@ -12,7 +12,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Login diperlukan' }, { status: 401 })
     }
 
-    // Fetch user's vouchers
+    // Fetch user's active unused vouchers
     const vouchers = await prisma.voucher.findMany({
       where: {
         userId: session.user.id,
@@ -26,8 +26,18 @@ export async function GET(req: Request) {
       }
     })
 
+    // Fetch all template claims by user to correctly hide templates from Voucher Pack
+    const allUserClaims = await prisma.voucher.findMany({
+      where: {
+        userId: session.user.id
+      },
+      select: {
+        templateId: true
+      }
+    })
+
     // Fetch active claimable templates that the user hasn't claimed yet (Voucher Pack)
-    const claimedTemplateIds = vouchers
+    const claimedTemplateIds = allUserClaims
       .map(v => v.templateId)
       .filter((id): id is string => !!id)
 

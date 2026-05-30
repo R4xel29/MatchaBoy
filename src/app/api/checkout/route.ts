@@ -331,6 +331,9 @@ export async function POST(req: Request) {
 
         // Tumbler discount
         const hasTumbler = body.hasTumbler === true
+        if (hasTumbler && orderType !== 'PICKUP') {
+            return NextResponse.json({ error: 'Bonus/Diskon tumbler hanya diperbolehkan untuk pesanan Ambil Sendiri (PICKUP).' }, { status: 400 })
+        }
         let tumblerDiscount = 0
         if (hasTumbler) {
             if (loyaltySettings?.tumblerBonusEnabled && loyaltySettings.tumblerDiscountPct > 0) {
@@ -664,17 +667,32 @@ export async function POST(req: Request) {
         const secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, deliveryFee - ongkirDiscount)
 
         const paymentSettings = await prisma.paymentSettings.findFirst()
-        const isDoku = body.paymentMethod?.toUpperCase() === 'DOKU'
-        if (isDoku && (!paymentSettings || !paymentSettings.dokuEnabled)) {
-            return NextResponse.json({ error: 'Metode pembayaran DOKU sedang tidak aktif. Silakan gunakan metode pembayaran lain.' }, { status: 400 })
+        if (!paymentSettings) {
+            return NextResponse.json({ error: 'Pengaturan pembayaran tidak ditemukan.' }, { status: 500 })
         }
+
+        const requestedMethod = body.paymentMethod?.toUpperCase()
+        if (requestedMethod === 'COD' && !paymentSettings.codEnabled) {
+            return NextResponse.json({ error: 'Metode pembayaran COD sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
+        }
+        if (requestedMethod === 'TRANSFER' && !paymentSettings.transferEnabled) {
+            return NextResponse.json({ error: 'Metode pembayaran Transfer Bank sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
+        }
+        if (requestedMethod === 'QRIS' && !paymentSettings.qrisEnabled) {
+            return NextResponse.json({ error: 'Metode pembayaran QRIS sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
+        }
+        if (requestedMethod === 'DOKU' && !paymentSettings.dokuEnabled) {
+            return NextResponse.json({ error: 'Metode pembayaran DOKU sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
+        }
+
+        const isDoku = requestedMethod === 'DOKU'
 
         // Build address string
         const address = orderType === 'PICKUP'
             ? 'Ambil di toko'
             : `${body.address?.label || ''} - ${body.address?.detail || ''} | Detail: ${body.address?.streetDetail || ''} (${body.address?.lat || 0}, ${body.address?.lng || 0})`
 
-        const isWallet = body.paymentMethod?.toUpperCase() === 'WALLET';
+        const isWallet = requestedMethod === 'WALLET';
 
         // Wrap database operations in a single interactive transaction to ensure data atomicity
         // ✅ BUG FIX #4 & #5: Added row-level locking and atomic operations
@@ -684,27 +702,29 @@ export async function POST(req: Request) {
 
             // 0. Process Wallet Deduction
             if (isWallet) {
-                // Get user wallet balance
-                const user = await tx.user.findUnique({
-                    where: { id: session.user.id },
-                    select: { walletBalance: true }
-                });
-
-                if (!user) {
-                    throw new Error('User tidak ditemukan');
-                }
-
-                if (user.walletBalance < secureTotal) {
-                    throw new Error(`Saldo wallet tidak mencukupi. Saldo Anda: ${formatCurrency(user.walletBalance)}, Total Tagihan: ${formatCurrency(secureTotal)}`);
-                }
-
-                // Decrement wallet balance
-                await tx.user.update({
-                    where: { id: session.user.id },
+                // Atomic decrement with condition check to prevent race conditions
+                const walletUpdateResult = await tx.user.updateMany({
+                    where: {
+                        id: session.user.id,
+                        walletBalance: { gte: secureTotal } // Only update if balance is sufficient
+                    },
                     data: {
                         walletBalance: { decrement: secureTotal }
                     }
                 });
+
+                if (walletUpdateResult.count === 0) {
+                    // Either user not found or balance insufficient
+                    const user = await tx.user.findUnique({
+                        where: { id: session.user.id },
+                        select: { walletBalance: true }
+                    });
+                    
+                    if (!user) {
+                        throw new Error('User tidak ditemukan');
+                    }
+                    throw new Error(`Saldo wallet tidak mencukupi. Saldo Anda: ${formatCurrency(user.walletBalance)}, Total Tagihan: ${formatCurrency(secureTotal)}`);
+                }
             }
 
             // 1. ✅ FIX: Use atomic update with WHERE condition for points

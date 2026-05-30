@@ -2088,6 +2088,29 @@ export default function CheckoutPage() {
                     </div>
                   </button>
                 )}
+
+                {/* 10. QRIS Mandiri / Manual - Added in Carousel! */}
+                {paymentConfig?.qris?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod('QRIS'); setPaymentChannel(''); }}
+                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
+                      ${paymentMethod === 'QRIS'
+                        ? 'border-purple-600 bg-purple-50/20 text-purple-900 shadow-sm shadow-purple-50'
+                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <QrCode className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-0.5 w-full">
+                      <p className="text-[10px] font-extrabold tracking-tight truncate w-full">{paymentConfig?.qris?.label || 'QRIS'}</p>
+                      <p className="text-[8px] font-bold text-purple-600 uppercase tracking-wide leading-none truncate w-full">Scan & Upload</p>
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'QRIS' && <div className="w-1 h-1 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
             <div className="bg-[#FFFDF9]/60 border border-[#EADFC9]/25 rounded-2xl p-4 text-[11px] text-[#8C7864] font-medium leading-relaxed select-none">
@@ -3558,6 +3581,36 @@ export default function CheckoutPage() {
                         <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0
                           ${paymentMethod === 'TRANSFER' ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300'}`}>
                           {paymentMethod === 'TRANSFER' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* MANUAL QRIS */}
+                    {paymentConfig?.qris?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentMethod('QRIS');
+                          setPaymentChannel('');
+                          setIsAllPaymentsOpen(false);
+                        }}
+                        className={`w-full text-left rounded-2xl p-4.5 border-2 flex items-center justify-between transition-all active:scale-[0.98] cursor-pointer
+                          ${paymentMethod === 'QRIS'
+                            ? 'border-purple-600 bg-purple-50/20 text-purple-900'
+                            : 'border-gray-150 bg-white text-gray-800 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3.5">
+                          <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <QrCode className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-black text-gray-900">{paymentConfig?.qris?.label || 'QRIS'}</p>
+                            <p className="text-[10px] text-purple-600 font-bold">Scan & Upload bukti transfer pembayaran</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0
+                          ${paymentMethod === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
+                          {paymentMethod === 'QRIS' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                         </div>
                       </button>
                     )}
