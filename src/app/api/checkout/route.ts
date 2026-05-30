@@ -26,6 +26,60 @@ export async function POST(req: Request) {
             throw new ValidationError('Terlalu banyak percobaan. Coba lagi dalam 1 menit.', 'RATE_LIMIT');
         }
 
+        // If checkout is for a Group Cart, pull the items directly and securely from PostgreSQL
+        const groupCartId = body.groupCartId || null;
+        if (groupCartId) {
+            const groupCart = await prisma.groupCart.findUnique({
+                where: { id: groupCartId },
+                include: {
+                    items: {
+                        include: {
+                            product: true
+                        }
+                    }
+                }
+            });
+
+            if (!groupCart) {
+                throw new ValidationError('Group Cart tidak ditemukan');
+            }
+
+            if (groupCart.creatorId !== session.user.id) {
+                throw new ValidationError('Hanya pembuat Group Cart yang dapat melakukan checkout');
+            }
+
+            if (groupCart.status !== 'ACTIVE') {
+                throw new ValidationError('Group Cart ini sudah dicheckout atau tidak aktif');
+            }
+
+            if (groupCart.items.length === 0) {
+                throw new ValidationError('Keranjang Group Cart masih kosong');
+            }
+
+            // Securely override client-sent items with server-verified items from DB
+            body.items = groupCart.items.map(item => {
+                let parsedMods: any = {};
+                try {
+                    if (item.modifiers) {
+                        parsedMods = JSON.parse(item.modifiers);
+                    }
+                } catch {}
+
+                const baseModsString = parsedMods.modsString || '';
+                const modsStringWithMember = `[${item.memberName}] ${baseModsString}`.trim();
+
+                return {
+                    productId: item.productId,
+                    name: item.product.name,
+                    quantity: item.qty,
+                    size: parsedMods.size || 'Normal',
+                    addOnIds: parsedMods.addOnIds || [],
+                    modsString: modsStringWithMember,
+                    bundleSelections: parsedMods.bundleSelections || undefined
+                };
+            });
+        }
+
         // ✅ BUG FIX #5: Enhanced server-side validation
         if (!body.items || body.items.length === 0) {
             throw new ValidationError('Keranjang kosong');
@@ -255,7 +309,21 @@ export async function POST(req: Request) {
             if (!body.address?.streetDetail || !body.address.streetDetail.trim()) {
                  return NextResponse.json({ error: `Detail alamat tambahan (No. Rumah / Komplek) wajib diisi untuk Delivery` }, { status: 400 })
             }
-            deliveryFee = calculateDeliveryFee(distanceKm, perKmFee)
+            
+            // Check if user has an active subscription for free delivery (MATCHA_LATTE or GOLDEN_MATCHA)
+            const userSubscription = await prisma.memberSubscription.findUnique({
+                where: { userId: session.user.id }
+            });
+            const hasFreeDelivery = userSubscription && 
+                userSubscription.status === 'ACTIVE' && 
+                userSubscription.expiresAt > new Date() && 
+                (userSubscription.tier === 'MATCHA_LATTE' || userSubscription.tier === 'GOLDEN_MATCHA');
+                
+            if (hasFreeDelivery) {
+                deliveryFee = 0;
+            } else {
+                deliveryFee = calculateDeliveryFee(distanceKm, perKmFee);
+            }
         }
 
         // Fetch loyalty settings
@@ -607,11 +675,39 @@ export async function POST(req: Request) {
             ? 'Ambil di toko'
             : `${body.address?.label || ''} - ${body.address?.detail || ''} | Detail: ${body.address?.streetDetail || ''} (${body.address?.lat || 0}, ${body.address?.lng || 0})`
 
+        const isWallet = body.paymentMethod?.toUpperCase() === 'WALLET';
+
         // Wrap database operations in a single interactive transaction to ensure data atomicity
         // ✅ BUG FIX #4 & #5: Added row-level locking and atomic operations
         const order = await prisma.$transaction(async (tx) => {
             // Acquire a transaction-level advisory lock to serialize queue number generation and other concurrent checkout writes
             await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(424242);');
+
+            // 0. Process Wallet Deduction
+            if (isWallet) {
+                // Get user wallet balance
+                const user = await tx.user.findUnique({
+                    where: { id: session.user.id },
+                    select: { walletBalance: true }
+                });
+
+                if (!user) {
+                    throw new Error('User tidak ditemukan');
+                }
+
+                if (user.walletBalance < secureTotal) {
+                    throw new Error(`Saldo wallet tidak mencukupi. Saldo Anda: ${formatCurrency(user.walletBalance)}, Total Tagihan: ${formatCurrency(secureTotal)}`);
+                }
+
+                // Decrement wallet balance
+                await tx.user.update({
+                    where: { id: session.user.id },
+                    data: {
+                        walletBalance: { decrement: secureTotal }
+                    }
+                });
+            }
+
             // 1. ✅ FIX: Use atomic update with WHERE condition for points
             if (pointsUsed > 0) {
                 // Atomic decrement with condition check
@@ -697,22 +793,43 @@ export async function POST(req: Request) {
                     distanceKm,
                     pickupDate: body.pickupDate ? new Date(body.pickupDate) : null,
                     pickupTime: body.pickupTime || null,
-                    paymentProofUrl: body.paymentProofUrl || null,
+                    paymentProofUrl: isWallet ? '/verified-wallet.svg' : (body.paymentProofUrl || null),
                     subtotal: secureSubtotal,
                     deliveryFee,
                     total: secureTotal,
                     paymentMethod: body.paymentMethod?.toUpperCase() || 'TRANSFER',
-                    status: (isDoku || body.paymentMethod?.toUpperCase() === 'TRANSFER' || body.paymentMethod?.toUpperCase() === 'QRIS') ? 'PENDING_PAYMENT' : 'PENDING',
+                    status: isWallet ? 'PENDING' : ((isDoku || body.paymentMethod?.toUpperCase() === 'TRANSFER' || body.paymentMethod?.toUpperCase() === 'QRIS') ? 'PENDING_PAYMENT' : 'PENDING'),
                     hasTumbler,
                     notes: body.notes || null,
                     voucherCode: voucherCode || null,
-                    paymentExpiredAt: (isDoku || body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'TRANSFER') ? new Date(Date.now() + 15 * 60 * 1000) : null,
+                    paymentExpiredAt: isWallet ? null : ((isDoku || body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'TRANSFER') ? new Date(Date.now() + 15 * 60 * 1000) : null),
                     queueNumber,
                     items: {
                         create: orderItemsToCreate
                     }
                 }
             })
+
+            // If a Group Cart was checked out, mark it as CHECKED_OUT within the transaction
+            if (body.groupCartId) {
+                await tx.groupCart.update({
+                    where: { id: body.groupCartId },
+                    data: { status: 'CHECKED_OUT' }
+                });
+            }
+
+            // 3.1 Create Wallet payment transaction if using WALLET
+            if (isWallet) {
+                await tx.walletTransaction.create({
+                    data: {
+                        userId: session.user.id,
+                        amount: -secureTotal,
+                        type: 'PAYMENT',
+                        description: `Pembayaran pesanan #${queueNumber}`,
+                        referenceId: newOrder.id
+                    }
+                })
+            }
 
             // 4. Write point history (points already deducted above)
             if (pointsUsed > 0) {

@@ -77,7 +77,7 @@ export async function awardPoints({
 /**
  * Helper to create a personal voucher cloned from a template (if exists) or fallback to legacy settings.
  */
-async function createVoucherForUser(
+export async function createVoucherForUser(
   userId: string,
   rewardTypeOrCode: string,
   fallbackDesc: string,
@@ -429,6 +429,22 @@ export async function processOrderCompletion(orderId: string) {
 
     if (pointsToAdd <= 0) pointsToAdd = 1; // minimum 1 poin
 
+    // Check subscription tier for multipliers (A1)
+    const userSubscription = await tx.memberSubscription.findUnique({
+      where: { userId: order.userId }
+    });
+    const isSubscriptionActive = userSubscription && 
+      userSubscription.status === 'ACTIVE' && 
+      userSubscription.expiresAt > new Date();
+
+    if (isSubscriptionActive) {
+      if (userSubscription.tier === 'MATCHA_LATTE') {
+        pointsToAdd = pointsToAdd * 2;
+      } else if (userSubscription.tier === 'GOLDEN_MATCHA') {
+        pointsToAdd = pointsToAdd * 3;
+      }
+    }
+
     // 1. Award poin
     const awardResult = await awardPoints({
       userId: order.userId,
@@ -447,7 +463,26 @@ export async function processOrderCompletion(orderId: string) {
     // 3. Cek referral (sekarang diklaim manual oleh referrer di profil)
     const referralResult = null;
 
-    // 4. Tandai order sudah diberi poin
+    // 4. Increment Gacha chances if order total is >= 25K (Rp 25.000)
+    let gachaChanceEarned = false;
+    if (order.total >= 25000) {
+      gachaChanceEarned = true;
+      await tx.user.update({
+        where: { id: order.userId },
+        data: { gachaChances: { increment: 1 } },
+      });
+    }
+
+    // 5. C1 Gamification Quests: Atomically increment quest progress
+    await incrementQuestProgress(order.userId, 'TRANSACTION_COUNT', 1, tx);
+    if (order.orderType === 'DINE_IN') {
+      await incrementQuestProgress(order.userId, 'DINE_IN_COUNT', 1, tx);
+    }
+    if (order.hasTumbler) {
+      await incrementQuestProgress(order.userId, 'TUMBLER_COUNT', 1, tx);
+    }
+
+    // 6. Tandai order sudah diberi poin
     const tumblerBonus = order.hasTumbler ? settings.tumblerBonusPoints : 0;
     await tx.order.update({
       where: { id: orderId },
@@ -463,6 +498,7 @@ export async function processOrderCompletion(orderId: string) {
       newPoints: awardResult.newPoints, 
       tumblerResult, 
       referralResult, 
+      gachaChanceEarned,
       customerName: order.customerName, 
       userId: order.userId,
       orderShortId: order.id.slice(0, 8).toUpperCase()
@@ -493,3 +529,62 @@ export async function processOrderCompletion(orderId: string) {
 
   return result;
 }
+
+/**
+ * C1 Gamification Quests: Atomically increment quest progress for a specific user and quest targetType.
+ */
+export async function incrementQuestProgress(
+  userId: string,
+  targetType: 'TRANSACTION_COUNT' | 'DINE_IN_COUNT' | 'TUMBLER_COUNT' | 'TOP_UP_COUNT',
+  amount: number = 1,
+  tx?: any
+) {
+  const client = tx || prisma;
+  
+  // Find all active quests matching the targetType
+  const activeQuests = await client.quest.findMany({
+    where: {
+      isActive: true,
+      targetType: targetType,
+    },
+  });
+
+  for (const quest of activeQuests) {
+    // Find or create UserQuest record
+    const userQuest = await client.userQuest.upsert({
+      where: {
+        userId_questId: {
+          userId,
+          questId: quest.id,
+        },
+      },
+      update: {},
+      create: {
+        userId,
+        questId: quest.id,
+        progress: 0,
+        isCompleted: false,
+        isClaimed: false,
+      },
+    });
+
+    if (userQuest.isCompleted) {
+      continue; // Already completed, no need to update
+    }
+
+    const newProgress = Math.min(userQuest.progress + amount, quest.targetValue);
+    const isCompletedNow = newProgress >= quest.targetValue;
+
+    await client.userQuest.update({
+      where: {
+        id: userQuest.id,
+      },
+      data: {
+        progress: newProgress,
+        isCompleted: isCompletedNow,
+        completedAt: isCompletedNow ? new Date() : userQuest.completedAt,
+      },
+    });
+  }
+}
+

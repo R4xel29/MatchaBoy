@@ -12,7 +12,7 @@ import {
   ArrowLeft, Phone, User, CreditCard, Banknote,
   ChevronDown, ChevronUp, ChevronRight, Trash2, Plus, Minus,
   ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle, MapPin,
-  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode
+  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const MapPicker = dynamic(() => import('@/components/checkout/MapPicker').then(m => m.MapPicker), { ssr: false });
@@ -45,6 +45,50 @@ export default function CheckoutPage() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const clearCart = useCartStore((s) => s.clearCart);
+
+  const [groupCartItems, setGroupCartItems] = useState<any[]>([]);
+  const [loadingGroupCart, setLoadingGroupCart] = useState<boolean>(false);
+
+  const searchParamsObj = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const groupCartId = searchParamsObj?.get('groupCartId') || null;
+
+  useEffect(() => {
+    if (groupCartId) {
+      setLoadingGroupCart(true);
+      fetch(`/api/group-cart/${groupCartId}/items`)
+        .then(r => r.json())
+        .then(data => {
+          if (data && data.groupedItems) {
+            const itemsList = Object.values(data.groupedItems).flat();
+            const mappedItems = itemsList.map((item: any) => {
+              const parsedMods = item.modifiers ? JSON.parse(item.modifiers) : {};
+              return {
+                id: item.id,
+                productId: item.productId,
+                name: item.product.name,
+                image: item.product.image,
+                basePrice: item.product.price,
+                quantity: item.qty,
+                iceLevel: parsedMods.iceLevel || 'Normal Ice',
+                sugarLevel: parsedMods.sugarLevel || 'Normal Sugar',
+                size: parsedMods.size || 'Normal',
+                sizePrice: parsedMods.size === 'Large' ? 5000 : 0,
+                addOns: parsedMods.addOns || [],
+                totalPrice: item.price * item.qty,
+                memberName: item.memberName
+              };
+            });
+            setGroupCartItems(mappedItems);
+          }
+        })
+        .catch(err => console.error("Error loading group cart for checkout:", err))
+        .finally(() => setLoadingGroupCart(false));
+    }
+  }, [groupCartId]);
+
+  const checkoutItems = useMemo(() => {
+    return groupCartId ? groupCartItems : items;
+  }, [groupCartId, groupCartItems, items]);
 
   const [orderType, setOrderType] = useState<OrderType>('PICKUP');
   const [pickupDate, setPickupDate] = useState<string | null>(null);
@@ -91,6 +135,8 @@ export default function CheckoutPage() {
 
   // Points state
   const [userPoints, setUserPoints] = useState(0);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [hasFreeDeliverySubscription, setHasFreeDeliverySubscription] = useState(false);
   const [usePoints, setUsePoints] = useState(false);
   const [pointsToUse, setPointsToUse] = useState(0);
   const [pointValue, setPointValue] = useState(1000);
@@ -110,6 +156,14 @@ export default function CheckoutPage() {
         .then(data => {
           if (data && data.points !== undefined) {
             setUserPoints(data.points);
+          }
+          if (data && data.walletBalance !== undefined) {
+            setWalletBalance(data.walletBalance);
+          }
+          if (data && data.subscription) {
+            const isActive = data.subscription.status === 'ACTIVE' && new Date(data.subscription.expiresAt) > new Date();
+            const tier = data.subscription.tier;
+            setHasFreeDeliverySubscription(isActive && (tier === 'MATCHA_LATTE' || tier === 'GOLDEN_MATCHA'));
           }
         })
         .catch(() => {});
@@ -481,6 +535,12 @@ export default function CheckoutPage() {
           if (profileData.name) pName = profileData.name;
           if (profileData.phone) pPhone = profileData.phone;
           if (profileData.points !== undefined) setUserPoints(profileData.points);
+          if (profileData.walletBalance !== undefined) setWalletBalance(profileData.walletBalance);
+          if (profileData.subscription) {
+            const isActive = profileData.subscription.status === 'ACTIVE' && new Date(profileData.subscription.expiresAt) > new Date();
+            const tier = profileData.subscription.tier;
+            setHasFreeDeliverySubscription(isActive && (tier === 'MATCHA_LATTE' || tier === 'GOLDEN_MATCHA'));
+          }
         }
         setProfileName(pName);
         setProfilePhone(pPhone);
@@ -597,15 +657,17 @@ export default function CheckoutPage() {
     }
   }, [session?.user?.id]);
 
-  const subtotal = totalPrice();
+  const subtotal = useMemo(() => {
+    return checkoutItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0);
+  }, [checkoutItems]);
 
   const toppingTotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + (item.addOns ? item.addOns.reduce((s, a) => s + a.price, 0) * item.quantity : 0), 0);
-  }, [items]);
+    return checkoutItems.reduce((sum: number, item: any) => sum + (item.addOns ? item.addOns.reduce((s: number, a: any) => s + a.price, 0) * item.quantity : 0), 0);
+  }, [checkoutItems]);
 
   const sizeUpgradeTotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + ((item.sizePrice || 0) * item.quantity), 0);
-  }, [items]);
+    return checkoutItems.reduce((sum: number, item: any) => sum + ((item.sizePrice || 0) * item.quantity), 0);
+  }, [checkoutItems]);
 
   const filteredUserVouchers = useMemo(() => {
     const now = new Date();
@@ -653,9 +715,9 @@ export default function CheckoutPage() {
 
       let eligibleSub = subtotal;
       if (validProductIds && validProductIds.length > 0) {
-        eligibleSub = items
+        eligibleSub = checkoutItems
           .filter(item => validProductIds.includes(item.productId))
-          .reduce((sum, item) => sum + item.totalPrice, 0);
+          .reduce((sum: number, item: any) => sum + item.totalPrice, 0);
         if (eligibleSub === 0) return false;
       }
       return eligibleSub >= (v.template?.minPurchase || v.minPurchase || 0);
@@ -679,9 +741,9 @@ export default function CheckoutPage() {
 
       let eligibleSub = subtotal;
       if (validProductIds && validProductIds.length > 0) {
-        eligibleSub = items
+        eligibleSub = checkoutItems
           .filter(item => validProductIds.includes(item.productId))
-          .reduce((sum, item) => sum + item.totalPrice, 0);
+          .reduce((sum: number, item: any) => sum + item.totalPrice, 0);
         if (eligibleSub === 0) return true;
       }
       return eligibleSub < (v.template?.minPurchase || v.minPurchase || 0);
@@ -700,10 +762,12 @@ export default function CheckoutPage() {
     }
   }, [toast]);
   const tumblerDiscount = hasTumbler && tumblerDiscountPct > 0 ? Math.round(subtotal * tumblerDiscountPct / 100) : 0;
-  const shippingFee = orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0;
+  const shippingFee = orderType === 'DELIVERY' && deliveryAddress 
+    ? (hasFreeDeliverySubscription ? 0 : deliveryAddress.deliveryFee) 
+    : 0;
   
   const hasFreeShippingBundle = useMemo(() => {
-    return items.some(item => {
+    return checkoutItems.some(item => {
       if (item.isBundle) {
         const prod = allProducts.find(p => p.id === item.productId);
         if (prod?.modifiers) {
@@ -712,7 +776,7 @@ export default function CheckoutPage() {
       }
       return false;
     });
-  }, [items, allProducts]);
+  }, [checkoutItems, allProducts]);
 
   const ongkirDiscount = useMemo(() => {
     if (hasFreeShippingBundle) return shippingFee;
@@ -744,31 +808,31 @@ export default function CheckoutPage() {
     }
 
     const eligibleItems = validProductIds && validProductIds.length > 0
-      ? items.filter(item => validProductIds.includes(item.productId))
-      : items;
+      ? checkoutItems.filter(item => validProductIds.includes(item.productId))
+      : checkoutItems;
 
     const eligibleSubtotal = validProductIds && validProductIds.length > 0
-      ? eligibleItems.reduce((sum, item) => sum + item.totalPrice, 0)
+      ? eligibleItems.reduce((sum: number, item: any) => sum + item.totalPrice, 0)
       : subtotal;
 
     const maxSingleUnitEligiblePrice = eligibleItems.length > 0
-      ? Math.max(...eligibleItems.map(item => {
+      ? Math.max(...eligibleItems.map((item: any) => {
           const singleUnit = item.isBundle && item.bundleSelections
-            ? (item.basePrice + item.bundleSelections.reduce((sum, a: any) => sum + (a.priceAdjustment || 0), 0))
-            : (item.basePrice + (item.sizePrice || 0) + (item.addOns ? item.addOns.reduce((s, a) => s + a.price, 0) : 0));
+            ? (item.basePrice + item.bundleSelections.reduce((sum: number, a: any) => sum + (a.priceAdjustment || 0), 0))
+            : (item.basePrice + (item.sizePrice || 0) + (item.addOns ? item.addOns.reduce((s: number, a: any) => s + a.price, 0) : 0));
           return singleUnit;
         }))
       : 0;
 
     if (appliedVoucher.type === 'FREE_TOPPING') {
-      const allAddOns = eligibleItems.flatMap(item => item.addOns || []);
+      const allAddOns = eligibleItems.flatMap((item: any) => item.addOns || []);
       if (allAddOns.length === 0) return 0;
-      const highestToppingPrice = Math.max(...allAddOns.map(a => a.price));
+      const highestToppingPrice = Math.max(...allAddOns.map((a: any) => a.price));
       return highestToppingPrice > 0 ? highestToppingPrice : 0;
     }
 
     if (appliedVoucher.type === 'UPGRADE_SIZE') {
-      const maxSizeUpgrade = eligibleItems.reduce((max, item) => {
+      const maxSizeUpgrade = eligibleItems.reduce((max: number, item: any) => {
         const itemSizePrice = item.sizePrice || 0;
         return itemSizePrice > max ? itemSizePrice : max;
       }, 0);
@@ -800,7 +864,7 @@ export default function CheckoutPage() {
       case 'DISCOUNT_RP': return Math.min(eligibleSubtotal, 10000);
       default: return Math.min(eligibleSubtotal, 10000);
     }
-  }, [appliedVoucher, subtotal, items]);
+  }, [appliedVoucher, subtotal, checkoutItems]);
 
   const maxPointsAllowed = useMemo(() => {
     const remainingAmount = Math.max(0, subtotal - tumblerDiscount - voucherDiscount);
@@ -816,7 +880,7 @@ export default function CheckoutPage() {
   }, [usePoints, pointsToUse, maxPointsAllowed]);
 
   const grandTotal = Math.max(0, subtotal - tumblerDiscount - voucherDiscount - pointsDiscount) + Math.max(0, shippingFee - ongkirDiscount);
-  const itemCount = items.reduce((sum, i) => sum + i.quantity, 0);
+  const itemCount = checkoutItems.reduce((sum: number, i: any) => sum + i.quantity, 0);
 
   const modalTimeSlots = useMemo(() => {
     const targetDate = tempPickupDate || new Date().toLocaleDateString('en-CA');
@@ -1106,6 +1170,10 @@ export default function CheckoutPage() {
       setToast({ message: 'Waktu pengiriman harus ditentukan', type: 'error' });
       return;
     }
+    if (paymentMethod === 'WALLET' && walletBalance < grandTotal) {
+      setToast({ message: `Saldo Wallet tidak mencukupi. Saldo Anda: ${formatRupiah(walletBalance)}, Tagihan: ${formatRupiah(grandTotal)}`, type: 'error' });
+      return;
+    }
     setIsSubmitting(true);
     setShowPaymentConfirmation(false);
 
@@ -1121,7 +1189,8 @@ export default function CheckoutPage() {
         pickupDate: pickupDate || undefined,
         pickupTime: pickupTime || undefined,
         paymentMethod,
-        items: items.map(item => ({
+        groupCartId: groupCartId || undefined,
+        items: checkoutItems.map((item: any) => ({
           productId: item.productId,
           name: item.name,
           quantity: item.quantity,
@@ -1130,9 +1199,9 @@ export default function CheckoutPage() {
           size: item.size || 'Normal',
           sizePrice: item.sizePrice || 0,
           modsString: item.isBundle && item.bundleSelections
-            ? item.bundleSelections.map(s => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
-            : `${item.size || 'Normal'}, ${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map(a => a.name).join(', +') : ''}`,
-          addOnIds: item.isBundle ? [] : item.addOns.map(a => a.id),
+            ? item.bundleSelections.map((s: any) => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
+            : `${item.size || 'Normal'}, ${item.iceLevel}, ${item.sugarLevel}${item.addOns ? (item.addOns.length > 0 ? ', +' + item.addOns.map((a: any) => a.name).join(', +') : '') : ''}`,
+          addOnIds: item.isBundle ? [] : (item.addOns ? item.addOns.map((a: any) => a.id) : []),
           isBundle: item.isBundle || false,
           bundleSelections: item.isBundle ? item.bundleSelections : undefined
         })),
@@ -1156,8 +1225,8 @@ export default function CheckoutPage() {
       
       setIsSubmitting(false);
       
-      // COD redirects straight to Order Tracking, online methods redirect to Payment detail page
-      if (paymentMethod === 'COD') {
+      // COD and WALLET redirect straight to Order Tracking, online methods redirect to Payment detail page
+      if (paymentMethod === 'COD' || paymentMethod === 'WALLET') {
         router.push(`/orders/${responseData.orderId}`);
       } else {
         router.push(`/orders/${responseData.orderId}/payment`);
@@ -1235,7 +1304,14 @@ export default function CheckoutPage() {
   }
 
   // Empty cart guard
-  if (items.length === 0) {
+  if (checkoutItems.length === 0) {
+    if (loadingGroupCart) {
+      return (
+        <div className="min-h-dvh bg-background flex items-center justify-center">
+          <div className="w-8 h-8 border-3 border-[#B48A5E] border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
     return (
       <div className="min-h-dvh bg-[#FFFBF5] flex flex-col items-center justify-center px-6 text-center">
         <div className="w-20 h-20 rounded-full bg-orange-50 flex items-center justify-center mb-6 shadow-inner border border-orange-100/50">
@@ -1593,61 +1669,78 @@ export default function CheckoutPage() {
               <ShoppingBag className="w-4.5 h-4.5 text-[#B48A5E]" /> Pesanan ({itemCount} Item)
             </h2>
             <div className="space-y-3">
-              {items.map((item) => (
+              {checkoutItems.map((item: any) => (
                 <div key={item.id} className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-gray-50/50 border border-gray-100/30 hover:border-gray-200 transition-colors">
                   {item.image ? (
-                    <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-white relative border border-gray-100 shadow-sm">
+                    <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-white relative border border-gray-150 shadow-sm">
                       <Image src={item.image} alt={item.name} fill className="object-cover" sizes="56px" />
                     </div>
                   ) : (
-                    <div className="w-14 h-14 rounded-xl shrink-0 bg-white border border-gray-100 flex items-center justify-center shadow-sm">
-                      <ShoppingBag className="w-5.5 h-5.5 text-gray-300" />
+                    <div className="w-14 h-14 rounded-xl shrink-0 bg-white border border-gray-150 flex items-center justify-center shadow-sm">
+                      <ShoppingBag className="w-5.5 h-5.5 text-gray-350" />
                     </div>
                   )}
                   
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
+                    <p className="text-sm font-bold text-gray-900 truncate">
+                      {item.memberName && (
+                        <span className="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-emerald-805 bg-emerald-50 border border-emerald-150 mr-1.5">
+                          {item.memberName}
+                        </span>
+                      )}
+                      {item.name}
+                    </p>
                     <p className="text-[11px] text-gray-400 font-medium leading-relaxed truncate mt-0.5">
                       {item.isBundle && item.bundleSelections
                         ? item.bundleSelections.map((s: any) => `${s.productName}`).join(' · ')
-                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.addOns.length > 0 ? ` · +${item.addOns.map(a => a.name).join(', ')}` : ''}`
+                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.addOns ? (item.addOns.length > 0 ? ` · +${item.addOns.map((a: any) => a.name).join(', ')}` : '') : ''}`
                       }
                     </p>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-xs font-bold text-[#B48A5E]">{formatRupiah(item.totalPrice)}</p>
-                      <button 
-                        type="button" 
-                        onClick={() => handleEditOrAdd(item, true)} 
-                        className="text-[10px] text-amber-600 font-bold hover:underline"
-                      >
-                        Edit
-                      </button>
+                      {!groupCartId && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleEditOrAdd(item, true)} 
+                          className="text-[10px] text-amber-600 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center gap-2 bg-white rounded-xl p-1 border border-gray-150 shadow-sm">
-                      <button type="button" onClick={() => item.quantity <= 1 ? removeItem(item.id) : updateQuantity(item.id, item.quantity - 1)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors">
-                        {item.quantity <= 1 ? <Trash2 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
-                      </button>
-                      <span className="w-5 text-center text-xs font-bold text-gray-800">{item.quantity}</span>
-                      <button type="button" onClick={() => handleEditOrAdd(item, false)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-50 text-gray-800 transition-colors">
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {groupCartId ? (
+                      <span className="text-xs font-bold text-gray-450 bg-gray-50 border border-gray-200/50 px-3 py-1.5 rounded-xl">
+                        x{item.quantity}
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-white rounded-xl p-1 border border-gray-150 shadow-sm">
+                        <button type="button" onClick={() => item.quantity <= 1 ? removeItem(item.id) : updateQuantity(item.id, item.quantity - 1)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors">
+                          {item.quantity <= 1 ? <Trash2 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+                        </button>
+                        <span className="w-5 text-center text-xs font-bold text-gray-800">{item.quantity}</span>
+                        <button type="button" onClick={() => handleEditOrAdd(item, false)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-50 text-gray-800 transition-colors">
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
             
-            <button
-              type="button"
-              onClick={() => router.push('/?openMenu=true')}
-              className="w-full py-4 rounded-2xl border-2 border-dashed border-[#B48A5E]/20 text-[#B48A5E] font-bold text-xs hover:bg-[#B48A5E]/5 hover:border-[#B48A5E]/40 transition-all text-center flex items-center justify-center gap-2"
-            >
-              + Tambah Menu Lain
-            </button>
+            {!groupCartId && (
+              <button
+                type="button"
+                onClick={() => router.push('/?openMenu=true')}
+                className="w-full py-4 rounded-2xl border-2 border-dashed border-[#B48A5E]/20 text-[#B48A5E] font-bold text-xs hover:bg-[#B48A5E]/5 hover:border-[#B48A5E]/40 transition-all text-center flex items-center justify-center gap-2"
+              >
+                + Tambah Menu Lain
+              </button>
+            )}
           </section>
 
           {/* ── Voucher Trigger Section matching screenshot 1 ── */}
@@ -1721,6 +1814,17 @@ export default function CheckoutPage() {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('WALLET')}
+                  className={`flex flex-col items-center gap-1.5 p-4.5 rounded-2xl border-2 transition-all active:scale-[0.97] col-span-2
+                    ${paymentMethod === 'WALLET'
+                      ? 'border-amber-650 bg-amber-50/50 text-amber-850 shadow-sm shadow-amber-100'
+                      : 'border-gray-150 bg-white text-gray-500 hover:border-gray-250'}`}
+                >
+                  <Wallet className="w-6 h-6 shrink-0" />
+                  <span className="text-[11px] font-bold tracking-wide">Matchaboy Wallet (Saldo: {formatRupiah(walletBalance)})</span>
+                </button>
                  {paymentConfig?.qris?.enabled && (
                   <button
                     type="button"
@@ -1771,6 +1875,8 @@ export default function CheckoutPage() {
             <div className="bg-[#FFFDF9]/60 border border-[#EADFC9]/25 rounded-2xl p-4 text-[11px] text-[#8C7864] font-medium leading-relaxed">
               💡 {paymentMethod === 'COD' 
                 ? 'Bayar langsung di tempat saat pesanan kamu diserahkan kurir atau diambil di toko.' 
+                : paymentMethod === 'WALLET'
+                ? `Bayar instan menggunakan saldo Matchaboy Wallet Anda. Saldo saat ini: ${formatRupiah(walletBalance)}.`
                 : 'Selesaikan transaksi dengan mudah lewat sistem pembayaran premium kami setelah checkout.'}
             </div>
           </section>

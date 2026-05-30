@@ -19,6 +19,14 @@ export async function GET() {
                 tumblerCount: true,
                 currentTumblerGoal: true,
                 arusLevel: true,
+                walletBalance: true,
+                subscription: {
+                    select: {
+                        tier: true,
+                        status: true,
+                        expiresAt: true
+                    }
+                },
                 accounts: {
                     select: { provider: true }
                 },
@@ -54,6 +62,8 @@ export async function GET() {
             tumblerCount: user.tumblerCount,
             currentTumblerGoal: user.currentTumblerGoal,
             arusLevel: user.arusLevel,
+            walletBalance: user.walletBalance,
+            subscription: user.subscription,
             isGoogleConnected,
             driverProfile: user.driverProfile,
             image: user.image

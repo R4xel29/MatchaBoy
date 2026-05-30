@@ -51,7 +51,10 @@ import {
   AlertTriangle,
   Building2,
   ClipboardList,
-  Users
+  Users,
+  Leaf,
+  Edit,
+  Calendar
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import 'leaflet/dist/leaflet.css';
@@ -108,7 +111,36 @@ type MilestoneInfo = {
   milestone3: { target: number; reward: string; enabled: boolean };
 };
 
-type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral' | 'tickets' | 'help-center';
+type QuestShape = {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  targetType: string;
+  targetValue: number;
+  rewardPoints: number;
+  rewardVoucher: string | null;
+  progress: number;
+  isCompleted: boolean;
+  isClaimed: boolean;
+  completedAt: string | null;
+};
+
+type LeaderboardEntry = {
+  id: string;
+  name: string;
+  image: string | null;
+  value: number;
+};
+
+type LeaderboardData = {
+  topSpenders: LeaderboardEntry[];
+  mostLoyal: LeaderboardEntry[];
+  topReferrers: LeaderboardEntry[];
+  ecoChampions: LeaderboardEntry[];
+};
+
+type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral' | 'tickets' | 'help-center' | 'auto-reorder' | 'quests' | 'leaderboard';
 
 const profileCache: {
   favorites?: any[];
@@ -186,7 +218,7 @@ export default function ProfileClient({
   }, []);
 
   useEffect(() => {
-    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral', 'tickets', 'help-center'].includes(sectionParam)) {
+    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral', 'tickets', 'help-center', 'auto-reorder', 'quests', 'leaderboard'].includes(sectionParam)) {
       setActiveSection(sectionParam);
       
       // If it's loyalty and there's a tab, we might want to scroll
@@ -226,9 +258,12 @@ export default function ProfileClient({
 
   const menuItems = [
     { icon: Coins, label: 'Poin Saya', id: 'loyalty', badge: null },
+    { icon: Target, label: 'Misi Saya (Quest)', id: 'quests', badge: null },
+    { icon: Trophy, label: 'Papan Peringkat', id: 'leaderboard', badge: null },
     { icon: Share2, label: 'Referral Teman', id: 'referral', badge: null },
     { icon: Ticket, label: 'Voucher Saya', id: 'vouchers', badge: vouchers.filter(v => !v.isUsed).length > 0 ? vouchers.filter(v => !v.isUsed).length.toString() : null },
     { icon: Package, label: 'Pesanan Saya', id: 'orders', badge: activeOrdersCount > 0 ? activeOrdersCount.toString() : null },
+    { icon: Clock, label: 'Pemesanan Otomatis', id: 'auto-reorder', badge: null },
     { icon: MapPin, label: 'Alamat Tersimpan', id: 'addresses', badge: null },
     { icon: Bell, label: 'Notifikasi', id: 'notifications', badge: unreadCount > 0 ? unreadCount.toString() : null },
     { icon: ClipboardList, label: 'Lapor Masalah', id: 'tickets', badge: null },
@@ -258,6 +293,9 @@ export default function ProfileClient({
       case 'vouchers': return 'Voucher Saya';
       case 'tickets': return 'Lapor Masalah';
       case 'help-center': return 'Pusat Bantuan';
+      case 'quests': return 'Misi Saya (Quest)';
+      case 'leaderboard': return 'Papan Peringkat';
+      case 'auto-reorder': return 'Pemesanan Otomatis';
       default: return 'Profile';
     }
   };
@@ -450,6 +488,8 @@ export default function ProfileClient({
 
           {/* Render Sections */}
           {activeSection === 'loyalty' && <LoyaltySection user={user} milestones={milestones} />}
+          {activeSection === 'quests' && <QuestsSection user={user} />}
+          {activeSection === 'leaderboard' && <LeaderboardSection user={user} />}
           {activeSection === 'referral' && <ReferralSection user={user} />}
           {activeSection === 'vouchers' && <VouchersSection vouchers={vouchers} />}
           {activeSection === 'orders' && <OrdersSection orders={orders} router={router} />}
@@ -466,6 +506,7 @@ export default function ProfileClient({
           {activeSection === 'settings' && <SettingsSection user={user} onUpdate={(u) => setUser({...user, ...u})} />}
           {activeSection === 'tickets' && <TicketsSection user={user} showToast={showToast} />}
           {activeSection === 'help-center' && <HelpCenterSection storeSettings={storeSettings} showToast={showToast} />}
+          {activeSection === 'auto-reorder' && <AutoReorderSection user={user} showToast={showToast} />}
 
         </AnimatePresence>
       </div>
@@ -1164,7 +1205,42 @@ function OrdersSection({ orders, router }: { orders: OrderShape[], router: any }
   );
 }
 
-function SectionSkeleton({ type }: { type: 'favorites' | 'addresses' | 'notifications' | 'referral' | 'vouchers' | 'tickets' | 'help-center' }) {
+function SectionSkeleton({ type }: { type: 'favorites' | 'addresses' | 'notifications' | 'referral' | 'vouchers' | 'tickets' | 'help-center' | 'quests' | 'leaderboard' }) {
+  if (type === 'quests') {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-white rounded-3xl p-5 border border-[#D4A574]/15 space-y-3 animate-pulse">
+            <div className="flex justify-between">
+              <div className="h-4 bg-gray-200/50 rounded-lg w-1/3" />
+              <div className="h-4 bg-gray-200/50 rounded-lg w-1/4" />
+            </div>
+            <div className="h-3 bg-gray-200/50 rounded-lg w-3/4" />
+            <div className="h-2.5 bg-gray-200/50 rounded-full w-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (type === 'leaderboard') {
+    return (
+      <div className="space-y-3">
+        <div className="h-10 bg-gray-200/50 rounded-2xl animate-pulse" />
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="bg-white rounded-2xl p-4 border border-[#D4A574]/15 flex items-center justify-between animate-pulse">
+            <div className="flex items-center gap-3 w-2/3">
+              <div className="w-8 h-8 rounded-full bg-gray-200/50" />
+              <div className="w-10 h-10 rounded-full bg-gray-200/50" />
+              <div className="h-4 bg-gray-200/50 rounded-lg w-1/2" />
+            </div>
+            <div className="w-20 h-6 bg-gray-200/50 rounded-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   if (type === 'vouchers') {
     return (
       <div className="space-y-4">
@@ -3982,6 +4058,1053 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
         >
           Hubungi Customer Service
         </button>
+      </div>
+    </motion.section>
+  );
+}
+
+// =============================================================================
+// AUTO-REORDER SUBSCRIPTIONS SECTION
+// =============================================================================
+
+function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) {
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [addresses, setAddresses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Form states
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [quantity, setQuantity] = useState(1);
+  const [size, setSize] = useState("Normal");
+  const [iceLevel, setIceLevel] = useState("Normal");
+  const [sugarLevel, setSugarLevel] = useState("Normal");
+  const [selectedAddOns, setSelectedAddOns] = useState<any[]>([]);
+  const [frequency, setFrequency] = useState("DAILY");
+  const [dayOfWeek, setDayOfWeek] = useState(1); // 1 = Monday
+  const [dayOfMonth, setDayOfMonth] = useState(1);
+  const [timeSlot, setTimeSlot] = useState("08:00");
+  const [selectedAddress, setSelectedAddress] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("WALLET");
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [schedulesRes, productsRes, addressesRes] = await Promise.all([
+        fetch('/api/auto-reorder'),
+        fetch('/api/products'),
+        fetch('/api/user/locations')
+      ]);
+
+      if (schedulesRes.ok) {
+        const scheds = await schedulesRes.json();
+        setSchedules(scheds);
+      }
+      if (productsRes.ok) {
+        const prodData = await productsRes.json();
+        setProducts(prodData.products || []);
+      }
+      if (addressesRes.ok) {
+        const addrData = await addressesRes.json();
+        setAddresses(addrData || []);
+      }
+    } catch (err) {
+      console.error("Error fetching auto-reorder data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const selectedProduct = products.find(p => p.id === selectedProductId);
+  const modifiers = selectedProduct?.modifiers;
+
+  const calculatePreviewPrice = () => {
+    if (!selectedProduct) return 0;
+    let basePrice = selectedProduct.price;
+
+    if (size !== "Normal" && modifiers?.sizes && Array.isArray(modifiers.sizes)) {
+      const sizeObj = modifiers.sizes.find((s: any) => s.name === size);
+      if (sizeObj) basePrice += sizeObj.price;
+    }
+
+    let addonsPrice = 0;
+    if (selectedAddOns.length > 0 && modifiers?.addOns && Array.isArray(modifiers.addOns)) {
+      selectedAddOns.forEach(addonId => {
+        const addonObj = modifiers.addOns.find((a: any) => a.id === addonId);
+        if (addonObj) addonsPrice += addonObj.price;
+      });
+    }
+
+    return (basePrice + addonsPrice) * quantity;
+  };
+
+  const handleOpenAdd = () => {
+    setEditingId(null);
+    setSelectedProductId(products[0]?.id || "");
+    setQuantity(1);
+    setSize("Normal");
+    setIceLevel("Normal");
+    setSugarLevel("Normal");
+    setSelectedAddOns([]);
+    setFrequency("DAILY");
+    setDayOfWeek(1);
+    setDayOfMonth(1);
+    setTimeSlot("08:00");
+    setSelectedAddress(addresses.find(a => a.isDefault)?.address || addresses[0]?.address || "");
+    setPaymentMethod("WALLET");
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEdit = (schedule: any) => {
+    setEditingId(schedule.id);
+    setSelectedProductId(schedule.productId);
+    setQuantity(schedule.quantity);
+    setSize(schedule.size);
+    setIceLevel(schedule.iceLevel);
+    setSugarLevel(schedule.sugarLevel);
+    
+    let addonIds: any[] = [];
+    if (schedule.addOns) {
+      try {
+        const parsed = JSON.parse(schedule.addOns);
+        addonIds = parsed.map((a: any) => typeof a === 'string' ? a : (a.id || a.name));
+      } catch {}
+    }
+    setSelectedAddOns(addonIds);
+    setFrequency(schedule.frequency);
+    setDayOfWeek(schedule.dayOfWeek !== null ? schedule.dayOfWeek : 1);
+    setDayOfMonth(schedule.dayOfMonth !== null ? schedule.dayOfMonth : 1);
+    setTimeSlot(schedule.timeSlot);
+    setSelectedAddress(schedule.deliveryAddress);
+    setPaymentMethod(schedule.paymentMethod);
+    setIsFormOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin membatalkan & menghapus pemesanan otomatis ini?")) return;
+    try {
+      const res = await fetch(`/api/auto-reorder?id=${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        showToast("Pemesanan otomatis berhasil dibatalkan", "success");
+        setSchedules(prev => prev.filter(s => s.id !== id));
+      } else {
+        showToast("Gagal membatalkan pemesanan otomatis", "error");
+      }
+    } catch {
+      showToast("Terjadi kesalahan koneksi", "error");
+    }
+  };
+
+  const handleToggleActive = async (schedule: any) => {
+    const updatedStatus = !schedule.isActive;
+    try {
+      const res = await fetch(`/api/auto-reorder?id=${schedule.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive: updatedStatus })
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setSchedules(prev => prev.map(s => s.id === schedule.id ? updated : s));
+        showToast(updatedStatus ? "Pemesanan otomatis diaktifkan" : "Pemesanan otomatis dinonaktifkan", "success");
+      } else {
+        showToast("Gagal mengubah status pemesanan", "error");
+      }
+    } catch {
+      showToast("Terjadi kesalahan koneksi", "error");
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductId) {
+      showToast("Silakan pilih produk terlebih dahulu", "error");
+      return;
+    }
+    if (!selectedAddress) {
+      showToast("Silakan pilih atau isi alamat pengiriman", "error");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        productId: selectedProductId,
+        quantity,
+        size,
+        iceLevel,
+        sugarLevel,
+        addOns: selectedAddOns,
+        frequency,
+        dayOfWeek: frequency === "WEEKLY" ? dayOfWeek : null,
+        dayOfMonth: frequency === "MONTHLY" ? dayOfMonth : null,
+        timeSlot,
+        deliveryAddress: selectedAddress,
+        paymentMethod,
+        isActive: true
+      };
+
+      const url = editingId ? `/api/auto-reorder?id=${editingId}` : '/api/auto-reorder';
+      const method = editingId ? 'PATCH' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const saved = await res.json();
+        if (editingId) {
+          setSchedules(prev => prev.map(s => s.id === editingId ? saved : s));
+          showToast("Pemesanan otomatis berhasil diperbarui", "success");
+        } else {
+          setSchedules(prev => [saved, ...prev]);
+          showToast("Pemesanan otomatis berhasil dibuat", "success");
+        }
+        setIsFormOpen(false);
+      } else {
+        const errorData = await res.json();
+        showToast(errorData.error || "Gagal menyimpan jadwal pemesanan", "error");
+      }
+    } catch {
+      showToast("Terjadi kesalahan jaringan", "error");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getFrequencyLabel = (sched: any) => {
+    const timeStr = `pukul ${sched.timeSlot}`;
+    if (sched.frequency === "DAILY") return `Setiap Hari, ${timeStr}`;
+    if (sched.frequency === "WEEKLY") {
+      const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+      return `Setiap Hari ${days[sched.dayOfWeek || 0]}, ${timeStr}`;
+    }
+    if (sched.frequency === "MONTHLY") {
+      return `Setiap Tanggal ${sched.dayOfMonth}, ${timeStr}`;
+    }
+    return sched.frequency;
+  };
+
+  if (loading) {
+    return <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-[#B48A5E]" /></div>;
+  }
+
+  return (
+    <motion.section
+      key="auto-reorder"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="space-y-4"
+    >
+      <div className="flex justify-between items-center mb-2">
+        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Jadwal Pemesanan Otomatis</p>
+        <button
+          onClick={handleOpenAdd}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1E3F20] text-white rounded-full text-xs font-bold shadow-md hover:bg-[#152e16] transition-all active:scale-95 animate-fade-in"
+        >
+          <Plus className="w-4.5 h-4.5" />
+          <span>Tambah Jadwal</span>
+        </button>
+      </div>
+
+      {schedules.length === 0 ? (
+        <div className="text-center py-16 px-6 bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm">
+          <div className="w-16 h-16 bg-[#FFFBF5] border border-[#D4A574]/15 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Clock className="w-8 h-8 text-[#B48A5E]" />
+          </div>
+          <h3 className="font-serif text-lg text-gray-800 mb-1 font-bold">Belum Ada Jadwal</h3>
+          <p className="text-xs text-gray-500 mb-6 max-w-xs mx-auto leading-relaxed">
+            Atur pemesanan minuman matcha favoritmu secara otomatis harian, mingguan, atau bulanan dengan pengantaran langsung ke alamatmu!
+          </p>
+          <button 
+            onClick={handleOpenAdd}
+            className="px-6 py-3 bg-[#B48A5E] text-white rounded-full text-xs font-black hover:bg-[#946F48] transition-all shadow-md shadow-[#B48A5E]/10"
+          >
+            Mulai Berlangganan
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {schedules.map((sched) => {
+            let addOnNames = "";
+            if (sched.addOns) {
+              try {
+                const parsed = JSON.parse(sched.addOns);
+                addOnNames = parsed.map((a: any) => typeof a === 'string' ? a : a.name).join(", ");
+              } catch {}
+            }
+
+            return (
+              <div
+                key={sched.id}
+                className={`bg-white rounded-3xl p-5 border border-[#D4A574]/15 shadow-sm transition-all flex flex-col justify-between gap-4 ${
+                  !sched.isActive ? 'opacity-70 bg-gray-50/55' : ''
+                }`}
+              >
+                <div className="flex items-start justify-between w-full">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#FFFBF5] border border-[#D4A574]/15 flex items-center justify-center text-[#B48A5E] shrink-0">
+                      <Coffee className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-gray-800 text-[15px]">{sched.productName}</h4>
+                      <p className="text-[10px] text-gray-400 mt-1 font-medium font-mono uppercase tracking-wider">
+                        {sched.quantity} cup • {sched.size} | Es: {sched.iceLevel} | Gula: {sched.sugarLevel}
+                        {addOnNames && ` • Topping: ${addOnNames}`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 font-bold hidden sm:inline">{sched.isActive ? 'Aktif' : 'Nonaktif'}</span>
+                    <button
+                      onClick={() => handleToggleActive(sched)}
+                      className={`w-11 h-6 rounded-full transition-all relative flex items-center p-1 cursor-pointer ${
+                        sched.isActive ? 'bg-[#1E3F20]' : 'bg-gray-200'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 bg-white rounded-full transition-all shadow ${
+                          sched.isActive ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="border-t border-dashed border-[#D4A574]/10 pt-3 space-y-2 text-xs text-gray-600">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-[#B48A5E] shrink-0" />
+                    <span className="font-semibold">{getFrequencyLabel(sched)}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <MapPin className="w-3.5 h-3.5 text-[#B48A5E] mt-0.5 shrink-0" />
+                    <span className="font-medium truncate max-w-xs sm:max-w-md">{sched.deliveryAddress}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-3.5 h-3.5 text-[#B48A5E] shrink-0" />
+                    <span className="font-bold">Total Biaya: {formatRupiah(sched.price * sched.quantity)}</span>
+                    <span className="text-[10px] bg-[#B48A5E]/10 text-[#B48A5E] font-black px-1.5 py-0.5 rounded ml-1">
+                      {sched.paymentMethod === "WALLET" ? 'E-WALLET' : 'COD'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2.5 mt-1 border-t border-gray-100 pt-3 w-full">
+                  <button
+                    onClick={() => handleOpenEdit(sched)}
+                    className="flex items-center gap-1 px-3 py-1.5 border border-gray-200 hover:bg-[#B48A5E]/5 text-gray-600 rounded-xl text-xs font-bold transition-all active:scale-95"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Ubah</span>
+                  </button>
+                  <button
+                    onClick={() => handleDelete(sched.id)}
+                    className="flex items-center gap-1 px-3 py-1.5 border border-red-200 bg-red-50/10 hover:bg-red-55 text-red-500 rounded-xl text-xs font-bold transition-all active:scale-95"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Batalkan</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ==================== CREATE / EDIT OVERLAY ==================== */}
+      <AnimatePresence>
+        {isFormOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] bg-white flex flex-col pt-safe pb-safe"
+          >
+            <div className="px-4 py-4 flex items-center gap-4 bg-white sticky top-0 z-10 border-b border-gray-100">
+              <button 
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all active:scale-90"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h2 className="font-serif text-lg font-bold text-gray-900 flex-1">
+                {editingId ? 'Ubah Pemesanan Otomatis' : 'Tambah Pemesanan Otomatis'}
+              </h2>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-hide pb-32">
+              {/* Product Selection */}
+              <div className="space-y-2">
+                <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Pilih Menu Matcha</label>
+                <select
+                  value={selectedProductId}
+                  onChange={(e) => {
+                    setSelectedProductId(e.target.value);
+                    setSize("Normal");
+                    setIceLevel("Normal");
+                    setSugarLevel("Normal");
+                    setSelectedAddOns([]);
+                  }}
+                  className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 shadow-inner"
+                >
+                  <option value="" disabled>-- Pilih Minuman --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name} ({formatRupiah(p.price)})</option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedProduct && (
+                <div className="bg-[#FFFBF5]/60 border border-[#D4A574]/15 rounded-3xl p-5 space-y-4">
+                  <p className="text-xs font-black text-[#B48A5E] uppercase tracking-wider">Kustomisasi Minuman</p>
+
+                  {/* Size customization */}
+                  {modifiers?.sizes && Array.isArray(modifiers.sizes) && modifiers.sizes.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500">Ukuran Cup</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSize("Normal")}
+                          className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                            size === "Normal"
+                              ? 'bg-[#B48A5E] text-white border-[#B48A5E]'
+                              : 'bg-white text-gray-600 border-gray-200'
+                          }`}
+                        >
+                          Normal (+Rp0)
+                        </button>
+                        {modifiers.sizes.map((s: any) => (
+                          <button
+                            key={s.name}
+                            type="button"
+                            onClick={() => setSize(s.name)}
+                            className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl border transition-all ${
+                              size === s.name
+                                ? 'bg-[#B48A5E] text-white border-[#B48A5E]'
+                                : 'bg-white text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {s.name} (+{formatRupiah(s.price)})
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Ice level customization */}
+                  {modifiers?.iceLevel && Array.isArray(modifiers.iceLevel) && modifiers.iceLevel.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500">Level Es</label>
+                      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {modifiers.iceLevel.map((lvl: string) => (
+                          <button
+                            key={lvl}
+                            type="button"
+                            onClick={() => setIceLevel(lvl)}
+                            className={`py-2 px-4 text-xs font-bold rounded-xl border transition-all whitespace-nowrap shrink-0 ${
+                              iceLevel === lvl
+                                ? 'bg-[#1E3F20] text-white border-[#1E3F20]'
+                                : 'bg-white text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {lvl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Sugar level customization */}
+                  {modifiers?.sugarLevel && Array.isArray(modifiers.sugarLevel) && modifiers.sugarLevel.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500">Level Gula</label>
+                      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                        {modifiers.sugarLevel.map((lvl: string) => (
+                          <button
+                            key={lvl}
+                            type="button"
+                            onClick={() => setSugarLevel(lvl)}
+                            className={`py-2 px-4 text-xs font-bold rounded-xl border transition-all whitespace-nowrap shrink-0 ${
+                              sugarLevel === lvl
+                                ? 'bg-[#1E3F20] text-white border-[#1E3F20]'
+                                : 'bg-white text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {lvl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add-ons customization */}
+                  {modifiers?.addOns && Array.isArray(modifiers.addOns) && modifiers.addOns.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-gray-500">Topping Tambahan</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {modifiers.addOns.map((add: any) => {
+                          const isSelected = selectedAddOns.includes(add.id);
+                          return (
+                            <button
+                              key={add.id}
+                              type="button"
+                              onClick={() => {
+                                if (isSelected) {
+                                  setSelectedAddOns(prev => prev.filter(id => id !== add.id));
+                                } else {
+                                  setSelectedAddOns(prev => [...prev, add.id]);
+                                }
+                              }}
+                              className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all text-left flex justify-between items-center ${
+                                isSelected
+                                  ? 'bg-[#B48A5E]/10 text-[#946F48] border-[#B48A5E]'
+                                  : 'bg-white text-gray-600 border-gray-200'
+                              }`}
+                            >
+                              <span>{add.name}</span>
+                              <span className="font-black text-[10px] text-[#B48A5E]">+{formatRupiah(add.price)}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quantity selection */}
+                  <div className="flex items-center justify-between pt-2">
+                    <span className="text-xs font-bold text-gray-600">Jumlah Cup</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        disabled={quantity <= 1}
+                        onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                        className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center font-bold text-gray-600 bg-white hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                      >
+                        -
+                      </button>
+                      <span className="font-black text-sm text-gray-900 w-4 text-center">{quantity}</span>
+                      <button
+                        type="button"
+                        onClick={() => setQuantity(prev => prev + 1)}
+                        className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center font-bold text-gray-600 bg-white hover:bg-gray-50 transition-colors"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Schedule customization */}
+              <div className="bg-[#FFFBF5]/60 border border-[#D4A574]/15 rounded-3xl p-5 space-y-4">
+                <p className="text-xs font-black text-[#B48A5E] uppercase tracking-wider">Jadwal Pengiriman</p>
+
+                {/* Frequency selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500">Frekuensi</label>
+                  <div className="flex gap-2">
+                    {["DAILY", "WEEKLY", "MONTHLY"].map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setFrequency(f)}
+                        className={`flex-1 py-2.5 text-xs font-black rounded-xl border transition-all ${
+                          frequency === f
+                            ? 'bg-[#1E3F20] text-white border-[#1E3F20]'
+                            : 'bg-white text-gray-500 border-gray-200'
+                        }`}
+                      >
+                        {f === "DAILY" ? 'Harian' : f === "WEEKLY" ? 'Mingguan' : 'Bulanan'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Day selector depending on frequency */}
+                {frequency === "WEEKLY" && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-500">Pilih Hari</label>
+                    <select
+                      value={dayOfWeek}
+                      onChange={(e) => setDayOfWeek(Number(e.target.value))}
+                      className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800"
+                    >
+                      <option value={1}>Senin</option>
+                      <option value={2}>Selasa</option>
+                      <option value={3}>Rabu</option>
+                      <option value={4}>Kamis</option>
+                      <option value={5}>Jumat</option>
+                      <option value={6}>Sabtu</option>
+                      <option value={0}>Minggu</option>
+                    </select>
+                  </div>
+                )}
+
+                {frequency === "MONTHLY" && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-gray-500">Pilih Tanggal</label>
+                    <select
+                      value={dayOfMonth}
+                      onChange={(e) => setDayOfMonth(Number(e.target.value))}
+                      className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl outline-none text-xs font-semibold text-gray-800"
+                    >
+                      {Array.from({ length: 31 }, (_, idx) => idx + 1).map(day => (
+                        <option key={day} value={day}>Tanggal {day}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Time picker */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-500">Jam Pengantaran</label>
+                  <input
+                    type="time"
+                    value={timeSlot}
+                    onChange={(e) => setTimeSlot(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl outline-none text-xs font-bold text-gray-800"
+                  />
+                  <p className="text-[10px] text-gray-400 font-medium">Pengiriman akan dijadwalkan pada jam operasional toko terdekat dengan slot ini.</p>
+                </div>
+              </div>
+
+              {/* Delivery Address selection */}
+              <div className="space-y-2">
+                <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Alamat Pengantaran</label>
+                {addresses.length === 0 ? (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      placeholder="Masukkan alamat pengiriman manual"
+                      value={selectedAddress}
+                      onChange={(e) => setSelectedAddress(e.target.value)}
+                      className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 shadow-inner"
+                    />
+                    <p className="text-[10px] text-amber-600 font-bold">⚠️ Anda belum memiliki alamat tersimpan. Silakan tambahkan alamat tersimpan terlebih dahulu di profil untuk ketepatan pinpoint delivery.</p>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedAddress}
+                    onChange={(e) => setSelectedAddress(e.target.value)}
+                    className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 shadow-inner"
+                  >
+                    <option value="" disabled>-- Pilih Alamat Pengantaran --</option>
+                    {addresses.map(a => (
+                      <option key={a.id} value={a.address}>{a.name || 'Alamat'} - {a.address.slice(0, 45)}...</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Payment Method */}
+              <div className="space-y-3">
+                <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Metode Pembayaran</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("WALLET")}
+                    className={`p-4 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+                      paymentMethod === "WALLET"
+                        ? 'border-[#B48A5E] bg-[#B48A5E]/5 text-[#946F48] shadow-sm'
+                        : 'border-[#D4A574]/15 bg-white text-gray-500'
+                    }`}
+                  >
+                    <span className="text-xs font-black">E-Wallet</span>
+                    <span className="text-[10px] text-gray-400 mt-2 font-medium">Saldo: {formatRupiah(user.walletBalance || 0)}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("COD")}
+                    className={`p-4 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+                      paymentMethod === "COD"
+                        ? 'border-[#B48A5E] bg-[#B48A5E]/5 text-[#946F48] shadow-sm'
+                        : 'border-[#D4A574]/15 bg-white text-gray-500'
+                    }`}
+                  >
+                    <span className="text-xs font-black">Cash On Delivery</span>
+                    <span className="text-[10px] text-gray-400 mt-2 font-medium">Bayar di Tempat</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Live Preview Card */}
+              {selectedProduct && (
+                <div className="bg-[#1E3F20] text-white rounded-3xl p-5 space-y-2.5 shadow-lg relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-5">
+                    <Coffee className="w-24 h-24 rotate-12" />
+                  </div>
+                  <div className="flex justify-between items-center relative z-10">
+                    <span className="text-xs font-bold text-white/85">Estimasi Biaya ({quantity} cup):</span>
+                    <span className="text-lg font-black">{formatRupiah(calculatePreviewPrice())}</span>
+                  </div>
+                  <p className="text-[10px] text-white/70 leading-relaxed relative z-10">
+                    * Pembayaran via E-Wallet akan dipotong secara otomatis pada setiap jadwal pemesanan. Pastikan saldo Anda mencukupi agar pengiriman tidak gagal.
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-4 bg-[#B48A5E] hover:bg-[#946F48] text-white rounded-2xl font-bold shadow-lg shadow-[#B48A5E]/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2 text-[15px]"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Menyimpan Jadwal...</span>
+                  </>
+                ) : (
+                  <span>Konfirmasi & Simpan Jadwal</span>
+                )}
+              </button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.section>
+  );
+}
+
+
+function QuestsSection({ user }: { user: UserShape }) {
+  const [quests, setQuests] = useState<QuestShape[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const { showToast } = useToast();
+  const router = useRouter();
+
+  const fetchQuests = async () => {
+    try {
+      const res = await fetch('/api/quests');
+      if (res.ok) {
+        const data = await res.json();
+        setQuests(data.quests || []);
+      }
+    } catch (e) {
+      console.error('Error fetching quests:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQuests();
+  }, []);
+
+  const handleClaim = async (questId: string) => {
+    setClaimingId(questId);
+    try {
+      const res = await fetch('/api/quests/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message, 'success');
+        fetchQuests();
+        router.refresh();
+      } else {
+        showToast(data.error || 'Gagal mengklaim hadiah', 'error');
+      }
+    } catch (e) {
+      showToast('Terjadi kesalahan jaringan', 'error');
+    } finally {
+      setClaimingId(null);
+    }
+  };
+
+  const getQuestTypeLabel = (type: string) => {
+    switch (type) {
+      case 'DAILY': return 'Harian';
+      case 'WEEKLY': return 'Mingguan';
+      case 'SPECIAL': return 'Spesial';
+      default: return type;
+    }
+  };
+
+  const getQuestTypeColor = (type: string) => {
+    switch (type) {
+      case 'DAILY': return 'bg-blue-50 text-blue-600 border-blue-100';
+      case 'WEEKLY': return 'bg-purple-50 text-purple-600 border-purple-100';
+      case 'SPECIAL': return 'bg-amber-50 text-amber-700 border-amber-100';
+      default: return 'bg-gray-50 text-gray-500 border-gray-100';
+    }
+  };
+
+  if (loading) {
+    return <SectionSkeleton type="quests" />;
+  }
+
+  return (
+    <motion.section
+      key="quests"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="space-y-4"
+    >
+      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
+            <Target className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-[15px] font-black text-gray-850 font-serif">Misi Setia Matchaboy</h4>
+            <p className="text-[11px] text-gray-500 font-medium">Selesaikan misi untuk mendapatkan Poin & Voucher gratis!</p>
+          </div>
+        </div>
+
+        {quests.length === 0 ? (
+          <div className="text-center py-10 text-gray-400 text-xs font-semibold">
+            Tidak ada misi aktif saat ini.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {quests.map((quest) => {
+              const progressPercent = Math.min((quest.progress / quest.targetValue) * 100, 100);
+              return (
+                <div key={quest.id} className="p-4 bg-[#FFFBF5]/70 border border-[#D4A574]/15 rounded-2xl space-y-3 relative overflow-hidden">
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="space-y-1">
+                      <span className={`inline-block px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${getQuestTypeColor(quest.type)}`}>
+                        Misi {getQuestTypeLabel(quest.type)}
+                      </span>
+                      <h4 className="text-[14px] font-black text-gray-900 leading-snug">{quest.title}</h4>
+                      <p className="text-[11px] text-gray-500 leading-relaxed font-semibold">{quest.description}</p>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="text-xs font-black text-[#B48A5E] bg-[#B48A5E]/5 border border-[#B48A5E]/15 px-2 py-1 rounded-xl">
+                        🎁 {quest.rewardPoints > 0 ? `+${quest.rewardPoints} Pts` : ''}
+                        {quest.rewardPoints > 0 && quest.rewardVoucher ? ' & ' : ''}
+                        {quest.rewardVoucher ? 'Voucher' : ''}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] text-gray-400 font-bold uppercase">
+                      <span>Progres</span>
+                      <span className="text-gray-700">{quest.progress} / {quest.targetValue}</span>
+                    </div>
+                    <div className="h-2 bg-gray-150 rounded-full overflow-hidden p-[1px]">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-500 ${quest.isCompleted ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.4)]' : 'bg-[#B48A5E]'}`}
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-dashed border-gray-150">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase">
+                      {quest.isClaimed ? 'Hadiah Diklaim' : quest.isCompleted ? 'Misi Selesai' : 'Misi Sedang Berjalan'}
+                    </span>
+
+                    {quest.isClaimed ? (
+                      <span className="text-[11px] font-black text-gray-400 bg-gray-100 px-3.5 py-1.5 rounded-xl border border-gray-200">
+                        Selesai & Diklaim
+                      </span>
+                    ) : quest.isCompleted ? (
+                      <button
+                        onClick={() => handleClaim(quest.id)}
+                        disabled={claimingId === quest.id}
+                        className="px-4 py-1.5 bg-[#B48A5E] hover:bg-[#946F48] text-white text-xs font-black rounded-xl shadow-md shadow-[#B48A5E]/15 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                      >
+                        {claimingId === quest.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Gift className="w-3.5 h-3.5" />
+                        )}
+                        Klaim Hadiah
+                      </button>
+                    ) : (
+                      <span className="text-[10px] font-bold text-[#B48A5E] bg-[#B48A5E]/5 px-2.5 py-1 rounded-lg border border-[#B48A5E]/10 animate-pulse">
+                        Selesaikan Target
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </motion.section>
+  );
+}
+
+function LeaderboardSection({ user }: { user: UserShape }) {
+  const [data, setData] = useState<LeaderboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'spend' | 'loyal' | 'refer' | 'eco'>('spend');
+
+  useEffect(() => {
+    fetch('/api/leaderboard')
+      .then(res => res.json())
+      .then(d => {
+        setData(d);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error fetching leaderboard:', err);
+        setLoading(false);
+      });
+  }, []);
+
+  if (loading) {
+    return <SectionSkeleton type="leaderboard" />;
+  }
+
+  const getActiveList = () => {
+    if (!data) return [];
+    switch (activeTab) {
+      case 'spend': return data.topSpenders;
+      case 'loyal': return data.mostLoyal;
+      case 'refer': return data.topReferrers;
+      case 'eco': return data.ecoChampions;
+      default: return [];
+    }
+  };
+
+  const getUnit = () => {
+    switch (activeTab) {
+      case 'spend': return 'Rupiah';
+      case 'loyal': return 'Transaksi';
+      case 'refer': return 'Orang';
+      case 'eco': return 'Bawaan';
+      default: return '';
+    }
+  };
+
+  const formatVal = (val: number) => {
+    if (activeTab === 'spend') {
+      return formatRupiah(val);
+    }
+    return `${val.toLocaleString('id-ID')} ${getUnit()}`;
+  };
+
+  const activeList = getActiveList();
+
+  return (
+    <motion.section
+      key="leaderboard"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="space-y-4"
+    >
+      <div className="flex gap-1 p-1 bg-[#FFFBF5]/90 border border-[#D4A574]/15 rounded-2xl shadow-inner overflow-x-auto scrollbar-hide">
+        {[
+          { id: 'spend', label: 'Top Spender', icon: Coins },
+          { id: 'loyal', label: 'Setia', icon: Coffee },
+          { id: 'refer', label: 'Referrer', icon: Users },
+          { id: 'eco', label: 'Eco-Hero', icon: Leaf },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex-1 py-2.5 px-3 text-center text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-br from-[#B48A5E] to-[#946F48] text-white shadow-md font-black'
+                  : 'text-gray-500 hover:text-gray-800 font-bold hover:bg-white/40'
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="bg-white/80 backdrop-blur-md rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+          <Trophy className="w-48 h-48 text-[#B48A5E]" />
+        </div>
+
+        <div className="flex items-center justify-between pb-3 border-b border-[#D4A574]/15">
+          <h4 className="font-serif text-sm font-bold text-gray-850 flex items-center gap-2">
+            🏆 Peringkat {activeTab === 'spend' ? 'Top Spender Bulan Ini' : activeTab === 'loyal' ? 'Transaksi Terbanyak Bulan Ini' : activeTab === 'refer' ? 'Referral Terbanyak' : 'Ramah Lingkungan (Tumbler)'}
+          </h4>
+          <span className="text-[10px] text-gray-400 font-extrabold uppercase bg-gray-50 px-2 py-0.5 rounded border border-gray-150/60">
+            Top 10
+          </span>
+        </div>
+
+        {activeList.length === 0 ? (
+          <div className="text-center py-12 text-gray-400 text-xs font-semibold">
+            Belum ada peringkat untuk kategori ini.
+          </div>
+        ) : (
+          <div className="space-y-3.5">
+            {activeList.map((entry, index) => {
+              const isTop3 = index < 3;
+              const rankIcons = ['🥇', '🥈', '🥉'];
+              return (
+                <motion.div
+                  key={entry.id || index}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
+                    entry.id === user.referralCode || (user.name && entry.name === user.name)
+                      ? 'bg-gradient-to-r from-[#FFFBF5] to-[#FFF6EB] border-[#D4A574] ring-1 ring-[#D4A574]/20 shadow-md scale-[1.01]'
+                      : 'bg-white border-[#D4A574]/10 shadow-sm'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 flex items-center justify-center shrink-0">
+                      {isTop3 ? (
+                        <span className="text-xl">{rankIcons[index]}</span>
+                      ) : (
+                        <span className="text-xs font-extrabold text-gray-400 font-mono">#{index + 1}</span>
+                      )}
+                    </div>
+
+                    <div className="w-10 h-10 rounded-full bg-[#1E3F20] flex items-center justify-center overflow-hidden border border-[#D4A574]/25 shrink-0 shadow-inner">
+                      {entry.image ? (
+                        <img src={entry.image} alt={entry.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <User className="w-5 h-5 text-[#D4A574]" />
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className={`text-sm font-bold text-gray-800 truncate max-w-[150px] sm:max-w-[200px] ${
+                        entry.id === user.referralCode || (user.name && entry.name === user.name) ? 'text-[#B48A5E] font-black' : ''
+                      }`}>
+                        {entry.name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <span className="text-xs font-black text-gray-850 bg-gray-50 border border-gray-150 px-3 py-1.5 rounded-xl shadow-sm">
+                      {formatVal(entry.value)}
+                    </span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </motion.section>
   );

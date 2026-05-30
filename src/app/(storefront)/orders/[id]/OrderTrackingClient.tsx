@@ -27,6 +27,7 @@ import { formatRupiah } from '@/lib/utils';
 import dynamic from 'next/dynamic';
 
 const LeafletTracking = dynamic(() => import('@/components/storefront/MapboxTracking').then(m => m.LeafletTracking), { ssr: false });
+import { SocialShareCard } from '@/components/storefront/SocialShareCard';
 
 export type TrackingOrderShape = {
   id: string;
@@ -435,10 +436,18 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           )}
 
           {isFinished && (
-            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
-              <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-              <p className="text-sm font-bold text-emerald-800">Pesanan Selesai!</p>
-              <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Arus</p>
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-5 duration-500">
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
+                <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
+                <p className="text-sm font-bold text-emerald-800">Pesanan Selesai!</p>
+                <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Matchaboy</p>
+              </div>
+              <SocialShareCard
+                customerName={order.customerName}
+                orderId={order.id}
+                total={order.total}
+                items={order.items}
+              />
             </div>
           )}
 

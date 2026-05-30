@@ -16,6 +16,7 @@ import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 const ProductModal = dynamic(() => import('@/components/storefront/ProductModal').then(m => ({ default: m.ProductModal })), { ssr: false });
 const SearchOverlay = dynamic(() => import('@/components/storefront/SearchOverlay').then(m => ({ default: m.SearchOverlay })), { ssr: false });
 const EasterEggOverlay = dynamic(() => import('@/components/storefront/EasterEggOverlay').then(m => ({ default: m.EasterEggOverlay })), { ssr: false });
+import { GachaOverlay } from '@/components/storefront/GachaOverlay';
 
 interface HeroBanner {
   id: string;
@@ -74,6 +75,21 @@ export default function StorefrontClient({
   const [isEasterEggExpanded, setIsEasterEggExpanded] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
   const loyaltyFetchedRef = useRef(false);
+
+  // Featured Reviews and Gacha chances states
+  const [featuredReviews, setFeaturedReviews] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
+  const [gachaChances, setGachaChances] = useState(0);
+  const [isGachaOpen, setIsGachaOpen] = useState(false);
+
+  // Weather recommendations state
+  const [weatherData, setWeatherData] = useState<any>(null);
+  const [loadingWeather, setLoadingWeather] = useState(true);
+
+  // AI recommendations state
+  const [aiData, setAiData] = useState<any[]>([]);
+  const [loadingAi, setLoadingAi] = useState(true);
+
 
   const [copied, setCopied] = useState(false);
   const referralCode = useMemo(() => {
@@ -135,6 +151,17 @@ export default function StorefrontClient({
   }, [setSearchOpen]);
 
   useEffect(() => {
+    // Fetch featured reviews
+    fetch('/api/reviews/featured')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.reviews) {
+          setFeaturedReviews(data.reviews);
+        }
+      })
+      .catch(err => console.error('Error fetching reviews:', err))
+      .finally(() => setLoadingReviews(false));
+
     if (status === 'authenticated' && !loyaltyFetchedRef.current) {
       loyaltyFetchedRef.current = true;
       fetch('/api/user/loyalty')
@@ -145,8 +172,60 @@ export default function StorefrontClient({
           }
         })
         .catch(err => console.error('Error fetching loyalty data:', err));
+
+      fetch('/api/user/gacha')
+        .then(res => res.json())
+        .then(data => {
+          if (data?.gachaChances !== undefined) {
+            setGachaChances(data.gachaChances);
+          }
+        })
+        .catch(err => console.error('Error fetching gacha chances:', err));
     }
   }, [status]);
+
+  // Weather & Geolocation Fetch
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          fetch(`/api/weather-recommendation?lat=${latitude}&lon=${longitude}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data?.success) setWeatherData(data);
+            })
+            .catch(err => console.error('Error fetching weather:', err))
+            .finally(() => setLoadingWeather(false));
+        },
+        (err) => {
+          fetch(`/api/weather-recommendation`)
+            .then(res => res.json())
+            .then(data => {
+              if (data?.success) setWeatherData(data);
+            })
+            .catch(err => console.error('Error fetching weather fallback:', err))
+            .finally(() => setLoadingWeather(false));
+        }
+      );
+    } else {
+      setLoadingWeather(false);
+    }
+  }, []);
+
+  // AI Recommendations Fetch
+  useEffect(() => {
+    fetch('/api/ai/recommendations')
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success && data.recommendations) {
+          setAiData(data.recommendations);
+        }
+      })
+      .catch(err => console.error('Error fetching AI recommendations:', err))
+      .finally(() => setLoadingAi(false));
+  }, [status]);
+
 
   const handleClaimEasterEgg = async () => {
     setIsClaiming(true);
@@ -535,6 +614,166 @@ export default function StorefrontClient({
           transition={{ delay: 0.2, duration: 0.7 }}
           className="max-w-6xl mx-auto px-4 sm:px-6 mt-8 space-y-8 relative z-10"
         >
+          {/* Custom Studio Banner Direct Link */}
+          <div className="bg-gradient-to-tr from-[#2E5A44] to-[#1E3F20] text-white rounded-[2.5rem] p-6 shadow-md border-2 border-[#D4A574]/40 flex flex-col md:flex-row items-center justify-between gap-4 relative overflow-hidden select-none">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(254,240,138,0.2)_0%,_rgba(0,0,0,0)_60%)] pointer-events-none" />
+            <div className="space-y-1.5 text-left z-10">
+              <span className="bg-[#FEF08A]/20 text-[#FEF08A] text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest leading-none">
+                ✦ Studio Menu Baru ✦
+              </span>
+              <h3 className="font-serif font-black text-lg md:text-xl text-white tracking-tight leading-none mt-1">
+                Custom Matcha Studio
+              </h3>
+              <p className="text-[11px] text-gray-200 font-semibold max-w-xl">
+                Jadilah master blender! Racik sendiri kadar matcha murni, susu oat/almond premium, tingkat kemanisan, dan aneka toppings sesukamu.
+              </p>
+            </div>
+            <button 
+              onClick={() => window.location.href = '/custom-studio'}
+              className="w-full md:w-auto px-6 py-3.5 bg-gradient-to-tr from-[#FEF08A] to-[#D4A574] hover:shadow-lg active:scale-98 transition-all text-[#2A1F16] text-[12px] font-black rounded-2xl shadow-md z-10 flex items-center justify-center gap-1.5 shrink-0"
+            >
+              <span>Mulai Meracik</span> 🧪
+            </button>
+          </div>
+
+          {/* Teman Cuaca Hari Ini Widget */}
+          {!loadingWeather && weatherData && (
+            <section className="bg-white rounded-[2rem] border border-gray-150 p-6 shadow-sm overflow-hidden text-left relative">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 border-b border-gray-100 pb-4">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl leading-none">🌤️</span>
+                    <h3 className="font-serif font-black text-base md:text-lg text-gray-950 tracking-tight">
+                      Teman Cuaca Hari Ini
+                    </h3>
+                  </div>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                    Rekomendasi minuman kurasi otomatis berdasarkan cuaca lokalmu
+                  </p>
+                </div>
+
+                {/* Weather details pill */}
+                <div className="flex items-center gap-2.5 bg-[#2E5A44]/5 border border-[#2E5A44]/10 px-3.5 py-1.5 rounded-2xl shrink-0 self-start sm:self-auto shadow-inner">
+                  <span className="text-sm font-bold text-gray-700">{weatherData.weather.city}</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-xs font-black text-[#2E5A44]">{weatherData.weather.temp.toFixed(1)}°C</span>
+                  <span className="text-[10px] bg-[#2E5A44]/10 text-[#2E5A44] font-black uppercase px-2 py-0.5 rounded-lg leading-none">
+                    {weatherData.weather.description}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tagline */}
+              <p className="text-xs text-gray-600 font-semibold italic bg-gray-50 p-3.5 rounded-2xl border border-gray-100 mb-5 leading-relaxed">
+                "{weatherData.tagline}"
+              </p>
+
+              {/* Recommended Items horizontal scrolls */}
+              <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                {weatherData.recommendations.map((p: any) => {
+                  const isSoldOut = p.badge === 'sold-out';
+                  const promo = getActivePromo(p);
+                  const displayPrice = promo ? promo.promoPrice : p.price;
+                  const originalPrice = promo ? p.price : (p.modifiers?.originalPrice || null);
+
+                  return (
+                    <div 
+                      key={p.id}
+                      onClick={() => handleProductClick(p)}
+                      className={`w-[135px] md:w-[155px] shrink-0 bg-white/50 border border-gray-150 rounded-2xl p-2.5 hover:border-[#2E5A44]/30 hover:shadow-[0_8px_30px_rgba(0,0,0,0.035)] transition-all cursor-pointer overflow-hidden relative group`}
+                    >
+                      {p.image && (
+                        <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-[#FAF8F5] mb-2 border border-gray-100 shadow-sm animate-pulse-once">
+                          <Image
+                            src={p.image}
+                            alt={p.name}
+                            fill
+                            sizes="120px"
+                            className="object-cover group-hover:scale-103 transition-transform"
+                          />
+                        </div>
+                      )}
+                      <p className="font-serif font-black text-[11px] text-gray-900 line-clamp-1 leading-tight">{p.name}</p>
+                      <span className="font-bold text-[10px] text-[#B48A5E] mt-1 block">
+                        {formatRupiah(displayPrice)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Rekomendasi AI Anda Section */}
+          {!loadingAi && aiData.length > 0 && (
+            <section className="bg-white rounded-[2rem] border border-gray-150 p-6 shadow-sm overflow-hidden text-left relative">
+              <div className="flex items-center justify-between mb-5">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-5 h-5 text-[#2E5A44] fill-[#2E5A44]/10" />
+                    <h3 className="font-serif font-black text-base md:text-lg text-gray-950 tracking-tight">
+                      Rekomendasi AI Anda
+                    </h3>
+                  </div>
+                  <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider">
+                    Sajian terbaik yang dipersonalisasi khusus berdasarkan selera unikmu
+                  </p>
+                </div>
+                <span className="text-[8px] font-black uppercase text-[#2E5A44] bg-[#2E5A44]/10 px-2.5 py-1 rounded-full tracking-widest leading-none">
+                  ✦ AI Engine v2.0
+                </span>
+              </div>
+
+              {/* Cards Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {aiData.map((rec: any) => {
+                  const p = rec.product;
+                  const isSoldOut = p.badge === 'sold-out';
+                  const promo = getActivePromo(p);
+                  const displayPrice = promo ? promo.promoPrice : p.price;
+
+                  return (
+                    <div 
+                      key={p.id}
+                      onClick={() => handleProductClick(p)}
+                      className="bg-white/80 border border-[#2E5A44]/15 rounded-3xl p-4 shadow-[0_8px_30px_rgba(0,0,0,0.015)] hover:border-[#2E5A44]/30 hover:shadow-md transition-all cursor-pointer relative overflow-hidden group flex flex-col justify-between"
+                    >
+                      <div className="absolute top-2 right-2 bg-gradient-to-tr from-[#FEF08A] to-[#D4A574] text-[#2A1F16] text-[8px] font-black px-2 py-0.5 rounded-full uppercase leading-none shadow-sm z-10 flex items-center gap-0.5">
+                        <span>Recommended</span> ✦
+                      </div>
+
+                      <div className="space-y-3">
+                        {p.image && (
+                          <div className="relative w-full h-32 rounded-2xl overflow-hidden bg-[#FAF8F5] border border-gray-100 shadow-sm">
+                            <Image
+                              src={p.image}
+                              alt={p.name}
+                              fill
+                              sizes="(max-width: 768px) 100vw, 300px"
+                              className="object-cover group-hover:scale-102 transition-transform"
+                            />
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <h4 className="font-serif font-black text-sm text-gray-900 group-hover:text-[#2E5A44] transition-colors leading-tight">
+                            {p.name}
+                          </h4>
+                          <span className="font-black text-xs text-[#B48A5E]">
+                            {formatRupiah(displayPrice)}
+                          </span>
+                        </div>
+                        {/* Custom text rationale */}
+                        <p className="text-[10px] text-gray-500 font-semibold leading-relaxed border-t border-gray-100 pt-2.5">
+                          {rec.rationale}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
           {/* Paket Combo */}
           {comboProducts.length > 0 && (
             <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm">
@@ -546,6 +785,7 @@ export default function StorefrontClient({
                   Semua Combo <ChevronRight className="w-3.5 h-3.5" />
                 </span>
               </div>
+
 
               <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
                 {comboProducts.map((p) => {
@@ -864,6 +1104,112 @@ export default function StorefrontClient({
             </div>
           </section>
 
+          {/* Matcha Moments - Featured Reviews Slideshow */}
+          {!loadingReviews && featuredReviews.length > 0 && (
+            <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="font-serif font-black text-base md:text-lg text-gray-950 tracking-tight flex items-center gap-1.5">
+                  <Star className="w-5 h-5 text-yellow-500 fill-yellow-500/20" /> Matcha Moments
+                </h3>
+                <span className="text-[9px] md:text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  Momen Manis Bersama Matchaboy
+                </span>
+              </div>
+
+              <div className="flex gap-5 overflow-x-auto pb-4 pt-1 scrollbar-hide">
+                {featuredReviews.map((review: any) => {
+                  let imageUrls: string[] = [];
+                  try {
+                    if (review.images) {
+                      imageUrls = JSON.parse(review.images);
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse review images', e);
+                  }
+
+                  const firstImage = imageUrls.length > 0 ? imageUrls[0] : null;
+
+                  return (
+                    <div
+                      key={review.id}
+                      className="w-[280px] md:w-[320px] shrink-0 bg-[#FAF8F5] border border-[#D4A574]/15 rounded-3xl overflow-hidden shadow-sm flex flex-col justify-between hover:shadow-md hover:border-[#D4A574]/30 transition-all duration-300"
+                    >
+                      {/* Review Photo */}
+                      <div className="relative w-full h-40 bg-stone-200 overflow-hidden">
+                        {firstImage ? (
+                          <Image
+                            src={firstImage}
+                            alt="Ulasan customer"
+                            fill
+                            className="object-cover"
+                            sizes="(max-width: 768px) 280px, 320px"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = review.product?.image || 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=1200';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center bg-[#2E5A44]/5 relative p-4">
+                            <span className="text-3xl select-none">🍵</span>
+                            <span className="text-[10px] font-black text-[#2E5A44] mt-2 tracking-widest uppercase">Matchaboy Moment</span>
+                          </div>
+                        )}
+                        {/* Rating Badge */}
+                        <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-full shadow-sm flex items-center gap-0.5 z-10">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`w-3.5 h-3.5 ${
+                                i < review.rating
+                                  ? 'fill-yellow-400 stroke-yellow-500'
+                                  : 'fill-gray-100 stroke-gray-300'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Content details */}
+                      <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-gray-700 font-semibold italic line-clamp-3 leading-relaxed text-left">
+                            "{review.comment || 'Enak banget, matcha terenak yang pernah kucoba! 💚'}"
+                          </p>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-150">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-[#2E5A44]/10 border border-[#FAF8F5] relative shrink-0">
+                              <Image
+                                src={review.user?.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(review.user?.name || 'C')}&background=2E5A44&color=FFFFFF&bold=true`}
+                                alt={review.user?.name || 'Customer'}
+                                fill
+                                className="object-cover"
+                              />
+                            </div>
+                            <div className="flex flex-col text-left">
+                              <span className="text-[10px] font-black text-gray-900 line-clamp-1 leading-tight">
+                                {review.user?.name || 'Matcha Lover'}
+                              </span>
+                              <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider">
+                                Terverifikasi
+                              </span>
+                            </div>
+                          </div>
+
+                          {review.product && (
+                            <div className="bg-[#2E5A44]/5 text-[#2E5A44] px-2 py-0.5 rounded-lg text-[9px] font-black uppercase max-w-[100px] truncate leading-tight select-none">
+                              {review.product.name}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
         </motion.div>
 
 
@@ -906,6 +1252,39 @@ export default function StorefrontClient({
         config={easterEggConfig}
         onClaim={handleClaimEasterEgg}
         isClaiming={isClaiming}
+      />
+
+      {/* Floating Gacha Trigger Button */}
+      <AnimatePresence>
+        {status === 'authenticated' && gachaChances > 0 && (
+          <motion.button
+            initial={{ scale: 0, y: 50 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0, y: 50 }}
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setIsGachaOpen(true)}
+            className="fixed bottom-24 right-4 z-40 p-4 bg-gradient-to-tr from-[#704F37] to-[#D4A574] text-white rounded-full shadow-2xl flex items-center justify-center border-2 border-[#FEF08A] hover:shadow-yellow-300/40 select-none touch-none"
+            style={{
+              boxShadow: '0 10px 25px rgba(112, 79, 55, 0.4), 0 0 15px rgba(254, 240, 138, 0.3)'
+            }}
+          >
+            <Gift className="w-6 h-6 animate-pulse" />
+            <span className="absolute -top-1 -right-1 w-5.5 h-5.5 rounded-full bg-rose-600 text-white font-extrabold text-[9px] flex items-center justify-center border border-white">
+              {gachaChances}
+            </span>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* Gacha Lucky Draw Spin-the-wheel game overlay */}
+      <GachaOverlay
+        isOpen={isGachaOpen}
+        onClose={() => setIsGachaOpen(false)}
+        gachaChances={gachaChances}
+        onSpinSuccess={(newChances) => {
+          setGachaChances(newChances);
+        }}
       />
     </>
   );

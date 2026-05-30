@@ -228,7 +228,7 @@ export function LoginPasskeyButton() {
         try {
             setLoading(true)
             // To login with passkey, just use signIn("passkey")
-            const result = await signIn("passkey", { callbackUrl: "/" })
+            const result = (await signIn("passkey", { callbackUrl: "/" })) as any
             if (result?.error) {
                 console.error("Passkey login error:", result.error)
             }

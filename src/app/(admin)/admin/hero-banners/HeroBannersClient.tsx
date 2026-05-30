@@ -362,7 +362,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                    <button onClick={() => handleOpenModal(banner)} className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-blue-50 bg-white rounded-lg transition-colors border shadow-sm">
                       <Edit2 className="w-4 h-4" />
                    </button>
-                   <button onClick={() => handleDeleteClick(banner.id, banner.headline)} className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 bg-white rounded-lg transition-colors border shadow-sm">
+                   <button onClick={() => handleDeleteClick(banner.id || '', banner.headline)} className="p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 bg-white rounded-lg transition-colors border shadow-sm">
                       <Trash2 className="w-4 h-4" />
                    </button>
                 </div>

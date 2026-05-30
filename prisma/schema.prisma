@@ -58,6 +58,22 @@ model User {
   supportTickets  SupportTicket[]
   stockSubscriptions StockNotificationSubscription[]
 
+  // Tier 2 Wallet & Subscription & Game & UGC & Group Cart
+  walletBalance     Int      @default(0)
+  gachaChances      Int      @default(0)
+  subscription      MemberSubscription?
+  walletTransactions WalletTransaction[]
+  sentGiftCards     GiftCard[] @relation("SentGiftCards")
+  claimedGiftCards  GiftCard[] @relation("ClaimedGiftCards")
+  reviews           Review[]
+  gachaDraws        GachaDraw[]
+  groupCarts        GroupCart[]
+
+  // Tier 3 Gamification Quests, Schedules, and Custom Recipes
+  userQuests        UserQuest[]
+  autoReorders      AutoReorder[]
+  customRecipes     CustomRecipe[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -185,6 +201,8 @@ model Product {
   updatedAt DateTime   @updatedAt
   Favorite  Favorite[]
   stockSubscriptions StockNotificationSubscription[]
+  reviews           Review[]
+  groupCartItems    GroupCartItem[]
 
   @@index([categoryId])
 }
@@ -743,4 +761,182 @@ model StockNotificationSubscription {
 
   @@unique([productId, phone])
 }
+
+// -----------------------------------------------------------------------------
+// TIER 2 FEATURE MODELS
+// -----------------------------------------------------------------------------
+
+model MemberSubscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tier      String   // "GREEN_TEA", "MATCHA_LATTE", "GOLDEN_MATCHA"
+  status    String   // "ACTIVE", "EXPIRED", "CANCELLED"
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Int      // positive for top-up, negative for payment
+  type        String   // TOP_UP, PAYMENT, TOP_UP_BONUS, TRANSFER_IN, TRANSFER_OUT
+  description String
+  referenceId String?  // e.g. orderId or transaction reference
+  createdAt   DateTime @default(now())
+}
+
+model GiftCard {
+  id             String    @id @default(cuid())
+  code           String    @unique @default(cuid())
+  senderId       String?
+  sender         User?     @relation("SentGiftCards", fields: [senderId], references: [id])
+  senderName     String
+  recipientPhone String
+  amount         Int
+  message        String?
+  isClaimed      Boolean   @default(false)
+  claimedById    String?
+  claimedBy      User?     @relation("ClaimedGiftCards", fields: [claimedById], references: [id])
+  claimedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime?
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating      Int      // 1-5
+  comment     String?
+  images      String?  // JSON array string of image URLs
+  isFeatured  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model GachaDraw {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prizeType   String   // POINTS, VOUCHER, MERCH
+  prizeValue  String   // e.g. "50" for points, or templateCode for voucher
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model GroupCart {
+  id          String          @id @default(cuid())
+  creatorId   String
+  creator     User            @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  status      String          @default("ACTIVE") // ACTIVE, CHECKED_OUT
+  items       GroupCartItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model GroupCartItem {
+  id          String    @id @default(cuid())
+  groupCartId String
+  groupCart   GroupCart @relation(fields: [groupCartId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  memberName  String    // name of the group member
+  qty         Int
+  price       Int
+  modifiers   String?   // JSON
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ReferralTier {
+  id            String   @id @default(cuid())
+  tierNumber    Int      // Nomor tier (1, 2, 3, ...)
+  targetInvites Int      // Target jumlah undangan
+  rewardType    String   // VOUCHER, POINTS, DISCOUNT
+  rewardValue   String   // Nilai reward (kode voucher, jumlah poin, atau nominal)
+  rewardDesc    String   // Deskripsi reward
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model Quest {
+  id            String      @id @default(cuid())
+  title         String
+  description   String
+  type          String      // DAILY, WEEKLY, SPECIAL
+  targetType    String      // TRANSACTION_COUNT, DINE_IN_COUNT, TUMBLER_COUNT, TOP_UP_COUNT
+  targetValue   Int
+  rewardPoints  Int         @default(0)
+  rewardVoucher String?     // Voucher template code if any
+  isActive      Boolean     @default(true)
+  userQuests    UserQuest[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model UserQuest {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questId     String
+  quest       Quest     @relation(fields: [questId], references: [id], onDelete: Cascade)
+  progress    Int       @default(0)
+  isCompleted Boolean   @default(false)
+  isClaimed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, questId])
+}
+
+model AutoReorder {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId        String
+  productName      String
+  price            Int
+  quantity         Int       @default(1)
+  size             String    @default("Normal")
+  iceLevel         String    @default("Normal")
+  sugarLevel       String    @default("Normal")
+  addOns           String?   // JSON string
+  frequency        String    // DAILY, WEEKLY, MONTHLY
+  dayOfWeek        Int?      // 0-6 (Sunday-Saturday)
+  dayOfMonth       Int?      // 1-31
+  timeSlot         String    // e.g. "08:00"
+  deliveryAddress  String
+  paymentMethod    String    @default("WALLET") // WALLET or COD
+  isActive         Boolean   @default(true)
+  lastTriggeredAt  DateTime?
+  nextTriggeredAt  DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model CustomRecipe {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  baseProductId  String
+  recipeName     String
+  matchaLevel    Int       @default(5)  // 1-10
+  creaminess     Int       @default(5)  // 1-10
+  sweetness      Int       @default(5)  // 1-10
+  milkType       String    @default("Fresh Milk") // Fresh Milk, Oat Milk, Soy Milk, Almond Milk
+  toppings       String?   // JSON string of toppings [{id, name, price}]
+  isPublic       Boolean   @default(false)
+  orderCount     Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
 
