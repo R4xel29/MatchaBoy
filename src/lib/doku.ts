@@ -13,6 +13,7 @@ interface CheckoutPayload {
   customerPhone: string;
   customerEmail: string;
   callbackUrl: string;
+  paymentChannel?: string; // Specific channel code
 }
 
 /**
@@ -78,7 +79,7 @@ export async function createDokuCheckoutSession(
   }
 
   // DOKU Checkout V1 Body Schema
-  const requestBody = {
+  const requestBody: any = {
     order: {
       invoice_number: payload.invoiceNumber,
       amount: Math.round(payload.amount),
@@ -94,6 +95,11 @@ export async function createDokuCheckoutSession(
       email: payload.customerEmail || 'customer@matchaboy.com',
     },
   };
+
+  // Pre-select payment method inside Doku hosted checkout if channel is selected
+  if (payload.paymentChannel) {
+    requestBody.payment.payment_methods = [payload.paymentChannel];
+  }
 
   const digest = generateDigest(requestBody);
   const signature = generateSignature({

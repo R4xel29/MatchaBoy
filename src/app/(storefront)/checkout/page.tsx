@@ -105,6 +105,7 @@ export default function CheckoutPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentChannel, setPaymentChannel] = useState('');
   const [showPickupWarning, setShowPickupWarning] = useState(false);
   const [showTumblerWarning, setShowTumblerWarning] = useState(false);
   const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
@@ -1189,6 +1190,7 @@ export default function CheckoutPage() {
         pickupDate: pickupDate || undefined,
         pickupTime: pickupTime || undefined,
         paymentMethod,
+        paymentChannel: paymentMethod === 'DOKU' ? paymentChannel : undefined,
         groupCartId: groupCartId || undefined,
         items: checkoutItems.map((item: any) => ({
           productId: item.productId,
@@ -1804,97 +1806,301 @@ export default function CheckoutPage() {
 
           {/* ── 5. Payment Selector (Brutal Premium Upgraded) ─────────────────── */}
           <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
-            <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
-              <CreditCard className="w-4.5 h-4.5 text-[#B48A5E]" /> Metode Pembayaran
-            </h2>
-            
-            {paymentConfigLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPaymentMethod('WALLET')}
-                  className={`flex flex-col items-center gap-1.5 p-4.5 rounded-2xl border-2 transition-all active:scale-[0.97] col-span-2
-                    ${paymentMethod === 'WALLET'
-                      ? 'border-amber-650 bg-amber-50/50 text-amber-850 shadow-sm shadow-amber-100'
-                      : 'border-gray-150 bg-white text-gray-500 hover:border-gray-250'}`}
-                >
-                  <Wallet className="w-6 h-6 shrink-0" />
-                  <span className="text-[11px] font-bold tracking-wide">Matchaboy Wallet (Saldo: {formatRupiah(walletBalance)})</span>
-                </button>
-                 {paymentConfig?.qris?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('QRIS')}
-                    disabled={grandTotal === 0}
-                    className={`flex flex-col items-center gap-1.5 p-4.5 rounded-2xl border-2 transition-all active:scale-[0.97]
-                      ${grandTotal === 0
-                        ? 'opacity-40 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
-                        : paymentMethod === 'QRIS'
-                        ? 'border-purple-500 bg-purple-50/50 text-purple-700 shadow-sm shadow-purple-100'
-                        : 'border-gray-150 bg-white text-gray-500 hover:border-gray-250'}`}
-                  >
-                    <QrCode className="w-6 h-6 shrink-0" />
-                    <span className="text-[11px] font-bold tracking-wide">QRIS Instan</span>
-                  </button>
-                )}
-                {paymentConfig?.transfer?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('TRANSFER')}
-                    disabled={grandTotal === 0}
-                    className={`flex flex-col items-center gap-1.5 p-4.5 rounded-2xl border-2 transition-all active:scale-[0.97]
-                      ${grandTotal === 0
-                        ? 'opacity-40 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
-                        : paymentMethod === 'TRANSFER'
-                        ? 'border-blue-500 bg-blue-50/50 text-blue-700 shadow-sm shadow-blue-100'
-                        : 'border-gray-150 bg-white text-gray-500 hover:border-gray-250'}`}
-                  >
-                    <Building2 className="w-6 h-6 shrink-0" />
-                    <span className="text-[11px] font-bold tracking-wide">Transfer Bank</span>
-                  </button>
-                )}
+                {/* 1. Pembayaran Instan (E-Wallet & QRIS) */}
+                <div className="space-y-2">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 pl-1 select-none">E-Wallet & Pembayaran Instan (Doku)</span>
+                  <div className="grid grid-cols-1 gap-2">
+                    {/* blu */}
+                    {paymentConfig?.doku?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('BLU'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'BLU'
+                            ? 'border-cyan-500 bg-cyan-50/40 text-cyan-850 shadow-sm shadow-cyan-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
+                            <img src="https://images.tokopedia.net/img/toppay/partnership/logo-blu.png" alt="blu" className="object-contain max-h-full max-w-full" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">blu by BCA Digital</p>
+                            <p className="text-[10px] text-gray-450 font-semibold">Cashback 40% max. 25RB*</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'BLU' ? 'border-cyan-500 bg-cyan-500' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'BLU' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* QRIS */}
+                    {paymentConfig?.doku?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('QRIS'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS'
+                            ? 'border-purple-500 bg-purple-50/40 text-purple-850 shadow-sm shadow-purple-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Logo_QRIS.svg/200px-Logo_QRIS.svg.png" alt="QRIS" className="object-contain max-h-full max-w-full" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">QRIS Instan</p>
+                            <p className="text-[10px] text-gray-455 font-semibold">Scan QR & Bayar Instan</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS' ? 'border-purple-500 bg-purple-500' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'QRIS' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* GoPay */}
+                    {paymentConfig?.doku?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('GOPAY'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'GOPAY'
+                            ? 'border-cyan-500 bg-cyan-50/20 text-cyan-850 shadow-sm shadow-cyan-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                            <img src="https://images.tokopedia.net/img/toppay/partnership/logo-gopay.png" alt="GoPay" className="object-contain max-h-full max-w-full" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">GoPay</p>
+                            <p className="text-[10px] text-gray-450 font-semibold">Bayar instan via Aplikasi Gojek</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'GOPAY' ? 'border-[#00AED6] bg-[#00AED6]' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'GOPAY' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* ShopeePay */}
+                    {paymentConfig?.doku?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('SHOPEEPAY'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY'
+                            ? 'border-orange-500 bg-orange-50/30 text-orange-950 shadow-sm shadow-orange-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                            <img src="https://images.tokopedia.net/img/toppay/partnership/logo-shopeepay.png" alt="ShopeePay" className="object-contain max-h-full max-w-full animate-pulse" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">ShopeePay</p>
+                            <p className="text-[10px] text-gray-455 font-semibold">Bayar dengan Koin & Saldo Shopee</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY' ? 'border-[#EE4D2D] bg-[#EE4D2D]' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* OVO */}
+                    {paymentConfig?.doku?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('OVO'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'OVO'
+                            ? 'border-indigo-650 bg-indigo-50/40 text-indigo-950 shadow-sm shadow-indigo-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
+                            <img src="https://images.tokopedia.net/img/toppay/partnership/logo-ovo.png" alt="OVO" className="object-contain max-h-full max-w-full" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">OVO</p>
+                            <p className="text-[10px] text-gray-450 font-semibold">OVO Cashback 60% max. 15RB*</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'OVO' ? 'border-[#4C2A86] bg-[#4C2A86]' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'OVO' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* DANA */}
+                    {paymentConfig?.doku?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('DANA'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'DANA'
+                            ? 'border-[#108EE9] bg-[#108EE9]/10 text-[#07538a] shadow-sm shadow-sky-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                            <img src="https://images.tokopedia.net/img/toppay/partnership/logo-dana.png" alt="DANA" className="object-contain max-h-full max-w-full" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">DANA</p>
+                            <p className="text-[10px] text-gray-450 font-semibold">Bayar aman dengan Dompet DANA</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'DANA' ? 'border-[#108EE9] bg-[#108EE9]' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'DANA' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Transfer Virtual Account (via Doku) */}
                 {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('DOKU')}
-                    disabled={grandTotal === 0}
-                    className={`flex flex-col items-center gap-1.5 p-4.5 rounded-2xl border-2 transition-all active:scale-[0.97]
-                      ${grandTotal === 0
-                        ? 'opacity-40 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
-                        : paymentMethod === 'DOKU'
-                        ? 'border-indigo-500 bg-indigo-50/50 text-indigo-700 shadow-sm shadow-indigo-100'
-                        : 'border-gray-150 bg-white text-gray-500 hover:border-gray-250'}`}
-                  >
-                    <CreditCard className="w-6 h-6 shrink-0" />
-                    <span className="text-[11px] font-bold tracking-wide">DOKU Online</span>
-                  </button>
+                  <div className="space-y-2">
+                    <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 pl-1 select-none">Virtual Account (Transfer Otomatis via Doku)</span>
+                    <div className="grid grid-cols-1 gap-2">
+                      {/* BCA VA */}
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('BCA_VA'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'BCA_VA'
+                            ? 'border-blue-500 bg-blue-50/40 text-blue-850 shadow-sm shadow-blue-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Bank_Central_Asia.svg/200px-Bank_Central_Asia.svg.png" alt="BCA VA" className="object-contain max-h-full max-w-full" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">BCA Virtual Account</p>
+                            <p className="text-[10px] text-gray-455 font-semibold">Verifikasi instan otomatis 24 jam</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'BCA_VA' ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'BCA_VA' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+
+                      {/* Mandiri VA */}
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('MANDIRI_VA'); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'MANDIRI_VA'
+                            ? 'border-amber-500 bg-amber-50/40 text-amber-950 shadow-sm shadow-amber-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/ad/Bank_Mandiri_logo_2016.svg/200px-Bank_Mandiri_logo_2016.svg.png" alt="Mandiri VA" className="object-contain max-h-full max-w-full" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">Mandiri Virtual Account</p>
+                            <p className="text-[10px] text-gray-455 font-semibold">Verifikasi instan otomatis 24 jam</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'MANDIRI_VA' ? 'border-amber-500 bg-amber-500' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'MANDIRI_VA' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    </div>
+                  </div>
                 )}
-                {paymentConfig?.cod?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('COD')}
-                    className={`flex flex-col items-center gap-1.5 p-4.5 rounded-2xl border-2 transition-all active:scale-[0.97]
-                      ${paymentMethod === 'COD'
-                        ? 'border-emerald-500 bg-emerald-50/50 text-emerald-700 shadow-sm shadow-emerald-100'
-                        : 'border-gray-150 bg-white text-gray-500 hover:border-gray-250'}`}
-                  >
-                    <Banknote className="w-6 h-6 shrink-0" />
-                    <span className="text-[11px] font-bold tracking-wide">COD (Toko/Kurir)</span>
-                  </button>
-                )}
-              </div>
-            )}
-            <div className="bg-[#FFFDF9]/60 border border-[#EADFC9]/25 rounded-2xl p-4 text-[11px] text-[#8C7864] font-medium leading-relaxed">
+
+                {/* 3. Metode Tradisional & Internal */}
+                <div className="space-y-2">
+                  <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 pl-1 select-none">Metode Lainnya</span>
+                  <div className="grid grid-cols-1 gap-2">
+                    {/* Wallet */}
+                    <button
+                      type="button"
+                      onClick={() => { setPaymentMethod('WALLET'); setPaymentChannel(''); }}
+                      className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                        ${paymentMethod === 'WALLET'
+                          ? 'border-amber-650 bg-amber-50/40 text-amber-850 shadow-sm shadow-amber-50'
+                          : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#B48A5E] text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <Wallet className="w-4.5 h-4.5" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-extrabold">Matchaboy Wallet</p>
+                          <p className="text-[10px] text-[#B48A5E] font-extrabold">Saldo Aktif: {formatRupiah(walletBalance)}</p>
+                        </div>
+                      </div>
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'WALLET' ? 'border-amber-600 bg-amber-600' : 'border-gray-300'}`}>
+                        {paymentMethod === 'WALLET' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                    </button>
+
+                    {/* COD */}
+                    {paymentConfig?.cod?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('COD'); setPaymentChannel(''); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'COD'
+                            ? 'border-emerald-500 bg-emerald-50/40 text-emerald-850 shadow-sm shadow-emerald-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <Banknote className="w-4.5 h-4.5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">COD (Bayar di Tempat)</p>
+                            <p className="text-[10px] text-gray-450 font-semibold">Bawa tumbler sendiri tetap dapat bonus</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'COD' ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'}`}>
+                          {paymentMethod === 'COD' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Transfer Manual */}
+                    {paymentConfig?.transfer?.enabled && (
+                      <button
+                        type="button"
+                        onClick={() => { setPaymentMethod('TRANSFER'); setPaymentChannel(''); }}
+                        className={`flex items-center justify-between p-3.5 rounded-2xl border-2 transition-all active:scale-[0.98] cursor-pointer text-left
+                          ${paymentMethod === 'TRANSFER'
+                            ? 'border-blue-500 bg-blue-50/40 text-blue-850 shadow-sm shadow-blue-50'
+                            : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <Building2 className="w-4.5 h-4.5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-extrabold">Transfer Bank Manual</p>
+                            <p className="text-[10px] text-gray-455 font-semibold">Kirim bukti transfer ke admin via aplikasi</p>
+                          </div>
+                        </div>
+                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${paymentMethod === 'TRANSFER' ? 'border-blue-500 bg-blue-500' : 'border-gray-300'}`}>
+                          {paymentMethod === 'TRANSFER' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        </div>
+                      </button>
+                    )}
+                  </div>
+                </div>
+            <div className="bg-[#FFFDF9]/60 border border-[#EADFC9]/25 rounded-2xl p-4 text-[11px] text-[#8C7864] font-medium leading-relaxed select-none">
               💡 {paymentMethod === 'COD' 
                 ? 'Bayar langsung di tempat saat pesanan kamu diserahkan kurir atau diambil di toko.' 
                 : paymentMethod === 'WALLET'
                 ? `Bayar instan menggunakan saldo Matchaboy Wallet Anda. Saldo saat ini: ${formatRupiah(walletBalance)}.`
                 : paymentMethod === 'DOKU'
-                ? 'Selesaikan pembayaran Anda menggunakan E-Wallet, QRIS, Virtual Account, & Kartu Kredit otomatis via gerbang DOKU.'
+                ? 'Selesaikan pembayaran Anda menggunakan pilihan instan otomatis via gerbang DOKU.'
                 : 'Selesaikan transaksi dengan mudah lewat sistem pembayaran premium kami setelah checkout.'}
             </div>
           </section>

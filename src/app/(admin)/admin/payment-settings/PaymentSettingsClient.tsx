@@ -360,8 +360,8 @@ export default function PaymentSettingsClient() {
         <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] lg:col-span-2 relative">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
-                <CreditCard className="w-5 h-5" />
+              <div className="p-1 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 w-10 h-10 shadow-sm overflow-hidden">
+                <img src="https://www.doku.com/wp-content/themes/doku/assets/images/logo.png" alt="DOKU" className="object-contain max-h-full max-w-full" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-foreground">DOKU Payment Gateway</h3>

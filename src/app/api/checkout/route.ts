@@ -892,6 +892,7 @@ export async function POST(req: Request) {
                     customerPhone: body.phone,
                     customerEmail: session.user.email || 'customer@matchaboy.com',
                     callbackUrl,
+                    paymentChannel: body.paymentChannel || undefined,
                 })
 
                 if (dokuResult.error) {

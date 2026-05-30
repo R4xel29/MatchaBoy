@@ -477,8 +477,8 @@ export default function PaymentClient({
             className="space-y-4"
           >
             <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-4">
-              <div className="w-16 h-16 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                <CreditCard className="w-8 h-8" />
+              <div className="w-28 h-14 bg-white border border-gray-150 rounded-2xl flex items-center justify-center mx-auto p-2 shadow-sm overflow-hidden">
+                <img src="https://www.doku.com/wp-content/themes/doku/assets/images/logo.png" alt="DOKU" className="object-contain max-h-full max-w-full" />
               </div>
               <div className="space-y-1">
                 <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Pembayaran Online DOKU</h3>
