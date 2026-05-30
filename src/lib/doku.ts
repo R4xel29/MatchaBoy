@@ -184,9 +184,31 @@ export function verifyDokuWebhookSignature({
       digest: calculatedDigest,
     });
 
-    // Compare signature safely
-    return crypto.timingSafeEqual(
+    // Safe comparison of the first signature (minified body)
+    const isMinifiedValid = crypto.timingSafeEqual(
       Buffer.from(calculatedSignature),
+      Buffer.from(receivedSignature)
+    );
+
+    if (isMinifiedValid) {
+      return true;
+    }
+
+    console.log('[DOKU WEBHOOK] Minified signature mismatch, attempting rawBody direct digest verification...');
+
+    // Fallback: hash the rawBody string directly in case JSON key order gets perturbed
+    const rawDigest = crypto.createHash('sha256').update(rawBody).digest('base64');
+    const calculatedSignatureRaw = generateSignature({
+      clientId,
+      sharedKey,
+      requestId: receivedRequestId,
+      timestamp: receivedTimestamp,
+      requestTarget,
+      digest: rawDigest,
+    });
+
+    return crypto.timingSafeEqual(
+      Buffer.from(calculatedSignatureRaw),
       Buffer.from(receivedSignature)
     );
   } catch (e) {

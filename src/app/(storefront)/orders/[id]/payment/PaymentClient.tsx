@@ -469,6 +469,42 @@ export default function PaymentClient({
           </motion.div>
         )}
 
+        {/* DOKU Instan Display Panel */}
+        {order.paymentMethod === 'DOKU' && order.paymentUrl && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-4">
+              <div className="w-16 h-16 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <CreditCard className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Pembayaran Online DOKU</h3>
+                <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
+                  Selesaikan pembayaran pesanan Anda dengan aman menggunakan E-Wallet, QRIS, Virtual Account, atau Kartu Kredit.
+                </p>
+              </div>
+
+              <a
+                href={order.paymentUrl}
+                target="_self"
+                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-indigo-100 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <span>Bayar Sekarang</span>
+                <ArrowRight className="w-4.5 h-4.5" />
+              </a>
+
+              <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 w-full text-center">
+                <p className="text-[10px] text-indigo-600 font-bold">
+                  💡 Status pesanan akan terverifikasi secara instan setelah pembayaran sukses di portal DOKU. Anda tidak perlu mengunggah bukti transfer manual.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Bank Accounts transfer box */}
         {order.paymentMethod === 'TRANSFER' && (
           <motion.div

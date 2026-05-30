@@ -665,9 +665,8 @@ export async function POST(req: Request) {
 
         const paymentSettings = await prisma.paymentSettings.findFirst()
         const isDoku = body.paymentMethod?.toUpperCase() === 'DOKU'
-        if (isDoku) {
-            // DOKU sementara dinonaktifkan — izin belum beres
-            return NextResponse.json({ error: 'Metode pembayaran DOKU sedang tidak aktif sementara. Silakan gunakan QRIS atau metode lain.' }, { status: 400 })
+        if (isDoku && (!paymentSettings || !paymentSettings.dokuEnabled)) {
+            return NextResponse.json({ error: 'Metode pembayaran DOKU sedang tidak aktif. Silakan gunakan metode pembayaran lain.' }, { status: 400 })
         }
 
         // Build address string

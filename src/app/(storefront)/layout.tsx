@@ -8,6 +8,7 @@ import { AppHeader } from '@/components/storefront/AppHeader';
 import { BottomNav } from '@/components/storefront/BottomNav';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { PromoPopup } from '@/components/storefront/PromoPopup';
+import { MatchaVibesPlayer } from '@/components/storefront/MatchaVibesPlayer';
 
 
 // Lazy-load heavy components that are only visible on user interaction
@@ -118,6 +119,7 @@ export default function StorefrontLayout({
         <FloatingCart />
         <ActiveOrderPopup />
         <PromoPopup />
+        <MatchaVibesPlayer />
 
         <Suspense fallback={null}>
           <BottomNav />

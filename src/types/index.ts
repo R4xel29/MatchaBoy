@@ -85,6 +85,7 @@ export interface CartItem {
     totalPrice: number;  // (basePrice + sizePrice + addOns) * quantity
     isBundle?: boolean;
     bundleSelections?: SelectedBundleItem[];
+    matchaLevel?: number; // 1-10
 }
 
 // ── Location & Delivery Types ───────────────────────────────

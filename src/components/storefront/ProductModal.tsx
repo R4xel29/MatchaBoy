@@ -41,6 +41,7 @@ export function ProductModal({
   const [sizePrice, setSizePrice] = useState<number>(0);
   const [quantity, setQuantity] = useState(1);
   const [isDesktop, setIsDesktop] = useState(false);
+  const [matchaLevel, setMatchaLevel] = useState<number>(5);
   
   // Bundle Selection State
   const [bundleSelections, setBundleSelections] = useState<{ [groupId: string]: any }>({});
@@ -113,6 +114,7 @@ export function ProductModal({
         setSize(initialData.size || 'Normal');
         setSizePrice(initialData.sizePrice || 0);
         setQuantity(initialData.quantity || 1);
+        setMatchaLevel(initialData.matchaLevel || 5);
         if (initialData.bundleSelections) {
           const loaded: { [groupId: string]: any } = {};
           initialData.bundleSelections.forEach((s: any) => {
@@ -127,6 +129,7 @@ export function ProductModal({
         setSize('Normal');
         setSizePrice(0);
         setQuantity(1);
+        setMatchaLevel(5);
 
         if (product?.modifiers?.isBundle && product.modifiers.bundleGroups) {
           const defaults: { [groupId: string]: any } = {};
@@ -163,6 +166,7 @@ export function ProductModal({
       setSizePrice(0);
       setQuantity(1);
       setBundleSelections({});
+      setMatchaLevel(5);
     }
   };
 
@@ -188,6 +192,13 @@ export function ProductModal({
     : (baseProductPrice + sizePrice + addOnTotal);
   
   const totalPrice = unitPrice * quantity;
+
+  const isMatchaProduct = useMemo(() => {
+    if (!product) return false;
+    const nameLower = product.name.toLowerCase();
+    const descLower = product.description.toLowerCase();
+    return nameLower.includes('matcha') || nameLower.includes('green tea') || descLower.includes('matcha');
+  }, [product]);
 
   const toggleAddOn = (addOn: AddOn) => {
     setSelectedAddOns((prev) => {
@@ -251,7 +262,8 @@ export function ProductModal({
       sizePrice: product.modifiers?.isBundle ? 0 : sizePrice,
       addOns: product.modifiers?.isBundle ? [] : selectedAddOns,
       isBundle: product.modifiers?.isBundle || false,
-      bundleSelections: product.modifiers?.isBundle ? (bundleSelectionsArray as any[]) : undefined
+      bundleSelections: product.modifiers?.isBundle ? (bundleSelectionsArray as any[]) : undefined,
+      matchaLevel: isMatchaProduct ? matchaLevel : undefined
     };
 
     if (editCartItemId) {
@@ -571,6 +583,55 @@ export function ProductModal({
                     ) : (
                       /* ── Standard Customization ── */
                       <>
+                        {/* Matcha Level Slider (Khusus Produk Matcha) */}
+                        {isMatchaProduct && (
+                          <div className="space-y-3 bg-[#2E5A44]/5 p-4.5 rounded-3xl border border-[#2E5A44]/15 shadow-[0_4px_20px_rgba(46,90,68,0.02)] relative overflow-hidden mb-4">
+                            {/* Visual Cup SVG Dinamis di Samping */}
+                            <div className="flex items-center gap-4.5">
+                              <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                                <MatchaCupVisualizer level={matchaLevel} />
+                              </div>
+                              <div className="flex-1 space-y-1 w-full text-left">
+                                <h3 className="text-sm font-black text-gray-900 flex items-center justify-start gap-1">
+                                  <span>Kepekatan Matcha</span> 🍵
+                                </h3>
+                                <p className="text-[10px] text-muted-foreground font-semibold leading-normal">
+                                  Sesuaikan intensitas bubuk chasen matcha murni pilihanmu.
+                                </p>
+                                <div className="mt-1 flex items-baseline justify-start gap-1.5">
+                                  <span className="text-xl font-black text-[#2E5A44] leading-none">{matchaLevel}</span>
+                                  <span className="text-[9px] text-[#8C6239] font-black uppercase tracking-wider bg-[#8C6239]/10 px-2 py-0.5 rounded-md leading-none">
+                                    {matchaLevel <= 3 && 'Mild Creamy 🥛'}
+                                    {matchaLevel >= 4 && matchaLevel <= 6 && 'Perfect Balance ⚖️'}
+                                    {matchaLevel >= 7 && matchaLevel <= 8 && 'Strong Shot ⚡'}
+                                    {matchaLevel >= 9 && 'Ceremonial Pure 🏆'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Range Slider */}
+                            <div className="pt-2 px-1 relative">
+                              <input
+                                type="range"
+                                min="1"
+                                max="10"
+                                value={matchaLevel}
+                                onChange={(e) => setMatchaLevel(parseInt(e.target.value))}
+                                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-emerald-100 via-emerald-400 to-emerald-950 focus:outline-none"
+                                style={{
+                                  WebkitAppearance: 'none',
+                                }}
+                              />
+                              <div className="flex justify-between text-[8px] font-black text-[#A69F94] uppercase tracking-widest mt-1.5 px-0.5 select-none">
+                                <span>Mild</span>
+                                <span>Medium</span>
+                                <span>Strong</span>
+                                <span>Pure</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         {/* Ukuran */}
                         {hasSizeOption && (
                           <div>
@@ -758,5 +819,131 @@ export function ProductModal({
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+// ── Premium Matcha Cup Visualizer Component ──
+function MatchaCupVisualizer({ level }: { level: number }) {
+  // Interpolate color from light milky green (level 1) to deep ceremonial dark green (level 10)
+  // Level 1: HSL(95, 45%, 85%) -> Level 10: HSL(140, 65%, 12%)
+  const h = 95 + (level - 1) * (45 / 9);     // 95 -> 140
+  const s = 45 + (level - 1) * (20 / 9);     // 45% -> 65%
+  const l = 85 - (level - 1) * (73 / 9);     // 85% -> 12%
+
+  const liquidColor = `hsl(${h}, ${s}%, ${l}%)`;
+  
+  // Calculate bubble and steam particles count based on level
+  const steamCount = Math.min(6, Math.floor(level / 1.5) + 1);
+  const bubbleCount = Math.min(10, level);
+
+  return (
+    <div className="relative w-24 h-24 flex items-center justify-center select-none pointer-events-none">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes steam-rise {
+          0% { transform: translateY(5px) scale(0.8); opacity: 0; }
+          50% { opacity: 0.55; }
+          100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+        @keyframes bubble-float {
+          0% { transform: translateY(0) scale(0.6); opacity: 0.2; }
+          80% { opacity: 0.7; }
+          100% { transform: translateY(-25px) scale(1); opacity: 0; }
+        }
+        @keyframes cup-shake {
+          0%, 100% { transform: rotate(0deg); }
+          50% { transform: rotate(${Math.min(3, level / 3)}deg); }
+        }
+      `}} />
+
+      {/* Steam rising */}
+      <div className="absolute top-2 w-full flex justify-center gap-1.5 z-10 pointer-events-none">
+        {Array.from({ length: steamCount }).map((_, i) => (
+          <div
+            key={i}
+            className="w-1.5 h-6 rounded-full bg-white/20 blur-[1.5px]"
+            style={{
+              animation: `steam-rise ${1.5 + Math.random() * 1}s ease-in-out infinite`,
+              animationDelay: `${i * 0.3}s`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* The Cup SVG */}
+      <svg
+        width="80"
+        height="80"
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{
+          animation: level > 7 ? 'cup-shake 0.3s ease-in-out infinite' : 'none',
+        }}
+        className="relative z-20 drop-shadow-[0_4px_12px_rgba(46,90,68,0.12)]"
+      >
+        {/* Cup Handle */}
+        <path
+          d="M72 40 C84 40, 84 64, 72 64"
+          stroke="#D4A574"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        
+        {/* Glass Cup Body */}
+        <path
+          d="M20 28 L28 76 C29 82, 35 86, 42 86 H58 C65 86, 71 82, 72 76 L80 28 Z"
+          fill="rgba(255, 255, 255, 0.45)"
+          stroke="#E5E2DD"
+          strokeWidth="3.5"
+        />
+
+        {/* Liquid level (Matcha) */}
+        <path
+          d="M23 48 L28 76 C29 80, 34 83, 40 83 H60 C66 83, 71 80, 72 76 L77 48 Z"
+          fill={liquidColor}
+          className="transition-colors duration-500 ease-out"
+        />
+
+        {/* Liquid Surface Curve */}
+        <ellipse
+          cx="50"
+          cy="48"
+          rx="27"
+          ry="5.5"
+          fill={liquidColor}
+          className="transition-colors duration-500 ease-out"
+        />
+
+        {/* Glass Highlight */}
+        <path
+          d="M26 34 L32 70"
+          stroke="rgba(255, 255, 255, 0.7)"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+      </svg>
+
+      {/* Floating Bubbles */}
+      <div className="absolute bottom-6 w-12 h-8 z-30 pointer-events-none">
+        {Array.from({ length: bubbleCount }).map((_, i) => {
+          const left = 20 + Math.random() * 60;
+          const delay = Math.random() * 2;
+          const duration = 1 + Math.random() * 1.5;
+          return (
+            <div
+              key={i}
+              className="absolute w-2 h-2 rounded-full border border-white/20"
+              style={{
+                left: `${left}%`,
+                bottom: '0px',
+                backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.45)`,
+                animation: `bubble-float ${duration}s ease-in infinite`,
+                animationDelay: `${delay}s`,
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }

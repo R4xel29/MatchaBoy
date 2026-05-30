@@ -17,6 +17,7 @@ const ProductModal = dynamic(() => import('@/components/storefront/ProductModal'
 const SearchOverlay = dynamic(() => import('@/components/storefront/SearchOverlay').then(m => ({ default: m.SearchOverlay })), { ssr: false });
 const EasterEggOverlay = dynamic(() => import('@/components/storefront/EasterEggOverlay').then(m => ({ default: m.EasterEggOverlay })), { ssr: false });
 import { GachaOverlay } from '@/components/storefront/GachaOverlay';
+import { StoryBar } from '@/components/storefront/StoryBar';
 
 interface HeroBanner {
   id: string;
@@ -494,6 +495,11 @@ export default function StorefrontClient({
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Story Bar Status (B3) */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-10 md:mt-4 relative z-10 md:hidden">
+          <StoryBar />
         </div>
 
         {/* Hero Banner Slider */}

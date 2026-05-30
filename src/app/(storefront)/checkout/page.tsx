@@ -1693,7 +1693,7 @@ export default function CheckoutPage() {
                     <p className="text-[11px] text-gray-400 font-medium leading-relaxed truncate mt-0.5">
                       {item.isBundle && item.bundleSelections
                         ? item.bundleSelections.map((s: any) => `${s.productName}`).join(' · ')
-                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.addOns ? (item.addOns.length > 0 ? ` · +${item.addOns.map((a: any) => a.name).join(', ')}` : '') : ''}`
+                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.matchaLevel !== undefined ? ` · Matcha Lvl: ${item.matchaLevel}/10` : ''}${item.addOns ? (item.addOns.length > 0 ? ` · +${item.addOns.map((a: any) => a.name).join(', ')}` : '') : ''}`
                       }
                     </p>
                     <div className="flex items-center gap-2 mt-1">
@@ -1857,6 +1857,22 @@ export default function CheckoutPage() {
                     <span className="text-[11px] font-bold tracking-wide">Transfer Bank</span>
                   </button>
                 )}
+                {paymentConfig?.doku?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('DOKU')}
+                    disabled={grandTotal === 0}
+                    className={`flex flex-col items-center gap-1.5 p-4.5 rounded-2xl border-2 transition-all active:scale-[0.97]
+                      ${grandTotal === 0
+                        ? 'opacity-40 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400'
+                        : paymentMethod === 'DOKU'
+                        ? 'border-indigo-500 bg-indigo-50/50 text-indigo-700 shadow-sm shadow-indigo-100'
+                        : 'border-gray-150 bg-white text-gray-500 hover:border-gray-250'}`}
+                  >
+                    <CreditCard className="w-6 h-6 shrink-0" />
+                    <span className="text-[11px] font-bold tracking-wide">DOKU Online</span>
+                  </button>
+                )}
                 {paymentConfig?.cod?.enabled && (
                   <button
                     type="button"
@@ -1877,6 +1893,8 @@ export default function CheckoutPage() {
                 ? 'Bayar langsung di tempat saat pesanan kamu diserahkan kurir atau diambil di toko.' 
                 : paymentMethod === 'WALLET'
                 ? `Bayar instan menggunakan saldo Matchaboy Wallet Anda. Saldo saat ini: ${formatRupiah(walletBalance)}.`
+                : paymentMethod === 'DOKU'
+                ? 'Selesaikan pembayaran Anda menggunakan E-Wallet, QRIS, Virtual Account, & Kartu Kredit otomatis via gerbang DOKU.'
                 : 'Selesaikan transaksi dengan mudah lewat sistem pembayaran premium kami setelah checkout.'}
             </div>
           </section>

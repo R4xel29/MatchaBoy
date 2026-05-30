@@ -25,7 +25,8 @@ function generateCartItemId(
     addOns: AddOn[],
     isBundle?: boolean,
     bundleSelections?: any[],
-    size?: string
+    size?: string,
+    matchaLevel?: number
 ): string {
     if (isBundle && bundleSelections) {
         const selectionSignature = bundleSelections
@@ -35,7 +36,8 @@ function generateCartItemId(
         return `${productId}__bundle__${selectionSignature}`;
     }
     const addOnIds = addOns.map((a) => a.id).sort().join(',');
-    return `${productId}__${iceLevel}__${sugarLevel}__${size || 'Normal'}__${addOnIds}`;
+    const mLevel = matchaLevel !== undefined ? `__m${matchaLevel}` : '';
+    return `${productId}__${iceLevel}__${sugarLevel}__${size || 'Normal'}__${addOnIds}${mLevel}`;
 }
 
 function calcItemTotal(item: { 
@@ -69,7 +71,8 @@ export const useCartStore = create<CartState>()(
                     item.addOns,
                     item.isBundle,
                     item.bundleSelections,
-                    item.size
+                    item.size,
+                    (item as any).matchaLevel
                 );
 
                 set((state) => {
@@ -107,7 +110,8 @@ export const useCartStore = create<CartState>()(
                     item.addOns,
                     item.isBundle,
                     item.bundleSelections,
-                    item.size
+                    item.size,
+                    (item as any).matchaLevel
                 );
 
                 set((state) => {

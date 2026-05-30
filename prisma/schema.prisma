@@ -939,4 +939,16 @@ model CustomRecipe {
   updatedAt      DateTime  @updatedAt
 }
 
+model Story {
+  id        String   @id @default(cuid())
+  title     String
+  mediaUrl  String   // Image or video URL
+  mediaType String   @default("IMAGE") // IMAGE, VIDEO
+  linkUrl   String?  // Optional redirect URL (e.g. to a specific promo or product)
+  isActive  Boolean  @default(true)
+  duration  Int      @default(5000) // milliseconds to display
+  createdAt DateTime @default(now())
+  expiresAt DateTime // 24 hours expiry
+}
+
 
