@@ -38,6 +38,7 @@ export default function PaymentClient({
 }) {
   const { showToast } = useToast()
   const router = useRouter()
+  const paymentChannel = order.notes?.match(/\[CHANNEL:\s*([^\]]+)\]/)?.[1] || '';
   const [timeLeft, setTimeLeft] = useState('')
   const [percentLeft, setPercentLeft] = useState(100)
   const [isExpired, setIsExpired] = useState(false)
@@ -470,38 +471,179 @@ export default function PaymentClient({
         )}
 
         {/* DOKU Instan Display Panel */}
-        {order.paymentMethod === 'DOKU' && order.paymentUrl && (
+        {order.paymentMethod === 'DOKU' && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-4">
-              <div className="w-28 h-14 bg-white border border-gray-150 rounded-2xl flex items-center justify-center mx-auto p-2 shadow-sm overflow-hidden">
-                <img src="https://www.doku.com/wp-content/themes/doku/assets/images/logo.png" alt="DOKU" className="object-contain max-h-full max-w-full" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Pembayaran Online DOKU</h3>
-                <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
-                  Selesaikan pembayaran pesanan Anda dengan aman menggunakan E-Wallet, QRIS, Virtual Account, atau Kartu Kredit.
-                </p>
-              </div>
+            {paymentChannel === 'OVO' ? (
+              // ── A. OVO DIRECT PUSH SCREEN (Gambar 3) ──
+              <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-5 select-none">
+                {/* OVO Branding Header */}
+                <div className="w-16 h-16 bg-[#4C2A86]/10 border border-[#4C2A86]/20 text-[#4C2A86] rounded-full flex items-center justify-center mx-auto shadow-inner">
+                  <span className="font-serif font-black text-xl italic tracking-tighter">OVO</span>
+                </div>
+                
+                <div className="space-y-1">
+                  <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Lanjutkan Pembayaran OVO</h3>
+                  <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
+                    Notifikasi push OVO telah dikirimkan ke HP Anda. Silakan selesaikan pembayaran.
+                  </p>
+                </div>
 
-              <a
-                href={order.paymentUrl}
-                target="_self"
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-indigo-100 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
-              >
-                <span>Bayar Sekarang</span>
-                <ArrowRight className="w-4.5 h-4.5" />
-              </a>
+                {/* Steps List (Gambar 3 style) */}
+                <div className="w-full text-left bg-gray-50/50 border border-gray-100 rounded-3xl p-5 space-y-4 font-semibold text-xs text-gray-700">
+                  <div className="flex gap-3">
+                    <div className="w-5 h-5 rounded-full bg-[#4C2A86] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">1</div>
+                    <div>
+                      <p className="font-bold text-gray-800">Buka Aplikasi OVO</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Ketuk ikon <span className="text-[#4C2A86] font-extrabold">"LONCENG"</span> di sudut kanan atas layar utama Anda.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <div className="w-5 h-5 rounded-full bg-[#4C2A86] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">2</div>
+                    <div>
+                      <p className="font-bold text-gray-800">Konfirmasi Pembayaran</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Pilih notifikasi tagihan Matchaboy, verifikasi nominal <span className="text-[#4C2A86] font-extrabold">{formatRupiah(order.total)}</span>, lalu masukkan PIN OVO Anda.</p>
+                    </div>
+                  </div>
 
-              <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 w-full text-center">
-                <p className="text-[10px] text-indigo-600 font-bold">
-                  💡 Status pesanan akan terverifikasi secara instan setelah pembayaran sukses di portal DOKU. Anda tidak perlu mengunggah bukti transfer manual.
-                </p>
+                  <div className="flex gap-3">
+                    <div className="w-5 h-5 rounded-full bg-[#4C2A86] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">3</div>
+                    <div>
+                      <p className="font-bold text-gray-800">Kembali Ke Matchaboy</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Pesanan Anda akan terverifikasi secara otomatis dalam beberapa detik setelah transaksi sukses.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fallback to Web Checkout URL if push doesn't arrive */}
+                {order.paymentUrl && (
+                  <a
+                    href={order.paymentUrl}
+                    target="_self"
+                    className="w-full py-3.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    <span>Tidak Menerima Notifikasi? Bayar via Web Portal DOKU</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                )}
               </div>
-            </div>
+            ) : paymentChannel === 'QRIS' && order.paymentQrContent ? (
+              // ── B. QRIS DIRECT SCREEN (Gambar 5 & 6) ──
+              <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-4">
+                {/* QRIS Header */}
+                <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-1 shrink-0">
+                  <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
+                    QR<span className="text-[#e26d5c]">IS</span>
+                  </span>
+                  <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
+                    Dinas Standard GPN
+                  </span>
+                </div>
+
+                {/* QR Image */}
+                <div className="relative w-64 h-64 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-inner flex items-center justify-center">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.paymentQrContent)}`}
+                    alt="QRIS Code"
+                    className="w-full h-full object-contain rounded-xl"
+                  />
+                </div>
+
+                <div className="w-full text-center">
+                  <p className="text-[10px] text-gray-400 font-extrabold uppercase">Unduh atau screenshot gambar QRIS</p>
+                  
+                  {/* Download Trigger */}
+                  <a
+                    href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(order.paymentQrContent)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block mt-3.5 px-6 py-2.5 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    Simpan Gambar QRIS
+                  </a>
+                </div>
+
+                {/* QRIS Instructions Steps (Gambar 6 style) */}
+                <div className="w-full text-left bg-gray-50/50 border border-gray-100 rounded-3xl p-5 space-y-4 font-semibold text-xs text-gray-700 mt-2">
+                  <h4 className="text-gray-800 font-extrabold text-xs uppercase tracking-wider pl-1 mb-1">Cara bayar dengan QRIS</h4>
+                  
+                  <div className="flex gap-3.5 items-center">
+                    <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 shrink-0 shadow-sm p-2">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800 text-xs">Langkah 1</p>
+                      <p className="text-[10.5px] text-gray-400 leading-tight">Simpan atau screenshot gambar QRIS di atas.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3.5 items-center">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 shadow-sm p-2">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800 text-xs">Langkah 2</p>
+                      <p className="text-[10.5px] text-gray-400 leading-tight">Buka aplikasi Bank / E-wallet kamu (Gojek, DANA, Shopee, BCA, dll), kemudian pilih pembayaran QRIS.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3.5 items-center">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm p-2">
+                      <CheckCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-800 text-xs">Langkah 3</p>
+                      <p className="text-[10.5px] text-gray-400 leading-tight">Lakukan pembayaran dengan upload gambar QRIS melalui menu gallery.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fallback link to DOKU page */}
+                {order.paymentUrl && (
+                  <a
+                    href={order.paymentUrl}
+                    target="_self"
+                    className="text-[10.5px] text-gray-400 hover:text-gray-605 hover:underline font-bold mt-2 cursor-pointer"
+                  >
+                    Buka di Portal Pembayaran DOKU
+                  </a>
+                )}
+              </div>
+            ) : (
+              // ── C. STANDARD DOKU CHECKOUT REDIRECT PANEL (Fallback) ──
+              <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-4">
+                <div className="w-28 h-14 bg-white border border-gray-150 rounded-2xl flex items-center justify-center mx-auto p-2 shadow-sm overflow-hidden">
+                  <img src="https://www.doku.com/wp-content/themes/doku/assets/images/logo.png" alt="DOKU" className="object-contain max-h-full max-w-full" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Pembayaran Online DOKU</h3>
+                  <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
+                    Selesaikan pembayaran pesanan Anda dengan aman menggunakan E-Wallet, QRIS, Virtual Account, atau Kartu Kredit.
+                  </p>
+                </div>
+
+                {order.paymentUrl && (
+                  <a
+                    href={order.paymentUrl}
+                    target="_self"
+                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-indigo-100 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    <span>Bayar Sekarang</span>
+                    <ArrowRight className="w-4.5 h-4.5" />
+                  </a>
+                )}
+
+                <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 w-full text-center">
+                  <p className="text-[10px] text-indigo-600 font-bold">
+                    💡 Status pesanan akan terverifikasi secara instan setelah pembayaran sukses di portal DOKU. Anda tidak perlu mengunggah bukti transfer manual.
+                  </p>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 

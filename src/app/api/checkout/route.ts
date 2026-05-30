@@ -799,7 +799,9 @@ export async function POST(req: Request) {
                     paymentMethod: body.paymentMethod?.toUpperCase() || 'TRANSFER',
                     status: isWallet ? 'PENDING' : ((isDoku || body.paymentMethod?.toUpperCase() === 'TRANSFER' || body.paymentMethod?.toUpperCase() === 'QRIS') ? 'PENDING_PAYMENT' : 'PENDING'),
                     hasTumbler,
-                    notes: body.notes || null,
+                    notes: body.paymentChannel 
+                        ? `${body.notes || ''}\n[CHANNEL: ${body.paymentChannel}]`.trim() 
+                        : (body.notes || null),
                     voucherCode: voucherCode || null,
                     paymentExpiredAt: isWallet ? null : ((isDoku || body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'TRANSFER') ? new Date(Date.now() + 15 * 60 * 1000) : null),
                     queueNumber,
