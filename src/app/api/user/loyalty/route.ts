@@ -19,6 +19,7 @@ export async function GET() {
         where: { id: userId },
         select: {
           points: true,
+          arusLevel: true,
           referralCode: true,
           referredById: true,
           _count: {
@@ -55,6 +56,7 @@ export async function GET() {
 
     return NextResponse.json({
       points: user.points,
+      arusLevel: user.arusLevel || 'Tunas Arus',
       referralCode: user.referralCode,
       totalReferrals: user._count?.referrals || 0,
       vouchers,

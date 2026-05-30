@@ -9,7 +9,7 @@ import type { Product, Category } from '@/types';
 import Image from 'next/image';
 import { formatRupiah, getActivePromo, cn } from '@/lib/utils';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
-import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ShoppingBag, Clock, Gift, Copy, Check, Share2 } from 'lucide-react';
+import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ShoppingBag, Clock, Gift, Copy, Check, Share2, Trophy, RefreshCw, FlaskConical, CreditCard, Plus, History, Trash2, ArrowUpRight, Leaf, Award, ShieldAlert, CheckCircle2, CalendarDays } from 'lucide-react';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 
 // Lazy-load heavy modal components (only shown on user interaction)
@@ -94,6 +94,25 @@ export default function StorefrontClient({
   const [loadingAi, setLoadingAi] = useState(true);
 
 
+  // Wallet states
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletTransactions, setWalletTransactions] = useState<any[]>([]);
+  const [loadingWallet, setLoadingWallet] = useState(false);
+  const [showWalletHistory, setShowWalletHistory] = useState(false);
+
+  // Loyalty states
+  const [points, setPoints] = useState<number | null>(null);
+  const [arusLevel, setArusLevel] = useState<string>("Tunas Arus");
+  const [pointHistory, setPointHistory] = useState<any[]>([]);
+  const [milestones, setMilestones] = useState<any>(null);
+  const [loadingLoyalty, setLoadingLoyalty] = useState(false);
+  const [showPointsHistory, setShowPointsHistory] = useState(false);
+
+  // Shortcut Modals states
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [isAutoReorderOpen, setIsAutoReorderOpen] = useState(false);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+
   const [copied, setCopied] = useState(false);
   const referralCode = useMemo(() => {
     return (session?.user as any)?.referralCode || '';
@@ -165,6 +184,41 @@ export default function StorefrontClient({
     }
   }, [setSearchOpen]);
 
+  const refreshWallet = () => {
+    if (status !== 'authenticated') return;
+    setLoadingWallet(true);
+    fetch('/api/user/wallet')
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          setWalletBalance(data.balance);
+          setWalletTransactions(data.transactions || []);
+        }
+      })
+      .catch(err => console.error('Error fetching wallet:', err))
+      .finally(() => setLoadingWallet(false));
+  };
+
+  const refreshLoyalty = () => {
+    if (status !== 'authenticated') return;
+    setLoadingLoyalty(true);
+    fetch('/api/user/loyalty')
+      .then(res => res.json())
+      .then(data => {
+        if (data) {
+          setPoints(data.points);
+          setArusLevel(data.arusLevel || 'Tunas Arus');
+          setPointHistory(data.pointHistory || []);
+          setMilestones(data.milestones || null);
+          if (data.easterEgg) {
+            setEasterEggConfig(data.easterEgg);
+          }
+        }
+      })
+      .catch(err => console.error('Error fetching loyalty:', err))
+      .finally(() => setLoadingLoyalty(false));
+  };
+
   useEffect(() => {
     // Fetch featured reviews
     fetch('/api/reviews/featured')
@@ -179,14 +233,8 @@ export default function StorefrontClient({
 
     if (status === 'authenticated' && !loyaltyFetchedRef.current) {
       loyaltyFetchedRef.current = true;
-      fetch('/api/user/loyalty')
-        .then(res => res.json())
-        .then(data => {
-          if (data?.easterEgg) {
-            setEasterEggConfig(data.easterEgg);
-          }
-        })
-        .catch(err => console.error('Error fetching loyalty data:', err));
+      refreshLoyalty();
+      refreshWallet();
 
       fetch('/api/user/gacha')
         .then(res => res.json())
@@ -497,10 +545,10 @@ export default function StorefrontClient({
           </div>
         </div>
 
-        {/* Story Bar Status (B3) */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-10 md:mt-4 relative z-10 md:hidden">
+        {/* Story Bar Status (B3) - Disabled as requested */}
+        {/* <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-10 md:mt-4 relative z-10 md:hidden">
           <StoryBar />
-        </div>
+        </div> */}
 
         {/* Hero Banner Slider */}
         <motion.div 
@@ -591,6 +639,343 @@ export default function StorefrontClient({
             </div>
           </div>
         </motion.div>
+
+
+        {/* INTERACTIVE FUNCTION SHORTCUTS GRID */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            
+            {/* PAPAN PERINGKAT */}
+            <motion.button
+              whileHover={{ scale: 1.025, y: -2 }}
+              whileTap={{ scale: 0.975 }}
+              onClick={() => {
+                if (status === 'authenticated') {
+                  setIsLeaderboardOpen(true);
+                } else {
+                  openLogin();
+                }
+              }}
+              className="bg-white border border-gray-150 rounded-3xl p-4 flex items-center gap-3 shadow-sm hover:shadow-md hover:border-[#2E5A44]/35 transition-all text-left cursor-pointer outline-none w-full"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500 shrink-0 shadow-inner">
+                <Trophy className="w-5.5 h-5.5" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
+                  Papan Peringkat
+                </h4>
+                <p className="text-[9px] text-gray-400 font-bold leading-tight">
+                  Juara Matcha 🏆
+                </p>
+              </div>
+            </motion.button>
+
+            {/* PEMESANAN OTOMATIS */}
+            <motion.button
+              whileHover={{ scale: 1.025, y: -2 }}
+              whileTap={{ scale: 0.975 }}
+              onClick={() => {
+                if (status === 'authenticated') {
+                  setIsAutoReorderOpen(true);
+                } else {
+                  openLogin();
+                }
+              }}
+              className="bg-white border border-gray-150 rounded-3xl p-4 flex items-center gap-3 shadow-sm hover:shadow-md hover:border-[#2E5A44]/35 transition-all text-left cursor-pointer outline-none w-full"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-[#2E5A44] shrink-0 shadow-inner">
+                <RefreshCw className="w-5.5 h-5.5 animate-spin-slow" style={{ animationDuration: '8s' }} />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
+                  Order Otomatis
+                </h4>
+                <p className="text-[9px] text-gray-400 font-bold leading-tight">
+                  Minum harian ⏱️
+                </p>
+              </div>
+            </motion.button>
+
+            {/* CUSTOM MATCHA STUDIO */}
+            <motion.button
+              whileHover={{ scale: 1.025, y: -2 }}
+              whileTap={{ scale: 0.975 }}
+              onClick={() => {
+                window.location.href = '/custom-studio';
+              }}
+              className="bg-white border border-gray-150 rounded-3xl p-4 flex items-center gap-3 shadow-sm hover:shadow-md hover:border-[#2E5A44]/35 transition-all text-left cursor-pointer outline-none w-full"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-500 shrink-0 shadow-inner">
+                <FlaskConical className="w-5.5 h-5.5" />
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
+                  Custom Studio
+                </h4>
+                <p className="text-[9px] text-gray-400 font-bold leading-tight">
+                  Racik sendiri 🧪
+                </p>
+              </div>
+            </motion.button>
+
+            {/* LUCKY GACHA */}
+            <motion.button
+              whileHover={{ scale: 1.025, y: -2 }}
+              whileTap={{ scale: 0.975 }}
+              onClick={() => {
+                if (status === 'authenticated') {
+                  setIsGachaOpen(true);
+                } else {
+                  openLogin();
+                }
+              }}
+              className="bg-white border border-gray-150 rounded-3xl p-4 flex items-center gap-3 shadow-sm hover:shadow-md hover:border-[#2E5A44]/35 transition-all text-left cursor-pointer outline-none w-full"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-500 shrink-0 shadow-inner relative">
+                <Gift className="w-5.5 h-5.5" />
+                {status === 'authenticated' && gachaChances > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-rose-600 border border-white text-white font-extrabold text-[8px] flex items-center justify-center animate-bounce">
+                    {gachaChances}
+                  </span>
+                )}
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
+                  Lucky Gacha
+                </h4>
+                <p className="text-[9px] text-gray-400 font-bold leading-tight">
+                  Hadiah & Game 🎁
+                </p>
+              </div>
+            </motion.button>
+
+          </div>
+        </div>
+
+        {/* MATCHABOY PAY & ARUS POIN DUAL CARD */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            
+            {/* MATCHABOY PAY (WALLET CARD) */}
+            <div className="bg-gradient-to-tr from-[#2E5A44] via-[#1E3F20] to-[#142C16] text-white rounded-[2rem] p-6 shadow-xl border border-[#D4A574]/35 relative overflow-hidden flex flex-col justify-between min-h-[170px] group transition-all duration-300 hover:shadow-2xl hover:shadow-[#2E5A44]/10">
+              {/* Background abstract circles */}
+              <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#FEF08A]/10 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition-transform duration-500" />
+              <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-[#D4A574]/15 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="flex items-center justify-between z-10">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-[#FEF08A]" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-300">
+                    Matchaboy Pay
+                  </span>
+                </div>
+                <div className="px-2.5 py-0.5 rounded-full bg-[#FEF08A]/10 border border-[#FEF08A]/20 text-[#FEF08A] text-[9px] font-black tracking-wider uppercase">
+                  Dompet Digital ⚡
+                </div>
+              </div>
+
+              <div className="my-4 z-10 text-left">
+                <span className="text-[10px] font-black text-neutral-300 uppercase tracking-widest leading-none block mb-1">
+                  Saldo Anda
+                </span>
+                <div className="flex items-baseline gap-1 animate-pulse-once">
+                  <span className="text-3xl font-black font-serif tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]">
+                    {walletBalance !== null ? formatRupiah(walletBalance) : (status === 'authenticated' ? 'Memuat...' : 'Rp 0')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 z-10 mt-auto">
+                <button
+                  onClick={() => {
+                    if (status === 'authenticated') {
+                      setIsTopUpOpen(true);
+                    } else {
+                      openLogin();
+                    }
+                  }}
+                  className="flex-1 py-2.5 bg-gradient-to-tr from-[#FEF08A] to-[#D4A574] text-[#2A1F16] text-[11px] font-black rounded-xl hover:shadow-lg active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md border border-[#FEF08A]/20"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Top Up Saldo</span>
+                </button>
+                <button
+                  onClick={() => {
+                    if (status === 'authenticated') {
+                      setShowWalletHistory(!showWalletHistory);
+                    } else {
+                      openLogin();
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/15 text-white border border-white/15 text-[11px] font-black rounded-xl active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <History className="w-4 h-4" />
+                  <span>Riwayat</span>
+                </button>
+              </div>
+
+              {/* Toggleable Wallet Transaction History inline list */}
+              <AnimatePresence>
+                {showWalletHistory && walletTransactions.length > 0 && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden border-t border-white/10 mt-4 pt-4 z-10 text-left space-y-2.5 max-h-[220px] overflow-y-auto scrollbar-hide"
+                  >
+                    <p className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">
+                      Transaksi Terakhir
+                    </p>
+                    {walletTransactions.slice(0, 5).map((tx: any) => (
+                      <div key={tx.id} className="flex justify-between items-center text-xs pb-2 border-b border-white/5 last:border-0 last:pb-0">
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-white text-[11px]">{tx.description}</p>
+                          <p className="text-[9px] text-neutral-400">{new Date(tx.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                        <span className={`font-black text-[11px] ${tx.type.startsWith('TOP_UP') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                          {tx.type.startsWith('TOP_UP') ? '+' : '-'}{formatRupiah(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* ARUS POIN (LOYALTY CARD) */}
+            <div className="bg-white text-[#2A1F16] rounded-[2rem] p-6 shadow-xl border border-gray-150 relative overflow-hidden flex flex-col justify-between min-h-[170px] group transition-all duration-300 hover:shadow-2xl">
+              {/* Background abstract circles */}
+              <div className="absolute -top-12 -right-12 w-40 h-40 bg-emerald-50 rounded-full blur-2xl pointer-events-none" />
+              <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-stone-100 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex items-center justify-between z-10">
+                <div className="flex items-center gap-2">
+                  <Leaf className="w-5 h-5 text-[#2E5A44]" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#2E5A44]">
+                    Arus Poin
+                  </span>
+                </div>
+                <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-200 text-[#2E5A44] text-[9px] font-black tracking-wider uppercase shadow-inner">
+                  <span>🍃</span>
+                  <span>{arusLevel}</span>
+                </div>
+              </div>
+
+              <div className="my-4 z-10 text-left flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest leading-none block mb-1">
+                    Loyalty Points
+                  </span>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-3xl font-black font-serif tracking-tight text-[#1E3F20] drop-shadow-sm">
+                      {points !== null ? points : (status === 'authenticated' ? 'Memuat...' : '0')}
+                    </span>
+                    <span className="text-xs font-bold text-gray-500">Poin</span>
+                  </div>
+                </div>
+                
+                {/* Eco level badge graphic */}
+                <div className="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-xl shadow-inner animate-pulse-once">
+                  {arusLevel.includes('Tunas') ? '🌱' : (arusLevel.includes('Mengalir') ? '🌊' : '🌊')}
+                </div>
+              </div>
+
+              {/* Progress to next Milestone */}
+              <div className="mb-4 z-10 text-left">
+                {(() => {
+                  const currentPoints = points || 0;
+                  let target = 5;
+                  let prevTarget = 0;
+                  let nextReward = "Reward Milestone 1";
+                  
+                  if (milestones) {
+                    if (currentPoints < milestones.milestone1.target && milestones.milestone1.enabled) {
+                      target = milestones.milestone1.target;
+                      nextReward = milestones.milestone1.reward;
+                    } else if (currentPoints < milestones.milestone2.target && milestones.milestone2.enabled) {
+                      target = milestones.milestone2.target;
+                      prevTarget = milestones.milestone1.target;
+                      nextReward = milestones.milestone2.reward;
+                    } else if (currentPoints < milestones.milestone3.target && milestones.milestone3.enabled) {
+                      target = milestones.milestone3.target;
+                      prevTarget = milestones.milestone2.target;
+                      nextReward = milestones.milestone3.reward;
+                    } else {
+                      target = milestones.milestone3.target;
+                      prevTarget = milestones.milestone2.target;
+                      nextReward = "Maximum Milestone Reached 🎉";
+                    }
+                  }
+                  
+                  const progressPct = Math.min(100, Math.max(0, ((currentPoints - prevTarget) / (target - prevTarget)) * 100));
+                  
+                  return (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[9px] font-black text-gray-500 uppercase tracking-widest">
+                        <span>Milestone Berikutnya</span>
+                        <span className="text-[#2E5A44]">{currentPoints} / {target} Poin</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-gray-200 border border-gray-300 overflow-hidden shadow-inner relative">
+                        <div 
+                          className="h-full bg-gradient-to-r from-emerald-500 to-[#2E5A44] rounded-full transition-all duration-1000 ease-out" 
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                      <p className="text-[8.5px] font-bold text-gray-500 leading-none">
+                        🎁 Target: {nextReward}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div className="flex items-center gap-2 z-10 mt-auto">
+                <button
+                  onClick={() => {
+                    if (status === 'authenticated') {
+                      setShowPointsHistory(!showPointsHistory);
+                    } else {
+                      openLogin();
+                    }
+                  }}
+                  className="w-full py-2.5 bg-[#2E5A44] hover:bg-[#1E3F20] text-white text-[11px] font-black rounded-xl hover:shadow-lg active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <History className="w-4 h-4" />
+                  <span>Riwayat Poin</span>
+                </button>
+              </div>
+
+              {/* Toggleable Points History inline list */}
+              <AnimatePresence>
+                {showPointsHistory && pointHistory.length > 0 && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden border-t border-gray-200 mt-4 pt-4 z-10 text-left space-y-2.5 max-h-[220px] overflow-y-auto scrollbar-hide"
+                  >
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
+                      Riwayat Transaksi Poin
+                    </p>
+                    {pointHistory.slice(0, 5).map((ph: any) => (
+                      <div key={ph.id} className="flex justify-between items-center text-xs pb-2 border-b border-gray-150 last:border-0 last:pb-0">
+                        <div className="space-y-0.5">
+                          <p className="font-bold text-gray-800 text-[11px]">{ph.description || 'Pemberian Poin'}</p>
+                          <p className="text-[9px] text-gray-500">{new Date(ph.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                        </div>
+                        <span className={`font-black text-[11px] ${ph.type === 'EARNED' || ph.amount > 0 ? 'text-[#2E5A44]' : 'text-rose-600'}`}>
+                          {ph.amount > 0 ? '+' : ''}{ph.amount} Pts
+                        </span>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+          </div>
+        </div>
 
         {/* Welcome & Referral Widget Banner (Shown for both authenticated users and guests) */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
@@ -1332,7 +1717,748 @@ export default function StorefrontClient({
           setGachaChances(newChances);
         }}
       />
+
+      <LeaderboardOverlay
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+      />
+
+      <AutoReorderOverlay
+        isOpen={isAutoReorderOpen}
+        onClose={() => setIsAutoReorderOpen(false)}
+        products={products}
+        showToast={showToast}
+        refreshWallet={refreshWallet}
+        refreshLoyalty={refreshLoyalty}
+      />
+
+      <TopUpOverlay
+        isOpen={isTopUpOpen}
+        onClose={() => setIsTopUpOpen(false)}
+        refreshWallet={refreshWallet}
+        showToast={showToast}
+      />
     </>
+  );
+}
+
+// ==========================================
+// STOREFRONT SHORTCUT OVERLAYS
+// ==========================================
+
+function LeaderboardOverlay({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const [data, setData] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'spender' | 'loyal' | 'referrer' | 'eco'>('spender');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true);
+      fetch('/api/leaderboard')
+        .then(res => res.json())
+        .then(d => {
+          if (d) setData(d);
+        })
+        .catch(err => console.error('Error fetching leaderboard:', err))
+        .finally(() => setLoading(false));
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const getList = () => {
+    if (!data) return [];
+    if (activeTab === 'spender') return data.topSpenders || [];
+    if (activeTab === 'loyal') return data.mostLoyal || [];
+    if (activeTab === 'referrer') return data.topReferrers || [];
+    return data.ecoChampions || [];
+  };
+
+  const getScoreLabel = (val: number) => {
+    if (activeTab === 'spender') return formatRupiah(val);
+    if (activeTab === 'loyal') return `${val} Order`;
+    if (activeTab === 'referrer') return `${val} Referral`;
+    return `${val} Tumbler ♻️`;
+  };
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl flex flex-col border border-gray-150 max-h-[85vh]"
+        >
+          {/* Header */}
+          <div className="p-6 bg-gradient-to-tr from-[#2E5A44] to-[#1E3F20] text-white flex justify-between items-center relative">
+            <div className="space-y-0.5">
+              <span className="text-[9px] text-[#FEF08A] font-black uppercase tracking-widest bg-white/10 px-2 py-0.5 rounded-full">
+                ✦ Matchaboy Arena ✦
+              </span>
+              <h3 className="font-serif font-black text-xl text-white tracking-tight mt-1">
+                Papan Peringkat
+              </h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 flex items-center justify-center text-white text-sm font-bold active:scale-95 transition-all cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Tabs selector */}
+          <div className="flex bg-gray-50 border-b border-gray-100 p-2 overflow-x-auto scrollbar-hide shrink-0 gap-1">
+            {[
+              { id: 'spender', label: 'Top Spender' },
+              { id: 'loyal', label: 'Most Loyal' },
+              { id: 'referrer', label: 'Referral' },
+              { id: 'eco', label: 'Eco Champion' }
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`px-4 py-2 text-[10px] font-black uppercase rounded-2xl tracking-wider transition-all whitespace-nowrap shrink-0 border cursor-pointer ${
+                  activeTab === tab.id
+                    ? 'bg-[#2E5A44] border-[#2E5A44] text-white shadow-sm'
+                    : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* List Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-3.5 scrollbar-hide">
+            {loading ? (
+              <div className="space-y-3">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-16 bg-gray-100 animate-pulse rounded-2xl w-full" />
+                ))}
+              </div>
+            ) : getList().length === 0 ? (
+              <div className="text-center py-10 space-y-2">
+                <span className="text-3xl">🫙</span>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Belum Ada Data Bulan Ini</p>
+              </div>
+            ) : (
+              getList().map((user: any, index: number) => {
+                const isTopThree = index < 3;
+                const medals = ['🥇', '🥈', '🥉'];
+                const badgeBg = ['bg-yellow-500/10 text-yellow-600 border-yellow-500/20', 'bg-slate-400/10 text-slate-500 border-slate-400/20', 'bg-amber-600/10 text-amber-700 border-amber-600/20'];
+
+                return (
+                  <div 
+                    key={user.id || index}
+                    className={`flex items-center justify-between p-3.5 border rounded-3xl transition-all ${
+                      isTopThree 
+                        ? 'bg-gradient-to-r from-[#2E5A44]/5 to-transparent border-[#2E5A44]/15 shadow-sm' 
+                        : 'bg-white border-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Rank Indicator */}
+                      <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-black text-xs ${
+                        isTopThree 
+                          ? badgeBg[index] 
+                          : 'bg-gray-50 border-gray-200 text-gray-500'
+                      }`}>
+                        {isTopThree ? medals[index] : index + 1}
+                      </div>
+
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-brand-50 border border-gray-100 shrink-0 relative">
+                        <Image
+                          src={user.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=1E3F20&color=D4A574&bold=true`}
+                          alt={user.name}
+                          fill
+                          sizes="40px"
+                          className="object-cover"
+                        />
+                      </div>
+
+                      {/* Name */}
+                      <div className="text-left">
+                        <h4 className="font-serif font-black text-xs text-gray-900 line-clamp-1 max-w-[150px]">
+                          {user.name}
+                        </h4>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest leading-none">
+                          Level Matcha Lover
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className={`font-black text-xs ${isTopThree ? 'text-[#2E5A44]' : 'text-gray-700'}`}>
+                        {getScoreLabel(user.value)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+}
+
+function TopUpOverlay({ 
+  isOpen, 
+  onClose, 
+  refreshWallet,
+  showToast
+}: { 
+  isOpen: boolean; 
+  onClose: () => void; 
+  refreshWallet: () => void;
+  showToast: (msg: string, type: 'success' | 'error') => void;
+}) {
+  const [amount, setAmount] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  if (!isOpen) return null;
+
+  const presets = [20000, 50000, 100000, 200000];
+
+  const handleTopUp = async (val?: number) => {
+    const finalAmount = val || parseInt(amount);
+    if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
+      showToast('Masukkan jumlah top up yang valid', 'error');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('/api/user/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: finalAmount })
+      });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        showToast(`Top Up berhasil! Saldo Anda bertambah sebesar ${formatRupiah(finalAmount)}`, 'success');
+        refreshWallet();
+        onClose();
+        setAmount('');
+      } else {
+        showToast(d.error || 'Gagal melakukan top up', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Koneksi terputus, coba lagi nanti', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-white rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl flex flex-col border border-gray-150"
+        >
+          {/* Header */}
+          <div className="p-6 bg-gradient-to-tr from-[#2E5A44] to-[#1E3F20] text-white flex justify-between items-center relative">
+            <div className="space-y-0.5">
+              <span className="text-[9px] text-[#FEF08A] font-black uppercase tracking-widest bg-white/10 px-2 py-0.5 rounded-full">
+                ✦ Matchaboy Wallet ✦
+              </span>
+              <h3 className="font-serif font-black text-xl text-white tracking-tight mt-1">
+                Top Up Matchaboy Pay
+              </h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 flex items-center justify-center text-white text-sm font-bold active:scale-95 transition-all cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6 text-left">
+            {/* Promo Alert */}
+            <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
+              <span className="text-lg">🔥</span>
+              <div className="space-y-0.5">
+                <p className="text-xs font-black text-[#2E5A44]">Bonus Saldo 10%!</p>
+                <p className="text-[10px] text-gray-500 font-semibold leading-tight">Lakukan pengisian saldo minimum Rp 100.000 untuk mendapatkan ekstra saldo 10% cuma-cuma!</p>
+              </div>
+            </div>
+
+            {/* Custom Input */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Masukkan Jumlah Top Up (Rp)</label>
+              <input
+                type="number"
+                placeholder="Contoh: 50000"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] text-sm font-bold text-gray-900 bg-gray-50"
+              />
+            </div>
+
+            {/* Presets */}
+            <div className="space-y-2">
+              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Pilih Cepat Nominal</span>
+              <div className="grid grid-cols-2 gap-3">
+                {presets.map(val => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => handleTopUp(val)}
+                    className="relative p-3.5 bg-white hover:bg-gray-50 border border-gray-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-center outline-none"
+                  >
+                    <span>{formatRupiah(val)}</span>
+                    {val >= 100000 && (
+                      <span className="absolute -top-2 -right-1 bg-rose-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-sm scale-95 border border-white">
+                        +10%
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Submit Button */}
+            <button
+              onClick={() => handleTopUp()}
+              disabled={loading}
+              className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:opacity-50 text-white font-black text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              {loading ? 'Memproses...' : 'Top Up Sekarang ⚡'}
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+}
+
+function AutoReorderOverlay({
+  isOpen,
+  onClose,
+  products,
+  showToast,
+  refreshWallet,
+  refreshLoyalty
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  products: Product[];
+  showToast: (msg: string, type: 'success' | 'error') => void;
+  refreshWallet: () => void;
+  refreshLoyalty: () => void;
+}) {
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  
+  // Form states
+  const [selectedProductId, setSelectedProductId] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [size, setSize] = useState('Normal');
+  const [iceLevel, setIceLevel] = useState('Normal');
+  const [sugarLevel, setSugarLevel] = useState('Normal');
+  const [frequency, setFrequency] = useState('DAILY');
+  const [dayOfWeek, setDayOfWeek] = useState(1); // 1 = Senin
+  const [dayOfMonth, setDayOfMonth] = useState(1);
+  const [timeSlot, setTimeSlot] = useState('09:00');
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('WALLET');
+  const [submitting, setSubmitting] = useState(false);
+
+  const fetchSchedules = () => {
+    setLoadingList(true);
+    fetch('/api/auto-reorder')
+      .then(res => res.json())
+      .then(d => {
+        if (Array.isArray(d)) setSchedules(d);
+      })
+      .catch(err => console.error('Error fetching schedules:', err))
+      .finally(() => setLoadingList(false));
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchSchedules();
+      setShowAddForm(false);
+      setSelectedProductId(products.filter(p => p.badge !== 'sold-out' && p.modifiers?.isBundle !== true)[0]?.id || '');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin membatalkan jadwal pemesanan otomatis ini?')) return;
+    try {
+      const res = await fetch(`/api/auto-reorder?id=${id}`, { method: 'DELETE' });
+      const d = await res.json();
+      if (res.ok && d.success) {
+        showToast('Jadwal pemesanan otomatis berhasil dibatalkan!', 'success');
+        fetchSchedules();
+      } else {
+        showToast(d.error || 'Gagal membatalkan jadwal', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Koneksi bermasalah', 'error');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductId || !timeSlot || !deliveryAddress) {
+      showToast('Mohon lengkapi produk, waktu, dan alamat pengiriman', 'error');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/auto-reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: selectedProductId,
+          quantity,
+          size,
+          iceLevel,
+          sugarLevel,
+          frequency,
+          dayOfWeek: frequency === 'WEEKLY' ? dayOfWeek : undefined,
+          dayOfMonth: frequency === 'MONTHLY' ? dayOfMonth : undefined,
+          timeSlot,
+          deliveryAddress,
+          paymentMethod
+        })
+      });
+      const d = await res.json();
+      if (res.ok && d.id) {
+        showToast('Jadwal pemesanan otomatis berhasil dibuat! 🎉', 'success');
+        setShowAddForm(false);
+        fetchSchedules();
+        refreshWallet();
+        refreshLoyalty();
+      } else {
+        showToast(d.error || 'Gagal membuat jadwal', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Koneksi bermasalah', 'error');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getProductOptions = () => {
+    return products.filter(p => p.badge !== 'sold-out' && p.modifiers?.isBundle !== true);
+  };
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-white rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl flex flex-col border border-gray-150 max-h-[85vh]"
+        >
+          {/* Header */}
+          <div className="p-6 bg-gradient-to-tr from-[#2E5A44] to-[#1E3F20] text-white flex justify-between items-center relative">
+            <div className="space-y-0.5">
+              <span className="text-[9px] text-[#FEF08A] font-black uppercase tracking-widest bg-white/10 px-2 py-0.5 rounded-full">
+                ✦ Matchaboy Concierge ✦
+              </span>
+              <h3 className="font-serif font-black text-xl text-white tracking-tight mt-1">
+                Pemesanan Otomatis
+              </h3>
+            </div>
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/15 border border-white/10 flex items-center justify-center text-white text-sm font-bold active:scale-95 transition-all cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-hide text-left">
+            {/* Info panel */}
+            <div className="bg-[#2E5A44]/5 border border-[#2E5A44]/15 rounded-2xl p-4 flex gap-3 text-gray-800">
+              <span className="text-lg">⏱️</span>
+              <div className="space-y-0.5">
+                <p className="text-xs font-black text-[#2E5A44]">Pesan Otomatis Mengalir</p>
+                <p className="text-[10px] text-gray-500 font-semibold leading-tight">
+                  Jadwalkan Matcha favorit Anda agar dikirim secara terjadwal (Harian, Mingguan, atau Bulanan) langsung ke alamat Anda secara otomatis!
+                </p>
+              </div>
+            </div>
+
+            {showAddForm ? (
+              /* ADD NEW REORDER FORM */
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <h4 className="text-xs font-black text-[#2E5A44] uppercase tracking-widest">Buat Jadwal Baru</h4>
+                
+                {/* Select Product */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Pilih Matcha Menu</label>
+                  <select
+                    value={selectedProductId}
+                    onChange={e => setSelectedProductId(e.target.value)}
+                    className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] text-xs font-bold bg-gray-50"
+                  >
+                    {getProductOptions().map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({formatRupiah(p.price)})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  {/* Size */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Ukuran</label>
+                    <select
+                      value={size}
+                      onChange={e => setSize(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-[10px] font-bold bg-gray-50"
+                    >
+                      <option value="Normal">Normal</option>
+                      <option value="Large">Large</option>
+                    </select>
+                  </div>
+                  {/* Ice */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Es Batu</label>
+                    <select
+                      value={iceLevel}
+                      onChange={e => setIceLevel(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-[10px] font-bold bg-gray-50"
+                    >
+                      <option value="Normal">Normal</option>
+                      <option value="Less">Less Ice</option>
+                      <option value="No Ice">No Ice</option>
+                    </select>
+                  </div>
+                  {/* Sugar */}
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Kemanisan</label>
+                    <select
+                      value={sugarLevel}
+                      onChange={e => setSugarLevel(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-[10px] font-bold bg-gray-50"
+                    >
+                      <option value="Normal">Normal</option>
+                      <option value="Less">Less Sugar</option>
+                      <option value="No Sugar">No Sugar</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Scheduling Parameters */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Frekuensi</label>
+                    <select
+                      value={frequency}
+                      onChange={e => setFrequency(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-[10px] font-bold bg-gray-50"
+                    >
+                      <option value="DAILY">Harian (Setiap Hari)</option>
+                      <option value="WEEKLY">Mingguan (Hari tertentu)</option>
+                      <option value="MONTHLY">Bulanan (Tanggal tertentu)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Jam Pengiriman</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: 09:00"
+                      value={timeSlot}
+                      onChange={e => setTimeSlot(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-[10px] font-bold bg-gray-50 text-center"
+                    />
+                  </div>
+                </div>
+
+                {frequency === 'WEEKLY' && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Pilih Hari dalam Seminggu</label>
+                    <select
+                      value={dayOfWeek}
+                      onChange={e => setDayOfWeek(parseInt(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50"
+                    >
+                      <option value="1">Senin</option>
+                      <option value="2">Selasa</option>
+                      <option value="3">Rabu</option>
+                      <option value="4">Kamis</option>
+                      <option value="5">Jumat</option>
+                      <option value="6">Sabtu</option>
+                      <option value="0">Minggu</option>
+                    </select>
+                  </div>
+                )}
+
+                {frequency === 'MONTHLY' && (
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Pilih Tanggal Pengiriman (1-31)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={dayOfMonth}
+                      onChange={e => setDayOfMonth(parseInt(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs font-bold bg-gray-50"
+                    />
+                  </div>
+                )}
+
+                {/* Delivery Address */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Alamat Pengiriman Lengkap</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Masukkan alamat lengkap rumah/kantor..."
+                    value={deliveryAddress}
+                    onChange={e => setDeliveryAddress(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-[#2E5A44] text-xs font-semibold bg-gray-50 resize-none"
+                  />
+                </div>
+
+                {/* Payment Method */}
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black text-gray-400 uppercase tracking-wider block">Metode Pembayaran</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {['WALLET', 'COD'].map(m => (
+                      <button
+                        type="button"
+                        key={m}
+                        onClick={() => setPaymentMethod(m)}
+                        className={`p-3 border rounded-xl font-black text-[10px] tracking-wide transition-all outline-none cursor-pointer ${
+                          paymentMethod === m
+                            ? 'bg-[#2E5A44] border-[#2E5A44] text-white'
+                            : 'bg-white border-gray-200 text-gray-600'
+                        }`}
+                      >
+                        {m === 'WALLET' ? 'Matchaboy Pay ⚡' : 'Bayar Ditempat (COD) 💵'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Form Actions */}
+                <div className="flex gap-3.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(false)}
+                    className="flex-1 py-3.5 border border-gray-200 hover:bg-gray-50 text-gray-600 font-black text-xs rounded-xl cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="flex-1 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:opacity-50 text-white font-black text-xs rounded-xl cursor-pointer"
+                  >
+                    {submitting ? 'Menyimpan...' : 'Aktifkan Jadwal 🚀'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              /* LIST ACTIVE AUTO REORDERS */
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-black text-gray-800 uppercase tracking-wider">Jadwal Anda</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddForm(true)}
+                    className="px-3.5 py-1.5 bg-gradient-to-tr from-[#FEF08A] to-[#D4A574] text-[#2A1F16] text-[10px] font-black rounded-full hover:shadow-md cursor-pointer border border-[#FEF08A]/35"
+                  >
+                    + Buat Baru
+                  </button>
+                </div>
+
+                {loadingList ? (
+                  <div className="space-y-2.5">
+                    {[1, 2].map(i => (
+                      <div key={i} className="h-28 bg-gray-100 animate-pulse rounded-2xl w-full" />
+                    ))}
+                  </div>
+                ) : schedules.length === 0 ? (
+                  <div className="text-center py-10 space-y-2 border border-dashed border-gray-200 rounded-3xl">
+                    <span className="text-3xl">📭</span>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Belum ada pemesanan otomatis</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddForm(true)}
+                      className="px-4.5 py-2.5 bg-[#2E5A44] text-white text-[10px] font-black rounded-xl hover:shadow-md cursor-pointer mt-2"
+                    >
+                      Atur Sekarang
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    {schedules.map((s: any) => (
+                      <div key={s.id} className="border border-gray-150 rounded-3xl p-4 bg-white shadow-sm flex flex-col justify-between space-y-3 hover:shadow-md transition-all">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-[#2E5A44] text-[8px] font-black uppercase tracking-wider leading-none">
+                              {s.frequency} ✦ {s.timeSlot}
+                            </span>
+                            <h4 className="font-serif font-black text-sm text-gray-900 mt-1 leading-snug">
+                              {s.productName}
+                            </h4>
+                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
+                              {s.size} ✦ Ice: {s.iceLevel} ✦ Sugar: {s.sugarLevel}
+                            </p>
+                          </div>
+                          
+                          <div className="text-right">
+                            <span className="font-black text-xs text-[#B48A5E] block">
+                              {formatRupiah(s.price * s.quantity)}
+                            </span>
+                            <span className="text-[9px] text-gray-400 font-bold">Qty: {s.quantity}</span>
+                          </div>
+                        </div>
+
+                        <div className="text-[9.5px] text-gray-500 font-semibold border-t border-b border-gray-100 py-2 space-y-1">
+                          <p className="line-clamp-1">📍 Alamat: {s.deliveryAddress}</p>
+                          <p className="flex items-center gap-1">
+                            Metode: <span className="font-bold text-gray-800">{s.paymentMethod === 'WALLET' ? 'Matchaboy Pay ⚡' : 'Cash On Delivery (COD) 💵'}</span>
+                          </p>
+                          {s.nextTriggeredAt && (
+                            <p className="text-[#2E5A44] font-bold">
+                              Pengiriman Berikutnya: {new Date(s.nextTriggeredAt).toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex justify-end gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(s.id)}
+                            className="px-4 py-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-[9px] font-black uppercase transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Batalkan Jadwal</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
   );
 }
 
