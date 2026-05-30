@@ -35,7 +35,18 @@ import {
   UserX,
   Ticket,
   Megaphone,
-  Flame
+  Flame,
+  Wallet,
+  Crown,
+  RefreshCcw,
+  Cake,
+  BellRing,
+  Swords,
+  Trophy,
+  Dices,
+  Star,
+  ChefHat,
+  UsersRound
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
@@ -82,6 +93,27 @@ const LOYALTY_ITEMS = [
 
 const DELIVERY_ITEMS = [
   { label: 'Kelola Kurir', href: '/admin/drivers', icon: Truck },
+];
+
+const CUSTOMER_FEATURE_ITEMS = [
+  { label: 'Wallet', href: '/admin/wallet', icon: Wallet },
+  { label: 'Subscription Club', href: '/admin/subscriptions', icon: Crown },
+  { label: 'Gift Card', href: '/admin/gift-cards', icon: Gift },
+  { label: 'Auto-Reorder', href: '/admin/auto-reorder', icon: RefreshCcw },
+  { label: 'Birthday Program', href: '/admin/birthday', icon: Cake },
+  { label: 'Notify Me', href: '/admin/notify-me', icon: BellRing },
+];
+
+const ENGAGEMENT_ITEMS = [
+  { label: 'Quest & Misi', href: '/admin/quests', icon: Swords },
+  { label: 'Leaderboard', href: '/admin/leaderboard', icon: Trophy },
+  { label: 'Lucky Draw', href: '/admin/gacha', icon: Dices },
+  { label: 'Moderasi Review', href: '/admin/reviews', icon: Star },
+  { label: 'Custom Recipes', href: '/admin/custom-recipes', icon: ChefHat },
+];
+
+const COLLABORATION_ITEMS = [
+  { label: 'Group Orders', href: '/admin/group-orders', icon: UsersRound },
 ];
 
 const CASHIER_ITEMS = [
@@ -273,6 +305,54 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
                 onNavigate={onNavigate}
                 activeColorClass="bg-gradient-to-r from-sky-600 to-sky-500 shadow-sky-700/15"
                 iconHoverClass="group-hover:text-sky-600"
+              />
+            ))}
+
+            {/* Fitur Pelanggan Section */}
+            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-violet-600/70">
+              Fitur Pelanggan
+            </p>
+            {CUSTOMER_FEATURE_ITEMS.map((item) => (
+              <NavItem 
+                key={item.href} 
+                item={item} 
+                pathname={pathname} 
+                onNavigate={onNavigate}
+                activeColorClass="bg-gradient-to-r from-violet-600 to-violet-500 shadow-violet-700/15"
+                iconHoverClass="group-hover:text-violet-600"
+              />
+            ))}
+
+            {/* Engagement Section */}
+            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-orange-600/70">
+              Engagement
+            </p>
+            {ENGAGEMENT_ITEMS.map((item) => (
+              <NavItem 
+                key={item.href} 
+                item={item} 
+                pathname={pathname} 
+                onNavigate={onNavigate}
+                activeColorClass="bg-gradient-to-r from-orange-600 to-orange-500 shadow-orange-700/15"
+                iconHoverClass="group-hover:text-orange-600"
+              />
+            ))}
+
+            {/* Kolaborasi Section */}
+            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
+            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-600/70">
+              Kolaborasi
+            </p>
+            {COLLABORATION_ITEMS.map((item) => (
+              <NavItem 
+                key={item.href} 
+                item={item} 
+                pathname={pathname} 
+                onNavigate={onNavigate}
+                activeColorClass="bg-gradient-to-r from-cyan-600 to-cyan-500 shadow-cyan-700/15"
+                iconHoverClass="group-hover:text-cyan-600"
               />
             ))}
 

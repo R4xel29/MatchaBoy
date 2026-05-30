@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
             icon: '01d'
         }
 
-        const apiKey = process.env.OPENWEATHER_API_KEY
+        const apiKey = process.env.OPENWEATHERMAP_API_KEY
         let isSimulated = true
 
-        if (apiKey && latStr && lonStr) {
+        if (apiKey) {
             try {
                 const res = await fetch(
                     `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${apiKey}&lang=id`,
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        // If simulated, let's randomize or adjust based on time of day
+        // If simulated, adjust based on time of day with realistic defaults
         if (isSimulated) {
             const hour = new Date().getHours()
             const isNight = hour >= 18 || hour < 6
@@ -52,12 +52,13 @@ export async function GET(req: NextRequest) {
                 weatherData.description = 'Berawan Malam'
                 weatherData.icon = '04n'
             } else {
-                // Daytime
+                // Daytime - default to sunny/clear, not rain
                 const isAfternoon = hour >= 12 && hour <= 15
-                weatherData.temp = isAfternoon ? 31.5 : 27.8
-                weatherData.condition = isAfternoon ? 'Sunny' : 'Rainy'
-                weatherData.description = isAfternoon ? 'Cerah Panas' : 'Hujan Ringan'
-                weatherData.icon = isAfternoon ? '01d' : '09d'
+                const isMorning = hour >= 6 && hour < 10
+                weatherData.temp = isAfternoon ? 31.5 : isMorning ? 26.5 : 28.8
+                weatherData.condition = 'Sunny'
+                weatherData.description = isAfternoon ? 'Cerah Panas' : isMorning ? 'Cerah Berawan' : 'Cerah'
+                weatherData.icon = isAfternoon ? '01d' : '02d'
             }
         }
 
