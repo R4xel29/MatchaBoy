@@ -115,7 +115,8 @@ export default function CheckoutPage() {
   const [isVoucherRestored, setIsVoucherRestored] = useState(false);
 
   // Tumbler state
-  const [hasTumbler, setHasTumbler] = useState(false);
+  const hasTumbler = useCartStore((s) => s.hasTumbler);
+  const setHasTumbler = useCartStore((s) => s.setHasTumbler);
   const [tumblerBonusPoints, setTumblerBonusPoints] = useState(0);
   const [tumblerDiscountPct, setTumblerDiscountPct] = useState(0);
   const [tumblerEnabled, setTumblerEnabled] = useState(false);
@@ -1616,67 +1617,6 @@ export default function CheckoutPage() {
               </div>
             </div>
           </section>
-
-          {/* ── 3b. Tumbler Toggle (Eco Card Glassmorphic) ──────────────────── */}
-          {tumblerEnabled && orderType === 'PICKUP' && (
-            <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-              <button
-                type="button"
-                onClick={() => {
-                  const newVal = !hasTumbler;
-                  setHasTumbler(newVal);
-                  if (newVal) {
-                    setShowTumblerWarning(true);
-                  }
-                }}
-                className={`w-full relative overflow-hidden rounded-[2rem] border-2 p-5 transition-all duration-300 text-left active:scale-[0.98] ${
-                  hasTumbler
-                    ? 'border-emerald-300 bg-gradient-to-r from-emerald-50 to-green-50 shadow-md shadow-emerald-100/50'
-                    : 'border-gray-100 bg-white hover:border-emerald-200'
-                }`}
-              >
-                {hasTumbler && (
-                  <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-emerald-400/10 blur-xl" />
-                )}
-
-                <div className="relative z-10 flex items-start gap-4">
-                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300 ${
-                    hasTumbler ? 'bg-emerald-500 shadow-md shadow-emerald-400/10 text-white' : 'bg-gray-50 border border-gray-100 text-gray-400'
-                  }`}>
-                    <Leaf className="w-5.5 h-5.5" />
-                  </div>
-
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className={`text-sm font-bold transition-colors ${hasTumbler ? 'text-emerald-800' : 'text-gray-900'}`}>
-                        Saya Bawa Tumbler Sendiri
-                      </p>
-                      {hasTumbler && (
-                        <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                          Aktif ✓
-                        </span>
-                      )}
-                    </div>
-                    <p className={`text-xs leading-relaxed transition-colors ${hasTumbler ? 'text-emerald-650' : 'text-gray-400 font-medium'}`}>
-                      Mendukung gerakan kurangi sampah plastik, dapatkan <strong>+{tumblerBonusPoints} bonus poin</strong>
-                      {tumblerDiscountPct > 0 && <> + <strong>diskon {tumblerDiscountPct}%</strong></>} pada pesanan ini! 🌍
-                    </p>
-                  </div>
-
-                  {/* Micro toggle switch */}
-                  <div className={`w-11 h-6 rounded-full transition-colors duration-300 shrink-0 mt-1 relative border ${
-                    hasTumbler ? 'bg-emerald-500 border-emerald-500' : 'bg-gray-100 border-gray-250'
-                  }`}>
-                    <motion.div
-                      initial={false}
-                      animate={{ x: hasTumbler ? 20 : 0 }}
-                      className="absolute left-0.5 top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-sm"
-                    />
-                  </div>
-                </div>
-              </button>
-            </motion.section>
-          )}
 
           {/* ── 4. Order Summary ──────────────────────────────── */}
           <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
