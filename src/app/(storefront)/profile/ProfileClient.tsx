@@ -376,19 +376,35 @@ export default function ProfileClient({
                 {/* Right: Metrics Grid */}
                 <div className="flex items-center gap-3 shrink-0">
                   {/* Level Badge */}
-                  <div className="flex-1 sm:flex-initial min-w-[100px] bg-[#FFFBF7] border border-[#D4A574]/25 shadow-sm rounded-2xl px-4 py-2.5 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#1E3F20] flex items-center justify-center shrink-0 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetUrl = `/profile?section=quests`;
+                      window.history.pushState(null, '', targetUrl);
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}
+                    className="flex-grow sm:flex-initial min-w-[100px] bg-[#FFFBF7] border border-[#D4A574]/25 shadow-sm rounded-2xl px-4 py-2.5 flex items-center gap-3 text-left hover:bg-[#B48A5E]/5 hover:border-[#D4A574]/50 transition-all active:scale-95 group/level cursor-pointer"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-[#1E3F20] flex items-center justify-center shrink-0 shadow-sm group-hover/level:scale-110 transition-transform">
                       <Leaf className="w-4 h-4 text-[#D4A574]" />
                     </div>
                     <div className="space-y-0.5">
                       <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider leading-none">Level Arus</p>
                       <p className="text-xs font-black text-gray-800 leading-none">{user.isGuest ? '-' : (user.arusLevel || 'Tunas Arus')}</p>
                     </div>
-                  </div>
+                  </button>
 
                   {/* Points Badge */}
-                  <div className="flex-1 sm:flex-initial min-w-[115px] bg-[#FFFBF7] border border-[#D4A574]/25 shadow-sm rounded-2xl px-4 py-2.5 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-[#B48A5E] flex items-center justify-center shrink-0 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetUrl = `/profile?section=loyalty`;
+                      window.history.pushState(null, '', targetUrl);
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}
+                    className="flex-grow sm:flex-initial min-w-[115px] bg-[#FFFBF7] border border-[#D4A574]/25 shadow-sm rounded-2xl px-4 py-2.5 flex items-center gap-3 text-left hover:bg-[#B48A5E]/5 hover:border-[#D4A574]/50 transition-all active:scale-95 group/points cursor-pointer"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-[#B48A5E] flex items-center justify-center shrink-0 shadow-sm group-hover/points:scale-110 transition-transform">
                       <Coins className="w-4 h-4 text-white" />
                     </div>
                     <div className="space-y-0.5">
@@ -397,7 +413,7 @@ export default function ProfileClient({
                         {user.isGuest ? '-' : user.points} <span className="text-[8px] text-gray-400 font-bold">pts</span>
                       </p>
                     </div>
-                  </div>
+                  </button>
                 </div>
               </div>
             </motion.div>

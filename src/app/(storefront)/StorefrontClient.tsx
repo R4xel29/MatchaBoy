@@ -375,7 +375,9 @@ export default function StorefrontClient({
               }`}>
                 {isNight ? 'Selamat Malam' : 'Selamat Siang'}
               </p>
-              <h1 className="font-serif text-lg md:text-2xl font-black tracking-tight text-white">
+              <h1 className={`font-serif text-lg md:text-2xl font-black tracking-tight ${
+                isNight ? 'text-white' : 'text-[#2A1F16]'
+              }`}>
                 Hai, {userName}
               </h1>
             </div>
