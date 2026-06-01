@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  CreditCard, QrCode, Banknote, MessageCircle,
+  CreditCard, QrCode, Banknote, MessageCircle, Wallet,
+
   Save, Loader2, CheckCircle2, Plus, Trash2, Upload,
   ToggleLeft, ToggleRight, Building2, Image as ImageIcon,
 } from 'lucide-react';
@@ -26,6 +27,10 @@ interface PaymentConfig {
   dokuClientId: string;
   dokuSharedKey: string;
   dokuSandbox: boolean;
+  walletTopUpEnabled: boolean;
+  walletMinTopUp: number;
+  walletBonusMinAmount: number;
+  walletBonusPercent: number;
 }
 
 interface BankAccount {
@@ -224,6 +229,70 @@ export default function PaymentSettingsClient() {
             <p className="text-[10px] text-muted-foreground mt-1.5">
               💡 Format: 628xxx (tanpa + atau spasi)
             </p>
+          </div>
+        </div>
+
+        {/* Matchaboy Pay & Top Up Settings */}
+        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Matchaboy Pay (Dompet Digital)</h3>
+                <p className="text-[10px] text-muted-foreground">Kelola pengisian saldo dan bonus loyalitas</p>
+              </div>
+            </div>
+            <button onClick={() => update('walletTopUpEnabled', !settings?.walletTopUpEnabled)}>
+              {settings?.walletTopUpEnabled
+                ? <ToggleRight className="w-7 h-7 text-emerald-500 animate-in fade-in" />
+                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
+              }
+            </button>
+          </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Minimal Top-Up (Rp)
+                </label>
+                <input
+                  type="number"
+                  value={settings?.walletMinTopUp ?? 10000}
+                  onChange={(e) => update('walletMinTopUp', Number(e.target.value))}
+                  placeholder="Contoh: 10000"
+                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                  Persentase Bonus (%)
+                </label>
+                <input
+                  type="number"
+                  value={settings?.walletBonusPercent ?? 10}
+                  onChange={(e) => update('walletBonusPercent', Number(e.target.value))}
+                  placeholder="Contoh: 10 untuk 10%"
+                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                Minimal Pengisian Untuk Mendapatkan Bonus (Rp)
+              </label>
+              <input
+                type="number"
+                value={settings?.walletBonusMinAmount ?? 100000}
+                onChange={(e) => update('walletBonusMinAmount', Number(e.target.value))}
+                placeholder="Contoh: 100000"
+                className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+              />
+              <p className="text-[9.5px] text-muted-foreground mt-1.5 leading-relaxed font-semibold">
+                💡 Pengisian saldo senilai atau di atas nominal ini akan otomatis mendapat bonus persentase saldo. Atur nominal sangat tinggi jika ingin menonaktifkan bonus.
+              </p>
+            </div>
           </div>
         </div>
 

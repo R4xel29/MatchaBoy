@@ -188,8 +188,13 @@ export async function POST(req: Request) {
 
     if (action === 'approve') {
       const amount = tx.amount;
-      const hasBonus = amount >= 100000;
-      const bonusAmount = hasBonus ? Math.floor(amount * 0.1) : 0;
+      
+      const settings = await prisma.paymentSettings.findFirst();
+      const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
+      const bonusPercent = settings?.walletBonusPercent ?? 10;
+
+      const hasBonus = amount >= bonusMinAmount;
+      const bonusAmount = hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0;
       const totalTopUp = amount + bonusAmount;
 
       const [updatedUser, updatedTx] = await prisma.$transaction(async (prismaTx) => {
@@ -221,7 +226,7 @@ export async function POST(req: Request) {
               userId: tx.userId,
               amount: bonusAmount,
               type: 'TOP_UP_BONUS',
-              description: `Bonus Top-up 10% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+              description: `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
               status: 'COMPLETED',
               paymentMethod: tx.paymentMethod,
               referenceId: tx.referenceId

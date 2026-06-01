@@ -573,6 +573,12 @@ model PaymentSettings {
   dokuSharedKey   String   @default("")
   dokuSandbox     Boolean  @default(true)
 
+  // Matchaboy Wallet Settings
+  walletTopUpEnabled   Boolean  @default(true)
+  walletMinTopUp       Int      @default(10000)
+  walletBonusMinAmount Int      @default(100000)
+  walletBonusPercent   Int      @default(10)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

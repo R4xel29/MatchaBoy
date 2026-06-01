@@ -54,6 +54,10 @@ export async function PUT(req: NextRequest) {
           dokuClientId: body.dokuClientId,
           dokuSharedKey: body.dokuSharedKey,
           dokuSandbox: body.dokuSandbox,
+          walletTopUpEnabled: body.walletTopUpEnabled,
+          walletMinTopUp: body.walletMinTopUp !== undefined ? Number(body.walletMinTopUp) : undefined,
+          walletBonusMinAmount: body.walletBonusMinAmount !== undefined ? Number(body.walletBonusMinAmount) : undefined,
+          walletBonusPercent: body.walletBonusPercent !== undefined ? Number(body.walletBonusPercent) : undefined,
         },
       });
     }

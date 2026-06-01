@@ -1931,22 +1931,57 @@ function TopUpOverlay({
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [simulating, setSimulating] = useState(false);
 
+  // Dynamic configurations from database
+  const [banks, setBanks] = useState<any[]>([]);
+  const [walletSettings, setWalletSettings] = useState<any>({
+    minTopUp: 10000,
+    bonusMinAmount: 100000,
+    bonusPercent: 10,
+    topUpEnabled: true
+  });
+
   useEffect(() => {
     if (isOpen) {
       setStep('select');
       setAmount('');
       setActiveTransaction(null);
+
+      // Fetch dynamic settings and bank details
+      fetch('/api/user/wallet')
+        .then(res => res.json())
+        .then(data => {
+          if (data) {
+            setBanks(data.banks || []);
+            setWalletSettings(data.settings || {
+              minTopUp: 10000,
+              bonusMinAmount: 100000,
+              bonusPercent: 10,
+              topUpEnabled: true
+            });
+            if (data.settings?.minTopUp) {
+              setAmount(String(data.settings.minTopUp));
+            }
+          }
+        })
+        .catch(err => console.error('Error fetching wallet settings:', err));
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const presets = [20000, 50000, 100000, 200000];
+  const minAmt = walletSettings?.minTopUp ?? 10000;
+  const bonusAmt = walletSettings?.bonusMinAmount ?? 100000;
+  const presets = [
+    minAmt,
+    Math.max(minAmt * 2, 50000),
+    bonusAmt,
+    bonusAmt * 2
+  ];
 
   const handleNextStep = async (val?: number) => {
     const finalAmount = val || parseInt(amount);
-    if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
-      showToast('Masukkan jumlah top up yang valid', 'error');
+    if (!finalAmount || isNaN(finalAmount) || finalAmount < minAmt) {
+      showToast(`Masukkan jumlah top up minimal ${formatRupiah(minAmt)}`, 'error');
       return;
     }
     setAmount(String(finalAmount));
@@ -2063,20 +2098,24 @@ function TopUpOverlay({
             /* STEP 1: SELECT NOMINAL */
             <div className="p-6 space-y-6 text-left">
               {/* Promo Alert */}
-              <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
-                <span className="text-lg">🔥</span>
-                <div className="space-y-0.5">
-                  <p className="text-xs font-black text-[#2E5A44]">Bonus Saldo 10%!</p>
-                  <p className="text-[10px] text-gray-500 font-semibold leading-tight">Lakukan pengisian saldo minimum Rp 100.000 untuk mendapatkan ekstra saldo 10% cuma-cuma!</p>
+              {walletSettings?.bonusPercent > 0 && (
+                <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
+                  <span className="text-lg">🔥</span>
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-black text-[#2E5A44]">Bonus Saldo {walletSettings.bonusPercent}%!</p>
+                    <p className="text-[10px] text-gray-550 font-semibold leading-tight">
+                      Lakukan pengisian saldo minimum {formatRupiah(bonusAmt)} untuk mendapatkan ekstra saldo {walletSettings.bonusPercent}% cuma-cuma!
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Custom Input */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Masukkan Jumlah Top Up (Rp)</label>
                 <input
                   type="number"
-                  placeholder="Contoh: 50000"
+                  placeholder={`Contoh: ${minAmt}`}
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] text-sm font-bold text-gray-900 bg-gray-50"
@@ -2095,9 +2134,9 @@ function TopUpOverlay({
                       className="relative p-3.5 bg-white hover:bg-gray-50 border border-gray-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-center outline-none"
                     >
                       <span>{formatRupiah(val)}</span>
-                      {val >= 100000 && (
+                      {val >= bonusAmt && walletSettings?.bonusPercent > 0 && (
                         <span className="absolute -top-2 -right-1 bg-rose-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-sm scale-95 border border-white">
-                          +10%
+                          +{walletSettings.bonusPercent}%
                         </span>
                       )}
                     </button>
@@ -2108,7 +2147,7 @@ function TopUpOverlay({
               {/* Next Button */}
               <button
                 onClick={() => handleNextStep()}
-                disabled={loading}
+                disabled={loading || !walletSettings?.topUpEnabled}
                 className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
               >
                 {loading ? (
@@ -2116,6 +2155,8 @@ function TopUpOverlay({
                     <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     <span>Memproses...</span>
                   </>
+                ) : !walletSettings?.topUpEnabled ? (
+                  <span>Pengisian Dinonaktifkan</span>
                 ) : (
                   <>
                     <span>Lanjutkan ke Pembayaran</span>
@@ -2143,10 +2184,10 @@ function TopUpOverlay({
               </div>
 
               {/* Payment Methods Tab */}
-              <div className="flex border border-gray-100 rounded-2xl p-1 bg-gray-50 gap-1 shrink-0 select-none">
+              <div className="flex border border-gray-100 rounded-2xl p-1 bg-gray-55 gap-1 shrink-0 select-none">
                 {[
                   { id: 'qris', label: 'Scan QRIS' },
-                  { id: 'bank', label: 'BCA Transfer' },
+                  { id: 'bank', label: 'Transfer Bank' },
                   { id: 'offline', label: 'Kasir Booth' }
                 ].map(m => (
                   <button
@@ -2179,7 +2220,7 @@ function TopUpOverlay({
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-extrabold text-orange-600 uppercase tracking-wider">Metode: QRIS GPN Standard</p>
-                      <p className="text-[10.5px] text-gray-500 font-semibold leading-relaxed px-4">
+                      <p className="text-[10.5px] text-gray-550 font-semibold leading-relaxed px-4">
                         Pindai kode QR di atas dengan aplikasi bank (BCA, Mandiri, OVO, ShopeePay) untuk simulasi pembayaran.
                       </p>
                     </div>
@@ -2187,29 +2228,39 @@ function TopUpOverlay({
                 )}
 
                 {payMethod === 'bank' && (
-                  <div className="w-full text-center space-y-4">
-                    <div className="bg-white border border-gray-150 p-5 rounded-2xl shadow-sm text-left relative overflow-hidden">
-                      <div className="absolute right-0 top-0 opacity-5 pointer-events-none select-none">
-                        <Wallet className="w-20 h-20 text-gray-900" />
+                  <div className="w-full text-center space-y-4 max-h-[300px] overflow-y-auto pr-1">
+                    {banks.length === 0 ? (
+                      <div className="py-6 bg-white border border-gray-150 rounded-2xl text-center text-gray-400 text-xs italic">
+                        Metode transfer bank belum dikonfigurasi oleh toko.
                       </div>
-                      <span className="text-[9px] font-extrabold uppercase bg-blue-50 border border-blue-100 px-2 py-0.5 rounded text-blue-700">Bank Transfer</span>
-                      <h4 className="text-[10px] text-gray-400 font-black uppercase tracking-wider mt-2.5">Nomor Rekening BCA</h4>
-                      
-                      <div className="flex items-center justify-between mt-1">
-                        <span className="text-base font-mono font-bold tracking-wider text-gray-900">456-092-1234</span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy('456-092-1234')}
-                          className="px-3 py-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-[10px] font-extrabold uppercase rounded-lg text-gray-600 transition-colors"
-                        >
-                          {copied ? 'Tersalin!' : 'Salin'}
-                        </button>
-                      </div>
-                      
-                      <p className="text-[10px] text-gray-550 mt-1 font-bold">a.n. PT MATCHABOY INDONESIA</p>
-                    </div>
+                    ) : (
+                      banks.map((bank, idx) => (
+                        <div key={bank.id || idx} className="bg-white border border-gray-150 p-4.5 rounded-2xl shadow-sm text-left relative overflow-hidden mb-3">
+                          <div className="absolute right-0 top-0 opacity-5 pointer-events-none select-none">
+                            <Wallet className="w-16 h-16 text-gray-900" />
+                          </div>
+                          <span className="text-[9px] font-extrabold uppercase bg-blue-50 border border-blue-100 px-2 py-0.5 rounded text-blue-700">
+                            Bank Transfer {bank.bankName}
+                          </span>
+                          <h4 className="text-[10px] text-gray-400 font-black uppercase tracking-wider mt-2.5">Nomor Rekening</h4>
+                          
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-base font-mono font-bold tracking-wider text-gray-900">{bank.accountNumber}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopy(bank.accountNumber)}
+                              className="px-3 py-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-[10px] font-extrabold uppercase rounded-lg text-gray-600 transition-colors cursor-pointer"
+                            >
+                              {copied ? 'Tersalin!' : 'Salin'}
+                            </button>
+                          </div>
+                          
+                          <p className="text-[10px] text-gray-550 mt-1 font-bold">a.n. {bank.accountName}</p>
+                        </div>
+                      ))
+                    )}
                     <p className="text-[10.5px] text-gray-500 font-semibold leading-relaxed px-2">
-                      Silakan lakukan transfer ke rekening di atas dengan nominal persis <span className="text-[#2E5A44] font-extrabold">{formatRupiah(parseInt(amount))}</span>.
+                      Silakan lakukan transfer ke salah satu rekening di atas dengan nominal persis <span className="text-[#2E5A44] font-extrabold">{formatRupiah(parseInt(amount))}</span>.
                     </p>
                   </div>
                 )}

@@ -43,9 +43,22 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: 'User tidak ditemukan' }, { status: 404 })
         }
 
+        const settings = await prisma.paymentSettings.findFirst();
+        const banks = await prisma.bankAccount.findMany({
+            where: { isActive: true },
+            orderBy: { order: 'asc' }
+        });
+
         return NextResponse.json({
             balance: user.walletBalance,
-            transactions: user.walletTransactions
+            transactions: user.walletTransactions,
+            banks: banks,
+            settings: {
+                minTopUp: settings?.walletMinTopUp ?? 10000,
+                bonusMinAmount: settings?.walletBonusMinAmount ?? 100000,
+                bonusPercent: settings?.walletBonusPercent ?? 10,
+                topUpEnabled: settings?.walletTopUpEnabled ?? true,
+            }
         })
     } catch (error) {
         logError(error, { route: 'user/wallet-get' });
@@ -70,6 +83,20 @@ export async function POST(req: Request) {
 
         if (isNaN(amount) || amount <= 0) {
             throw new ValidationError('Jumlah top-up harus berupa angka positif')
+        }
+
+        const settings = await prisma.paymentSettings.findFirst();
+        const minTopUp = settings?.walletMinTopUp ?? 10000;
+        const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
+        const bonusPercent = settings?.walletBonusPercent ?? 10;
+        const topUpEnabled = settings?.walletTopUpEnabled ?? true;
+
+        if (!topUpEnabled) {
+            throw new ValidationError('Fitur top-up saldo sedang dinonaktifkan sementara.')
+        }
+
+        if (amount < minTopUp) {
+            throw new ValidationError(`Jumlah pengisian minimal adalah Rp${minTopUp.toLocaleString('id-ID')}`)
         }
 
         // If payment method is specified and not DIRECT, create a PENDING transaction
@@ -101,8 +128,8 @@ export async function POST(req: Request) {
         }
 
         // Legacy / Direct Credit flow (used when no paymentMethod is specified)
-        const hasBonus = amount >= 100000
-        const bonusAmount = hasBonus ? Math.floor(amount * 0.1) : 0
+        const hasBonus = amount >= bonusMinAmount
+        const bonusAmount = hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0
         const totalTopUp = amount + bonusAmount
 
         const updatedUser = await prisma.$transaction(async (tx) => {
@@ -133,7 +160,7 @@ export async function POST(req: Request) {
                         userId: session.user.id,
                         amount: bonusAmount,
                         type: 'TOP_UP_BONUS',
-                        description: `Bonus Top-up 10% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+                        description: `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
                         status: 'COMPLETED'
                     }
                 })

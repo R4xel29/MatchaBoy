@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
     try {
-        const latStr = req.nextUrl.searchParams.get('lat')
-        const lonStr = req.nextUrl.searchParams.get('lon')
+        const latStr = req.nextUrl.searchParams.get('lat') || req.headers.get('x-vercel-ip-latitude')
+        const lonStr = req.nextUrl.searchParams.get('lon') || req.headers.get('x-vercel-ip-longitude')
         const clientHourStr = req.nextUrl.searchParams.get('hour')
+
+        // Extract city name from Vercel Geolocation headers if available
+        const ipCity = req.headers.get('x-vercel-ip-city')
+        const defaultCity = ipCity ? decodeURIComponent(ipCity) : 'Probolinggo'
 
         let lat = latStr ? parseFloat(latStr) : -7.78125
         let lon = lonStr ? parseFloat(lonStr) : 113.21226
@@ -20,7 +26,7 @@ export async function GET(req: NextRequest) {
             temp: 29.8,
             condition: 'Sunny',
             description: 'Cerah Berawan',
-            city: 'Probolinggo',
+            city: defaultCity,
             icon: '01d'
         }
 
@@ -39,7 +45,7 @@ export async function GET(req: NextRequest) {
                         temp: data.main?.temp ?? 29.8,
                         condition: data.weather?.[0]?.main ?? 'Sunny',
                         description: data.weather?.[0]?.description ?? 'Cerah',
-                        city: data.name ?? 'Lokasi Anda',
+                        city: data.name ?? defaultCity,
                         icon: data.weather?.[0]?.icon ?? '01d'
                     }
                     isSimulated = false
