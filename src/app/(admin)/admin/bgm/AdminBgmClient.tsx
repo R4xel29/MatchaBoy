@@ -36,11 +36,62 @@ export default function AdminBgmClient({ initialSongs }: Props) {
   const [isActive, setIsActive] = useState(true);
   
   const [saving, setSaving] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<BgmSong | null>(null);
   
   // Audio preview states
   const [previewingId, setPreviewingId] = useState<string | null>(null);
   const [previewAudio, setPreviewAudio] = useState<HTMLAudioElement | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('audio/') && !file.name.endsWith('.mp3')) {
+      showToast('Hanya file MP3 yang diperbolehkan!', 'error');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      showToast('Ukuran file maksimal 15MB!', 'error');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/admin/bgm/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Upload failed');
+      }
+
+      const data = await res.json();
+      setUrl(data.url);
+      
+      // Auto fill title if empty
+      if (!title) {
+        const cleanTitle = file.name
+          .replace(/\.[^.]+$/, '')
+          .replace(/[-_]/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+        setTitle(cleanTitle);
+      }
+      
+      showToast('Audio berhasil diupload!', 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || 'Gagal mengupload audio', 'error');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const openModal = (song?: BgmSong) => {
     if (song) {
@@ -360,17 +411,42 @@ export default function AdminBgmClient({ initialSongs }: Props) {
                 />
               </div>
 
-              {/* MP3 URL Input */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Link URL File MP3 *</label>
+              {/* MP3 URL Input & Local Upload */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">Link URL File MP3 *</label>
+                  <label className={`text-[11px] font-bold text-brand-600 hover:underline cursor-pointer flex items-center gap-1 ${isUploading ? 'pointer-events-none opacity-50' : ''}`}>
+                    {isUploading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <>📁 Upload MP3</>
+                    )}
+                    <input 
+                      type="file" 
+                      accept="audio/mpeg,audio/mp3,audio/*" 
+                      onChange={handleFileUpload} 
+                      disabled={isUploading}
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+                
                 <input 
                   value={url} 
                   onChange={e => setUrl(e.target.value)} 
-                  placeholder="https://example.com/song.mp3"
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all font-mono text-xs" 
+                  disabled={isUploading}
+                  placeholder="https://example.com/song.mp3 atau hasil upload"
+                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all font-mono text-xs disabled:opacity-50" 
                 />
+                
+                {isUploading && (
+                  <div className="text-[10px] text-brand-600 font-semibold animate-pulse flex items-center gap-1.5 bg-brand-500/5 border border-brand-500/10 rounded-lg px-2.5 py-1.5">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sedang mengupload MP3 ke database... Mohon tunggu.
+                  </div>
+                )}
+                
                 <span className="text-[10px] text-muted-foreground/80 mt-1 block">
-                  Masukkan link MP3 langsung (Direct Link). Anda bisa menggunakan file mp3 hosting publik.
+                  Anda bisa mengupload file MP3 secara langsung dengan mengklik tombol <strong>Upload MP3</strong>, atau memasukkan link MP3 langsung (Direct Link).
                 </span>
               </div>
 
