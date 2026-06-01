@@ -49,15 +49,45 @@ export async function GET(req: Request) {
             orderBy: { order: 'asc' }
         });
 
+        const completedCount = await prisma.walletTransaction.count({
+            where: {
+                userId: session.user.id,
+                type: 'TOP_UP',
+                status: 'COMPLETED'
+            }
+        });
+        const isFirstTime = completedCount === 0;
+
+        let parsedPromoPackages = [];
+        try {
+            if (settings?.walletFirstTimePromoPackages) {
+                parsedPromoPackages = JSON.parse(settings.walletFirstTimePromoPackages);
+            } else {
+                parsedPromoPackages = [
+                    { amount: 50000, bonus: 5000 },
+                    { amount: 200000, bonus: 10000 }
+                ];
+            }
+        } catch (e) {
+            console.error('Error parsing first-time promo packages:', e);
+            parsedPromoPackages = [
+                { amount: 50000, bonus: 5000 },
+                { amount: 200000, bonus: 10000 }
+            ];
+        }
+
         return NextResponse.json({
             balance: user.walletBalance,
             transactions: user.walletTransactions,
             banks: banks,
+            isFirstTime: isFirstTime,
             settings: {
                 minTopUp: settings?.walletMinTopUp ?? 10000,
                 bonusMinAmount: settings?.walletBonusMinAmount ?? 100000,
                 bonusPercent: settings?.walletBonusPercent ?? 10,
                 topUpEnabled: settings?.walletTopUpEnabled ?? true,
+                firstTimePromoEnabled: settings?.walletFirstTimePromoEnabled ?? true,
+                firstTimePromoPackages: parsedPromoPackages
             }
         })
     } catch (error) {
@@ -99,6 +129,36 @@ export async function POST(req: Request) {
             throw new ValidationError(`Jumlah pengisian minimal adalah Rp${minTopUp.toLocaleString('id-ID')}`)
         }
 
+        // Check if first-time top-up promo is enabled and active
+        const completedCount = await prisma.walletTransaction.count({
+            where: {
+                userId: session.user.id,
+                type: 'TOP_UP',
+                status: 'COMPLETED'
+            }
+        });
+        const isFirstTime = completedCount === 0;
+
+        let calculatedPromoBonus = 0;
+        let isPromoApplied = false;
+
+        if (isFirstTime && settings?.walletFirstTimePromoEnabled) {
+            let promoPackages = [];
+            try {
+                if (settings?.walletFirstTimePromoPackages) {
+                    promoPackages = JSON.parse(settings.walletFirstTimePromoPackages);
+                }
+            } catch (e) {
+                console.error('Error parsing first-time promo packages in POST:', e);
+            }
+
+            const matchedPackage = promoPackages.find((pkg: any) => pkg.amount === amount);
+            if (matchedPackage) {
+                calculatedPromoBonus = matchedPackage.bonus;
+                isPromoApplied = true;
+            }
+        }
+
         // If payment method is specified and not DIRECT, create a PENDING transaction
         if (paymentMethod && paymentMethod !== 'DIRECT') {
             const paymentCode = `MB-TOPUP-${Math.floor(1000 + Math.random() * 9000)}`
@@ -108,10 +168,13 @@ export async function POST(req: Request) {
                     userId: session.user.id,
                     amount: amount,
                     type: 'TOP_UP',
-                    description: `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')} via ${paymentMethod.toUpperCase()}`,
+                    description: isPromoApplied 
+                        ? `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')} via ${paymentMethod.toUpperCase()} (Promo Pertama)` 
+                        : `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')} via ${paymentMethod.toUpperCase()}`,
                     status: 'PENDING',
                     paymentMethod: paymentMethod.toUpperCase(),
-                    referenceId: paymentCode
+                    referenceId: paymentCode,
+                    promoBonus: isPromoApplied ? calculatedPromoBonus : null
                 }
             })
 
@@ -128,8 +191,8 @@ export async function POST(req: Request) {
         }
 
         // Legacy / Direct Credit flow (used when no paymentMethod is specified)
-        const hasBonus = amount >= bonusMinAmount
-        const bonusAmount = hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0
+        const hasBonus = isPromoApplied || amount >= bonusMinAmount
+        const bonusAmount = isPromoApplied ? calculatedPromoBonus : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0)
         const totalTopUp = amount + bonusAmount
 
         const updatedUser = await prisma.$transaction(async (tx) => {
@@ -147,20 +210,25 @@ export async function POST(req: Request) {
                     userId: session.user.id,
                     amount: amount,
                     type: 'TOP_UP',
-                    description: `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')}`,
+                    description: isPromoApplied
+                        ? `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')} (Promo Pertama)`
+                        : `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')}`,
                     status: 'COMPLETED',
-                    paymentMethod: 'DIRECT'
+                    paymentMethod: 'DIRECT',
+                    promoBonus: isPromoApplied ? calculatedPromoBonus : null
                 }
             })
 
             // If there's a bonus, create TOP_UP_BONUS transaction
-            if (hasBonus && bonusAmount > 0) {
+            if (bonusAmount > 0) {
                 await tx.walletTransaction.create({
                     data: {
                         userId: session.user.id,
                         amount: bonusAmount,
                         type: 'TOP_UP_BONUS',
-                        description: `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+                        description: isPromoApplied
+                            ? `Bonus Top-up Pertama sebesar Rp${bonusAmount.toLocaleString('id-ID')}`
+                            : `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
                         status: 'COMPLETED'
                     }
                 })

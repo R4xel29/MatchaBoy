@@ -58,6 +58,8 @@ export async function PUT(req: NextRequest) {
           walletMinTopUp: body.walletMinTopUp !== undefined ? Number(body.walletMinTopUp) : undefined,
           walletBonusMinAmount: body.walletBonusMinAmount !== undefined ? Number(body.walletBonusMinAmount) : undefined,
           walletBonusPercent: body.walletBonusPercent !== undefined ? Number(body.walletBonusPercent) : undefined,
+          walletFirstTimePromoEnabled: body.walletFirstTimePromoEnabled,
+          walletFirstTimePromoPackages: body.walletFirstTimePromoPackages,
         },
       });
     }

@@ -193,8 +193,9 @@ export async function POST(req: Request) {
       const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
       const bonusPercent = settings?.walletBonusPercent ?? 10;
 
-      const hasBonus = amount >= bonusMinAmount;
-      const bonusAmount = hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0;
+      const isPromoApplied = tx.promoBonus !== null && tx.promoBonus > 0;
+      const hasBonus = isPromoApplied || amount >= bonusMinAmount;
+      const bonusAmount = isPromoApplied ? tx.promoBonus! : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0);
       const totalTopUp = amount + bonusAmount;
 
       const [updatedUser, updatedTx] = await prisma.$transaction(async (prismaTx) => {
@@ -220,13 +221,15 @@ export async function POST(req: Request) {
         });
 
         // If there's a bonus, create a COMPLETED TOP_UP_BONUS transaction
-        if (hasBonus && bonusAmount > 0) {
+        if (bonusAmount > 0) {
           await prismaTx.walletTransaction.create({
             data: {
               userId: tx.userId,
               amount: bonusAmount,
               type: 'TOP_UP_BONUS',
-              description: `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+              description: isPromoApplied
+                ? `Bonus Top-up Pertama sebesar Rp${bonusAmount.toLocaleString('id-ID')}`
+                : `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
               status: 'COMPLETED',
               paymentMethod: tx.paymentMethod,
               referenceId: tx.referenceId

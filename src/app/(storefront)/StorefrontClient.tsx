@@ -9,7 +9,7 @@ import type { Product, Category } from '@/types';
 import Image from 'next/image';
 import { formatRupiah, getActivePromo, cn } from '@/lib/utils';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
-import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ShoppingBag, Clock, Gift, Copy, Check, Share2, Trophy, RefreshCw, FlaskConical, CreditCard, Plus, History, Trash2, ArrowUpRight, Leaf, Award, ShieldAlert, CheckCircle2, CalendarDays, Wallet, Loader2 } from 'lucide-react';
+import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ChevronDown, ShoppingBag, Clock, Gift, Copy, Check, Share2, Trophy, RefreshCw, FlaskConical, CreditCard, Plus, History, Trash2, ArrowUpRight, Leaf, Award, ShieldAlert, CheckCircle2, CalendarDays, Wallet, Loader2 } from 'lucide-react';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -1930,6 +1930,7 @@ function TopUpOverlay({
   const [activeTransaction, setActiveTransaction] = useState<any>(null);
   const [checkingStatus, setCheckingStatus] = useState(false);
   const [simulating, setSimulating] = useState(false);
+  const [isFirstTime, setIsFirstTime] = useState<boolean>(false);
 
   // Dynamic configurations from database
   const [banks, setBanks] = useState<any[]>([]);
@@ -1937,7 +1938,9 @@ function TopUpOverlay({
     minTopUp: 10000,
     bonusMinAmount: 100000,
     bonusPercent: 10,
-    topUpEnabled: true
+    topUpEnabled: true,
+    firstTimePromoEnabled: true,
+    firstTimePromoPackages: []
   });
 
   useEffect(() => {
@@ -1952,11 +1955,14 @@ function TopUpOverlay({
         .then(data => {
           if (data) {
             setBanks(data.banks || []);
+            setIsFirstTime(!!data.isFirstTime);
             setWalletSettings(data.settings || {
               minTopUp: 10000,
               bonusMinAmount: 100000,
               bonusPercent: 10,
-              topUpEnabled: true
+              topUpEnabled: true,
+              firstTimePromoEnabled: true,
+              firstTimePromoPackages: []
             });
             if (data.settings?.minTopUp) {
               setAmount(String(data.settings.minTopUp));
@@ -2097,73 +2103,154 @@ function TopUpOverlay({
           {step === 'select' ? (
             /* STEP 1: SELECT NOMINAL */
             <div className="p-6 space-y-6 text-left">
-              {/* Promo Alert */}
-              {walletSettings?.bonusPercent > 0 && (
-                <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
-                  <span className="text-lg">🔥</span>
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-black text-[#2E5A44]">Bonus Saldo {walletSettings.bonusPercent}%!</p>
-                    <p className="text-[10px] text-gray-550 font-semibold leading-tight">
-                      Lakukan pengisian saldo minimum {formatRupiah(bonusAmt)} untuk mendapatkan ekstra saldo {walletSettings.bonusPercent}% cuma-cuma!
-                    </p>
+              {isFirstTime && walletSettings?.firstTimePromoEnabled && walletSettings?.firstTimePromoPackages?.length > 0 ? (
+                /* FIRST TIME PROMO LAYOUT */
+                <div className="space-y-4">
+                  <div className="bg-gradient-to-r from-amber-500/10 to-rose-500/10 border border-amber-500/30 rounded-2xl p-4 flex gap-3 text-gray-800 shadow-sm relative overflow-hidden">
+                    <div className="absolute right-0 top-0 text-5xl opacity-10 pointer-events-none select-none">🎁</div>
+                    <span className="text-xl">🎉</span>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-black text-rose-700">Promo Pengisian Pertama Kali!</p>
+                      <p className="text-[10px] text-gray-550 font-semibold leading-tight">
+                        Dapatkan bonus saldo langsung yang melimpah khusus untuk transaksi top-up pertama Anda di bawah ini!
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Promo Packages Cards */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black text-gray-550 uppercase tracking-wider block">Pilih Paket Promo</span>
+                    <div className="grid grid-cols-1 gap-3">
+                      {walletSettings.firstTimePromoPackages.map((pkg: any, idx: number) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => handleNextStep(pkg.amount)}
+                          className="relative p-4 bg-gradient-to-br from-white to-[#FAF6EE]/30 hover:to-[#2E5A44]/5 border-2 border-amber-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-left outline-none flex items-center justify-between shadow-sm active:scale-[0.99]"
+                        >
+                          <div className="space-y-1">
+                            <span className="text-sm font-black text-gray-900 block">{formatRupiah(pkg.amount)}</span>
+                            <span className="text-[10px] text-rose-600 font-extrabold bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg">
+                              Bonus Ekstra +{formatRupiah(pkg.bonus)} Saldo
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[9px] text-gray-400 uppercase font-black tracking-wider block">Total Diterima</span>
+                            <span className="text-base font-black text-[#2E5A44]">{formatRupiah(pkg.amount + pkg.bonus)}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Accordion to custom amount */}
+                  <div className="border-t border-gray-100 pt-3">
+                    <details className="group">
+                      <summary className="text-[10.5px] font-extrabold text-gray-500 hover:text-[#2E5A44] cursor-pointer list-none flex items-center justify-between">
+                        <span>Atau isi nominal kustom lainnya (Kembali ke rate normal)</span>
+                        <ChevronDown className="w-3.5 h-3.5 transition-transform group-open:rotate-180" />
+                      </summary>
+                      <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-gray-550 uppercase tracking-wider block">Masukkan Jumlah Top Up (Rp)</label>
+                          <input
+                            type="number"
+                            placeholder={`Contoh: ${minAmt}`}
+                            value={amount}
+                            onChange={e => setAmount(e.target.value)}
+                            className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] text-sm font-bold text-gray-900 bg-gray-50"
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleNextStep()}
+                          disabled={loading || !walletSettings?.topUpEnabled}
+                          className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-sm transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                          {loading ? (
+                            <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <>
+                              <span>Lanjutkan dengan Nominal Kustom</span>
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </details>
                   </div>
                 </div>
-              )}
+              ) : (
+                /* STANDARD SELECT NOMINAL SCREEN */
+                <div className="space-y-6">
+                  {/* Standard Promo Alert */}
+                  {walletSettings?.bonusPercent > 0 && (
+                    <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
+                      <span className="text-lg">🔥</span>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-black text-[#2E5A44]">Bonus Saldo {walletSettings.bonusPercent}%!</p>
+                        <p className="text-[10px] text-gray-550 font-semibold leading-tight">
+                          Lakukan pengisian saldo minimum {formatRupiah(bonusAmt)} untuk mendapatkan ekstra saldo {walletSettings.bonusPercent}% cuma-cuma!
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-              {/* Custom Input */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Masukkan Jumlah Top Up (Rp)</label>
-                <input
-                  type="number"
-                  placeholder={`Contoh: ${minAmt}`}
-                  value={amount}
-                  onChange={e => setAmount(e.target.value)}
-                  className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] text-sm font-bold text-gray-900 bg-gray-50"
-                />
-              </div>
+                  {/* Custom Input */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Masukkan Jumlah Top Up (Rp)</label>
+                    <input
+                      type="number"
+                      placeholder={`Contoh: ${minAmt}`}
+                      value={amount}
+                      onChange={e => setAmount(e.target.value)}
+                      className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] text-sm font-bold text-gray-900 bg-gray-50"
+                    />
+                  </div>
 
-              {/* Presets */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-black text-gray-550 uppercase tracking-wider block">Pilih Cepat Nominal</span>
-                <div className="grid grid-cols-2 gap-3">
-                  {presets.map(val => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => handleNextStep(val)}
-                      className="relative p-3.5 bg-white hover:bg-gray-50 border border-gray-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-center outline-none"
-                    >
-                      <span>{formatRupiah(val)}</span>
-                      {val >= bonusAmt && walletSettings?.bonusPercent > 0 && (
-                        <span className="absolute -top-2 -right-1 bg-rose-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-sm scale-95 border border-white">
-                          +{walletSettings.bonusPercent}%
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                  {/* Presets */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black text-gray-550 uppercase tracking-wider block">Pilih Cepat Nominal</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      {presets.map(val => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => handleNextStep(val)}
+                          className="relative p-3.5 bg-white hover:bg-gray-50 border border-gray-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-center outline-none"
+                        >
+                          <span>{formatRupiah(val)}</span>
+                          {val >= bonusAmt && walletSettings?.bonusPercent > 0 && (
+                            <span className="absolute -top-2 -right-1 bg-rose-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-sm scale-95 border border-white">
+                              +{walletSettings.bonusPercent}%
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={() => handleNextStep()}
+                    disabled={loading || !walletSettings?.topUpEnabled}
+                    className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {loading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Memproses...</span>
+                      </>
+                    ) : !walletSettings?.topUpEnabled ? (
+                      <span>Pengisian Dinonaktifkan</span>
+                    ) : (
+                      <>
+                        <span>Lanjutkan ke Pembayaran</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
                 </div>
-              </div>
-
-              {/* Next Button */}
-              <button
-                onClick={() => handleNextStep()}
-                disabled={loading || !walletSettings?.topUpEnabled}
-                className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                {loading ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Memproses...</span>
-                  </>
-                ) : !walletSettings?.topUpEnabled ? (
-                  <span>Pengisian Dinonaktifkan</span>
-                ) : (
-                  <>
-                    <span>Lanjutkan ke Pembayaran</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
+              )}
             </div>
           ) : (
             /* STEP 2: PAYMENT METHOD POPUP */

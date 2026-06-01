@@ -574,10 +574,12 @@ model PaymentSettings {
   dokuSandbox     Boolean  @default(true)
 
   // Matchaboy Wallet Settings
-  walletTopUpEnabled   Boolean  @default(true)
-  walletMinTopUp       Int      @default(10000)
-  walletBonusMinAmount Int      @default(100000)
-  walletBonusPercent   Int      @default(10)
+  walletTopUpEnabled          Boolean  @default(true)
+  walletMinTopUp              Int      @default(10000)
+  walletBonusMinAmount        Int      @default(100000)
+  walletBonusPercent          Int      @default(10)
+  walletFirstTimePromoEnabled Boolean  @default(true)
+  walletFirstTimePromoPackages String  @default("[{\"amount\":50000,\"bonus\":5000},{\"amount\":200000,\"bonus\":10000}]")
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -794,6 +796,7 @@ model WalletTransaction {
   referenceId   String?  // e.g. orderId or transaction reference
   status        String   @default("COMPLETED") // COMPLETED, PENDING, VERIFYING, REJECTED
   paymentMethod String?  // QRIS, BANK, OFFLINE
+  promoBonus    Int?
   createdAt     DateTime @default(now())
 }
 

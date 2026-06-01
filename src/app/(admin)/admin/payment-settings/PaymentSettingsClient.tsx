@@ -31,6 +31,8 @@ interface PaymentConfig {
   walletMinTopUp: number;
   walletBonusMinAmount: number;
   walletBonusPercent: number;
+  walletFirstTimePromoEnabled: boolean;
+  walletFirstTimePromoPackages: string;
 }
 
 interface BankAccount {
@@ -54,6 +56,10 @@ export default function PaymentSettingsClient() {
   // New bank form
   const [showNewBank, setShowNewBank] = useState(false);
   const [newBank, setNewBank] = useState({ bankName: '', accountNumber: '', accountName: '', bankLogo: '' });
+
+  // First-time promo package inputs
+  const [newPromoAmount, setNewPromoAmount] = useState('');
+  const [newPromoBonus, setNewPromoBonus] = useState('');
   
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -67,6 +73,49 @@ export default function PaymentSettingsClient() {
     message: '',
     onConfirm: () => {},
   });
+
+  // Helper to get parsed promo packages from settings
+  const getPromoPackages = (): Array<{ amount: number; bonus: number }> => {
+    try {
+      if (settings?.walletFirstTimePromoPackages) {
+        return JSON.parse(settings.walletFirstTimePromoPackages);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [];
+  };
+
+  // Helper to update promo packages list
+  const updatePromoPackages = (packages: Array<{ amount: number; bonus: number }>) => {
+    update('walletFirstTimePromoPackages', JSON.stringify(packages));
+  };
+
+  const addPromoPackage = () => {
+    const amountVal = parseInt(newPromoAmount);
+    const bonusVal = parseInt(newPromoBonus);
+    if (isNaN(amountVal) || isNaN(bonusVal) || amountVal <= 0 || bonusVal <= 0) {
+      showToast('Nominal dan bonus harus berupa angka positif', 'error');
+      return;
+    }
+    const current = getPromoPackages();
+    if (current.some(pkg => pkg.amount === amountVal)) {
+      showToast('Paket nominal ini sudah terdaftar', 'error');
+      return;
+    }
+    const updated = [...current, { amount: amountVal, bonus: bonusVal }].sort((a, b) => a.amount - b.amount);
+    updatePromoPackages(updated);
+    setNewPromoAmount('');
+    setNewPromoBonus('');
+    showToast('Paket promo berhasil ditambahkan', 'success');
+  };
+
+  const removePromoPackage = (amountVal: number) => {
+    const current = getPromoPackages();
+    const updated = current.filter(pkg => pkg.amount !== amountVal);
+    updatePromoPackages(updated);
+    showToast('Paket promo berhasil dihapus', 'success');
+  };
 
   useEffect(() => {
     fetchData();
@@ -294,6 +343,108 @@ export default function PaymentSettingsClient() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* First-Time Top-Up Promo Settings */}
+        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                <Wallet className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Promo Pengisian Pertama Kali</h3>
+                <p className="text-[10px] text-muted-foreground">Konfigurasi paket promo khusus transaksi top-up pertama</p>
+              </div>
+            </div>
+            <button onClick={() => update('walletFirstTimePromoEnabled', !settings?.walletFirstTimePromoEnabled)}>
+              {settings?.walletFirstTimePromoEnabled
+                ? <ToggleRight className="w-7 h-7 text-emerald-500 animate-in fade-in" />
+                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
+              }
+            </button>
+          </div>
+
+          {settings?.walletFirstTimePromoEnabled && (
+            <div className="space-y-4">
+              {/* Packages List */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                  Daftar Paket Promo Pertama Kali
+                </span>
+                {getPromoPackages().length === 0 ? (
+                  <div className="py-4 bg-gray-50 border border-dashed border-border/40 rounded-xl text-center text-xs text-muted-foreground italic font-semibold">
+                    Belum ada paket promo. Tambahkan paket di bawah.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {getPromoPackages().map((pkg, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-3.5 bg-gray-50 border border-border/40 rounded-2xl shadow-sm relative overflow-hidden">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] text-muted-foreground font-bold block">Top Up Nominal</span>
+                          <span className="text-[13px] font-extrabold text-foreground">Rp{pkg.amount.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="text-right flex items-center gap-3">
+                          <div className="space-y-0.5 pr-2.5 border-r border-border/40 text-right">
+                            <span className="text-[10px] text-rose-500 font-bold block">Ekstra Bonus</span>
+                            <span className="text-[13px] font-extrabold text-rose-600">+{pkg.bonus.toLocaleString('id-ID')}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removePromoPackage(pkg.amount)}
+                            className="p-1.5 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-xl text-rose-600 transition-all cursor-pointer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Add New Package Form */}
+              <div className="border-t border-border/30 pt-4.5 space-y-3">
+                <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <span>✨ Tambah Paket Promo Baru</span>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                      Nominal Top-Up (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      value={newPromoAmount}
+                      onChange={(e) => setNewPromoAmount(e.target.value)}
+                      placeholder="Contoh: 50000"
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                      Nominal Bonus Saldo (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      value={newPromoBonus}
+                      onChange={(e) => setNewPromoBonus(e.target.value)}
+                      placeholder="Contoh: 5000"
+                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={addPromoPackage}
+                  disabled={!newPromoAmount || !newPromoBonus}
+                  className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-400 border border-gray-900 disabled:border-transparent text-white text-[10px] font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Tambah Paket Promo
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* QRIS Settings */}
