@@ -5,9 +5,16 @@ export async function GET(req: NextRequest) {
     try {
         const latStr = req.nextUrl.searchParams.get('lat')
         const lonStr = req.nextUrl.searchParams.get('lon')
+        const clientHourStr = req.nextUrl.searchParams.get('hour')
 
         let lat = latStr ? parseFloat(latStr) : -7.78125
         let lon = lonStr ? parseFloat(lonStr) : 113.21226
+
+        // Compute local hour with fallback to Asia/Jakarta (WIB, UTC+7) if not provided by client
+        const serverDate = new Date()
+        const utc = serverDate.getTime() + (serverDate.getTimezoneOffset() * 60000)
+        const wibDate = new Date(utc + (3600000 * 7))
+        const hour = clientHourStr ? parseInt(clientHourStr) : wibDate.getHours()
 
         let weatherData = {
             temp: 29.8,
@@ -44,9 +51,8 @@ export async function GET(req: NextRequest) {
 
         // If simulated, adjust based on time of day with realistic defaults
         if (isSimulated) {
-            const hour = new Date().getHours()
-            const isNight = hour >= 18 || hour < 6
-            if (isNight) {
+            const isSimulatedNight = hour >= 18 || hour < 6
+            if (isSimulatedNight) {
                 weatherData.temp = 24.5
                 weatherData.condition = 'Cloudy'
                 weatherData.description = 'Berawan Malam'
@@ -64,7 +70,11 @@ export async function GET(req: NextRequest) {
 
         const allProducts = await prisma.product.findMany()
 
-        const isHotWeather = weatherData.temp >= 27.0
+        // Determine if it is night time (either via client hour or weather icon ending in 'n')
+        const isNight = hour >= 18 || hour < 6 || (weatherData.icon && weatherData.icon.endsWith('n'))
+
+        // Hot weather represents terik/sunny daytime conditions, so it shouldn't apply at night
+        const isHotWeather = weatherData.temp >= 27.0 && !isNight
         const conditionLower = weatherData.condition.toLowerCase()
         const isRainy = conditionLower.includes('rain') || conditionLower.includes('drizzle') || conditionLower.includes('storm')
 
@@ -92,8 +102,9 @@ export async function GET(req: NextRequest) {
             if (signature) recommendedProducts.push(signature)
             if (biscoff) recommendedProducts.push(biscoff)
         } else {
-            // Cool/night weather
-            tagline = `Suasana malam/sejuk 🍃 (${weatherData.temp.toFixed(1)}°C) di ${weatherData.city}. Nikmati santai malam dengan Matcha Signature creamy atau Matcha Tiramisu manis lembut.`
+            // Cool/night weather - matches when temp < 27.0 or when it is night
+            const weatherDesc = isNight ? 'Suasana malam/sejuk' : `Udara sejuk`;
+            tagline = `${weatherDesc} 🍃 (${weatherData.temp.toFixed(1)}°C) di ${weatherData.city}. Nikmati santai malam dengan Matcha Signature creamy atau Matcha Tiramisu manis lembut.`
             const signature = allProducts.find(p => p.id === 'brand-signature')
             const tiramisu = allProducts.find(p => p.id === 'brand-tiramisu')
             const cookies = allProducts.find(p => p.id === 'brand-cookie')

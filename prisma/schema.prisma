@@ -779,14 +779,16 @@ model MemberSubscription {
 }
 
 model WalletTransaction {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  amount      Int      // positive for top-up, negative for payment
-  type        String   // TOP_UP, PAYMENT, TOP_UP_BONUS, TRANSFER_IN, TRANSFER_OUT
-  description String
-  referenceId String?  // e.g. orderId or transaction reference
-  createdAt   DateTime @default(now())
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount        Int      // positive for top-up, negative for payment
+  type          String   // TOP_UP, PAYMENT, TOP_UP_BONUS, TRANSFER_IN, TRANSFER_OUT
+  description   String
+  referenceId   String?  // e.g. orderId or transaction reference
+  status        String   @default("COMPLETED") // COMPLETED, PENDING, VERIFYING, REJECTED
+  paymentMethod String?  // QRIS, BANK, OFFLINE
+  createdAt     DateTime @default(now())
 }
 
 model GiftCard {

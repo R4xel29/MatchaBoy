@@ -9,8 +9,9 @@ import type { Product, Category } from '@/types';
 import Image from 'next/image';
 import { formatRupiah, getActivePromo, cn } from '@/lib/utils';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
-import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ShoppingBag, Clock, Gift, Copy, Check, Share2, Trophy, RefreshCw, FlaskConical, CreditCard, Plus, History, Trash2, ArrowUpRight, Leaf, Award, ShieldAlert, CheckCircle2, CalendarDays } from 'lucide-react';
+import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ShoppingBag, Clock, Gift, Copy, Check, Share2, Trophy, RefreshCw, FlaskConical, CreditCard, Plus, History, Trash2, ArrowUpRight, Leaf, Award, ShieldAlert, CheckCircle2, CalendarDays, Wallet, Loader2 } from 'lucide-react';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
+import { QRCodeSVG } from 'qrcode.react';
 
 // Lazy-load heavy modal components (only shown on user interaction)
 const ProductModal = dynamic(() => import('@/components/storefront/ProductModal').then(m => ({ default: m.ProductModal })), { ssr: false });
@@ -257,11 +258,26 @@ export default function StorefrontClient({
       }
     };
 
+    const localHour = new Date().getHours();
+
+    // 1. Fetch immediately with fallback/default (extremely fast initial load)
+    fetch(`/api/weather-recommendation?hour=${localHour}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data?.success) {
+          setWeatherData(data);
+          updateWeatherCategory(data);
+        }
+      })
+      .catch(err => console.error('Error fetching initial weather:', err))
+      .finally(() => setLoadingWeather(false));
+
+    // 2. Then, asynchronously request precise geolocation to update to precise location seamlessly
     if (typeof window !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
-          fetch(`/api/weather-recommendation?lat=${latitude}&lon=${longitude}`)
+          fetch(`/api/weather-recommendation?lat=${latitude}&lon=${longitude}&hour=${localHour}`)
             .then(res => res.json())
             .then(data => {
               if (data?.success) {
@@ -269,24 +285,13 @@ export default function StorefrontClient({
                 updateWeatherCategory(data);
               }
             })
-            .catch(err => console.error('Error fetching weather:', err))
-            .finally(() => setLoadingWeather(false));
+            .catch(err => console.error('Error fetching precise weather:', err));
         },
         (err) => {
-          fetch(`/api/weather-recommendation`)
-            .then(res => res.json())
-            .then(data => {
-              if (data?.success) {
-                setWeatherData(data);
-                updateWeatherCategory(data);
-              }
-            })
-            .catch(err => console.error('Error fetching weather fallback:', err))
-            .finally(() => setLoadingWeather(false));
-        }
+          console.log('Precise geolocation declined or timed out, keeping default location/weather.');
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
       );
-    } else {
-      setLoadingWeather(false);
     }
   }, []);
 
@@ -1918,41 +1923,113 @@ function TopUpOverlay({
   showToast: (msg: string, type: 'success' | 'error') => void;
 }) {
   const [amount, setAmount] = useState('');
+  const [step, setStep] = useState<'select' | 'payment'>('select');
+  const [payMethod, setPayMethod] = useState<'bank' | 'qris' | 'offline'>('qris');
   const [loading, setLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [activeTransaction, setActiveTransaction] = useState<any>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [simulating, setSimulating] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setStep('select');
+      setAmount('');
+      setActiveTransaction(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
   const presets = [20000, 50000, 100000, 200000];
 
-  const handleTopUp = async (val?: number) => {
+  const handleNextStep = async (val?: number) => {
     const finalAmount = val || parseInt(amount);
     if (!finalAmount || isNaN(finalAmount) || finalAmount <= 0) {
       showToast('Masukkan jumlah top up yang valid', 'error');
       return;
     }
-
+    setAmount(String(finalAmount));
     setLoading(true);
     try {
       const res = await fetch('/api/user/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: finalAmount })
+        body: JSON.stringify({ amount: finalAmount, paymentMethod: payMethod })
+      });
+      const d = await res.json();
+      if (res.ok && d.success && d.transaction) {
+        setActiveTransaction(d.transaction);
+        setStep('payment');
+      } else {
+        showToast(d.error || 'Gagal memulai transaksi top up', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal terhubung ke server', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCheckStatus = async () => {
+    if (!activeTransaction) return;
+    setCheckingStatus(true);
+    try {
+      const res = await fetch(`/api/user/wallet?transactionId=${activeTransaction.id}`);
+      const d = await res.json();
+      if (res.ok && d.success) {
+        if (d.status === 'COMPLETED') {
+          showToast(`Top Up berhasil! Saldo Anda bertambah sebesar ${formatRupiah(d.amount)}`, 'success');
+          refreshWallet();
+          onClose();
+          setAmount('');
+          setActiveTransaction(null);
+        } else {
+          showToast('Pembayaran Anda belum terkonfirmasi oleh sistem/kasir.', 'error');
+        }
+      } else {
+        showToast(d.error || 'Gagal memeriksa status pembayaran', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Gagal memeriksa status pembayaran', 'error');
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
+
+  const handleSimulatePayment = async () => {
+    if (!activeTransaction) return;
+    setSimulating(true);
+    try {
+      const res = await fetch('/api/admin/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: activeTransaction.id, action: 'approve' })
       });
       const d = await res.json();
       if (res.ok && d.success) {
-        showToast(`Top Up berhasil! Saldo Anda bertambah sebesar ${formatRupiah(finalAmount)}`, 'success');
+        showToast(`[Sandbox] Pembayaran berhasil disimulasikan! Saldo Anda bertambah sebesar ${formatRupiah(activeTransaction.amount)}`, 'success');
         refreshWallet();
         onClose();
         setAmount('');
+        setActiveTransaction(null);
       } else {
-        showToast(d.error || 'Gagal melakukan top up', 'error');
+        showToast(d.error || 'Gagal mensimulasikan pembayaran', 'error');
       }
     } catch (err) {
       console.error(err);
       showToast('Koneksi terputus, coba lagi nanti', 'error');
     } finally {
-      setLoading(false);
+      setSimulating(false);
     }
+  };
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -1971,7 +2048,7 @@ function TopUpOverlay({
                 ✦ Matchaboy Wallet ✦
               </span>
               <h3 className="font-serif font-black text-xl text-white tracking-tight mt-1">
-                Top Up Matchaboy Pay
+                {step === 'select' ? 'Top Up Matchaboy Pay' : 'Petunjuk Pembayaran'}
               </h3>
             </div>
             <button
@@ -1982,64 +2059,232 @@ function TopUpOverlay({
             </button>
           </div>
 
-          <div className="p-6 space-y-6 text-left">
-            {/* Promo Alert */}
-            <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
-              <span className="text-lg">🔥</span>
-              <div className="space-y-0.5">
-                <p className="text-xs font-black text-[#2E5A44]">Bonus Saldo 10%!</p>
-                <p className="text-[10px] text-gray-500 font-semibold leading-tight">Lakukan pengisian saldo minimum Rp 100.000 untuk mendapatkan ekstra saldo 10% cuma-cuma!</p>
+          {step === 'select' ? (
+            /* STEP 1: SELECT NOMINAL */
+            <div className="p-6 space-y-6 text-left">
+              {/* Promo Alert */}
+              <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
+                <span className="text-lg">🔥</span>
+                <div className="space-y-0.5">
+                  <p className="text-xs font-black text-[#2E5A44]">Bonus Saldo 10%!</p>
+                  <p className="text-[10px] text-gray-500 font-semibold leading-tight">Lakukan pengisian saldo minimum Rp 100.000 untuk mendapatkan ekstra saldo 10% cuma-cuma!</p>
+                </div>
               </div>
-            </div>
 
-            {/* Custom Input */}
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Masukkan Jumlah Top Up (Rp)</label>
-              <input
-                type="number"
-                placeholder="Contoh: 50000"
-                value={amount}
-                onChange={e => setAmount(e.target.value)}
-                className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] text-sm font-bold text-gray-900 bg-gray-50"
-              />
-            </div>
+              {/* Custom Input */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Masukkan Jumlah Top Up (Rp)</label>
+                <input
+                  type="number"
+                  placeholder="Contoh: 50000"
+                  value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  className="w-full px-4.5 py-3 rounded-2xl border border-gray-200 outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] text-sm font-bold text-gray-900 bg-gray-50"
+                />
+              </div>
 
-            {/* Presets */}
-            <div className="space-y-2">
-              <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider block">Pilih Cepat Nominal</span>
-              <div className="grid grid-cols-2 gap-3">
-                {presets.map(val => (
+              {/* Presets */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-black text-gray-550 uppercase tracking-wider block">Pilih Cepat Nominal</span>
+                <div className="grid grid-cols-2 gap-3">
+                  {presets.map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => handleNextStep(val)}
+                      className="relative p-3.5 bg-white hover:bg-gray-50 border border-gray-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-center outline-none"
+                    >
+                      <span>{formatRupiah(val)}</span>
+                      {val >= 100000 && (
+                        <span className="absolute -top-2 -right-1 bg-rose-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-sm scale-95 border border-white">
+                          +10%
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Next Button */}
+              <button
+                onClick={() => handleNextStep()}
+                disabled={loading}
+                className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {loading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Memproses...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Lanjutkan ke Pembayaran</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            /* STEP 2: PAYMENT METHOD POPUP */
+            <div className="p-6 space-y-5 text-left flex flex-col max-h-[70vh] overflow-y-auto scrollbar-hide">
+              {/* Back Button & Amount display */}
+              <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+                <button
+                  type="button"
+                  onClick={() => setStep('select')}
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 text-[10px] font-black uppercase text-gray-655 hover:bg-gray-50 transition-all cursor-pointer"
+                >
+                  ← Kembali
+                </button>
+                <div className="text-right">
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest leading-none">Total Tagihan</p>
+                  <p className="text-lg font-black text-[#2E5A44] font-serif mt-0.5">{formatRupiah(parseInt(amount))}</p>
+                </div>
+              </div>
+
+              {/* Payment Methods Tab */}
+              <div className="flex border border-gray-100 rounded-2xl p-1 bg-gray-50 gap-1 shrink-0 select-none">
+                {[
+                  { id: 'qris', label: 'Scan QRIS' },
+                  { id: 'bank', label: 'BCA Transfer' },
+                  { id: 'offline', label: 'Kasir Booth' }
+                ].map(m => (
                   <button
-                    key={val}
+                    key={m.id}
                     type="button"
-                    onClick={() => handleTopUp(val)}
-                    className="relative p-3.5 bg-white hover:bg-gray-50 border border-gray-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-center outline-none"
+                    onClick={() => setPayMethod(m.id as any)}
+                    className={`flex-1 py-2 text-[10px] font-black uppercase tracking-wider text-center rounded-xl border transition-all cursor-pointer ${
+                      payMethod === m.id
+                        ? 'bg-[#2E5A44] border-[#2E5A44] text-white shadow-sm'
+                        : 'bg-white border-gray-155 text-gray-600 hover:bg-gray-100'
+                    }`}
                   >
-                    <span>{formatRupiah(val)}</span>
-                    {val >= 100000 && (
-                      <span className="absolute -top-2 -right-1 bg-rose-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-sm scale-95 border border-white">
-                        +10%
-                      </span>
-                    )}
+                    {m.label}
                   </button>
                 ))}
               </div>
-            </div>
 
-            {/* Submit Button */}
-            <button
-              onClick={() => handleTopUp()}
-              disabled={loading}
-              className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:opacity-50 text-white font-black text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              {loading ? 'Memproses...' : 'Top Up Sekarang ⚡'}
-            </button>
-          </div>
+              {/* Tab Contents */}
+              <div className="flex-1 bg-[#FFFBF5]/30 border border-[#FAF6EE] rounded-3xl p-5 flex flex-col items-center justify-center min-h-[220px]">
+                {payMethod === 'qris' && (
+                  <div className="text-center space-y-4 flex flex-col items-center">
+                    <div className="relative w-44 h-44 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-sm flex items-center justify-center">
+                      <QRCodeSVG
+                        value={`00020101021226570014ID.DOKU.WWW.01189360091234567890120215MB${activeTransaction?.paymentCode || 'TOPUP'}0303UME5204581153033605802ID5913MATCHABOY COFFEE6007JAKARTA61051212362070703A016304ABCD`}
+                        size={156}
+                        level="M"
+                        includeMargin={false}
+                        className="object-contain"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-extrabold text-orange-600 uppercase tracking-wider">Metode: QRIS GPN Standard</p>
+                      <p className="text-[10.5px] text-gray-500 font-semibold leading-relaxed px-4">
+                        Pindai kode QR di atas dengan aplikasi bank (BCA, Mandiri, OVO, ShopeePay) untuk simulasi pembayaran.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {payMethod === 'bank' && (
+                  <div className="w-full text-center space-y-4">
+                    <div className="bg-white border border-gray-150 p-5 rounded-2xl shadow-sm text-left relative overflow-hidden">
+                      <div className="absolute right-0 top-0 opacity-5 pointer-events-none select-none">
+                        <Wallet className="w-20 h-20 text-gray-900" />
+                      </div>
+                      <span className="text-[9px] font-extrabold uppercase bg-blue-50 border border-blue-100 px-2 py-0.5 rounded text-blue-700">Bank Transfer</span>
+                      <h4 className="text-[10px] text-gray-400 font-black uppercase tracking-wider mt-2.5">Nomor Rekening BCA</h4>
+                      
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-base font-mono font-bold tracking-wider text-gray-900">456-092-1234</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy('456-092-1234')}
+                          className="px-3 py-1 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-[10px] font-extrabold uppercase rounded-lg text-gray-600 transition-colors"
+                        >
+                          {copied ? 'Tersalin!' : 'Salin'}
+                        </button>
+                      </div>
+                      
+                      <p className="text-[10px] text-gray-550 mt-1 font-bold">a.n. PT MATCHABOY INDONESIA</p>
+                    </div>
+                    <p className="text-[10.5px] text-gray-500 font-semibold leading-relaxed px-2">
+                      Silakan lakukan transfer ke rekening di atas dengan nominal persis <span className="text-[#2E5A44] font-extrabold">{formatRupiah(parseInt(amount))}</span>.
+                    </p>
+                  </div>
+                )}
+
+                {payMethod === 'offline' && (
+                  <div className="text-center space-y-4">
+                    <div className="bg-white border border-dashed border-gray-200 p-5 rounded-2xl shadow-sm">
+                      <span className="text-[32px] select-none block mb-1">🏪</span>
+                      <h4 className="text-[10px] text-gray-400 font-black uppercase tracking-wider">Kode Tiket Pembayaran</h4>
+                      <h3 className="text-lg font-mono font-black text-[#2E5A44] tracking-widest mt-1">
+                        {activeTransaction?.paymentCode || 'MB-TOPUP-XXXX'}
+                      </h3>
+                    </div>
+                    <p className="text-[10.5px] text-gray-550 font-semibold leading-relaxed px-3">
+                      Tunjukkan kode tiket di atas ke Kasir Matchaboy di booth kami dan lakukan pembayaran tunai sebesar <span className="text-[#2E5A44] font-extrabold">{formatRupiah(parseInt(amount))}</span>.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Dev Sandbox simulation button for QRIS and BCA Bank */}
+              {(payMethod === 'qris' || payMethod === 'bank') && (
+                <button
+                  type="button"
+                  onClick={handleSimulatePayment}
+                  disabled={simulating || checkingStatus}
+                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5 border border-amber-600"
+                >
+                  {simulating ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Mensimulasikan Pembayaran...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>⚡ Simulasi Bayar Instan (Dev Sandbox)</span>
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Confirm / Check Status Button */}
+              <div className="space-y-2.5 pt-2">
+                <button
+                  onClick={handleCheckStatus}
+                  disabled={checkingStatus || simulating}
+                  className="w-full py-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {checkingStatus ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Memeriksa status pembayaran...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Periksa Status Pembayaran</span>
+                    </>
+                  )}
+                </button>
+                
+                <p className="text-[9px] text-gray-400 font-semibold text-center leading-normal">
+                  {payMethod === 'offline' 
+                    ? "Tunjukkan kode tiket di atas ke Kasir. Setelah Kasir memproses pembayaran Anda, klik tombol Periksa di atas."
+                    : "Setelah melakukan transfer atau memindai QRIS, klik tombol Periksa di atas untuk memperbarui saldo Anda."
+                  }
+                </p>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>
   );
 }
+
 
 function AutoReorderOverlay({
   isOpen,

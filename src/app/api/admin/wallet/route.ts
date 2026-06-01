@@ -1,11 +1,12 @@
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
+import { incrementQuestProgress } from '@/lib/loyalty-utils';
 
 export async function GET() {
   try {
     const session = await auth();
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'CASHIER')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -27,26 +28,47 @@ export async function GET() {
       orderBy: { walletBalance: 'desc' },
     });
 
+    // Get pending top-up requests
+    const pendingTransactions = await prisma.walletTransaction.findMany({
+      where: {
+        status: { in: ['PENDING', 'VERIFYING'] },
+        type: 'TOP_UP',
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            image: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
     // Total wallet balance across all users
     const totalBalance = await prisma.user.aggregate({
       _sum: { walletBalance: true },
     });
 
-    // Transaction stats
+    // Transaction stats (completed topups)
     const totalTopUps = await prisma.walletTransaction.aggregate({
-      where: { amount: { gt: 0 } },
+      where: { amount: { gt: 0 }, status: 'COMPLETED' },
       _sum: { amount: true },
       _count: true,
     });
 
     const totalPayments = await prisma.walletTransaction.aggregate({
-      where: { amount: { lt: 0 } },
+      where: { amount: { lt: 0 }, status: 'COMPLETED' },
       _sum: { amount: true },
       _count: true,
     });
 
     return NextResponse.json({
       users,
+      pendingTransactions,
       stats: {
         totalBalance: totalBalance._sum.walletBalance ?? 0,
         totalTopUps: totalTopUps._sum.amount ?? 0,
@@ -117,6 +139,8 @@ export async function PATCH(req: Request) {
           amount: adjustAmount,
           type: adjustAmount > 0 ? 'ADMIN_TOPUP' : 'ADMIN_DEDUCT',
           description: `[Admin] ${reason}`,
+          status: 'COMPLETED',
+          paymentMethod: 'DIRECT',
         },
       }),
     ]);
@@ -124,6 +148,99 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ user: updatedUser, transaction });
   } catch (error: unknown) {
     console.error('[ADMIN_WALLET_PATCH_ERROR]', error);
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const session = await auth();
+    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'CASHIER')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { transactionId, action } = await req.json();
+
+    if (!transactionId || !action) {
+      return NextResponse.json({ error: 'transactionId and action are required' }, { status: 400 });
+    }
+
+    const tx = await prisma.walletTransaction.findUnique({
+      where: { id: transactionId },
+    });
+
+    if (!tx) {
+      return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 });
+    }
+
+    if (tx.status !== 'PENDING' && tx.status !== 'VERIFYING') {
+      return NextResponse.json({ error: 'Transaksi sudah tidak berstatus pending' }, { status: 400 });
+    }
+
+    if (action === 'reject') {
+      const updatedTx = await prisma.walletTransaction.update({
+        where: { id: transactionId },
+        data: { status: 'REJECTED' },
+      });
+      return NextResponse.json({ success: true, transaction: updatedTx });
+    }
+
+    if (action === 'approve') {
+      const amount = tx.amount;
+      const hasBonus = amount >= 100000;
+      const bonusAmount = hasBonus ? Math.floor(amount * 0.1) : 0;
+      const totalTopUp = amount + bonusAmount;
+
+      const [updatedUser, updatedTx] = await prisma.$transaction(async (prismaTx) => {
+        // Increment user's wallet balance
+        const user = await prismaTx.user.update({
+          where: { id: tx.userId },
+          data: { walletBalance: { increment: totalTopUp } },
+          select: {
+            id: true,
+            name: true,
+            walletBalance: true,
+            walletTransactions: {
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+            },
+          },
+        });
+
+        // Mark transaction as COMPLETED
+        const completedTx = await prismaTx.walletTransaction.update({
+          where: { id: transactionId },
+          data: { status: 'COMPLETED' },
+        });
+
+        // If there's a bonus, create a COMPLETED TOP_UP_BONUS transaction
+        if (hasBonus && bonusAmount > 0) {
+          await prismaTx.walletTransaction.create({
+            data: {
+              userId: tx.userId,
+              amount: bonusAmount,
+              type: 'TOP_UP_BONUS',
+              description: `Bonus Top-up 10% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+              status: 'COMPLETED',
+              paymentMethod: tx.paymentMethod,
+              referenceId: tx.referenceId
+            },
+          });
+        }
+
+        // C1 Gamification Quests: Atomically increment top-up count quest progress
+        await incrementQuestProgress(tx.userId, 'TOP_UP_COUNT', 1, prismaTx);
+
+        return [user, completedTx];
+      });
+
+      return NextResponse.json({ success: true, user: updatedUser, transaction: updatedTx });
+    }
+
+    return NextResponse.json({ error: 'Action not supported' }, { status: 400 });
+  } catch (error: unknown) {
+    console.error('[ADMIN_WALLET_POST_ERROR]', error);
     const message = error instanceof Error ? error.message : 'Internal Server Error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

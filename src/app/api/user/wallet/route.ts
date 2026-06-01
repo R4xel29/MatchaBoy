@@ -11,6 +11,24 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
+        const { searchParams } = new URL(req.url)
+        const transactionId = searchParams.get('transactionId')
+
+        if (transactionId) {
+            const tx = await prisma.walletTransaction.findUnique({
+                where: { id: transactionId }
+            })
+            if (!tx || tx.userId !== session.user.id) {
+                return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 })
+            }
+            return NextResponse.json({
+                success: true,
+                status: tx.status,
+                amount: tx.amount,
+                paymentCode: tx.referenceId
+            })
+        }
+
         const user = await prisma.user.findUnique({
             where: { id: session.user.id },
             select: {
@@ -48,12 +66,41 @@ export async function POST(req: Request) {
 
         const body = await req.json()
         const amount = parseInt(body.amount)
+        const paymentMethod = body.paymentMethod // Optional, e.g. 'qris' | 'bank' | 'offline'
 
         if (isNaN(amount) || amount <= 0) {
             throw new ValidationError('Jumlah top-up harus berupa angka positif')
         }
 
-        // Rule: 10% bonus for top-up >= 100K (100,000)
+        // If payment method is specified and not DIRECT, create a PENDING transaction
+        if (paymentMethod && paymentMethod !== 'DIRECT') {
+            const paymentCode = `MB-TOPUP-${Math.floor(1000 + Math.random() * 9000)}`
+            
+            const transaction = await prisma.walletTransaction.create({
+                data: {
+                    userId: session.user.id,
+                    amount: amount,
+                    type: 'TOP_UP',
+                    description: `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')} via ${paymentMethod.toUpperCase()}`,
+                    status: 'PENDING',
+                    paymentMethod: paymentMethod.toUpperCase(),
+                    referenceId: paymentCode
+                }
+            })
+
+            return NextResponse.json({
+                success: true,
+                transaction: {
+                    id: transaction.id,
+                    amount: transaction.amount,
+                    paymentCode: transaction.referenceId,
+                    status: transaction.status,
+                    paymentMethod: transaction.paymentMethod
+                }
+            })
+        }
+
+        // Legacy / Direct Credit flow (used when no paymentMethod is specified)
         const hasBonus = amount >= 100000
         const bonusAmount = hasBonus ? Math.floor(amount * 0.1) : 0
         const totalTopUp = amount + bonusAmount
@@ -74,6 +121,8 @@ export async function POST(req: Request) {
                     amount: amount,
                     type: 'TOP_UP',
                     description: `Top-up wallet sebesar Rp${amount.toLocaleString('id-ID')}`,
+                    status: 'COMPLETED',
+                    paymentMethod: 'DIRECT'
                 }
             })
 
@@ -85,6 +134,7 @@ export async function POST(req: Request) {
                         amount: bonusAmount,
                         type: 'TOP_UP_BONUS',
                         description: `Bonus Top-up 10% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+                        status: 'COMPLETED'
                     }
                 })
             }

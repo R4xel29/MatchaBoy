@@ -45,6 +45,7 @@ export default function AdminWalletClient() {
   const [adjustReason, setAdjustReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
 
   const { showToast } = useToast();
 
@@ -56,6 +57,7 @@ export default function AdminWalletClient() {
       const data = await res.json();
       setUsers(data.users);
       setStats(data.stats);
+      setPendingTransactions(data.pendingTransactions || []);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Gagal memuat data wallet.';
       showToast(message, 'error');
@@ -86,6 +88,46 @@ export default function AdminWalletClient() {
     setAdjustAmount('');
     setAdjustReason('');
     setIsModalOpen(true);
+  };
+
+  const handleApprovePending = async (txId: string) => {
+    if (!confirm('Apakah Anda yakin ingin mengonfirmasi lunas permintaan top up ini?')) return;
+    try {
+      const res = await fetch('/api/admin/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: txId, action: 'approve' }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Failed to approve transaction');
+      }
+      showToast('Permintaan top up berhasil disetujui! Saldo pelanggan telah didepositkan.', 'success');
+      fetchData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gagal menyetujui top up.';
+      showToast(message, 'error');
+    }
+  };
+
+  const handleRejectPending = async (txId: string) => {
+    if (!confirm('Apakah Anda yakin ingin menolak permintaan top up ini?')) return;
+    try {
+      const res = await fetch('/api/admin/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: txId, action: 'reject' }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || 'Failed to reject transaction');
+      }
+      showToast('Permintaan top up berhasil ditolak.', 'success');
+      fetchData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gagal menolak top up.';
+      showToast(message, 'error');
+    }
   };
 
   const handleAdjustBalance = async (e: React.FormEvent) => {
@@ -202,7 +244,86 @@ export default function AdminWalletClient() {
         </div>
       )}
 
-      {/* Search & Refresh */}
+ 
+
+      {/* Pending Top-Up Requests Section */}
+      {pendingTransactions.length > 0 && (
+        <div className="bg-card rounded-2xl border border-dashed border-amber-300 p-5 space-y-4 bg-amber-50/10">
+          <div className="flex items-center justify-between border-b border-border/50 pb-3">
+            <h3 className="font-heading font-black text-sm text-foreground flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              <span>Permintaan Top-Up Pending ({pendingTransactions.length})</span>
+            </h3>
+            <span className="text-[10px] bg-amber-100 text-amber-800 font-extrabold uppercase px-2 py-0.5 rounded-full">
+              Butuh Konfirmasi Kasir
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-80 overflow-y-auto">
+            {pendingTransactions.map((tx) => (
+              <div key={tx.id} className="bg-background border border-border rounded-xl p-3.5 flex flex-col justify-between gap-3 shadow-sm hover:shadow transition-shadow">
+                <div className="flex items-start gap-3 justify-between">
+                  <div className="flex gap-2.5">
+                    {/* User Avatar */}
+                    <div className="w-8.5 h-8.5 rounded-full bg-brand-50 border border-border flex items-center justify-center text-xs font-bold text-brand-700 overflow-hidden shrink-0">
+                      {tx.user?.image ? (
+                        <img src={tx.user.image} alt={tx.user.name || ''} className="w-full h-full object-cover" />
+                      ) : (
+                        (tx.user?.name || '?').charAt(0).toUpperCase()
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-extrabold text-foreground leading-tight truncate max-w-[150px]">
+                        {tx.user?.name || 'Tanpa Nama'}
+                      </h4>
+                      <p className="text-[10px] text-muted-foreground mt-0.5 leading-none font-semibold">
+                        {tx.user?.phone || tx.user?.email || '-'}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded leading-none ${
+                          tx.paymentMethod === 'QRIS' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                          tx.paymentMethod === 'BANK' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                          'bg-orange-50 text-orange-700 border border-orange-100'
+                        }`}>
+                          {tx.paymentMethod || 'OFFLINE'}
+                        </span>
+                        <span className="text-[9px] font-mono text-muted-foreground font-semibold">
+                          {tx.referenceId}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p className="font-black text-sm text-[#2E5A44]">{formatRupiah(tx.amount)}</p>
+                    <p className="text-[9px] text-muted-foreground mt-0.5 font-semibold">
+                      {new Date(tx.createdAt).toLocaleDateString('id-ID')}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 select-none border-t border-border/40 pt-2.5">
+                  <button
+                    type="button"
+                    onClick={() => handleRejectPending(tx.id)}
+                    className="flex-1 py-2 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50 text-[10px] font-extrabold uppercase transition-colors cursor-pointer"
+                  >
+                    Tolak
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApprovePending(tx.id)}
+                    className="flex-1.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold uppercase shadow-sm transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    Konfirmasi Lunas
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+     {/* Search & Refresh */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
