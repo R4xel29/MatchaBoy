@@ -86,6 +86,7 @@ export async function GET(req: Request) {
                 bonusMinAmount: settings?.walletBonusMinAmount ?? 100000,
                 bonusPercent: settings?.walletBonusPercent ?? 10,
                 topUpEnabled: settings?.walletTopUpEnabled ?? true,
+                bonusMode: settings?.walletBonusMode ?? "BOTH",
                 firstTimePromoEnabled: settings?.walletFirstTimePromoEnabled ?? true,
                 firstTimePromoPackages: parsedPromoPackages
             }
@@ -120,6 +121,7 @@ export async function POST(req: Request) {
         const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
         const bonusPercent = settings?.walletBonusPercent ?? 10;
         const topUpEnabled = settings?.walletTopUpEnabled ?? true;
+        const bonusMode = settings?.walletBonusMode ?? "BOTH";
 
         if (!topUpEnabled) {
             throw new ValidationError('Fitur top-up saldo sedang dinonaktifkan sementara.')
@@ -142,7 +144,9 @@ export async function POST(req: Request) {
         let calculatedPromoBonus = 0;
         let isPromoApplied = false;
 
-        if (isFirstTime && settings?.walletFirstTimePromoEnabled) {
+        const isPromoActiveMode = bonusMode === "FIRST_TIME" || bonusMode === "BOTH";
+
+        if (isFirstTime && isPromoActiveMode && settings?.walletFirstTimePromoEnabled) {
             let promoPackages = [];
             try {
                 if (settings?.walletFirstTimePromoPackages) {
@@ -191,9 +195,10 @@ export async function POST(req: Request) {
         }
 
         // Legacy / Direct Credit flow (used when no paymentMethod is specified)
-        const hasBonus = isPromoApplied || amount >= bonusMinAmount
-        const bonusAmount = isPromoApplied ? calculatedPromoBonus : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0)
-        const totalTopUp = amount + bonusAmount
+        const isRegularActiveMode = bonusMode === "REGULAR" || bonusMode === "BOTH";
+        const hasBonus = isPromoApplied || (isRegularActiveMode && amount >= bonusMinAmount);
+        const bonusAmount = isPromoApplied ? calculatedPromoBonus : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0);
+        const totalTopUp = amount + bonusAmount;
 
         const updatedUser = await prisma.$transaction(async (tx) => {
             // Update user wallet balance

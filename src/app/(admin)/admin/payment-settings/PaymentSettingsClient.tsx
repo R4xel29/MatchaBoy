@@ -31,6 +31,7 @@ interface PaymentConfig {
   walletMinTopUp: number;
   walletBonusMinAmount: number;
   walletBonusPercent: number;
+  walletBonusMode: string;
   walletFirstTimePromoEnabled: boolean;
   walletFirstTimePromoPackages: string;
 }
@@ -281,16 +282,16 @@ export default function PaymentSettingsClient() {
           </div>
         </div>
 
-        {/* Matchaboy Pay & Top Up Settings */}
-        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-4">
+        {/* Matchaboy Pay & Unified Top Up Settings (Opsi B) */}
+        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] space-y-4">
+          <div className="flex items-center justify-between border-b border-border/20 pb-3">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                 <Wallet className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="text-sm font-bold text-foreground">Matchaboy Pay (Dompet Digital)</h3>
-                <p className="text-[10px] text-muted-foreground">Kelola pengisian saldo dan bonus loyalitas</p>
+                <p className="text-[10px] text-muted-foreground">Kelola pengisian saldo dan skema bonus loyalitas</p>
               </div>
             </div>
             <button onClick={() => update('walletTopUpEnabled', !settings?.walletTopUpEnabled)}>
@@ -300,149 +301,166 @@ export default function PaymentSettingsClient() {
               }
             </button>
           </div>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+          {settings?.walletTopUpEnabled && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              {/* General Top-Up Configuration */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                  Minimal Top-Up (Rp)
+                  Minimal Pengisian Saldo (Rp)
                 </label>
                 <input
                   type="number"
                   value={settings?.walletMinTopUp ?? 10000}
                   onChange={(e) => update('walletMinTopUp', Number(e.target.value))}
                   placeholder="Contoh: 10000"
-                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                  className="w-full sm:w-1/2 px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                  Persentase Bonus (%)
+
+              {/* Bonus Scheme Selector */}
+              <div className="border-t border-border/30 pt-3.5 space-y-2">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Skema Bonus Top-Up
                 </label>
-                <input
-                  type="number"
-                  value={settings?.walletBonusPercent ?? 10}
-                  onChange={(e) => update('walletBonusPercent', Number(e.target.value))}
-                  placeholder="Contoh: 10 untuk 10%"
-                  className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { id: 'NONE', title: '🚫 Tanpa Bonus', desc: 'Saldo bertambah persis nominal top-up' },
+                    { id: 'REGULAR', title: '📈 Hanya Bonus Reguler', desc: 'Bonus persentase berlaku untuk semua transaksi' },
+                    { id: 'FIRST_TIME', title: '🎁 Hanya Promo Pertama', desc: 'Bonus paket khusus untuk pengisian pertama saja' },
+                    { id: 'BOTH', title: '✨ Gunakan Keduanya', desc: 'Paket untuk top-up pertama, persentase untuk selanjutnya' }
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => update('walletBonusMode', mode.id)}
+                      className={`p-3 text-left border rounded-xl transition-all cursor-pointer flex flex-col gap-0.5 ${
+                        (settings?.walletBonusMode ?? 'BOTH') === mode.id
+                          ? 'border-blue-500 bg-blue-50/20 text-blue-700 shadow-sm ring-1 ring-blue-500/25'
+                          : 'border-border/40 hover:border-gray-300 bg-white text-muted-foreground'
+                      }`}
+                    >
+                      <span className="text-[11.5px] font-extrabold text-foreground">{mode.title}</span>
+                      <span className="text-[9.5px] leading-tight text-muted-foreground">{mode.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                Minimal Pengisian Untuk Mendapatkan Bonus (Rp)
-              </label>
-              <input
-                type="number"
-                value={settings?.walletBonusMinAmount ?? 100000}
-                onChange={(e) => update('walletBonusMinAmount', Number(e.target.value))}
-                placeholder="Contoh: 100000"
-                className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-              />
-              <p className="text-[9.5px] text-muted-foreground mt-1.5 leading-relaxed font-semibold">
-                💡 Pengisian saldo senilai atau di atas nominal ini akan otomatis mendapat bonus persentase saldo. Atur nominal sangat tinggi jika ingin menonaktifkan bonus.
-              </p>
-            </div>
-          </div>
-        </div>
 
-        {/* First-Time Top-Up Promo Settings */}
-        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
-                <Wallet className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground">Promo Pengisian Pertama Kali</h3>
-                <p className="text-[10px] text-muted-foreground">Konfigurasi paket promo khusus transaksi top-up pertama</p>
-              </div>
-            </div>
-            <button onClick={() => update('walletFirstTimePromoEnabled', !settings?.walletFirstTimePromoEnabled)}>
-              {settings?.walletFirstTimePromoEnabled
-                ? <ToggleRight className="w-7 h-7 text-emerald-500 animate-in fade-in" />
-                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
-              }
-            </button>
-          </div>
-
-          {settings?.walletFirstTimePromoEnabled && (
-            <div className="space-y-4">
-              {/* Packages List */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-                  Daftar Paket Promo Pertama Kali
-                </span>
-                {getPromoPackages().length === 0 ? (
-                  <div className="py-4 bg-gray-50 border border-dashed border-border/40 rounded-xl text-center text-xs text-muted-foreground italic font-semibold">
-                    Belum ada paket promo. Tambahkan paket di bawah.
-                  </div>
-                ) : (
+              {/* standard regular bonus panel */}
+              {((settings?.walletBonusMode ?? 'BOTH') === 'REGULAR' || (settings?.walletBonusMode ?? 'BOTH') === 'BOTH') && (
+                <div className="border-t border-border/30 pt-3.5 space-y-3.5 animate-in fade-in duration-200">
+                  <h4 className="text-[11px] font-bold text-foreground uppercase tracking-wider">📈 Pengaturan Bonus Persentase Reguler</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {getPromoPackages().map((pkg, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-3.5 bg-gray-50 border border-border/40 rounded-2xl shadow-sm relative overflow-hidden">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] text-muted-foreground font-bold block">Top Up Nominal</span>
-                          <span className="text-[13px] font-extrabold text-foreground">Rp{pkg.amount.toLocaleString('id-ID')}</span>
-                        </div>
-                        <div className="text-right flex items-center gap-3">
-                          <div className="space-y-0.5 pr-2.5 border-r border-border/40 text-right">
-                            <span className="text-[10px] text-rose-500 font-bold block">Ekstra Bonus</span>
-                            <span className="text-[13px] font-extrabold text-rose-600">+{pkg.bonus.toLocaleString('id-ID')}</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removePromoPackage(pkg.amount)}
-                            className="p-1.5 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-xl text-rose-600 transition-all cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Add New Package Form */}
-              <div className="border-t border-border/30 pt-4.5 space-y-3">
-                <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                  <span>✨ Tambah Paket Promo Baru</span>
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                      Nominal Top-Up (Rp)
-                    </label>
-                    <input
-                      type="number"
-                      value={newPromoAmount}
-                      onChange={(e) => setNewPromoAmount(e.target.value)}
-                      placeholder="Contoh: 50000"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                      Nominal Bonus Saldo (Rp)
-                    </label>
-                    <input
-                      type="number"
-                      value={newPromoBonus}
-                      onChange={(e) => setNewPromoBonus(e.target.value)}
-                      placeholder="Contoh: 5000"
-                      className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                    />
+                    <div>
+                      <label className="block text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                        Persentase Bonus (%)
+                      </label>
+                      <input
+                        type="number"
+                        value={settings?.walletBonusPercent ?? 10}
+                        onChange={(e) => update('walletBonusPercent', Number(e.target.value))}
+                        placeholder="Contoh: 10 untuk 10%"
+                        className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                        Minimal Pengisian Untuk Bonus (Rp)
+                      </label>
+                      <input
+                        type="number"
+                        value={settings?.walletBonusMinAmount ?? 100000}
+                        onChange={(e) => update('walletBonusMinAmount', Number(e.target.value))}
+                        placeholder="Contoh: 100000"
+                        className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                      />
+                    </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={addPromoPackage}
-                  disabled={!newPromoAmount || !newPromoBonus}
-                  className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-400 border border-gray-900 disabled:border-transparent text-white text-[10px] font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Tambah Paket Promo
-                </button>
-              </div>
+              )}
+
+              {/* First-Time Promo packages panel */}
+              {((settings?.walletBonusMode ?? 'BOTH') === 'FIRST_TIME' || (settings?.walletBonusMode ?? 'BOTH') === 'BOTH') && (
+                <div className="border-t border-border/30 pt-3.5 space-y-4 animate-in fade-in duration-200">
+                  <h4 className="text-[11px] font-bold text-foreground uppercase tracking-wider">🎁 Pengaturan Promo Pengisian Pertama Kali</h4>
+                  
+                  {/* Packages List */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
+                      Daftar Paket Promo Pertama Kali
+                    </span>
+                    {getPromoPackages().length === 0 ? (
+                      <div className="py-4 bg-gray-50 border border-dashed border-border/40 rounded-xl text-center text-xs text-muted-foreground italic font-semibold">
+                        Belum ada paket promo. Tambahkan paket di bawah.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {getPromoPackages().map((pkg, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-3.5 bg-gray-50 border border-border/40 rounded-2xl shadow-sm relative overflow-hidden">
+                            <div className="space-y-0.5">
+                              <span className="text-[10px] text-muted-foreground font-bold block">Top Up Nominal</span>
+                              <span className="text-[13px] font-extrabold text-foreground">Rp{pkg.amount.toLocaleString('id-ID')}</span>
+                            </div>
+                            <div className="text-right flex items-center gap-3">
+                              <div className="space-y-0.5 pr-2.5 border-r border-border/40 text-right">
+                                <span className="text-[10px] text-rose-500 font-bold block">Ekstra Bonus</span>
+                                <span className="text-[13px] font-extrabold text-rose-600">+{pkg.bonus.toLocaleString('id-ID')}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => removePromoPackage(pkg.amount)}
+                                className="p-1.5 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-xl text-rose-600 transition-all cursor-pointer"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Add New Package Form */}
+                  <div className="border-t border-border/30 pt-3.5 space-y-3">
+                    <h5 className="text-[10.5px] font-bold text-foreground">✨ Tambah Paket Promo Baru</h5>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                          Nominal Top-Up (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          value={newPromoAmount}
+                          onChange={(e) => setNewPromoAmount(e.target.value)}
+                          placeholder="Contoh: 50000"
+                          className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                          Nominal Bonus Saldo (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          value={newPromoBonus}
+                          onChange={(e) => setNewPromoBonus(e.target.value)}
+                          placeholder="Contoh: 5000"
+                          className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addPromoPackage}
+                      disabled={!newPromoAmount || !newPromoBonus}
+                      className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-400 border border-gray-900 disabled:border-transparent text-white text-[10px] font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Tambah Paket Promo
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

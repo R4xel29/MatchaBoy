@@ -1939,6 +1939,7 @@ function TopUpOverlay({
     bonusMinAmount: 100000,
     bonusPercent: 10,
     topUpEnabled: true,
+    bonusMode: 'BOTH',
     firstTimePromoEnabled: true,
     firstTimePromoPackages: []
   });
@@ -1961,6 +1962,7 @@ function TopUpOverlay({
               bonusMinAmount: 100000,
               bonusPercent: 10,
               topUpEnabled: true,
+              bonusMode: 'BOTH',
               firstTimePromoEnabled: true,
               firstTimePromoPackages: []
             });
@@ -2103,7 +2105,7 @@ function TopUpOverlay({
           {step === 'select' ? (
             /* STEP 1: SELECT NOMINAL */
             <div className="p-6 space-y-6 text-left">
-              {isFirstTime && walletSettings?.firstTimePromoEnabled && walletSettings?.firstTimePromoPackages?.length > 0 ? (
+              {isFirstTime && (walletSettings?.bonusMode === "FIRST_TIME" || walletSettings?.bonusMode === "BOTH") && walletSettings?.firstTimePromoEnabled && walletSettings?.firstTimePromoPackages?.length > 0 ? (
                 /* FIRST TIME PROMO LAYOUT */
                 <div className="space-y-4">
                   <div className="bg-gradient-to-r from-amber-500/10 to-rose-500/10 border border-amber-500/30 rounded-2xl p-4 flex gap-3 text-gray-800 shadow-sm relative overflow-hidden">
@@ -2183,7 +2185,7 @@ function TopUpOverlay({
                 /* STANDARD SELECT NOMINAL SCREEN */
                 <div className="space-y-6">
                   {/* Standard Promo Alert */}
-                  {walletSettings?.bonusPercent > 0 && (
+                  {(walletSettings?.bonusMode === "REGULAR" || walletSettings?.bonusMode === "BOTH") && walletSettings?.bonusPercent > 0 && (
                     <div className="bg-[#FEF08A]/10 border border-[#FEF08A]/40 rounded-2xl p-4 flex gap-3 text-gray-800">
                       <span className="text-lg">🔥</span>
                       <div className="space-y-0.5">
@@ -2219,7 +2221,7 @@ function TopUpOverlay({
                           className="relative p-3.5 bg-white hover:bg-gray-50 border border-gray-200 hover:border-[#2E5A44] text-gray-800 text-xs font-black rounded-2xl transition-all cursor-pointer text-center outline-none"
                         >
                           <span>{formatRupiah(val)}</span>
-                          {val >= bonusAmt && walletSettings?.bonusPercent > 0 && (
+                          {val >= bonusAmt && (walletSettings?.bonusMode === "REGULAR" || walletSettings?.bonusMode === "BOTH") && walletSettings?.bonusPercent > 0 && (
                             <span className="absolute -top-2 -right-1 bg-rose-600 text-white text-[7.5px] font-black px-1.5 py-0.5 rounded-full uppercase leading-none shadow-sm scale-95 border border-white">
                               +{walletSettings.bonusPercent}%
                             </span>

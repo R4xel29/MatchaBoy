@@ -578,6 +578,7 @@ model PaymentSettings {
   walletMinTopUp              Int      @default(10000)
   walletBonusMinAmount        Int      @default(100000)
   walletBonusPercent          Int      @default(10)
+  walletBonusMode             String   @default("BOTH")
   walletFirstTimePromoEnabled Boolean  @default(true)
   walletFirstTimePromoPackages String  @default("[{\"amount\":50000,\"bonus\":5000},{\"amount\":200000,\"bonus\":10000}]")
 

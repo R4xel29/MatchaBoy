@@ -192,9 +192,13 @@ export async function POST(req: Request) {
       const settings = await prisma.paymentSettings.findFirst();
       const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
       const bonusPercent = settings?.walletBonusPercent ?? 10;
+      const bonusMode = settings?.walletBonusMode ?? "BOTH";
 
-      const isPromoApplied = tx.promoBonus !== null && tx.promoBonus > 0;
-      const hasBonus = isPromoApplied || amount >= bonusMinAmount;
+      const isPromoActiveMode = bonusMode === "FIRST_TIME" || bonusMode === "BOTH";
+      const isRegularActiveMode = bonusMode === "REGULAR" || bonusMode === "BOTH";
+
+      const isPromoApplied = isPromoActiveMode && tx.promoBonus !== null && tx.promoBonus > 0;
+      const hasBonus = isPromoApplied || (isRegularActiveMode && amount >= bonusMinAmount);
       const bonusAmount = isPromoApplied ? tx.promoBonus! : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0);
       const totalTopUp = amount + bonusAmount;
 
