@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Clock, Save, Info, CheckCircle2, ChevronRight, Upload, X, Loader2, Check, Download } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
-import Image from 'next/image'
 import { useToast } from '@/components/ui/Toast'
+import { QRCodeCanvas } from 'qrcode.react'
 
 export default function QrisClient({ order }: { order: any }) {
   const { showToast } = useToast()
@@ -123,27 +123,24 @@ export default function QrisClient({ order }: { order: any }) {
     }
   };
 
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=${encodeURIComponent(order.paymentQrContent)}`
-
-  const handleDownloadQr = async () => {
+  const handleDownloadQr = () => {
     try {
       showToast("Mengunduh QRIS...", "info")
-      const response = await fetch(qrImageUrl)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
+      const canvas = document.getElementById('qris-canvas') as HTMLCanvasElement;
+      if (!canvas) {
+        throw new Error('Canvas not found');
+      }
+      const url = canvas.toDataURL('image/png');
       const link = document.createElement('a')
       link.href = url
       link.download = `QRIS_MATCHABOY_${order.id.slice(0, 8).toUpperCase()}.png`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
       showToast("QRIS berhasil diunduh!", "success")
     } catch (error) {
       console.error("Gagal mengunduh QRIS:", error)
-      // Fallback: open in new tab
-      window.open(qrImageUrl, '_blank')
-      showToast("Gagal mengunduh langsung. QRIS dibuka di tab baru.", "error")
+      showToast("Gagal mengunduh QRIS.", "error")
     }
   }
 
@@ -202,14 +199,13 @@ export default function QrisClient({ order }: { order: any }) {
           <div className="relative w-72 h-72 bg-white rounded-3xl p-3 border border-gray-100 flex items-center justify-center shadow-inner group">
             <div className="absolute inset-0 bg-gradient-to-tr from-[#B48A5E]/5 to-transparent rounded-3xl pointer-events-none" />
             
-            <Image
-              src={qrImageUrl}
-              alt="QRIS Code"
-              width={260}
-              height={260}
+            <QRCodeCanvas
+              id="qris-canvas"
+              value={order.paymentQrContent}
+              size={260}
+              level="M"
+              includeMargin={false}
               className="object-contain"
-              priority
-              unoptimized
             />
           </div>
 

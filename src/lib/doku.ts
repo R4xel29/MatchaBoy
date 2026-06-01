@@ -1,4 +1,6 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 
 interface DokuCredentials {
   clientId: string;
@@ -298,4 +300,201 @@ function crc16CcittFalse(str: string): number {
     }
   }
   return crc & 0xFFFF;
+}
+
+// ============================================================================
+// DOKU SNAP DIRECT QRIS (B2B API) IMPLEMENTATION
+// ============================================================================
+
+/**
+ * Returns standard ISO 8601 offset timestamp e.g. 2026-06-01T20:41:02+07:00
+ */
+export function getSnapTimestamp(): string {
+  const now = new Date();
+  
+  // Hardcode Jakarta timezone (UTC+7) or local system timezone if needed
+  // Using UTC+7 (WIB) since it is standard for SNAP payment APIs in Indonesia
+  const offsetMinutes = 7 * 60; // +07:00
+  const localTime = new Date(now.getTime() + (offsetMinutes + now.getTimezoneOffset()) * 60000);
+  
+  const pad = (num: number) => String(num).padStart(2, '0');
+  
+  const year = localTime.getFullYear();
+  const month = pad(localTime.getMonth() + 1);
+  const day = pad(localTime.getDate());
+  const hours = pad(localTime.getHours());
+  const minutes = pad(localTime.getMinutes());
+  const seconds = pad(localTime.getSeconds());
+  
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+07:00`;
+}
+
+/**
+ * Retrieves the RSA Merchant Private Key.
+ * If not defined, dynamically creates a 2048-bit RSA key pair for testing.
+ */
+export function getPrivateKey(): string {
+  // 1. Check environment variable
+  if (process.env.DOKU_PRIVATE_KEY) {
+    return process.env.DOKU_PRIVATE_KEY.replace(/\\n/g, '\n');
+  }
+
+  // 2. Check local file 'private.key' in workspace root
+  const rootKeyPath = path.join(process.cwd(), 'private.key');
+  if (fs.existsSync(rootKeyPath)) {
+    return fs.readFileSync(rootKeyPath, 'utf8');
+  }
+
+  // 3. Fallback: Automatically generate persistent 2048-bit RSA keys for sandbox testing
+  console.log('[DOKU SNAP] No private key detected. Auto-generating 2048-bit RSA key pair for sandbox...');
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: {
+      type: 'spki',
+      format: 'pem'
+    },
+    privateKeyEncoding: {
+      type: 'pkcs8',
+      format: 'pem'
+    }
+  });
+
+  try {
+    fs.writeFileSync(rootKeyPath, privateKey, 'utf8');
+    fs.writeFileSync(path.join(process.cwd(), 'public.pem'), publicKey, 'utf8');
+    console.log('[DOKU SNAP] RSA keys generated successfully!');
+    console.log('[DOKU SNAP] Private key saved to: ' + rootKeyPath);
+    console.log('[DOKU SNAP] Public key saved to: ' + path.join(process.cwd(), 'public.pem'));
+    console.log('[DOKU SNAP] IMPORTANT: Upload this public.pem file into your DOKU Sandbox Merchant Dashboard.');
+  } catch (fsErr) {
+    console.error('[DOKU SNAP] Failed to persist RSA key files:', fsErr);
+  }
+
+  return privateKey;
+}
+
+/**
+ * Requests a B2B access token from DOKU using an Asymmetric RSA-SHA256 signature.
+ */
+export async function getSnapAccessToken(clientId: string, isSandbox: boolean): Promise<string> {
+  const baseUrl = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+  const endpoint = `${baseUrl}/authorization/v1/access-token/b2b`;
+  
+  const timestamp = getSnapTimestamp();
+  const stringToSign = `${clientId}|${timestamp}`;
+  
+  const privateKey = getPrivateKey();
+  
+  const signer = crypto.createSign('SHA256');
+  signer.update(stringToSign);
+  const signature = signer.sign(privateKey, 'base64');
+  
+  const body = {
+    grantType: 'client_credentials'
+  };
+  
+  try {
+    console.log(`[DOKU SNAP] Requesting B2B Access Token from ${endpoint}...`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CLIENT-KEY': clientId,
+        'X-TIMESTAMP': timestamp,
+        'X-SIGNATURE': signature
+      },
+      body: JSON.stringify(body)
+    });
+    
+    const data = await response.json();
+    if (!response.ok || !data.accessToken) {
+      console.error('[DOKU SNAP ACCESS TOKEN ERROR]', data);
+      throw new Error(data.responseMessage || 'Failed to fetch SNAP access token');
+    }
+    
+    console.log('[DOKU SNAP] B2B Access Token retrieved successfully.');
+    return data.accessToken;
+  } catch (err: any) {
+    console.error('[DOKU SNAP ACCESS TOKEN EXCEPTION]', err);
+    throw err;
+  }
+}
+
+/**
+ * Generates a dynamic QRIS string using the DOKU SNAP B2B Direct API.
+ * This does not redirect and returns the raw EMVCo code string ("qrData").
+ */
+export async function generateDokuSnapQris(
+  creds: DokuCredentials,
+  payload: {
+    invoiceNumber: string;
+    amount: number;
+    merchantId?: string;
+    terminalId?: string;
+  }
+): Promise<string> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  const baseUrl = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+  
+  const requestTarget = '/snap-adapter/b2b/v1.0/qr/qr-mpm-generate';
+  const endpoint = `${baseUrl}${requestTarget}`;
+  
+  // Obtain B2B Access Token
+  const accessToken = await getSnapAccessToken(clientId, isSandbox);
+  
+  const timestamp = getSnapTimestamp();
+  const externalId = `EXT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+  
+  // Payload for DOKU SNAP QR MPM Generate
+  const requestBody = {
+    partnerReferenceNo: payload.invoiceNumber,
+    amount: {
+      value: payload.amount.toFixed(2), // Wajib 2 desimal
+      currency: 'IDR'
+    },
+    feeAmount: {
+      value: '0.00',
+      currency: 'IDR'
+    },
+    merchantId: payload.merchantId || clientId,
+    terminalId: payload.terminalId || 'TID-001'
+  };
+  
+  // Calculate Symmetric Signature:
+  // HTTPMethod + ":" + EndpointUrl + ":" + AccessToken + ":" + Lowercase(HexEncode(SHA-256(minify(RequestBody)))) + ":" + TimeStamp
+  const minifiedBody = JSON.stringify(requestBody);
+  const bodyHash = crypto.createHash('sha256').update(minifiedBody).digest('hex').toLowerCase();
+  
+  const stringToSign = `POST:${requestTarget}:${accessToken}:${bodyHash}:${timestamp}`;
+  
+  const signature = crypto.createHmac('sha512', sharedKey).update(stringToSign).digest('base64');
+  
+  try {
+    console.log(`[DOKU SNAP] Generating Direct QRIS from ${endpoint}...`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-TIMESTAMP': timestamp,
+        'X-SIGNATURE': signature,
+        'X-PARTNER-ID': clientId,
+        'X-EXTERNAL-ID': externalId
+      },
+      body: minifiedBody
+    });
+    
+    const data = await response.json();
+    console.log('[DOKU SNAP RESPONSE]', JSON.stringify(data, null, 2));
+    
+    if (!response.ok || !data.qrData) {
+      console.error('[DOKU SNAP QRIS ERROR]', data);
+      throw new Error(data.responseMessage || 'Failed to generate DOKU SNAP QRIS');
+    }
+    
+    return data.qrData;
+  } catch (err: any) {
+    console.error('[DOKU SNAP QRIS EXCEPTION]', err);
+    throw err;
+  }
 }

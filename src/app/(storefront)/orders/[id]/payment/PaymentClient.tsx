@@ -10,6 +10,7 @@ import {
 import { formatRupiah } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { QRCodeSVG } from 'qrcode.react'
 
 interface BankAccount {
   id: string;
@@ -430,9 +431,11 @@ export default function PaymentClient({
                   />
                 ) : (
                   // Mode 2: QR auto-generate dari sistem (dinamis dengan nominal)
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.paymentQrContent)}`}
-                    alt="QRIS Code"
+                  <QRCodeSVG
+                    value={order.paymentQrContent}
+                    size={250}
+                    level="M"
+                    includeMargin={false}
                     className="w-full h-full object-contain rounded-xl"
                   />
                 )}
@@ -546,9 +549,11 @@ export default function PaymentClient({
 
                 {/* QR Image */}
                 <div className="relative w-64 h-64 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-inner flex items-center justify-center">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.paymentQrContent)}`}
-                    alt="QRIS Code"
+                  <QRCodeSVG
+                    value={order.paymentQrContent}
+                    size={250}
+                    level="M"
+                    includeMargin={false}
                     className="w-full h-full object-contain rounded-xl"
                   />
                 </div>

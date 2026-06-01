@@ -1838,13 +1838,47 @@ export default function CheckoutPage() {
                       ${paymentMethod === 'WALLET' ? 'bg-amber-400 text-[#1E2D1F]' : 'bg-[#B48A5E]/10 text-[#B48A5E]'}`}>
                       <Wallet className="w-5 h-5" />
                     </div>
-                    <div>
-                      <p className={`text-xs font-black uppercase tracking-wider ${paymentMethod === 'WALLET' ? 'text-amber-300' : 'text-gray-400'}`}>
-                        Matchaboy Wallet
-                      </p>
-                      <h4 className={`text-lg font-serif font-black tracking-tight mt-0.5 ${paymentMethod === 'WALLET' ? 'text-white' : 'text-gray-900'}`}>
-                        {formatRupiah(walletBalance)}
-                      </h4>
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <p className={`text-xs font-black uppercase tracking-wider ${paymentMethod === 'WALLET' ? 'text-amber-300' : 'text-gray-400'}`}>
+                          Matchaboy Wallet
+                        </p>
+                        <h4 className={`text-lg font-serif font-black tracking-tight mt-0.5 ${paymentMethod === 'WALLET' ? 'text-white' : 'text-gray-900'}`}>
+                          {formatRupiah(walletBalance)}
+                        </h4>
+                      </div>
+                      
+                      {/* Quick instant simulated top-up button */}
+                      <button
+                        type="button"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          const amountToTopUp = 100000;
+                          try {
+                            const res = await fetch('/api/user/wallet', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ amount: amountToTopUp })
+                            });
+                            const d = await res.json();
+                            if (res.ok && d.success) {
+                              setWalletBalance(d.balance);
+                              setToast({ message: `Top Up Simulasi Sukses! Saldo bertambah Rp100.000`, type: 'success' });
+                            } else {
+                              setToast({ message: d.error || 'Gagal top up', type: 'error' });
+                            }
+                          } catch (err) {
+                            setToast({ message: 'Gagal menghubungi server', type: 'error' });
+                          }
+                        }}
+                        className={`ml-2 px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all active:scale-95 flex items-center gap-1 select-none cursor-pointer
+                          ${paymentMethod === 'WALLET'
+                            ? 'bg-amber-400/10 border-amber-400/20 text-amber-300 hover:bg-amber-400/20'
+                            : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'}`}
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Isi Rp100k (Simulasi)</span>
+                      </button>
                     </div>
                   </div>
                   
@@ -3291,7 +3325,36 @@ export default function CheckoutPage() {
                       </div>
                       <div>
                         <p className="text-xs font-black uppercase tracking-wider text-gray-400">Matchaboy Wallet</p>
-                        <h4 className="text-sm font-black text-gray-900 mt-0.5">{formatRupiah(walletBalance)}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-black text-gray-900 mt-0.5">{formatRupiah(walletBalance)}</h4>
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const amountToTopUp = 100000;
+                              try {
+                                const res = await fetch('/api/user/wallet', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ amount: amountToTopUp })
+                                });
+                                const d = await res.json();
+                                if (res.ok && d.success) {
+                                  setWalletBalance(d.balance);
+                                  setToast({ message: `Top Up Simulasi Sukses! Saldo bertambah Rp100.000`, type: 'success' });
+                                } else {
+                                  setToast({ message: d.error || 'Gagal top up', type: 'error' });
+                                }
+                              } catch (err) {
+                                setToast({ message: 'Gagal menghubungi server', type: 'error' });
+                              }
+                            }}
+                            className="px-2 py-0.5 text-[8px] font-black uppercase rounded bg-amber-400 hover:bg-amber-500 text-[#1E2D1F] transition-all active:scale-95 flex items-center gap-0.5 select-none cursor-pointer"
+                          >
+                            <Plus className="w-2.5 h-2.5" />
+                            <span>Isi +Rp100k</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors

@@ -897,47 +897,33 @@ export async function POST(req: Request) {
             }
         }
 
-        // Call DOKU Hosted Checkout API outside the database transaction (currently disabled)
+        // Call DOKU Direct SNAP QRIS API outside the database transaction
         if (isDoku && paymentSettings) {
             try {
-                const { createDokuCheckoutSession, generateQrisString } = await import('@/lib/doku')
-                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
+                const { generateDokuSnapQris } = await import('@/lib/doku')
                 
-                const dokuResult = await createDokuCheckoutSession({
+                const paymentQrContent = await generateDokuSnapQris({
                     clientId: paymentSettings.dokuClientId,
                     sharedKey: paymentSettings.dokuSharedKey,
                     isSandbox: paymentSettings.dokuSandbox,
                 }, {
                     invoiceNumber: order.id,
                     amount: secureTotal,
-                    customerName: body.name,
-                    customerPhone: body.phone,
-                    customerEmail: session.user.email || 'customer@matchaboy.com',
-                    callbackUrl,
-                    paymentChannel: body.paymentChannel || undefined,
                 })
 
-                if (dokuResult.error) {
-                    throw new Error(`DOKU Error: ${dokuResult.error}`)
-                }
-
-                paymentUrl = dokuResult.url
-                const paymentQrContent = generateQrisString(secureTotal, order.id)
-
-                // Save both payment URL and QRIS content back to the order
+                // Save SNAP QRIS content back to the order
                 await prisma.order.update({
                     where: { id: order.id },
                     data: { 
-                        paymentUrl,
                         paymentQrContent
                     }
                 })
             } catch (dokuError: any) {
                 console.error('[DOKU INITIALIZATION ERROR]', dokuError)
-                // Set order status to CANCELLED since DOKU generation failed
+                // Set order status to CANCELLED since DOKU SNAP generation failed
                 await prisma.order.update({
                     where: { id: order.id },
-                    data: { status: 'CANCELLED', notes: `DOKU Failure: ${dokuError.message}` }
+                    data: { status: 'CANCELLED', notes: `DOKU SNAP Failure: ${dokuError.message}` }
                 })
                 return NextResponse.json({ error: `Gagal memproses pembayaran DOKU: ${dokuError.message}` }, { status: 500 })
             }
