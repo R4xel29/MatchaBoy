@@ -363,15 +363,19 @@ export async function POST(req: Request) {
         }
       });
 
-      // Siapkan URL Magic Link
-      const refMatch = text.match(/Ref:\s*([a-zA-Z0-9_-]+)/i);
+      // Siapkan URL Magic Link - Regex lebih robust mencocokkan karakter non-spasi dan non-titik
+      const refMatch = text.match(/Ref:\s*([^\s\.]+)/i);
       let magicLink = `${appUrl}/verify-wa?token=${magicToken}`;
       if (refMatch) {
-        magicLink += `&ref=${refMatch[1]}`;
+        const parsedRef = refMatch[1].trim();
+        magicLink += `&ref=${parsedRef}`;
+        console.log(`[WHATSAPP_WEBHOOK] Mendeteksi referral code: "${parsedRef}"`);
       }
 
       // Pesan balasan ke user
       const replyMessage = `Login Berhasil Dikonfirmasi! ✅\n\nSilakan klik link berikut untuk kembali ke aplikasi dan masuk ke akun Anda:\n${magicLink}\n\n(Link berlaku selama 15 menit)`;
+
+      console.log(`[WHATSAPP_WEBHOOK] Sukses memproses login request. Magic link: ${magicLink}`);
 
       // Kirim pesan ke WhatsApp user via API provider (asynchronous callback)
       if (!body.directReply) {
