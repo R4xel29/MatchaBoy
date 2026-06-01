@@ -953,4 +953,16 @@ model Story {
   expiresAt DateTime // 24 hours expiry
 }
 
+model BgmSong {
+  id          String   @id @default(cuid())
+  title       String
+  artist      String
+  url         String
+  mood        String
+  timePeriod  String   // "pagi", "siang", "sore", "malam"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 

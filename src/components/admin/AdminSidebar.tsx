@@ -46,7 +46,8 @@ import {
   Dices,
   Star,
   ChefHat,
-  UsersRound
+  UsersRound,
+  Music
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
@@ -110,6 +111,7 @@ const ENGAGEMENT_ITEMS = [
   { label: 'Lucky Draw', href: '/admin/gacha', icon: Dices },
   { label: 'Moderasi Review', href: '/admin/reviews', icon: Star },
   { label: 'Custom Recipes', href: '/admin/custom-recipes', icon: ChefHat },
+  { label: 'Matcha Vibes BGM', href: '/admin/bgm', icon: Music },
 ];
 
 const COLLABORATION_ITEMS = [

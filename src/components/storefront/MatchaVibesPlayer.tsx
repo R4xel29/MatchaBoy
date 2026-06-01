@@ -54,6 +54,7 @@ export function MatchaVibesPlayer() {
   const [isOpen, setIsOpen] = useState(false);
   const [currentPeriod, setCurrentPeriod] = useState<'pagi' | 'siang' | 'sore' | 'malam'>('siang');
   const [volume, setVolume] = useState(0.5);
+  const [playlist, setPlaylist] = useState<Track[]>(PLAYLIST);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -72,9 +73,36 @@ export function MatchaVibesPlayer() {
     }
   }, []);
 
+  // Fetch Admin BGM list from database
+  useEffect(() => {
+    if (!mounted) return;
+    async function loadBgm() {
+      try {
+        const res = await fetch('/api/bgm');
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            const formatted = data.map((item: any) => ({
+              id: item.id,
+              title: item.title,
+              artist: item.artist,
+              url: item.url,
+              mood: item.mood,
+              timePeriod: item.timePeriod as 'pagi' | 'siang' | 'sore' | 'malam',
+            }));
+            setPlaylist(formatted);
+          }
+        }
+      } catch (error) {
+        console.log('Failed to fetch bgm, using fallback:', error);
+      }
+    }
+    loadBgm();
+  }, [mounted]);
+
   const currentTrack = useMemo(() => {
-    return PLAYLIST.find(t => t.timePeriod === currentPeriod) || PLAYLIST[1];
-  }, [currentPeriod]);
+    return playlist.find(t => t.timePeriod === currentPeriod) || playlist[0];
+  }, [currentPeriod, playlist]);
 
   // Audio Playback Sync
   useEffect(() => {
