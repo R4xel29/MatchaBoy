@@ -762,9 +762,9 @@ export default function StorefrontClient({
         <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             
-            {/* MATCHABOY PAY (WALLET CARD) - DISABLED (Coming Soon) */}
-            {/* <div className="bg-gradient-to-tr from-[#2E5A44] via-[#1E3F20] to-[#142C16] text-white rounded-[2rem] p-6 shadow-xl border border-[#D4A574]/35 relative overflow-hidden flex flex-col justify-between min-h-[170px] group transition-all duration-300 hover:shadow-2xl hover:shadow-[#2E5A44]/10">
-              {/* Background abstract circles */}
+            {/* MATCHABOY PAY (WALLET CARD) - DISABLED (Coming Soon) 
+            <div className="bg-gradient-to-tr from-[#2E5A44] via-[#1E3F20] to-[#142C16] text-white rounded-[2rem] p-6 shadow-xl border border-[#D4A574]/35 relative overflow-hidden flex flex-col justify-between min-h-[170px] group transition-all duration-300 hover:shadow-2xl hover:shadow-[#2E5A44]/10">
+              Background abstract circles
               <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#FEF08A]/10 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition-transform duration-500" />
               <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-[#D4A574]/15 rounded-full blur-3xl pointer-events-none" />
               
@@ -820,7 +820,7 @@ export default function StorefrontClient({
                 </button>
               </div>
 
-              {/* Toggleable Wallet Transaction History inline list */}
+              Toggleable Wallet Transaction History inline list
               <AnimatePresence>
                 {showWalletHistory && walletTransactions.length > 0 && (
                   <motion.div
@@ -846,7 +846,8 @@ export default function StorefrontClient({
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div> */}
+            </div> 
+            */}
 
             {/* ARUS POIN (LOYALTY CARD) */}
             <div className="bg-white text-[#2A1F16] rounded-[2rem] p-6 shadow-xl border border-gray-150 relative overflow-hidden flex flex-col justify-between min-h-[170px] group transition-all duration-300 hover:shadow-2xl">
@@ -1050,8 +1051,8 @@ export default function StorefrontClient({
           transition={{ delay: 0.2, duration: 0.7 }}
           className="max-w-6xl mx-auto px-4 sm:px-6 mt-8 space-y-8 relative z-10"
         >
-          {/* Custom Studio Banner Direct Link - DISABLED (Coming Soon) */}
-          {/* <div className="bg-gradient-to-tr from-[#2E5A44] to-[#1E3F20] text-white rounded-[2.5rem] p-6 shadow-md border-2 border-[#D4A574]/40 flex flex-col md:flex-row items-center justify-between gap-4 relative overflow-hidden select-none">
+          {/* Custom Studio Banner Direct Link - DISABLED (Coming Soon) 
+          <div className="bg-gradient-to-tr from-[#2E5A44] to-[#1E3F20] text-white rounded-[2.5rem] p-6 shadow-md border-2 border-[#D4A574]/40 flex flex-col md:flex-row items-center justify-between gap-4 relative overflow-hidden select-none">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(254,240,138,0.2)_0%,_rgba(0,0,0,0)_60%)] pointer-events-none" />
             <div className="space-y-1.5 text-left z-10">
               <span className="bg-[#FEF08A]/20 text-[#FEF08A] text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest leading-none">
@@ -1070,7 +1071,8 @@ export default function StorefrontClient({
             >
               <span>Mulai Meracik</span> 🧪
             </button>
-          </div> */}
+          </div>
+          */}
 
           {/* Teman Cuaca Hari Ini Widget */}
           {!loadingWeather && weatherData && (
@@ -1140,8 +1142,8 @@ export default function StorefrontClient({
             </section>
           )}
 
-          {/* Rekomendasi AI Anda Section - DISABLED (Coming Soon) */}
-          {/* {!loadingAi && aiData.length > 0 && (
+          {/* Rekomendasi AI Anda Section - DISABLED (Coming Soon) 
+          {!loadingAi && aiData.length > 0 && (
             <section className="bg-white rounded-[2rem] border border-gray-150 p-6 shadow-sm overflow-hidden text-left relative">
               <div className="flex items-center justify-between mb-5">
                 <div className="space-y-0.5">
@@ -1160,7 +1162,7 @@ export default function StorefrontClient({
                 </span>
               </div>
 
-              {/* Cards Grid */}
+              Cards Grid
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 {aiData.map((rec: any) => {
                   const p = rec.product;
@@ -1198,7 +1200,7 @@ export default function StorefrontClient({
                             {formatRupiah(displayPrice)}
                           </span>
                         </div>
-                        {/* Custom text rationale */}
+                        Custom text rationale
                         <p className="text-[10px] text-gray-500 font-semibold leading-relaxed border-t border-gray-100 pt-2.5">
                           {rec.rationale}
                         </p>
@@ -1208,7 +1210,8 @@ export default function StorefrontClient({
                 })}
               </div>
             </section>
-          )} */}
+          )}
+          */}
 
           {/* Paket Combo */}
           {comboProducts.length > 0 && (
