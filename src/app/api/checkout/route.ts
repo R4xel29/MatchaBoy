@@ -9,6 +9,62 @@ import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors'
 
 const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`
 
+function calculateSecureItemPrice(item: any, dbProduct: any) {
+    let dbModifiers: any = {}
+    if (dbProduct.modifiers) {
+        try {
+            dbModifiers = JSON.parse(dbProduct.modifiers)
+        } catch {}
+    }
+    const activePromo = getActivePromo(dbProduct);
+    let secureItemPrice = activePromo ? activePromo.promoPrice : dbProduct.price;
+
+    if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
+        let secureBundleAdjustments = 0;
+        for (const sel of item.bundleSelections) {
+            const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId);
+            if (group) {
+                const option = group.options?.find((o: any) => o.productId === sel.productId);
+                if (option) {
+                    secureBundleAdjustments += option.priceAdjustment || 0;
+                }
+            }
+        }
+        secureItemPrice += secureBundleAdjustments;
+    } else {
+        let secureSizePrice = 0
+        if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+            const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+            if (validSize) {
+                secureSizePrice = validSize.price
+            }
+        }
+
+        let addOnsTotal = 0
+        if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+            for (const addOnId of item.addOnIds) {
+                const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                if (validAddOn) {
+                    addOnsTotal += validAddOn.price
+                }
+            }
+        }
+
+        let matchaLevelAdjustment = 0
+        if (item.matchaLevel !== undefined && item.matchaLevel !== null) {
+            const mLevel = Number(item.matchaLevel)
+            if (mLevel === 7 || mLevel === 8) {
+                matchaLevelAdjustment = 1000
+            } else if (mLevel === 9 || mLevel === 10) {
+                matchaLevelAdjustment = 2000
+            }
+        }
+
+        secureItemPrice += secureSizePrice + addOnsTotal + matchaLevelAdjustment;
+    }
+    return secureItemPrice;
+}
+
 export async function POST(req: Request) {
     try {
         const session = await auth()
@@ -243,44 +299,7 @@ export async function POST(req: Request) {
                 hasFreeShippingBundle = true
             }
 
-            const activePromo = getActivePromo(dbProduct);
-            let secureItemPrice = activePromo ? activePromo.promoPrice : dbProduct.price;
-
-            if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
-                let secureBundleAdjustments = 0;
-                for (const sel of item.bundleSelections) {
-                    const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId);
-                    if (group) {
-                        const option = group.options?.find((o: any) => o.productId === sel.productId);
-                        if (option) {
-                            secureBundleAdjustments += option.priceAdjustment || 0;
-                        }
-                    }
-                }
-                secureItemPrice += secureBundleAdjustments;
-            } else {
-                // Securely calculate size price
-                let secureSizePrice = 0
-                if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
-                    const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
-                    if (validSize) {
-                        secureSizePrice = validSize.price
-                    }
-                }
-
-                // Calculate Add-Ons total
-                let addOnsTotal = 0
-                if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
-                    for (const addOnId of item.addOnIds) {
-                        const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
-                        if (validAddOn) {
-                            addOnsTotal += validAddOn.price
-                        }
-                    }
-                }
-                secureItemPrice += secureSizePrice + addOnsTotal;
-            }
-
+            const secureItemPrice = calculateSecureItemPrice(item, dbProduct);
             const secureItemTotal = secureItemPrice * item.quantity
             secureSubtotal += secureItemTotal
 
@@ -382,33 +401,7 @@ export async function POST(req: Request) {
                             // Find the product price securely
                             const dbProduct = dbProducts.find(p => p.id === item.productId)
                             if (dbProduct) {
-                                // Add-ons adjustment if applicable
-                                const activePromo = getActivePromo(dbProduct)
-                                let secureItemPrice = activePromo ? activePromo.promoPrice : dbProduct.price
-                                let dbModifiers: any = {}
-                                if (dbProduct.modifiers) {
-                                    try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
-                                }
-                                if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
-                                    let secureBundleAdjustments = 0
-                                    for (const sel of item.bundleSelections) {
-                                        const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId)
-                                        if (group) {
-                                            const option = group.options?.find((o: any) => o.productId === sel.productId)
-                                            if (option) secureBundleAdjustments += option.priceAdjustment || 0
-                                        }
-                                    }
-                                    secureItemPrice += secureBundleAdjustments
-                                } else {
-                                    let addOnsTotal = 0
-                                    if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
-                                        for (const addOnId of item.addOnIds) {
-                                            const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
-                                            if (validAddOn) addOnsTotal += validAddOn.price
-                                        }
-                                    }
-                                    secureItemPrice += addOnsTotal
-                                }
+                                const secureItemPrice = calculateSecureItemPrice(item, dbProduct);
                                 validProductsSubtotal += secureItemPrice * item.quantity
                             }
                         }
@@ -429,39 +422,7 @@ export async function POST(req: Request) {
                             if (isProductValidForVoucher(item.productId, template.validProductIds)) {
                                 const dbProduct = dbProducts.find(p => p.id === item.productId)
                                 if (dbProduct) {
-                                    const activePromo = getActivePromo(dbProduct)
-                                    let secureItemPrice = activePromo ? activePromo.promoPrice : dbProduct.price
-                                    let dbModifiers: any = {}
-                                    if (dbProduct.modifiers) {
-                                        try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
-                                    }
-                                    if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
-                                        let secureBundleAdjustments = 0
-                                        for (const sel of item.bundleSelections) {
-                                            const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId)
-                                            if (group) {
-                                                const option = group.options?.find((o: any) => o.productId === sel.productId)
-                                                if (option) secureBundleAdjustments += option.priceAdjustment || 0
-                                            }
-                                        }
-                                        secureItemPrice += secureBundleAdjustments
-                                    } else {
-                                        let secureSizePrice = 0
-                                        if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
-                                            const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
-                                            if (validSize) {
-                                                secureSizePrice = validSize.price
-                                            }
-                                        }
-                                        let addOnsTotal = 0
-                                        if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
-                                            for (const addOnId of item.addOnIds) {
-                                                const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
-                                                if (validAddOn) addOnsTotal += validAddOn.price
-                                            }
-                                        }
-                                        secureItemPrice += secureSizePrice + addOnsTotal
-                                    }
+                                    const secureItemPrice = calculateSecureItemPrice(item, dbProduct);
                                     if (secureItemPrice > maxSingleUnitEligiblePrice) {
                                         maxSingleUnitEligiblePrice = secureItemPrice
                                     }
@@ -518,39 +479,7 @@ export async function POST(req: Request) {
                         for (const item of body.items) {
                             const dbProduct = dbProducts.find(p => p.id === item.productId)
                             if (dbProduct) {
-                                const activePromo = getActivePromo(dbProduct)
-                                let secureItemPrice = activePromo ? activePromo.promoPrice : dbProduct.price
-                                let dbModifiers: any = {}
-                                if (dbProduct.modifiers) {
-                                    try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
-                                }
-                                if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
-                                    let secureBundleAdjustments = 0
-                                    for (const sel of item.bundleSelections) {
-                                        const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId)
-                                        if (group) {
-                                            const option = group.options?.find((o: any) => o.productId === sel.productId)
-                                            if (option) secureBundleAdjustments += option.priceAdjustment || 0
-                                        }
-                                    }
-                                    secureItemPrice += secureBundleAdjustments
-                                } else {
-                                    let secureSizePrice = 0
-                                    if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
-                                        const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
-                                        if (validSize) {
-                                            secureSizePrice = validSize.price
-                                        }
-                                    }
-                                    let addOnsTotal = 0
-                                    if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
-                                        for (const addOnId of item.addOnIds) {
-                                            const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
-                                            if (validAddOn) addOnsTotal += validAddOn.price
-                                        }
-                                    }
-                                    secureItemPrice += secureSizePrice + addOnsTotal
-                                }
+                                const secureItemPrice = calculateSecureItemPrice(item, dbProduct);
                                 if (secureItemPrice > maxSingleUnitEligiblePrice) {
                                     maxSingleUnitEligiblePrice = secureItemPrice
                                 }
@@ -599,39 +528,7 @@ export async function POST(req: Request) {
                         for (const item of body.items) {
                             const dbProduct = dbProducts.find(p => p.id === item.productId)
                             if (dbProduct) {
-                                const activePromo = getActivePromo(dbProduct)
-                                let secureItemPrice = activePromo ? activePromo.promoPrice : dbProduct.price
-                                let dbModifiers: any = {}
-                                if (dbProduct.modifiers) {
-                                    try { dbModifiers = JSON.parse(dbProduct.modifiers) } catch {}
-                                }
-                                if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
-                                    let secureBundleAdjustments = 0
-                                    for (const sel of item.bundleSelections) {
-                                        const group = dbModifiers.bundleGroups?.find((g: any) => g.id === sel.groupId)
-                                        if (group) {
-                                            const option = group.options?.find((o: any) => o.productId === sel.productId)
-                                            if (option) secureBundleAdjustments += option.priceAdjustment || 0
-                                        }
-                                    }
-                                    secureItemPrice += secureBundleAdjustments
-                                } else {
-                                    let secureSizePrice = 0
-                                    if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
-                                        const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
-                                        if (validSize) {
-                                            secureSizePrice = validSize.price
-                                        }
-                                    }
-                                    let addOnsTotal = 0
-                                    if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
-                                        for (const addOnId of item.addOnIds) {
-                                            const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
-                                            if (validAddOn) addOnsTotal += validAddOn.price
-                                        }
-                                    }
-                                    secureItemPrice += secureSizePrice + addOnsTotal
-                                }
+                                const secureItemPrice = calculateSecureItemPrice(item, dbProduct);
                                 if (secureItemPrice > maxSingleUnitEligiblePrice) {
                                     maxSingleUnitEligiblePrice = secureItemPrice
                                 }

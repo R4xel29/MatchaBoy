@@ -47,6 +47,7 @@ function calcItemTotal(item: {
     isBundle?: boolean;
     bundleSelections?: any[];
     sizePrice?: number;
+    matchaLevel?: number;
 }): number {
     if (item.isBundle && item.bundleSelections) {
         const adjustments = item.bundleSelections.reduce((sum, a) => sum + (a.priceAdjustment || 0), 0);
@@ -54,7 +55,15 @@ function calcItemTotal(item: {
     }
     const addOnTotal = item.addOns.reduce((sum, a) => sum + a.price, 0);
     const sizeAdj = item.sizePrice || 0;
-    return (item.basePrice + sizeAdj + addOnTotal) * item.quantity;
+    let matchaAdj = 0;
+    if (item.matchaLevel !== undefined) {
+        if (item.matchaLevel === 7 || item.matchaLevel === 8) {
+            matchaAdj = 1000;
+        } else if (item.matchaLevel === 9 || item.matchaLevel === 10) {
+            matchaAdj = 2000;
+        }
+    }
+    return (item.basePrice + sizeAdj + addOnTotal + matchaAdj) * item.quantity;
 }
 
 export const useCartStore = create<CartState>()(

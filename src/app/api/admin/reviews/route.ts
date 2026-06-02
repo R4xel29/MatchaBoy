@@ -69,6 +69,21 @@ export async function GET(req: Request) {
             category: { select: { name: true } },
           },
         },
+        likes: true,
+        replies: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                image: true,
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
       },
     })
 
@@ -106,7 +121,7 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json()
-    const { id, action } = body as { id: string; action: 'feature' | 'unfeature' | 'hide' | 'approve' }
+    const { id, action } = body as { id: string; action: 'feature' | 'unfeature' | 'hide' | 'approve' | 'delete-comment' }
 
     if (!id || !action) {
       return NextResponse.json({ error: 'Missing id or action' }, { status: 400 })
@@ -128,6 +143,9 @@ export async function PATCH(req: Request) {
         // Since there's no status field, we keep the review but unfeature it
         updateData = { isFeatured: false }
         break
+      case 'delete-comment':
+        updateData = { comment: null }
+        break
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
@@ -142,6 +160,17 @@ export async function PATCH(req: Request) {
         product: {
           select: { id: true, name: true, image: true, category: { select: { name: true } } },
         },
+        likes: true,
+        replies: {
+          include: {
+            user: {
+              select: { id: true, name: true, image: true },
+            },
+          },
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
       },
     })
 
@@ -152,7 +181,7 @@ export async function PATCH(req: Request) {
   }
 }
 
-// DELETE: Remove a review
+// DELETE: Remove a review or reply
 export async function DELETE(req: Request) {
   try {
     const adminId = await verifyAdmin()
@@ -162,16 +191,22 @@ export async function DELETE(req: Request) {
 
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
+    const replyId = searchParams.get('replyId')
+
+    if (replyId) {
+      await prisma.reviewReply.delete({ where: { id: replyId } })
+      return NextResponse.json({ success: true, message: 'Reply deleted successfully' })
+    }
 
     if (!id) {
-      return NextResponse.json({ error: 'Missing review ID' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing ID' }, { status: 400 })
     }
 
     await prisma.review.delete({ where: { id } })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, message: 'Review deleted successfully' })
   } catch (error) {
-    console.error('Delete review error:', error)
-    return NextResponse.json({ error: 'Failed to delete review' }, { status: 500 })
+    console.error('Delete review/reply error:', error)
+    return NextResponse.json({ error: 'Failed to delete review/reply' }, { status: 500 })
   }
 }

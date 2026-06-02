@@ -7,6 +7,7 @@ import { ChevronLeft, Sparkles, Save, ShoppingBag, Check, Plus, Minus } from 'lu
 import { useCartStore } from '@/stores/cart-store'
 import { useToast } from '@/components/ui/Toast'
 import Image from 'next/image'
+import type { SugarLevel } from '@/types'
 
 const MILK_OPTIONS = [
     { name: 'Fresh Milk', price: 0, desc: 'Klasik & Creamy' },
@@ -39,7 +40,7 @@ export default function CustomStudioPage() {
     const [recipeName, setRecipeName] = useState('Racikan Matcha Mimpiku')
     const [matchaLevel, setMatchaLevel] = useState(5) // 1-10
     const [creaminess, setCreaminess] = useState(5) // 1-10
-    const [sweetness, setSweetness] = useState(5) // 1-10
+    const [sweetness, setSweetness] = useState(1) // 0-3 (Less, Biasa, Lumayan, Manis Sekali)
     const [milkType, setMilkType] = useState('Fresh Milk')
     const [selectedToppings, setSelectedToppings] = useState<typeof TOPPING_OPTIONS>([])
 
@@ -50,7 +51,8 @@ export default function CustomStudioPage() {
     const basePrice = selectedBase.price
     const milkPremium = MILK_OPTIONS.find(m => m.name === milkType)?.price || 0
     const toppingsPrice = selectedToppings.reduce((sum, t) => sum + t.price, 0)
-    const totalPrice = basePrice + milkPremium + toppingsPrice
+    const matchaPremium = matchaLevel >= 9 ? 2000 : (matchaLevel >= 7 ? 1000 : 0)
+    const totalPrice = basePrice + milkPremium + toppingsPrice + matchaPremium
 
     // Dynamic color calculation for preview
     // Shifting from creamy-milky (#F5E6D3) at low matcha to emerald-green (#1B4D3E) at high matcha
@@ -71,10 +73,8 @@ export default function CustomStudioPage() {
     }, [matchaLevel])
 
     const sweetnessLabel = useMemo(() => {
-        if (sweetness <= 3) return 'Tanpa/Sedikit Gula 🧘'
-        if (sweetness <= 6) return 'Normal Manis 🍯'
-        if (sweetness <= 8) return 'Manis Manja 🍭'
-        return 'Overload Manis ⚡'
+        const labels = ['Less 🧘', 'Biasa 🍯', 'Lumayan 🍭', 'Manis Sekali ⚡']
+        return labels[sweetness] || 'Biasa 🍯'
     }, [sweetness])
 
     const creaminessLabel = useMemo(() => {
@@ -147,6 +147,8 @@ export default function CustomStudioPage() {
             })
         }
 
+        const SWEETNESS_VALUES_MAP: SugarLevel[] = ['Less', 'Biasa', 'Lumayan', 'Manis Sekali']
+
         // Add to Zustand Cart
         addItem({
             productId: selectedBase.id,
@@ -155,10 +157,11 @@ export default function CustomStudioPage() {
             basePrice: selectedBase.price,
             quantity: 1,
             iceLevel: 'Normal Ice',
-            sugarLevel: sweetness <= 5 ? 'Less Sugar' : 'Normal Sugar',
+            sugarLevel: SWEETNESS_VALUES_MAP[sweetness] || 'Biasa',
             addOns,
             size: 'Normal',
-            sizePrice: 0
+            sizePrice: 0,
+            matchaLevel
         })
 
         showToast('Minuman kustom Anda ditambahkan ke keranjang! 🛒', 'success')
@@ -331,31 +334,36 @@ export default function CustomStudioPage() {
                             <div className="space-y-2">
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-black uppercase tracking-widest text-gray-400">Tingkat Kemanisan (Sweetness)</span>
-                                    <span className="text-xs font-black text-amber-600 bg-amber-600/10 px-2 py-0.5 rounded-md">{sweetness} / 10</span>
+                                    <span className="text-xs font-black text-amber-600 bg-amber-600/10 px-2 py-0.5 rounded-md">{sweetnessLabel}</span>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <button 
-                                        onClick={() => setSweetness(prev => Math.max(1, prev - 1))}
+                                        onClick={() => setSweetness(prev => Math.max(0, prev - 1))}
                                         className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all shrink-0"
                                     >
                                         <Minus className="w-3.5 h-3.5" />
                                     </button>
                                     <input 
                                         type="range"
-                                        min="1"
-                                        max="10"
+                                        min="0"
+                                        max="3"
                                         value={sweetness}
                                         onChange={(e) => setSweetness(parseInt(e.target.value))}
                                         className="w-full h-2 bg-gray-150 rounded-lg appearance-none cursor-pointer accent-amber-500"
                                     />
                                     <button 
-                                        onClick={() => setSweetness(prev => Math.min(10, prev + 1))}
+                                        onClick={() => setSweetness(prev => Math.min(3, prev + 1))}
                                         className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all shrink-0"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
-                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider text-right italic">{sweetnessLabel}</p>
+                                <div className="flex justify-between text-[8px] font-black text-gray-400 uppercase tracking-widest px-1">
+                                    <span>Less</span>
+                                    <span>Biasa</span>
+                                    <span>Lumayan</span>
+                                    <span>Manis Sekali</span>
+                                </div>
                             </div>
 
                             {/* Creaminess slider */}

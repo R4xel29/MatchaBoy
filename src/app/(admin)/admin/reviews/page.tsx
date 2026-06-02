@@ -24,6 +24,21 @@ export default async function AdminReviewsPage() {
           category: { select: { name: true } },
         },
       },
+      likes: true,
+      replies: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              image: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      },
     },
   });
 

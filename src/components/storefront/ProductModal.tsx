@@ -3,13 +3,24 @@
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Minus, Check } from 'lucide-react';
+import { X, Plus, Minus, Check, Heart, MessageSquare, Send, Star } from 'lucide-react';
 import type { Product, IceLevel, SugarLevel, AddOn } from '@/types';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
 import { useCartStore } from '@/stores/cart-store';
 import { ADD_ONS } from '@/lib/constants';
 import { PromoCountdown } from './PromoCountdown';
 import { useSession } from 'next-auth/react';
+
+const SWEETNESS_VALUES: SugarLevel[] = ['Less', 'Biasa', 'Lumayan', 'Manis Sekali'];
+const SWEETNESS_MAP: { [key: string]: number } = {
+  'Less': 0,
+  'Less Sugar': 0,
+  'Biasa': 1,
+  'Normal Sugar': 1,
+  'Normal': 1,
+  'Lumayan': 2,
+  'Manis Sekali': 3
+};
 
 interface ProductModalProps {
   product: Product | null;
@@ -47,6 +58,85 @@ export function ProductModal({
   const [bundleSelections, setBundleSelections] = useState<{ [groupId: string]: any }>({});
 
   const { data: session } = useSession();
+  
+  // Reviews state
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(false);
+  const [replyComment, setReplyComment] = useState<{ [reviewId: string]: string }>({});
+  const [replyLoading, setReplyLoading] = useState<{ [reviewId: string]: boolean }>({});
+
+  const fetchReviews = async () => {
+    if (!product) return;
+    setLoadingReviews(true);
+    try {
+      const res = await fetch(`/api/products/${product.id}/reviews`);
+      if (res.ok) {
+        const data = await res.json();
+        setReviews(data.reviews || []);
+      }
+    } catch (err) {
+      console.error('Error fetching reviews:', err);
+    } finally {
+      setLoadingReviews(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && product) {
+      fetchReviews();
+    }
+  }, [isOpen, product]);
+
+  const handleToggleLike = async (reviewId: string) => {
+    if (!session) {
+      alert('Silakan login terlebih dahulu untuk menyukai ulasan.');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/reviews/${reviewId}/like`, { method: 'POST' });
+      if (res.ok) {
+        fetchReviews();
+      }
+    } catch (err) {
+      console.error('Error liking review:', err);
+    }
+  };
+
+  const handlePostReply = async (reviewId: string) => {
+    if (!session) {
+      alert('Silakan login terlebih dahulu untuk membalas ulasan.');
+      return;
+    }
+    const comment = replyComment[reviewId];
+    if (!comment || comment.trim() === '') return;
+
+    setReplyLoading(prev => ({ ...prev, [reviewId]: true }));
+    try {
+      const res = await fetch(`/api/reviews/${reviewId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment })
+      });
+      if (res.ok) {
+        setReplyComment(prev => ({ ...prev, [reviewId]: '' }));
+        fetchReviews();
+      }
+    } catch (err) {
+      console.error('Error posting reply:', err);
+    } finally {
+      setReplyLoading(prev => ({ ...prev, [reviewId]: false }));
+    }
+  };
+
+  // Sweetness mapping helper
+  const currentSweetnessIndex = useMemo(() => {
+    return SWEETNESS_MAP[sugarLevel] ?? 1;
+  }, [sugarLevel]);
+
+  const handleSweetnessSliderChange = (val: number) => {
+    setSugarLevel(SWEETNESS_VALUES[val]);
+  };
+
   const isSoldOut = product?.badge === 'sold-out';
   const [subPhone, setSubPhone] = useState('');
   const [subEmail, setSubEmail] = useState('');
@@ -184,21 +274,28 @@ export function ProductModal({
     return bundleSelectionsArray.reduce((sum, item: any) => sum + (item.priceAdjustment || 0), 0);
   }, [bundleSelectionsArray]);
 
-  const activePromo = product ? getActivePromo(product) : null;
-  const baseProductPrice = activePromo ? activePromo.promoPrice : (product?.price ?? 0);
-
-  const unitPrice = product?.modifiers?.isBundle
-    ? (baseProductPrice + bundleAdjustmentsTotal)
-    : (baseProductPrice + sizePrice + addOnTotal);
-  
-  const totalPrice = unitPrice * quantity;
-
   const isMatchaProduct = useMemo(() => {
     if (!product) return false;
     const nameLower = product.name.toLowerCase();
     const descLower = product.description.toLowerCase();
     return nameLower.includes('matcha') || nameLower.includes('green tea') || descLower.includes('matcha');
   }, [product]);
+
+  const matchaPremium = useMemo(() => {
+    if (!isMatchaProduct || product?.modifiers?.isBundle) return 0;
+    if (matchaLevel === 7 || matchaLevel === 8) return 1000;
+    if (matchaLevel === 9 || matchaLevel === 10) return 2000;
+    return 0;
+  }, [isMatchaProduct, matchaLevel, product]);
+
+  const activePromo = product ? getActivePromo(product) : null;
+  const baseProductPrice = activePromo ? activePromo.promoPrice : (product?.price ?? 0);
+
+  const unitPrice = product?.modifiers?.isBundle
+    ? (baseProductPrice + bundleAdjustmentsTotal)
+    : (baseProductPrice + sizePrice + addOnTotal + matchaPremium);
+  
+  const totalPrice = unitPrice * quantity;
 
   const toggleAddOn = (addOn: AddOn) => {
     setSelectedAddOns((prev) => {
@@ -688,28 +785,47 @@ export function ProductModal({
                           </div>
                         )}
 
-                        {/* Sugar Level */}
+                        {/* Sugar Level Slider */}
                         {hasSugarOption && (
-                          <div>
-                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2.5">
-                              Sugar Level
-                            </h3>
-                            <div className="flex gap-2 flex-wrap">
-                              {SUGAR_LEVELS.map((level) => (
-                                <button
-                                  key={level}
-                                  onClick={() => setSugarLevel(level)}
-                                  className={`px-4 py-2 rounded-full text-sm font-medium 
-                                    transition-all touch-target border
-                                    ${
-                                      sugarLevel === level
-                                        ? 'bg-brand-700 text-white border-brand-700 shadow-sm'
-                                        : 'bg-card text-foreground border-border hover:border-brand-400'
-                                    }`}
-                                >
-                                  {level}
-                                </button>
-                              ))}
+                          <div className="space-y-3 bg-amber-500/5 p-4.5 rounded-3xl border border-amber-500/15 shadow-[0_4px_20px_rgba(245,158,11,0.02)] relative overflow-hidden mb-4">
+                            <div className="flex items-center gap-4.5">
+                              <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                                <SweetnessCupVisualizer level={currentSweetnessIndex} />
+                              </div>
+                              <div className="flex-1 space-y-1 w-full text-left">
+                                <h3 className="text-sm font-black text-gray-900 flex items-center justify-start gap-1">
+                                  <span>Tingkat Kemanisan</span> 🍯
+                                </h3>
+                                <p className="text-[10px] text-muted-foreground font-semibold leading-normal">
+                                  Tentukan kadar kemanisan sesuai seleramu.
+                                </p>
+                                <div className="mt-1 flex items-baseline justify-start gap-1.5">
+                                  <span className="text-xl font-black text-[#8C6239] leading-none">
+                                    {SWEETNESS_VALUES[currentSweetnessIndex]}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Sweetness Slider */}
+                            <div className="pt-2 px-1 relative">
+                              <input
+                                type="range"
+                                min="0"
+                                max="3"
+                                value={currentSweetnessIndex}
+                                onChange={(e) => handleSweetnessSliderChange(parseInt(e.target.value))}
+                                className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-amber-100 via-amber-300 to-amber-600 focus:outline-none"
+                                style={{
+                                  WebkitAppearance: 'none',
+                                }}
+                              />
+                              <div className="flex justify-between text-[8px] font-black text-[#A69F94] uppercase tracking-widest mt-1.5 px-0.5 select-none">
+                                <span>Less</span>
+                                <span>Biasa</span>
+                                <span>Lumayan</span>
+                                <span>Manis Sekali</span>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -810,6 +926,117 @@ export function ProductModal({
                         {editCartItemId ? 'Simpan — ' : 'Add — '}
                         {formatRupiah(totalPrice)}
                       </motion.button>
+                    </div>
+
+                    {/* Reviews Section */}
+                    <div className="border-t border-border/60 pt-5 mt-6 space-y-4 text-left">
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4 text-brand-600" />
+                        Ulasan Pelanggan ({reviews.length})
+                      </h3>
+                      
+                      {loadingReviews ? (
+                        <div className="flex justify-center py-4">
+                          <span className="w-5 h-5 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                      ) : reviews.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          Belum ada ulasan untuk produk ini.
+                        </p>
+                      ) : (
+                        <div className="space-y-4">
+                          {reviews.map((rev) => {
+                            const isLikedByMe = session?.user?.id && rev.likes?.some((l: any) => l.userId === session.user.id);
+                            return (
+                              <div key={rev.id} className="p-3 bg-muted/40 rounded-2xl border border-border/40 space-y-2">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    {rev.user?.image ? (
+                                      <div className="relative w-6 h-6 rounded-full overflow-hidden">
+                                        <Image
+                                          src={rev.user.image}
+                                          alt={rev.user.name || 'User'}
+                                          fill
+                                          sizes="24px"
+                                          className="object-cover"
+                                        />
+                                      </div>
+                                    ) : (
+                                      <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-800">
+                                        {(rev.user?.name?.[0] || 'U').toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <p className="text-xs font-bold text-foreground">{rev.user?.name || 'Pelanggan Matchaboy'}</p>
+                                      <p className="text-[9px] text-muted-foreground">{new Date(rev.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-0.5">
+                                    {Array.from({ length: 5 }).map((_, idx) => (
+                                      <Star
+                                        key={idx}
+                                        className={`w-3 h-3 ${idx < rev.rating ? 'text-amber-500 fill-amber-500' : 'text-border'}`}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+
+                                {rev.comment && (
+                                  <p className="text-xs text-foreground leading-relaxed pl-1">{rev.comment}</p>
+                                )}
+
+                                {/* Likes & Action Panel */}
+                                <div className="flex items-center gap-4 text-[10px] font-semibold text-muted-foreground pt-1.5 pl-1">
+                                  <button
+                                    onClick={() => handleToggleLike(rev.id)}
+                                    className={`flex items-center gap-1.5 transition-colors hover:text-rose-600 ${isLikedByMe ? 'text-rose-600' : ''}`}
+                                  >
+                                    <Heart className={`w-3.5 h-3.5 ${isLikedByMe ? 'fill-rose-600' : ''}`} />
+                                    <span>{rev.likes?.length || 0} Suka</span>
+                                  </button>
+                                </div>
+
+                                {/* Replies List */}
+                                {rev.replies && rev.replies.length > 0 && (
+                                  <div className="mt-2 pl-4 border-l border-border/80 space-y-2">
+                                    {rev.replies.map((rep: any) => (
+                                      <div key={rep.id} className="text-[11px] space-y-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-bold text-foreground">{rep.user?.name || 'User'}</span>
+                                          <span className="text-[8px] text-muted-foreground">{new Date(rep.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}</span>
+                                        </div>
+                                        <p className="text-muted-foreground leading-normal">{rep.comment}</p>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Add Reply Form */}
+                                <div className="mt-2.5 flex items-center gap-2 pl-1">
+                                  <input
+                                    type="text"
+                                    placeholder="Balas ulasan ini..."
+                                    value={replyComment[rev.id] || ''}
+                                    onChange={(e) => setReplyComment(prev => ({ ...prev, [rev.id]: e.target.value }))}
+                                    className="flex-1 px-3 py-1.5 text-[11px] rounded-xl border border-border bg-card focus:outline-none focus:border-brand-500"
+                                  />
+                                  <button
+                                    onClick={() => handlePostReply(rev.id)}
+                                    disabled={replyLoading[rev.id]}
+                                    className="p-1.5 rounded-xl bg-brand-700 text-white hover:bg-brand-800 transition-colors shrink-0 disabled:opacity-50"
+                                  >
+                                    {replyLoading[rev.id] ? (
+                                      <span className="w-3.5 h-3.5 border border-white border-t-transparent rounded-full animate-spin block" />
+                                    ) : (
+                                      <Send className="w-3.5 h-3.5" />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -938,6 +1165,129 @@ function MatchaCupVisualizer({ level }: { level: number }) {
                 bottom: '0px',
                 backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.45)`,
                 animation: `bubble-float ${duration}s ease-in infinite`,
+                animationDelay: `${delay}s`,
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Sweetness Cup Visualizer Component ──
+function SweetnessCupVisualizer({ level }: { level: number }) {
+  // level ranges from 0 to 3
+  const h = 45;
+  const s = 60 + level * 10;
+  const l = 95 - level * 13;
+  const liquidColor = `hsl(${h}, ${s}%, ${l}%)`;
+  
+  const steamCount = Math.min(6, level + 1);
+  const bubbleCount = Math.min(10, (level + 1) * 2.5);
+
+  return (
+    <div className="relative w-24 h-24 flex items-center justify-center select-none pointer-events-none">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes sugar-steam-rise {
+          0% { transform: translateY(5px) scale(0.8); opacity: 0; }
+          50% { opacity: 0.55; }
+          100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+        @keyframes sugar-bubble-float {
+          0% { transform: translateY(0) scale(0.6); opacity: 0.2; }
+          80% { opacity: 0.7; }
+          100% { transform: translateY(-25px) scale(1); opacity: 0; }
+        }
+        @keyframes sugar-cup-shake {
+          0%, 100% { transform: rotate(0deg); }
+          50% { transform: rotate(${Math.min(3, level * 1)}deg); }
+        }
+      `}} />
+
+      {/* Steam rising */}
+      <div className="absolute top-2 w-full flex justify-center gap-1.5 z-10 pointer-events-none">
+        {Array.from({ length: steamCount }).map((_, i) => (
+          <div
+            key={i}
+            className="w-1.5 h-6 rounded-full bg-white/20 blur-[1.5px]"
+            style={{
+              animation: `sugar-steam-rise ${1.5 + Math.random() * 1}s ease-in-out infinite`,
+              animationDelay: `${i * 0.3}s`,
+            }}
+          />
+        ))}
+      </div>
+
+      {/* The Cup SVG */}
+      <svg
+        width="80"
+        height="80"
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{
+          animation: level > 2 ? 'sugar-cup-shake 0.3s ease-in-out infinite' : 'none',
+        }}
+        className="relative z-20 drop-shadow-[0_4px_12px_rgba(212,165,116,0.12)]"
+      >
+        {/* Cup Handle */}
+        <path
+          d="M72 40 C84 40, 84 64, 72 64"
+          stroke="#F1C40F"
+          strokeWidth="6"
+          strokeLinecap="round"
+        />
+        
+        {/* Glass Cup Body */}
+        <path
+          d="M20 28 L28 76 C29 82, 35 86, 42 86 H58 C65 86, 71 82, 72 76 L80 28 Z"
+          fill="rgba(255, 255, 255, 0.45)"
+          stroke="#E5E2DD"
+          strokeWidth="3.5"
+        />
+
+        {/* Liquid level */}
+        <path
+          d="M23 48 L28 76 C29 80, 34 83, 40 83 H60 C66 83, 71 80, 72 76 L77 48 Z"
+          fill={liquidColor}
+          className="transition-colors duration-500 ease-out"
+        />
+
+        {/* Liquid Surface Curve */}
+        <ellipse
+          cx="50"
+          cy="48"
+          rx="27"
+          ry="5.5"
+          fill={liquidColor}
+          className="transition-colors duration-500 ease-out"
+        />
+
+        {/* Glass Highlight */}
+        <path
+          d="M26 34 L32 70"
+          stroke="rgba(255, 255, 255, 0.7)"
+          strokeWidth="3"
+          strokeLinecap="round"
+        />
+      </svg>
+
+      {/* Floating Bubbles */}
+      <div className="absolute bottom-6 w-12 h-8 z-30 pointer-events-none">
+        {Array.from({ length: bubbleCount }).map((_, i) => {
+          const left = 20 + Math.random() * 60;
+          const delay = Math.random() * 2;
+          const duration = 1 + Math.random() * 1.5;
+          return (
+            <div
+              key={i}
+              className="absolute w-2 h-2 rounded-full border border-white/20"
+              style={{
+                left: `${left}%`,
+                bottom: '0px',
+                backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.45)`,
+                animation: `sugar-bubble-float ${duration}s ease-in infinite`,
                 animationDelay: `${delay}s`,
               }}
             />

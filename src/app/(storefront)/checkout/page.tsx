@@ -1205,21 +1205,26 @@ export default function CheckoutPage() {
         paymentMethod,
         paymentChannel: paymentMethod === 'DOKU' ? paymentChannel : undefined,
         groupCartId: groupCartId || undefined,
-        items: checkoutItems.map((item: any) => ({
-          productId: item.productId,
-          name: item.name,
-          quantity: item.quantity,
-          price: item.basePrice,
-          totalPrice: item.totalPrice,
-          size: item.size || 'Normal',
-          sizePrice: item.sizePrice || 0,
-          modsString: item.isBundle && item.bundleSelections
-            ? item.bundleSelections.map((s: any) => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
-            : `${item.size || 'Normal'}, ${item.iceLevel}, ${item.sugarLevel}${item.addOns ? (item.addOns.length > 0 ? ', +' + item.addOns.map((a: any) => a.name).join(', +') : '') : ''}`,
-          addOnIds: item.isBundle ? [] : (item.addOns ? item.addOns.map((a: any) => a.id) : []),
-          isBundle: item.isBundle || false,
-          bundleSelections: item.isBundle ? item.bundleSelections : undefined
-        })),
+        items: checkoutItems.map((item: any) => {
+          const isMatcha = item.name.toLowerCase().includes('matcha') || item.name.toLowerCase().includes('green tea');
+          const matchaString = isMatcha && item.matchaLevel !== undefined ? `, Matcha Lvl: ${item.matchaLevel}` : '';
+          return {
+            productId: item.productId,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.basePrice,
+            totalPrice: item.totalPrice,
+            size: item.size || 'Normal',
+            sizePrice: item.sizePrice || 0,
+            matchaLevel: item.matchaLevel,
+            modsString: item.isBundle && item.bundleSelections
+              ? item.bundleSelections.map((s: any) => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
+              : `${item.size || 'Normal'}, ${item.iceLevel}, ${item.sugarLevel}${matchaString}${item.addOns ? (item.addOns.length > 0 ? ', +' + item.addOns.map((a: any) => a.name).join(', +') : '') : ''}`,
+            addOnIds: item.isBundle ? [] : (item.addOns ? item.addOns.map((a: any) => a.id) : []),
+            isBundle: item.isBundle || false,
+            bundleSelections: item.isBundle ? item.bundleSelections : undefined
+          };
+        }),
         address: deliveryAddress ? { ...deliveryAddress } : undefined,
         deliveryFee: orderType === 'DELIVERY' && deliveryAddress ? deliveryAddress.deliveryFee : 0,
       };
@@ -1651,6 +1656,29 @@ export default function CheckoutPage() {
                       <p className={`text-sm font-bold transition-colors ${hasTumbler ? 'text-emerald-800' : 'text-gray-900'}`}>
                         Saya Bawa Tumbler Sendiri
                       </p>
+                      
+                      {/* Tooltip Info Popover */}
+                      <div className="relative group inline-block z-30">
+                        <span className="w-4 h-4 rounded-full bg-emerald-100/80 text-emerald-700 flex items-center justify-center text-[10px] font-black cursor-help hover:bg-emerald-250 transition-colors">
+                          ?
+                        </span>
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-gray-900 text-white rounded-xl text-[10px] font-medium leading-relaxed opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 shadow-xl pointer-events-none">
+                          <div className="space-y-1">
+                            <p className="font-black text-emerald-400 flex items-center gap-1 uppercase tracking-wider text-[9px]">
+                              🌱 Eco-Friendly Impact
+                            </p>
+                            <p className="text-gray-200">Dengan menggunakan reusable cup:</p>
+                            <p className="pl-2 border-l border-emerald-500/50 text-gray-300">
+                              • Hemat: <span className="font-bold text-amber-300">Diskon {tumblerDiscountPct}%</span> ({formatRupiah(tumblerDiscount)})
+                            </p>
+                            <p className="pl-2 border-l border-emerald-500/50 text-gray-300">
+                              • Eco-Points: <span className="font-bold text-emerald-300">+{tumblerBonusPoints} Poin</span>
+                            </p>
+                          </div>
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                        </div>
+                      </div>
+
                       {hasTumbler && (
                         <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
                           Aktif ✓
@@ -1708,7 +1736,7 @@ export default function CheckoutPage() {
                     <p className="text-[11px] text-gray-400 font-medium leading-relaxed truncate mt-0.5">
                       {item.isBundle && item.bundleSelections
                         ? item.bundleSelections.map((s: any) => `${s.productName}`).join(' · ')
-                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.matchaLevel !== undefined ? ` · Matcha Lvl: ${item.matchaLevel}/10` : ''}${item.addOns ? (item.addOns.length > 0 ? ` · +${item.addOns.map((a: any) => a.name).join(', ')}` : '') : ''}`
+                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.matchaLevel !== undefined ? ` · Matcha Lvl: ${item.matchaLevel}/10${item.matchaLevel >= 9 ? ' (+Rp2.000)' : (item.matchaLevel >= 7 ? ' (+Rp1.000)' : '')}` : ''}${item.addOns ? (item.addOns.length > 0 ? ` · +${item.addOns.map((a: any) => a.name).join(', ')}` : '') : ''}`
                       }
                     </p>
                     <div className="flex items-center gap-2 mt-1">

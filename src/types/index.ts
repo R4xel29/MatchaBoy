@@ -44,7 +44,7 @@ export interface Product {
 }
 
 export type IceLevel = 'Normal Ice' | 'Less Ice' | 'No Ice';
-export type SugarLevel = 'Normal Sugar' | 'Less Sugar';
+export type SugarLevel = 'Normal Sugar' | 'Less Sugar' | 'Less' | 'Biasa' | 'Lumayan' | 'Manis Sekali';
 
 export interface AddOn {
     id: string;

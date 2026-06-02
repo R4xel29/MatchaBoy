@@ -24,6 +24,25 @@ interface ReviewProduct {
   category: { name: string };
 }
 
+interface ReviewLike {
+  id: string;
+  reviewId: string;
+  userId: string;
+}
+
+interface ReviewReply {
+  id: string;
+  reviewId: string;
+  userId: string;
+  comment: string;
+  createdAt: string;
+  user: {
+    id: string;
+    name: string | null;
+    image: string | null;
+  };
+}
+
 interface Review {
   id: string;
   productId: string;
@@ -36,6 +55,8 @@ interface Review {
   updatedAt: string;
   user: ReviewUser;
   product: ReviewProduct;
+  likes: ReviewLike[];
+  replies: ReviewReply[];
 }
 
 interface Stats {
@@ -100,8 +121,8 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
     });
   }, [reviews, searchTerm, ratingFilter, statusFilter]);
 
-  // Handle action (feature, unfeature, hide, approve)
-  const handleAction = async (id: string, action: 'feature' | 'unfeature' | 'approve' | 'hide') => {
+  // Handle action (feature, unfeature, hide, approve, delete-comment)
+  const handleAction = async (id: string, action: 'feature' | 'unfeature' | 'approve' | 'hide' | 'delete-comment') => {
     setLoading(true);
     try {
       const res = await fetch('/api/admin/reviews', {
@@ -130,10 +151,42 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
         unfeature: 'Review dihapus dari featured.',
         approve: 'Review berhasil disetujui.',
         hide: 'Review berhasil disembunyikan.',
+        'delete-comment': 'Komentar ulasan berhasil dihapus.',
       };
       showToast(messages[action], 'success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Gagal memperbarui review.';
+      showToast(message, 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle delete reply
+  const handleDeleteReply = async (reviewId: string, replyId: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus balasan ini?')) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/reviews?replyId=${replyId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      setReviews(prev =>
+        prev.map(r => {
+          if (r.id === reviewId) {
+            return {
+              ...r,
+              replies: r.replies.filter(reply => reply.id !== replyId),
+            };
+          }
+          return r;
+        })
+      );
+      showToast('Balasan berhasil dihapus.', 'success');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gagal menghapus balasan.';
       showToast(message, 'error');
     } finally {
       setLoading(false);
@@ -359,7 +412,11 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
                 </div>
 
                 {/* Comment preview (always shown) */}
-                {review.comment && (
+                {!review.comment ? (
+                  <p className="text-xs italic text-muted-foreground mt-3 leading-relaxed">
+                    [Konten komentar dihapus oleh administrator]
+                  </p>
+                ) : (
                   <p className={cn(
                     "text-sm text-foreground/80 mt-3 leading-relaxed",
                     !isExpanded && "line-clamp-2"
@@ -382,21 +439,72 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
                       </div>
                     )}
 
-                    {/* User details */}
-                    <div className="text-[10px] space-y-1 text-muted-foreground font-medium">
-                      {review.user.email && (
-                        <div className="flex items-center gap-1.5">
-                          <span>📧</span>
-                          <span>{review.user.email}</span>
-                        </div>
-                      )}
-                      {review.user.phone && (
-                        <div className="flex items-center gap-1.5">
-                          <span>📱</span>
-                          <span>{review.user.phone}</span>
-                        </div>
-                      )}
+                    {/* User & Likes summary */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[10px] text-muted-foreground font-medium border-b border-border/30 pb-2">
+                      <div className="space-y-1">
+                        {review.user.email && (
+                          <div className="flex items-center gap-1.5">
+                            <span>📧</span>
+                            <span>{review.user.email}</span>
+                          </div>
+                        )}
+                        {review.user.phone && (
+                          <div className="flex items-center gap-1.5">
+                            <span>📱</span>
+                            <span>{review.user.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 sm:mt-0 font-semibold bg-muted/50 px-2 py-1 rounded-lg">
+                        <span className="flex items-center gap-1">
+                          ❤️ {review.likes?.length || 0} Likes
+                        </span>
+                        <span className="flex items-center gap-1">
+                          💬 {review.replies?.length || 0} Balasan
+                        </span>
+                      </div>
                     </div>
+
+                    {/* Replies section */}
+                    {review.replies && review.replies.length > 0 && (
+                      <div className="mt-4 space-y-2.5 pl-4 border-l-2 border-brand-500/30">
+                        <h5 className="text-[11px] font-bold text-foreground mb-1.5 flex items-center gap-1">
+                          <span>💬</span> Balasan Pelanggan & Admin:
+                        </h5>
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {review.replies.map(reply => (
+                            <div key={reply.id} className="p-2.5 bg-muted/40 rounded-xl space-y-1 relative group transition-all border border-border/10">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  {reply.user.image ? (
+                                    <div className="relative w-5 h-5 rounded-full overflow-hidden shrink-0 border">
+                                      <Image src={reply.user.image} alt={reply.user.name || ''} fill className="object-cover" />
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700">
+                                      {(reply.user.name || '?')[0].toUpperCase()}
+                                    </div>
+                                  )}
+                                  <span className="text-xs font-bold text-foreground">{reply.user.name || 'Anonymous'}</span>
+                                  <span className="text-[9px] text-muted-foreground">
+                                    {new Date(reply.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => handleDeleteReply(review.id, reply.id)}
+                                  disabled={loading}
+                                  className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded hover:bg-red-50"
+                                  title="Hapus Balasan"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                              <p className="text-xs text-foreground/80 pl-7 leading-relaxed">{reply.comment}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -439,6 +547,21 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
                     <EyeOff className="w-3.5 h-3.5" />
                     Hide
                   </button>
+
+                  {review.comment && (
+                    <button
+                      onClick={() => {
+                        if (confirm('Apakah Anda yakin ingin menghapus konten komentar ulasan ini? (Rating bintang akan tetap dipertahankan)')) {
+                          handleAction(review.id, 'delete-comment');
+                        }
+                      }}
+                      disabled={loading}
+                      className="py-2 px-3 text-[11px] font-bold rounded-xl border border-red-200 text-red-650 bg-red-55/10 hover:bg-red-50 transition-colors flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Hapus Komentar
+                    </button>
+                  )}
 
                   {deleteConfirmId === review.id ? (
                     <div className="flex items-center gap-1 ml-auto">

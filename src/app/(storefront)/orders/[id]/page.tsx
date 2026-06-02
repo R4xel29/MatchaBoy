@@ -48,9 +48,11 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     address: order.address,
     paymentMethod: order.paymentMethod,
     items: order.items.map((item: any) => ({
+      productId: item.productId,
       name: item.product.name,
       qty: item.qty,
       price: item.price,
+      image: item.product.image || undefined,
       mods: item.modifiers || undefined
     })),
     subtotal: order.subtotal,

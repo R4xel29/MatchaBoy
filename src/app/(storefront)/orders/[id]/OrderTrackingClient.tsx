@@ -38,7 +38,7 @@ export type TrackingOrderShape = {
   address: string;
   paymentMethod: string;
   orderType: string;
-  items: Array<{ name: string; qty: number; price: number; mods?: string }>;
+  items: Array<{ productId?: string; name: string; qty: number; price: number; image?: string; mods?: string }>;
   subtotal: number;
   deliveryFee: number;
   total: number;
@@ -113,12 +113,182 @@ function getOrderTypeIcon(type: string) {
   }
 }
 
+function ProductReviewForm({
+  item,
+  orderId,
+  onSuccess,
+  disabled,
+}: {
+  item: any;
+  orderId: string;
+  onSuccess: () => void;
+  disabled?: boolean;
+}) {
+  const [rating, setRating] = useState(5);
+  const [hoverRating, setHoverRating] = useState<number | null>(null);
+  const [comment, setComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      const res = await fetch(`/api/products/${item.productId}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rating,
+          comment: comment.trim() || undefined,
+          orderId,
+        }),
+      });
+
+      if (res.ok) {
+        onSuccess();
+      } else {
+        const data = await res.json();
+        setError(data.message || data.error || 'Gagal mengirimkan ulasan.');
+      }
+    } catch (err) {
+      setError('Terjadi kesalahan. Silakan coba lagi.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (disabled) {
+    return (
+      <div className="p-4 rounded-xl bg-gray-50 border border-gray-150 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          {item.image && (
+            <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border relative">
+              <img src={item.image} alt={item.name} className="object-cover w-full h-full" />
+            </div>
+          )}
+          <div>
+            <p className="text-xs font-bold text-gray-805">{item.name}</p>
+            <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+              ✓ Ulasan berhasil dikirim
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="p-4 rounded-xl border border-gray-100 bg-gray-50/20 space-y-3">
+      <div className="flex items-center gap-3">
+        {item.image && (
+          <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 border relative bg-white">
+            <img src={item.image} alt={item.name} className="object-cover w-full h-full" />
+          </div>
+        )}
+        <div className="flex-1">
+          <p className="text-xs font-bold text-gray-900 leading-tight">{item.name}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">{item.mods || 'Normal'}</p>
+        </div>
+      </div>
+
+      {/* Star Selector */}
+      <div className="flex items-center gap-1.5 py-1">
+        <span className="text-[11px] text-gray-500 font-bold mr-1">Rating:</span>
+        {[1, 2, 3, 4, 5].map((star) => {
+          const isFilled = hoverRating !== null ? star <= hoverRating : star <= rating;
+          return (
+            <button
+              key={star}
+              type="button"
+              onClick={() => setRating(star)}
+              onMouseEnter={() => setHoverRating(star)}
+              onMouseLeave={() => setHoverRating(null)}
+              className="text-amber-400 hover:scale-110 transition-transform duration-105"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill={isFilled ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-5.5 h-5.5"
+              >
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Comment Input */}
+      <div>
+        <textarea
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Tulis ulasan Anda tentang rasa, kemasan, atau pelayanan kami..."
+          rows={2}
+          className="w-full p-2.5 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-505 transition-all text-foreground"
+        />
+      </div>
+
+      {error && <p className="text-[10px] text-red-600 font-bold">{error}</p>}
+
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-[11px] font-bold transition-all flex items-center gap-1.5"
+        >
+          {isSubmitting ? (
+            <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+          ) : 'Kirim Ulasan'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export default function OrderTrackingClient({ order }: { order: TrackingOrderShape }) {
   const router = useRouter();
   const orderId = order.id;
 
+  const [cooldown, setCooldown] = useState<{
+    cooldownActive: boolean;
+    remainingMs?: number;
+    nextAllowedDate?: string;
+  } | null>(null);
+  const [loadingCooldown, setLoadingCooldown] = useState(false);
+  const [submittedReviews, setSubmittedReviews] = useState<Record<string, boolean>>({});
+  const [remainingTime, setRemainingTime] = useState<number>(0);
+
+  const checkReviewCooldown = useCallback(async () => {
+    try {
+      setLoadingCooldown(true);
+      const res = await fetch('/api/reviews/cooldown');
+      if (res.ok) {
+        const data = await res.json();
+        setCooldown(data);
+        if (data.cooldownActive && data.remainingMs) {
+          setRemainingTime(Math.ceil(data.remainingMs / 1000));
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingCooldown(false);
+    }
+  }, []);
+
   const [copied, setCopied] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(order.status);
+  const isFinished = ['COMPLETED', 'DELIVERED'].includes(currentStatus);
   const [cancelReasonState, setCancelReasonState] = useState<string | null>(order.cancelReason || null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const statusRef = useRef(currentStatus);
@@ -146,6 +316,41 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [order.cancellationTimeLimit, order.createdAtRaw]);
+
+  useEffect(() => {
+    if (isFinished) {
+      checkReviewCooldown();
+    }
+  }, [isFinished, checkReviewCooldown]);
+
+  useEffect(() => {
+    if (remainingTime <= 0) return;
+    const interval = setInterval(() => {
+      setRemainingTime(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setCooldown(c => c ? { ...c, cooldownActive: false } : null);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [remainingTime]);
+
+  const formatCooldownTime = (secs: number) => {
+    const d = Math.floor(secs / (24 * 3600));
+    const h = Math.floor((secs % (24 * 3600)) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (d > 0) {
+      return `${d} hari ${h} jam ${m} menit`;
+    }
+    if (h > 0) {
+      return `${h} jam ${m} menit ${s} detik`;
+    }
+    return `${m} menit ${s} detik`;
+  };
 
   const formatTimeLeft = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -246,7 +451,6 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
 
   const OrderTypeIcon = getOrderTypeIcon(order.orderType);
   const steps = getOrderSteps(order.orderType, currentStatus);
-  const isFinished = ['COMPLETED', 'DELIVERED'].includes(currentStatus);
 
   const isOngoingDelivery = order.orderType === 'DELIVERY' && ['PICKED_UP', 'ON_DELIVERY'].includes(currentStatus);
 
@@ -448,6 +652,49 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 total={order.total}
                 items={order.items}
               />
+
+              {/* Review Section */}
+              <div className="bg-card border border-border/50 rounded-2xl p-5 space-y-4">
+                <h3 className="font-heading font-bold text-sm text-foreground">Ulas Produk</h3>
+                <p className="text-xs text-muted-foreground leading-normal">
+                  Berikan penilaian untuk produk yang Anda beli dan dapatkan bonus 1 poin loyalitas!
+                </p>
+
+                {cooldown?.cooldownActive ? (
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
+                    <p className="font-bold flex items-center gap-1.5">
+                      ⏳ Cooldown Ulasan Aktif
+                    </p>
+                    <p className="text-amber-700 leading-normal">
+                      Anda hanya dapat menulis ulasan sekali setiap 3 hari untuk menjaga kualitas ulasan dan mencegah penyalahgunaan poin.
+                    </p>
+                    <p className="font-mono text-[10px] mt-1 font-bold text-amber-900 bg-amber-100/50 inline-block px-2 py-0.5 rounded-md">
+                      Tersedia dalam: {formatCooldownTime(remainingTime)}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {order.items.map((item, idx) => {
+                      if (!item.productId) return null;
+                      const prodId = item.productId;
+                      const hasSubmitted = submittedReviews[prodId];
+                      
+                      return (
+                        <ProductReviewForm
+                          key={prodId}
+                          item={item}
+                          orderId={orderId}
+                          onSuccess={() => {
+                            setSubmittedReviews(prev => ({ ...prev, [prodId]: true }));
+                            checkReviewCooldown();
+                          }}
+                          disabled={hasSubmitted}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

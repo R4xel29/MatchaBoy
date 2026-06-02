@@ -6,7 +6,7 @@ import { logAdminAction } from '@/lib/admin-logger';
 // PATCH /api/admin/bgm/[id] — Update BGM song details
 export async function PATCH(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const session = await auth();
@@ -48,7 +48,7 @@ export async function PATCH(
 // DELETE /api/admin/bgm/[id] — Delete BGM song
 export async function DELETE(
     request: Request,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
         const session = await auth();
