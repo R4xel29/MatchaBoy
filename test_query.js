@@ -2,30 +2,23 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  const drivers = await prisma.user.findMany({
-    where: { role: 'DRIVER' },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      image: true,
-      createdAt: true,
-      driverProfile: {
+  const vouchers = await prisma.voucher.findMany({
+    where: {
+      discountAmount: 3000,
+      minPurchase: 0,
+    },
+    include: {
+      user: {
         select: {
-          isOnline: true,
-          vehicleType: true,
-          plateNumber: true,
-          driverImageUrl: true,
-          shiftStart: true,
-          shiftEnd: true,
-          status: true,
+          id: true,
+          name: true,
+          phone: true,
         }
       }
-    },
-    orderBy: { createdAt: 'desc' }
+    }
   });
-  console.log(JSON.stringify(drivers, null, 2));
+  console.log("=== Vouchers with 3000 and minPurchase 0 ===");
+  console.log(JSON.stringify(vouchers, null, 2));
 }
 
 main()

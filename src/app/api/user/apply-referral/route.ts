@@ -72,20 +72,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Akun Anda sudah terhubung dengan kode referral sebelumnya' }, { status: 400 });
     }
 
-    // SECURITY FIX #9: Check apakah user sudah pernah dapat welcome voucher
     const loyaltySettings = await prisma.loyaltySettings.findFirst();
     const welcomeCode = (loyaltySettings as any)?.welcomeVoucherCode || 'WELCOME';
-    
-    const existingWelcomeVoucher = await prisma.voucher.findFirst({
-      where: {
-        userId,
-        code: { startsWith: welcomeCode }
-      }
-    })
-
-    if (existingWelcomeVoucher) {
-      return NextResponse.json({ error: 'Anda sudah pernah mendapat voucher selamat datang' }, { status: 400 })
-    }
 
     // Cegah self-referral (case-insensitive comparison)
     if (currentUser.referralCode.toUpperCase() === cleanedCode) {
@@ -107,6 +95,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Kode referral tidak ditemukan atau tidak valid' }, { status: 404 });
     }
 
+    let voucherCreated = false;
+
     // Use transaction to ensure atomicity
     await prisma.$transaction(async (tx) => {
       // Hubungkan user ke referrer
@@ -115,61 +105,75 @@ export async function POST(req: Request) {
         data: { referredById: referrer.id },
       });
 
-      // Cari atau buat template WELCOME
-      let welcomeTemplate = await tx.voucherTemplate.findUnique({
-        where: { code: welcomeCode },
-      });
-      
-      if (!welcomeTemplate) {
-        try {
-          welcomeTemplate = await tx.voucherTemplate.create({
-            data: {
-              code: welcomeCode,
-              title: 'Diskon Pengguna Baru',
-              description: 'Diskon Rp3.000 (Hadiah Pengguna Baru)',
-              type: 'DISCOUNT_RP',
-              discountValue: 3000,
-              minPurchase: 30000,
-              terms: 'Minimum transaksi Rp30.000\nBerlaku 7 hari sejak klaim',
-              targetNewUserOnly: true,
-              hideFromVoucherPack: true,
-            },
-          });
-        } catch (e) {
-          console.error('[APPLY_REFERRAL] Gagal membuat voucher template welcome:', e);
-        }
-      }
-
-      // Berikan voucher kepada user
-      const generatedCode = `${welcomeCode}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const discountAmount = welcomeTemplate?.discountValue ?? 3000;
-      const minPurchaseVal = welcomeTemplate?.minPurchase ?? 30000;
-      const expiresDays = 7;
-      
-      await tx.voucher.create({
-        data: {
+      // Cek apakah user sudah pernah dapat welcome voucher
+      const existingWelcomeVoucher = await tx.voucher.findFirst({
+        where: {
           userId,
-          code: generatedCode,
-          type: welcomeTemplate?.type ?? 'DISCOUNT_RP',
-          description: welcomeTemplate?.description ?? 'Diskon Rp3.000 (Hadiah Pengguna Baru)',
-          discountAmount,
-          minPurchase: minPurchaseVal,
-          templateId: welcomeTemplate?.id || null,
-          expiresAt: new Date(Date.now() + expiresDays * 24 * 60 * 60 * 1000),
-        },
+          code: { startsWith: welcomeCode }
+        }
       });
 
-      if (welcomeTemplate) {
-        await tx.voucherTemplate.update({
-          where: { id: welcomeTemplate.id },
-          data: { usageCount: { increment: 1 } }
-        }).catch(() => {});
+      if (!existingWelcomeVoucher) {
+        // Cari atau buat template WELCOME
+        let welcomeTemplate = await tx.voucherTemplate.findUnique({
+          where: { code: welcomeCode },
+        });
+        
+        if (!welcomeTemplate) {
+          try {
+            welcomeTemplate = await tx.voucherTemplate.create({
+              data: {
+                code: welcomeCode,
+                title: 'Diskon Pengguna Baru',
+                description: 'Diskon Rp3.000 (Hadiah Pengguna Baru)',
+                type: 'DISCOUNT_RP',
+                discountValue: 3000,
+                minPurchase: 30000,
+                terms: 'Minimum transaksi Rp30.000\nBerlaku 7 hari sejak klaim',
+                targetNewUserOnly: true,
+                hideFromVoucherPack: true,
+              },
+            });
+          } catch (e) {
+            console.error('[APPLY_REFERRAL] Gagal membuat voucher template welcome:', e);
+          }
+        }
+
+        // Berikan voucher kepada user
+        const generatedCode = `${welcomeCode}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+        const discountAmount = welcomeTemplate?.discountValue ?? 3000;
+        const minPurchaseVal = welcomeTemplate?.minPurchase ?? 30000;
+        const expiresDays = 7;
+        
+        await tx.voucher.create({
+          data: {
+            userId,
+            code: generatedCode,
+            type: welcomeTemplate?.type ?? 'DISCOUNT_RP',
+            description: welcomeTemplate?.description ?? 'Diskon Rp3.000 (Hadiah Pengguna Baru)',
+            discountAmount,
+            minPurchase: minPurchaseVal,
+            templateId: welcomeTemplate?.id || null,
+            expiresAt: new Date(Date.now() + expiresDays * 24 * 60 * 60 * 1000),
+          },
+        });
+
+        if (welcomeTemplate) {
+          await tx.voucherTemplate.update({
+            where: { id: welcomeTemplate.id },
+            data: { usageCount: { increment: 1 } }
+          }).catch(() => {});
+        }
+
+        voucherCreated = true;
       }
-    })
+    });
 
     return NextResponse.json({
       success: true,
-      message: 'Kode referral berhasil diterapkan! Voucher diskon Rp3.000 (min. belanja Rp30.000) telah ditambahkan ke akun Anda.',
+      message: voucherCreated
+        ? 'Kode referral berhasil diterapkan! Voucher diskon Rp3.000 (min. belanja Rp30.000) telah ditambahkan ke akun Anda.'
+        : 'Kode referral berhasil diterapkan! Akun Anda telah terhubung dengan pengundang.',
     });
   } catch (error) {
     console.error('[APPLY_REFERRAL] Error:', error);

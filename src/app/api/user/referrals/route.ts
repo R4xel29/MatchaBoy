@@ -21,26 +21,39 @@ export async function GET() {
         name: true,
         createdAt: true,
         referralBonusPaid: true,
-        _count: {
+        orders: {
+          where: { status: 'COMPLETED' },
           select: {
-            orders: {
-              where: { status: 'COMPLETED' },
-            },
+            total: true,
           },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    const formattedReferees = referees.map((ref) => ({
-      id: ref.id,
-      name: ref.name || 'Pengguna Matchaboy',
-      joinedAt: ref.createdAt,
-      bonusClaimed: ref.referralBonusPaid,
-      hasCompletedOrder: ref._count.orders > 0,
-    }));
+    const settings = await prisma.loyaltySettings.findFirst();
+    const minPurchaseNeeded = settings?.referralMinPurchase ?? 30000;
 
-    return NextResponse.json({ success: true, referrals: formattedReferees });
+    const formattedReferees = referees.map((ref) => {
+      const completedOrders = ref.orders;
+      const highestOrderAmount = completedOrders.reduce((max, order) => Math.max(max, order.total), 0);
+      const totalOrdersCount = completedOrders.length;
+      return {
+        id: ref.id,
+        name: ref.name || 'Pengguna Matchaboy',
+        joinedAt: ref.createdAt,
+        bonusClaimed: ref.referralBonusPaid,
+        highestOrderAmount,
+        totalOrdersCount,
+        hasCompletedOrder: totalOrdersCount > 0,
+      };
+    });
+
+    return NextResponse.json({ 
+      success: true, 
+      referrals: formattedReferees,
+      minPurchaseNeeded 
+    });
   } catch (error) {
     console.error('[GET_REFERRALS] Error:', error);
     return NextResponse.json({ error: 'Terjadi kesalahan server' }, { status: 500 });

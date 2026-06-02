@@ -3141,6 +3141,7 @@ function ReferralSection({ user }: { user: UserShape }) {
   const [referees, setReferees] = useState<any[]>(profileCache.referees || []);
   const [loadingReferees, setLoadingReferees] = useState(!profileCache.referees);
   const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [minPurchaseNeeded, setMinPurchaseNeeded] = useState<number>(30000);
   const { showToast } = useToast();
   const fetchedRef = useRef(false);
 
@@ -3152,6 +3153,9 @@ function ReferralSection({ user }: { user: UserShape }) {
         const refs = data.referrals || [];
         setReferees(refs);
         profileCache.referees = refs;
+        if (typeof data.minPurchaseNeeded === 'number') {
+          setMinPurchaseNeeded(data.minPurchaseNeeded);
+        }
       }
     } catch (e) {
       console.error('Error fetching referees:', e);
@@ -3294,46 +3298,92 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
             Belum ada teman yang mendaftar menggunakan kode Anda.
           </div>
         ) : (
-          <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
-            {referees.map((ref) => (
-              <div key={ref.id} className="flex items-center justify-between p-3.5 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/10">
-                <div className="space-y-1">
-                  <p className="text-sm font-bold text-gray-800">{ref.name}</p>
-                  <p className="text-[10px] text-gray-400 font-medium">
-                    Gabung: {new Date(ref.joinedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </p>
-                  <div className="flex items-center gap-1.5 mt-1">
-                    <span className={`inline-block w-2 h-2 rounded-full ${ref.hasCompletedOrder ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                    <span className="text-[10px] font-bold text-gray-500">
-                      {ref.hasCompletedOrder ? 'Selesai Order Pertama' : 'Baru Mendaftar'}
-                    </span>
-                  </div>
-                </div>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
+            {referees.map((ref) => {
+              const isQualified = ref.highestOrderAmount >= minPurchaseNeeded;
+              return (
+                <div key={ref.id} className="flex flex-col gap-3.5 p-4 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/10 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-gray-800 leading-tight">{ref.name}</p>
+                      <p className="text-[10px] text-gray-400 font-semibold">
+                        Gabung: {new Date(ref.joinedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${
+                          ref.bonusClaimed 
+                            ? 'bg-gray-400' 
+                            : isQualified 
+                              ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse' 
+                              : ref.totalOrdersCount > 0 
+                                ? 'bg-amber-400' 
+                                : 'bg-gray-300'
+                        }`} />
+                        <span className="text-[10px] font-bold text-gray-500">
+                          {ref.bonusClaimed 
+                            ? 'Bonus Sudah Diklaim' 
+                            : isQualified 
+                              ? 'Syarat Terpenuhi' 
+                              : ref.totalOrdersCount > 0 
+                                ? 'Belum Memenuhi Syarat' 
+                                : 'Baru Mendaftar'}
+                        </span>
+                      </div>
+                    </div>
 
-                {ref.bonusClaimed ? (
-                  <span className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-450 text-xs font-bold">
-                    Sudah Diklaim
-                  </span>
-                ) : ref.hasCompletedOrder ? (
-                  <button
-                    disabled={claimingId === ref.id}
-                    onClick={() => handleClaim(ref.id)}
-                    className="px-4 py-2 bg-[#B48A5E] hover:bg-[#946F48] text-white text-xs font-black rounded-xl shadow-md shadow-[#B48A5E]/10 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-                  >
-                    {claimingId === ref.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {ref.bonusClaimed ? (
+                      <span className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-400 text-xs font-extrabold border border-gray-200/50">
+                        Sudah Diklaim
+                      </span>
+                    ) : isQualified ? (
+                      <button
+                        disabled={claimingId === ref.id}
+                        onClick={() => handleClaim(ref.id)}
+                        className="px-4 py-2 bg-[#2E5A44] hover:bg-[#1E3F20] text-white text-xs font-black rounded-xl shadow-md shadow-emerald-800/10 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer text-sans"
+                      >
+                        {claimingId === ref.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Gift className="w-3.5 h-3.5" />
+                        )}
+                        Klaim Voucher
+                      </button>
                     ) : (
-                      <Gift className="w-3.5 h-3.5" />
+                      <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 text-[10px] font-extrabold select-none">
+                        Menunggu Belanja
+                      </span>
                     )}
-                    Klaim Voucher
-                  </button>
-                ) : (
-                  <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 text-[11px] font-bold">
-                    Menunggu Order
-                  </span>
-                )}
-              </div>
-            ))}
+                  </div>
+
+                  {/* Progress Bar & Info */}
+                  {!ref.bonusClaimed && (
+                    <div className="space-y-1.5 pt-2.5 border-t border-[#D4A574]/10">
+                      <div className="flex justify-between items-center text-[10px] font-bold text-gray-500">
+                        <span>Progress Belanja Teman</span>
+                        <span className={isQualified ? 'text-emerald-600 font-extrabold' : 'text-[#B48A5E] font-extrabold'}>
+                          {formatRupiah(ref.highestOrderAmount)} / {formatRupiah(minPurchaseNeeded)}
+                        </span>
+                      </div>
+                      
+                      <div className="h-2.5 bg-gray-150 rounded-full overflow-hidden p-[1px] border border-gray-50">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ease-out ${
+                            isQualified ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-r from-[#D4A574] to-[#B48A5E]'
+                          }`}
+                          style={{ width: `${Math.min((ref.highestOrderAmount / minPurchaseNeeded) * 100, 100)}%` }}
+                        />
+                      </div>
+                      
+                      {!isQualified && (
+                        <p className="text-[9px] text-gray-400 font-medium leading-tight mt-0.5">
+                          * Teman harus belanja min. <strong className="text-gray-650">{formatRupiah(minPurchaseNeeded)}</strong> dalam satu order selesai untuk mengaktifkan voucher reward Anda.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
