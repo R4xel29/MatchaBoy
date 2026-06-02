@@ -32,6 +32,18 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     notFound() // Hide from unauthorized customers
   }
 
+  // Fetch reviews already submitted for this order by this user
+  const existingReviews = await prisma.review.findMany({
+    where: {
+      userId: session.user.id,
+      orderId: id,
+    },
+    select: {
+      productId: true,
+    }
+  })
+  const reviewedProductIds = new Set(existingReviews.map(r => r.productId))
+
   const settings = await prisma.storeSettings.findFirst()
   const cancellationTimeLimit = settings?.cancellationTimeLimit ?? 15
 
@@ -53,7 +65,8 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
       qty: item.qty,
       price: item.price,
       image: item.product.image || undefined,
-      mods: item.modifiers || undefined
+      mods: item.modifiers || undefined,
+      reviewed: reviewedProductIds.has(item.productId),
     })),
     subtotal: order.subtotal,
     deliveryFee: order.deliveryFee,

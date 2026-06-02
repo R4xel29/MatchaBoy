@@ -22,12 +22,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid file type. Only images are allowed.' }, { status: 400 });
         }
 
-        // Validate file size — max 1MB for customer payment proof
-        if (file.size > 1024 * 1024) {
-            return NextResponse.json({ error: 'File too large. Max 1MB.' }, { status: 400 });
+        const type = formData.get('type') as string | null;
+
+        // Validate file size — max 5MB for reviews, 1MB for payments
+        const maxLimit = type === 'review' ? 5 * 1024 * 1024 : 1024 * 1024;
+        if (file.size > maxLimit) {
+            return NextResponse.json({ error: `File too large. Max ${type === 'review' ? '5MB' : '1MB'}.` }, { status: 400 });
         }
 
-        // Generate unique filename inside the 'payments' folder
+        // Generate unique filename inside the appropriate folder
         const timestamp = Date.now();
         const safeName = file.name
             .replace(/\.[^.]+$/, '') // remove extension
@@ -35,8 +38,8 @@ export async function POST(request: NextRequest) {
             .toLowerCase()
             .slice(0, 50);
         
-        // Prefix with 'payments/' to organize in Supabase
-        const filename = `payments/${safeName}-${timestamp}.webp`;
+        const folder = type === 'review' ? 'reviews' : 'payments';
+        const filename = `${folder}/${safeName}-${timestamp}.webp`;
 
         // Read file into buffer
         const bytes = await file.arrayBuffer();

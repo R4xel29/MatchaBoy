@@ -1736,13 +1736,18 @@ export default function CheckoutPage() {
                   )}
                   
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-gray-900 truncate">
+                    <p className="text-sm font-bold text-gray-900 flex items-center flex-wrap gap-1.5 truncate">
                       {item.memberName && (
-                        <span className="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-emerald-805 bg-emerald-50 border border-emerald-150 mr-1.5">
+                        <span className="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-emerald-805 bg-emerald-50 border border-emerald-150">
                           {item.memberName}
                         </span>
                       )}
-                      {item.name}
+                      <span>{item.name}</span>
+                      {hasTumbler && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-150">
+                          <Leaf className="w-2.5 h-2.5" /> Tumbler
+                        </span>
+                      )}
                     </p>
                     <p className="text-[11px] text-gray-400 font-medium leading-relaxed truncate mt-0.5">
                       {item.isBundle && item.bundleSelections

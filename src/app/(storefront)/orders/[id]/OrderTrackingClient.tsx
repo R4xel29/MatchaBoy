@@ -113,6 +113,55 @@ function getOrderTypeIcon(type: string) {
   }
 }
 
+const compressImageToWebP = (file: File): Promise<Blob> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        const MAX_SIZE = 1000;
+        if (width > MAX_SIZE || height > MAX_SIZE) {
+          if (width > height) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          } else {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Gagal mendapatkan canvas context'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              reject(new Error('toBlob compression failed'));
+            }
+          },
+          'image/webp',
+          0.75
+        );
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 function ProductReviewForm({
   item,
   orderId,
@@ -129,6 +178,41 @@ function ProductReviewForm({
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    setError('');
+
+    try {
+      const webpBlob = await compressImageToWebP(file);
+      const formData = new FormData();
+      formData.append('file', webpBlob, 'review-photo.webp');
+      formData.append('type', 'review');
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUploadedImageUrl(data.url);
+      } else {
+        const data = await res.json();
+        setError(data.error || 'Gagal mengunggah foto.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError('Gagal mengompresi atau mengunggah foto.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,6 +226,7 @@ function ProductReviewForm({
         body: JSON.stringify({
           rating,
           comment: comment.trim() || undefined,
+          images: uploadedImageUrl ? [uploadedImageUrl] : undefined,
           orderId,
         }),
       });
@@ -235,12 +320,55 @@ function ProductReviewForm({
         />
       </div>
 
+      {/* Photo Uploader */}
+      <div className="space-y-2">
+        <label className="block text-[11px] font-bold text-gray-500">Tambahkan Foto (Opsional):</label>
+        
+        {uploadedImageUrl ? (
+          <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-border shadow-sm group">
+            <img src={uploadedImageUrl} alt="Review upload" className="object-cover w-full h-full" />
+            <button
+              type="button"
+              onClick={() => setUploadedImageUrl(null)}
+              className="absolute top-1 right-1 w-6 h-6 bg-black/70 hover:bg-black text-white rounded-full flex items-center justify-center transition-colors animate-in fade-in"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer px-4 py-2.5 rounded-xl border border-dashed border-gray-300 bg-white hover:bg-gray-50 hover:border-brand-500 transition-all text-[11px] font-bold text-gray-600 flex items-center gap-1.5 shadow-sm active:scale-[0.98]">
+              {uploadingImage ? (
+                <>
+                  <svg className="animate-spin h-3.5 w-3.5 text-gray-500" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span>Mengompres & Mengunggah...</span>
+                </>
+              ) : (
+                <>
+                  <span>📸 Unggah Foto Matcha</span>
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                disabled={uploadingImage}
+                className="hidden"
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
       {error && <p className="text-[10px] text-red-600 font-bold">{error}</p>}
 
       <div className="flex justify-end">
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || uploadingImage}
           className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-[11px] font-bold transition-all flex items-center gap-1.5"
         >
           {isSubmitting ? (
@@ -265,8 +393,17 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     nextAllowedDate?: string;
   } | null>(null);
   const [loadingCooldown, setLoadingCooldown] = useState(false);
-  const [submittedReviews, setSubmittedReviews] = useState<Record<string, boolean>>({});
+  const [submittedReviews, setSubmittedReviews] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    order.items.forEach(item => {
+      if (item.productId && (item as any).reviewed) {
+        initial[item.productId] = true;
+      }
+    });
+    return initial;
+  });
   const [remainingTime, setRemainingTime] = useState<number>(0);
+  const [showReviewModal, setShowReviewModal] = useState(false);
 
   const checkReviewCooldown = useCallback(async () => {
     try {
@@ -320,8 +457,13 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   useEffect(() => {
     if (isFinished) {
       checkReviewCooldown();
+      
+      const hasUnsubmitted = order.items.some(item => item.productId && !submittedReviews[item.productId]);
+      if (hasUnsubmitted) {
+        setShowReviewModal(true);
+      }
     }
-  }, [isFinished, checkReviewCooldown]);
+  }, [isFinished, checkReviewCooldown, order.items, submittedReviews]);
 
   useEffect(() => {
     if (remainingTime <= 0) return;
@@ -654,46 +796,18 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               />
 
               {/* Review Section */}
-              <div className="bg-card border border-border/50 rounded-2xl p-5 space-y-4">
+              <div className="bg-card border border-border/50 rounded-2xl p-5 text-center space-y-3">
                 <h3 className="font-heading font-bold text-sm text-foreground">Ulas Produk</h3>
                 <p className="text-xs text-muted-foreground leading-normal">
-                  Berikan penilaian untuk produk yang Anda beli dan dapatkan bonus 1 poin loyalitas!
+                  Berikan ulasan dan unggah foto matcha-mu untuk mendapatkan reward 1 poin loyalitas!
                 </p>
-
-                {cooldown?.cooldownActive ? (
-                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
-                    <p className="font-bold flex items-center gap-1.5">
-                      ⏳ Cooldown Ulasan Aktif
-                    </p>
-                    <p className="text-amber-700 leading-normal">
-                      Anda hanya dapat menulis ulasan sekali setiap 3 hari untuk menjaga kualitas ulasan dan mencegah penyalahgunaan poin.
-                    </p>
-                    <p className="font-mono text-[10px] mt-1 font-bold text-amber-900 bg-amber-100/50 inline-block px-2 py-0.5 rounded-md">
-                      Tersedia dalam: {formatCooldownTime(remainingTime)}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {order.items.map((item, idx) => {
-                      if (!item.productId) return null;
-                      const prodId = item.productId;
-                      const hasSubmitted = submittedReviews[prodId];
-                      
-                      return (
-                        <ProductReviewForm
-                          key={prodId}
-                          item={item}
-                          orderId={orderId}
-                          onSuccess={() => {
-                            setSubmittedReviews(prev => ({ ...prev, [prodId]: true }));
-                            checkReviewCooldown();
-                          }}
-                          disabled={hasSubmitted}
-                        />
-                      );
-                    })}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowReviewModal(true)}
+                  className="px-5 py-2.5 rounded-xl gradient-brand text-white font-bold text-xs shadow-md shadow-brand-700/10 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 mx-auto"
+                >
+                  <span>✍ Ulas & Upload Foto Matcha</span>
+                </button>
               </div>
             </div>
           )}
@@ -951,6 +1065,88 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 >
                   Tutup
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Rating & Review Pop-up Modal */}
+      <AnimatePresence>
+        {showReviewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-card w-full max-w-lg rounded-3xl border border-border shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
+            >
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between bg-muted/40 shrink-0">
+                <div className="text-left">
+                  <h3 className="font-heading font-bold text-sm text-foreground flex items-center gap-1.5">
+                    <span>Penilaian Pesanan</span> 🌟
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">
+                    Berikan ulasan Anda tentang produk yang dibeli
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowReviewModal(false)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-border transition-colors text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Scrollable Form Area */}
+              <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                {cooldown?.cooldownActive ? (
+                  <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1 text-center">
+                    <p className="font-bold flex items-center justify-center gap-1.5">
+                      ⏳ Cooldown Ulasan Aktif
+                    </p>
+                    <p className="text-amber-700 leading-normal">
+                      Anda hanya dapat menulis ulasan sekali setiap 3 hari untuk menjaga kualitas ulasan dan mencegah penyalahgunaan poin.
+                    </p>
+                    <p className="font-mono text-[10px] mt-1.5 font-bold text-amber-900 bg-amber-100/50 inline-block px-2.5 py-1 rounded-lg">
+                      Tersedia dalam: {formatCooldownTime(remainingTime)}
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground leading-normal mb-1 text-left">
+                      Kirim ulasan produk di bawah ini untuk mendapatkan bonus 1 poin loyalitas!
+                    </p>
+                    <div className="space-y-4">
+                      {order.items.map((item) => {
+                        if (!item.productId) return null;
+                        const prodId = item.productId;
+                        const hasSubmitted = submittedReviews[prodId];
+                        
+                        return (
+                          <ProductReviewForm
+                            key={prodId}
+                            item={item}
+                            orderId={orderId}
+                            onSuccess={() => {
+                              setSubmittedReviews(prev => {
+                                const next = { ...prev, [prodId]: true };
+                                const allReviewed = order.items.every(i => !i.productId || next[i.productId]);
+                                if (allReviewed) {
+                                  setTimeout(() => setShowReviewModal(false), 2000);
+                                }
+                                return next;
+                              });
+                              checkReviewCooldown();
+                            }}
+                            disabled={hasSubmitted}
+                          />
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
               </div>
             </motion.div>
           </div>

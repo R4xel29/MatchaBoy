@@ -22,14 +22,19 @@ export default auth((req) => {
             if (!isLoggedIn) {
                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
             }
-            if (role !== 'ADMIN' && role !== 'CASHIER') {
-                return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-            }
-            if (role === 'CASHIER') {
-                const cashierAllowed = ['/api/admin/reports', '/api/admin/bank-accounts', '/api/admin/store-settings']
-                const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
-                if (!isAllowed) {
+            const isPublicAdminRoute = pathname === '/api/admin/loyalty/settings' || pathname === '/api/admin/store-settings'
+            const isGetRequest = req.method === 'GET'
+            
+            if (!(isPublicAdminRoute && isGetRequest)) {
+                if (role !== 'ADMIN' && role !== 'CASHIER') {
                     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+                }
+                if (role === 'CASHIER') {
+                    const cashierAllowed = ['/api/admin/reports', '/api/admin/bank-accounts', '/api/admin/store-settings']
+                    const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
+                    if (!isAllowed) {
+                        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+                    }
                 }
             }
         }
