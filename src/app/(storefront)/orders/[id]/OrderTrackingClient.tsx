@@ -788,12 +788,14 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 <p className="text-sm font-bold text-emerald-800">Pesanan Selesai!</p>
                 <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Matchaboy</p>
               </div>
+              {/* MATCHA MOMEN CARD - DISABLED (Coming Soon)
               <SocialShareCard
                 customerName={order.customerName}
                 orderId={order.id}
                 total={order.total}
                 items={order.items}
               />
+              */}
 
               {/* Review Section */}
               <div className="bg-card border border-border/50 rounded-2xl p-5 text-center space-y-3">

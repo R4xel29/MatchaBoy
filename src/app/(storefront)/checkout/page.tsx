@@ -1858,7 +1858,8 @@ export default function CheckoutPage() {
 
           {/* ── 5. Payment Selector (Brutal Premium Upgraded) ─────────────────── */}
           <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-5">
-            {/* A. MATCHABOY WALLET (Eksklusif & Utama) */}
+            {/* A. MATCHABOY WALLET (Eksklusif & Utama) - Only show if enabled */}
+            {paymentConfig?.wallet?.enabled && (
             <div className="space-y-2">
               <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 pl-1 select-none">Metode Pembayaran Utama</span>
               <button
@@ -1940,6 +1941,7 @@ export default function CheckoutPage() {
                 </div>
               </button>
             </div>
+            )}
 
             {/* B. PEMBAYARAN LANGSUNG (Horizontal Carousel) */}
             <div className="space-y-2">
@@ -3347,7 +3349,8 @@ export default function CheckoutPage() {
               {/* Content List Scrollable */}
               <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
                 
-                {/* 1. MATCHABOY WALLET */}
+                {/* 1. MATCHABOY WALLET - Only show if enabled */}
+                {paymentConfig?.wallet?.enabled && (
                 <div className="space-y-2.5">
                   <span className="block text-[9.5px] font-black uppercase tracking-wider text-gray-400 pl-1">Matchaboy Wallet (Pilihan Utama)</span>
                   <button
@@ -3407,6 +3410,7 @@ export default function CheckoutPage() {
                     </div>
                   </button>
                 </div>
+                )}
 
                 {/* 2. E-WALLETS */}
                 {paymentConfig?.doku?.enabled && (
