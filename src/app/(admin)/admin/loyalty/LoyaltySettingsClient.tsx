@@ -49,6 +49,11 @@ interface LoyaltySettingsData {
   easterEggVoucherCode: string;
   easterEggDiscount: number;
   easterEggQuota: number;
+
+  // Customizer fields
+  showMatchaCustomizer: boolean;
+  showSweetnessCustomizer: boolean;
+  showTumblerCustomizer: boolean;
 }
 
 interface Props {
@@ -356,6 +361,45 @@ export default function LoyaltySettingsClient({ initialSettings, voucherTemplate
               {settings.tumblerDiscountPct > 0 && ` + diskon ${settings.tumblerDiscountPct}%`}.
               {settings.tumblerVoucherEnabled && ` Pelanggan juga akan secara otomatis menerima Voucher Eco-Reward!`}
             </p>
+          </div>
+
+          {/* Fitur Kustomisasi Interaktif */}
+          <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+            <div className="flex items-center gap-2 mb-4 border-b border-border/20 pb-3">
+              <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                <Coffee className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Fitur Kustomisasi & Pilihan Interaktif</h3>
+                <p className="text-[10px] text-muted-foreground">Aktifkan atau matikan tampilan fitur interaktif di halaman menu detail produk.</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-xs font-bold text-foreground">Slider Kepekatan Matcha 🍵</h4>
+                  <p className="text-[10px] text-muted-foreground">Tampilkan penyesuaian kepekatan bubuk matcha murni pada produk matcha.</p>
+                </div>
+                <ToggleButton enabled={settings.showMatchaCustomizer} onChange={(v) => update('showMatchaCustomizer', v)} />
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border/20 pt-3">
+                <div>
+                  <h4 className="text-xs font-bold text-foreground">Slider Kemanisan Gula 🍯</h4>
+                  <p className="text-[10px] text-muted-foreground">Tampilkan pilihan slider tingkat kemanisan (Less, Biasa, Lumayan, Manis Sekali).</p>
+                </div>
+                <ToggleButton enabled={settings.showSweetnessCustomizer} onChange={(v) => update('showSweetnessCustomizer', v)} />
+              </div>
+
+              <div className="flex items-center justify-between border-t border-border/20 pt-3">
+                <div>
+                  <h4 className="text-xs font-bold text-foreground">Opsi Tumbler Sendiri di Detail Produk 🌿</h4>
+                  <p className="text-[10px] text-muted-foreground">Tanyakan kepada pelanggan apakah membawa tumbler sendiri langsung pada modal produk.</p>
+                </div>
+                <ToggleButton enabled={settings.showTumblerCustomizer} onChange={(v) => update('showTumblerCustomizer', v)} />
+              </div>
+            </div>
           </div>
 
           {/* Easter Egg Settings */}

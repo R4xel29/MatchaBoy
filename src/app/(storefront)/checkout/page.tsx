@@ -116,9 +116,20 @@ export default function CheckoutPage() {
 
   // Tumbler state
   const [hasTumbler, setHasTumbler] = useState(false);
+  const [hasInitializedTumbler, setHasInitializedTumbler] = useState(false);
   const [tumblerBonusPoints, setTumblerBonusPoints] = useState(0);
   const [tumblerDiscountPct, setTumblerDiscountPct] = useState(0);
   const [tumblerEnabled, setTumblerEnabled] = useState(false);
+
+  useEffect(() => {
+    if (items.length > 0 && !hasInitializedTumbler) {
+      const cartHasTumbler = items.some((item) => (item as any).hasTumbler === true);
+      if (cartHasTumbler) {
+        setHasTumbler(true);
+      }
+      setHasInitializedTumbler(true);
+    }
+  }, [items, hasInitializedTumbler]);
 
   // Voucher state
   const [voucherCode, setVoucherCode] = useState('');
@@ -498,7 +509,7 @@ export default function CheckoutPage() {
           setPointValue(d.pointValue || 1000);
         }
         if (d.tumblerBonusEnabled) {
-          setTumblerEnabled(true);
+          setTumblerEnabled(d.showTumblerCustomizer !== false);
           setTumblerBonusPoints(d.tumblerBonusPoints || 0);
           setTumblerDiscountPct(d.tumblerDiscountPct || 0);
         }

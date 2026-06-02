@@ -6,9 +6,6 @@ import { auth } from '@/auth';
 export async function GET() {
   try {
     const session = await auth();
-    if (!session?.user) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
 
     let settings = await prisma.loyaltySettings.findFirst();
     if (!settings) {
@@ -17,7 +14,7 @@ export async function GET() {
       });
     }
 
-    if (session.user.role === 'ADMIN') {
+    if (session?.user?.role === 'ADMIN') {
       return NextResponse.json(settings);
     } else {
       // Saring field rahasia easter egg untuk pengguna biasa/customer
@@ -90,6 +87,9 @@ export async function PUT(request: Request) {
         easterEggVoucherCode: body.easterEggVoucherCode !== undefined ? body.easterEggVoucherCode : undefined,
         easterEggDiscount: body.easterEggDiscount !== undefined ? Number(body.easterEggDiscount) : undefined,
         easterEggQuota: body.easterEggQuota !== undefined ? Number(body.easterEggQuota) : undefined,
+        showMatchaCustomizer: body.showMatchaCustomizer !== undefined ? Boolean(body.showMatchaCustomizer) : undefined,
+        showSweetnessCustomizer: body.showSweetnessCustomizer !== undefined ? Boolean(body.showSweetnessCustomizer) : undefined,
+        showTumblerCustomizer: body.showTumblerCustomizer !== undefined ? Boolean(body.showTumblerCustomizer) : undefined,
       },
     });
 

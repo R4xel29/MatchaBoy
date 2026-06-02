@@ -53,11 +53,22 @@ export function ProductModal({
   const [quantity, setQuantity] = useState(1);
   const [isDesktop, setIsDesktop] = useState(false);
   const [matchaLevel, setMatchaLevel] = useState<number>(5);
+  const [hasTumbler, setHasTumbler] = useState(false);
+  const [loyaltySettings, setLoyaltySettings] = useState<any>(null);
   
   // Bundle Selection State
   const [bundleSelections, setBundleSelections] = useState<{ [groupId: string]: any }>({});
 
   const { data: session } = useSession();
+
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/admin/loyalty/settings')
+        .then((r) => (r.ok ? r.json() : {}))
+        .then((data) => setLoyaltySettings(data))
+        .catch((err) => console.error('Error fetching settings in modal:', err));
+    }
+  }, [isOpen]);
   
   // Reviews state
   const [reviews, setReviews] = useState<any[]>([]);
@@ -205,6 +216,7 @@ export function ProductModal({
         setSizePrice(initialData.sizePrice || 0);
         setQuantity(initialData.quantity || 1);
         setMatchaLevel(initialData.matchaLevel || 5);
+        setHasTumbler(initialData.hasTumbler || false);
         if (initialData.bundleSelections) {
           const loaded: { [groupId: string]: any } = {};
           initialData.bundleSelections.forEach((s: any) => {
@@ -220,6 +232,7 @@ export function ProductModal({
         setSizePrice(0);
         setQuantity(1);
         setMatchaLevel(5);
+        setHasTumbler(false);
 
         if (product?.modifiers?.isBundle && product.modifiers.bundleGroups) {
           const defaults: { [groupId: string]: any } = {};
@@ -257,6 +270,7 @@ export function ProductModal({
       setQuantity(1);
       setBundleSelections({});
       setMatchaLevel(5);
+      setHasTumbler(false);
     }
   };
 
@@ -360,7 +374,8 @@ export function ProductModal({
       addOns: product.modifiers?.isBundle ? [] : selectedAddOns,
       isBundle: product.modifiers?.isBundle || false,
       bundleSelections: product.modifiers?.isBundle ? (bundleSelectionsArray as any[]) : undefined,
-      matchaLevel: isMatchaProduct ? matchaLevel : undefined
+      matchaLevel: isMatchaProduct ? matchaLevel : undefined,
+      hasTumbler: loyaltySettings?.showTumblerCustomizer !== false ? hasTumbler : false
     };
 
     if (editCartItemId) {
@@ -681,7 +696,7 @@ export function ProductModal({
                       /* ── Standard Customization ── */
                       <>
                         {/* Matcha Level Slider (Khusus Produk Matcha) */}
-                        {isMatchaProduct && (
+                        {isMatchaProduct && loyaltySettings?.showMatchaCustomizer !== false && (
                           <div className="space-y-3 bg-[#2E5A44]/5 p-4.5 rounded-3xl border border-[#2E5A44]/15 shadow-[0_4px_20px_rgba(46,90,68,0.02)] relative overflow-hidden mb-4">
                             {/* Visual Cup SVG Dinamis di Samping */}
                             <div className="flex items-center gap-4.5">
@@ -786,7 +801,7 @@ export function ProductModal({
                         )}
 
                         {/* Sugar Level Slider */}
-                        {hasSugarOption && (
+                        {(hasSugarOption || isMatchaProduct) && loyaltySettings?.showSweetnessCustomizer !== false && (
                           <div className="space-y-3 bg-amber-500/5 p-4.5 rounded-3xl border border-amber-500/15 shadow-[0_4px_20px_rgba(245,158,11,0.02)] relative overflow-hidden mb-4">
                             <div className="flex items-center gap-4.5">
                               <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
@@ -878,6 +893,45 @@ export function ProductModal({
                                 );
                               })}
                             </div>
+                          </div>
+                        )}
+
+                        {/* Opsi Tumbler Sendiri */}
+                        {loyaltySettings?.showTumblerCustomizer !== false && (
+                          <div className="bg-emerald-500/5 p-4 rounded-2xl border border-emerald-500/10 flex items-center justify-between gap-4 mt-4 text-left">
+                            <div className="flex items-center gap-3">
+                              <span className="text-xl">🌿</span>
+                              <div className="text-left">
+                                <h4 className="text-xs font-black text-gray-900 flex items-center gap-1.5">
+                                  Bawa Tumbler Sendiri
+                                  <span 
+                                    className="cursor-pointer text-muted-foreground hover:text-emerald-650 transition-colors inline-flex items-center text-[10px]"
+                                    title="Dapatkan bonus poin & diskon serta hemat lingkungan!"
+                                  >
+                                    ℹ️
+                                  </span>
+                                </h4>
+                                <p className="text-[10px] text-muted-foreground font-semibold leading-snug">
+                                  Bantu kurangi sampah plastik sekali pakai
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setHasTumbler(!hasTumbler)}
+                              className="focus:outline-none shrink-0"
+                            >
+                              <div className={`w-11 h-6 rounded-full transition-colors relative flex items-center p-0.5
+                                ${hasTumbler ? 'bg-emerald-500 border-emerald-500' : 'bg-gray-200 border-gray-300'}`}
+                              >
+                                <motion.div 
+                                  layout
+                                  transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                                  className="w-5 h-5 rounded-full bg-white shadow-sm"
+                                  animate={{ x: hasTumbler ? 20 : 0 }}
+                                />
+                              </div>
+                            </button>
                           </div>
                         )}
                       </>

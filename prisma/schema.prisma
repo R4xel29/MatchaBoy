@@ -512,6 +512,11 @@ model LoyaltySettings {
   easterEggDiscount     Int     @default(15000)
   easterEggQuota        Int     @default(10)
 
+  // Pengaturan Fitur Interaktif Customizer
+  showMatchaCustomizer     Boolean @default(true)
+  showSweetnessCustomizer  Boolean @default(true)
+  showTumblerCustomizer    Boolean @default(true)
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
