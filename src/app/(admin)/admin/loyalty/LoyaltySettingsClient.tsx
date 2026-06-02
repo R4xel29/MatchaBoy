@@ -8,7 +8,7 @@ import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import {
   Gift, Award, Coffee, Leaf, Share2, Save, Loader2,
   Trophy, Target, Recycle, ToggleLeft, ToggleRight,
-  TrendingUp, Ticket, CheckCircle2, BarChart3, ShieldCheck, Coins
+  TrendingUp, Ticket, CheckCircle2, BarChart3, ShieldCheck, Coins, AlertTriangle
 } from 'lucide-react';
 
 interface LoyaltySettingsData {
@@ -299,40 +299,152 @@ export default function LoyaltySettingsClient({ initialSettings, voucherTemplate
             </div>
           </div>
  
-          {/* Tumbler Bonus */}
-          <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-xl bg-teal-50 text-teal-600">
-                  <Recycle className="w-5 h-5" />
+          {/* Eco-Friendly Program (Tumbler Bonus) - REDESIGNED */}
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl border-2 border-emerald-200/60 p-6 shadow-md">
+            {/* Header dengan Emphasis */}
+            <div className="flex items-center justify-between mb-5 pb-4 border-b-2 border-emerald-200/40">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg">
+                  <Leaf className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">Bonus Tumbler / Wadah Sendiri</h3>
-                  <p className="text-[10px] text-muted-foreground">Kurangi plastik, beri bonus poin</p>
+                  <h3 className="text-base font-black text-emerald-900 flex items-center gap-2">
+                    🌿 Eco-Friendly Program (Tumbler Bonus)
+                  </h3>
+                  <p className="text-[11px] text-emerald-700/80 font-semibold">
+                    Program Badge Ramah Lingkungan
+                  </p>
                 </div>
               </div>
               <ToggleButton enabled={settings.tumblerBonusEnabled} onChange={(v) => update('tumblerBonusEnabled', v)} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Extra Poin</label>
-                <input type="number" value={settings.tumblerBonusPoints} onChange={(e) => update('tumblerBonusPoints', parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+
+            {/* Warning Box - Perbedaan Sistem */}
+            <div className="mb-5 p-4 bg-white/80 backdrop-blur-sm rounded-xl border-2 border-amber-300/50 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="p-2 rounded-lg bg-amber-100 text-amber-700 shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div className="space-y-2">
+                  <h4 className="text-xs font-black text-amber-900 uppercase tracking-wide">
+                    💡 PENTING: Perbedaan Loyalty Points vs Eco Badge
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10px]">
+                    <div className="p-2.5 bg-amber-50/50 rounded-lg border border-amber-200/30">
+                      <p className="font-black text-amber-900 mb-1">💎 Loyalty Points:</p>
+                      <ul className="space-y-0.5 text-amber-800 font-medium">
+                        <li>• <strong>Bisa digunakan</strong> untuk diskon checkout</li>
+                        <li>• <strong>Berkurang</strong> saat dipakai user</li>
+                        <li>• Bonus +<strong>{settings.tumblerBonusPoints}</strong> poin saat bawa tumbler</li>
+                      </ul>
+                    </div>
+                    <div className="p-2.5 bg-emerald-50/50 rounded-lg border border-emerald-200/30">
+                      <p className="font-black text-emerald-900 mb-1">🌿 Eco Badge (Counter):</p>
+                      <ul className="space-y-0.5 text-emerald-800 font-medium">
+                        <li>• <strong>TIDAK bisa</strong> digunakan untuk checkout</li>
+                        <li>• <strong>Tidak pernah</strong> berkurang (counter permanent)</li>
+                        <li>• Reward: <strong>Voucher FREE_DRINK</strong> + Level Up</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Diskon (%)</label>
-                <input type="number" value={settings.tumblerDiscountPct} onChange={(e) => update('tumblerDiscountPct', parseInt(e.target.value) || 0)}
-                  min={0} max={100}
-                  className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20" />
+            </div>
+
+            {/* Configuration - Loyalty Points Bonus */}
+            <div className="bg-white/60 rounded-xl p-4 mb-4 border border-emerald-200/30">
+              <h4 className="text-sm font-black text-emerald-900 mb-3 flex items-center gap-2">
+                <Coins className="w-4 h-4 text-amber-600" />
+                Bonus Loyalty Points (Poin Arus)
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-800 mb-1.5">
+                    Extra Poin Loyalty
+                  </label>
+                  <input 
+                    type="number" 
+                    value={settings.tumblerBonusPoints} 
+                    onChange={(e) => update('tumblerBonusPoints', parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2.5 text-sm bg-white border-2 border-emerald-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 font-semibold"
+                  />
+                  <p className="text-[9px] text-emerald-700 mt-1 font-medium">
+                    Bonus poin ARUS yang bisa dipakai untuk diskon
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-800 mb-1.5">
+                    Diskon Langsung (%)
+                  </label>
+                  <input 
+                    type="number" 
+                    value={settings.tumblerDiscountPct} 
+                    onChange={(e) => update('tumblerDiscountPct', parseInt(e.target.value) || 0)}
+                    min={0} 
+                    max={100}
+                    className="w-full px-3 py-2.5 text-sm bg-white border-2 border-emerald-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/40 focus:border-emerald-400 font-semibold"
+                  />
+                  <p className="text-[9px] text-emerald-700 mt-1 font-medium">
+                    Diskon % langsung dari subtotal
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Configuration - Eco Badge Milestone */}
+            <div className="bg-white/60 rounded-xl p-4 border border-emerald-200/30">
+              <h4 className="text-sm font-black text-emerald-900 mb-3 flex items-center gap-2">
+                <Target className="w-4 h-4 text-emerald-600" />
+                Eco-Milestone Rewards (Badge Counter)
+              </h4>
+              
+              <div className="space-y-3 text-[10px] text-emerald-800 mb-4 bg-emerald-50/30 p-3 rounded-lg border border-emerald-200/30">
+                <p className="font-semibold">
+                  📊 <strong>Cara Kerja Eco Badge:</strong>
+                </p>
+                <ul className="space-y-1 ml-4 font-medium">
+                  <li>• User bawa tumbler → <strong>tumblerCount +1</strong> (counter naik)</li>
+                  <li>• Setiap mencapai goal tertentu → dapat <strong>Voucher FREE_DRINK</strong> + <strong>Level naik</strong></li>
+                  <li>• Counter <strong>TIDAK PERNAH berkurang</strong> (permanent achievement)</li>
+                  <li>• User <strong>TIDAK BISA pakai</strong> eco badge untuk checkout</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 bg-emerald-100/50 rounded-lg border border-emerald-200/40">
+                    <p className="text-[9px] font-bold text-emerald-700 uppercase mb-1">Goal 1</p>
+                    <p className="text-lg font-black text-emerald-900">10x</p>
+                    <p className="text-[8px] text-emerald-600 mt-0.5">→ Ksatria Hijau</p>
+                  </div>
+                  <div className="p-2 bg-emerald-100/50 rounded-lg border border-emerald-200/40">
+                    <p className="text-[9px] font-bold text-emerald-700 uppercase mb-1">Goal 2</p>
+                    <p className="text-lg font-black text-emerald-900">25x</p>
+                    <p className="text-[8px] text-emerald-600 mt-0.5">→ Penjaga Arus</p>
+                  </div>
+                  <div className="p-2 bg-emerald-100/50 rounded-lg border border-emerald-200/40">
+                    <p className="text-[9px] font-bold text-emerald-700 uppercase mb-1">Goal 3+</p>
+                    <p className="text-lg font-black text-emerald-900">+25x</p>
+                    <p className="text-[8px] text-emerald-600 mt-0.5">→ Increment</p>
+                  </div>
+                </div>
+                <p className="text-[10px] text-emerald-700 font-medium text-center">
+                  ⚙️ Milestone goals saat ini <strong>hardcoded</strong> di kode. Future: bisa dikonfigurasi di sini.
+                </p>
               </div>
             </div>
             
             {/* Tumbler Eco-Voucher Settings */}
-            <div className="border-t border-border/40 mt-4 pt-4 space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="bg-white/60 rounded-xl p-4 mt-4 border border-emerald-200/30">
+              <div className="flex items-center justify-between mb-3">
                 <div>
-                  <h4 className="text-xs font-bold text-foreground">Hadiah Voucher Eco-Reward</h4>
-                  <p className="text-[10px] text-muted-foreground">Berikan voucher otomatis jika membawa tumbler</p>
+                  <h4 className="text-sm font-bold text-emerald-900 flex items-center gap-2">
+                    <Ticket className="w-4 h-4" />
+                    Auto-Voucher Eco-Reward
+                  </h4>
+                  <p className="text-[10px] text-emerald-700 font-medium mt-0.5">
+                    Berikan voucher otomatis setiap kali bawa tumbler (per transaksi)
+                  </p>
                 </div>
                 <ToggleButton enabled={settings.tumblerVoucherEnabled} onChange={(v) => update('tumblerVoucherEnabled', v)} />
               </div>
@@ -340,27 +452,41 @@ export default function LoyaltySettingsClient({ initialSettings, voucherTemplate
               {settings.tumblerVoucherEnabled && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fadeIn">
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Jenis Voucher</label>
-                    <select value={settings.tumblerVoucherType || 'UPGRADE_SIZE'} onChange={(e) => update('tumblerVoucherType', e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-800 mb-1.5">Jenis Voucher</label>
+                    <select 
+                      value={settings.tumblerVoucherType || 'UPGRADE_SIZE'} 
+                      onChange={(e) => update('tumblerVoucherType', e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm bg-white border-2 border-emerald-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/40 font-semibold"
+                    >
                       {dynamicRewardTypes.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Deskripsi Voucher</label>
-                    <input type="text" value={settings.tumblerVoucherDesc || ''} onChange={(e) => update('tumblerVoucherDesc', e.target.value)}
-                      className="w-full px-3 py-2 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-teal-500/20"
-                      placeholder="Eco-Reward: Free Upgrade Size (Bawa Tumbler)" />
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-800 mb-1.5">Deskripsi Voucher</label>
+                    <input 
+                      type="text" 
+                      value={settings.tumblerVoucherDesc || ''} 
+                      onChange={(e) => update('tumblerVoucherDesc', e.target.value)}
+                      className="w-full px-3 py-2.5 text-sm bg-white border-2 border-emerald-200/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/40 font-semibold"
+                      placeholder="Eco-Reward: Free Upgrade Size (Bawa Tumbler)" 
+                    />
                   </div>
                 </div>
               )}
             </div>
 
-            <p className="text-[10px] text-muted-foreground mt-3">
-              💡 Setiap pelanggan yang bawa tumbler/wadah sendiri mendapat {settings.tumblerBonusPoints} poin extra
-              {settings.tumblerDiscountPct > 0 && ` + diskon ${settings.tumblerDiscountPct}%`}.
-              {settings.tumblerVoucherEnabled && ` Pelanggan juga akan secara otomatis menerima Voucher Eco-Reward!`}
-            </p>
+            {/* Summary Footer */}
+            <div className="mt-5 p-3.5 bg-emerald-900/5 rounded-xl border border-emerald-300/30">
+              <p className="text-[11px] text-emerald-900 font-semibold leading-relaxed">
+                💡 <strong>Ringkasan:</strong> Setiap pelanggan yang bawa tumbler akan mendapat:
+              </p>
+              <ul className="mt-2 space-y-1 text-[10px] text-emerald-800 font-medium ml-4">
+                <li>• <strong>+{settings.tumblerBonusPoints} Loyalty Points</strong> (bisa dipakai diskon)</li>
+                {settings.tumblerDiscountPct > 0 && <li>• <strong>Diskon {settings.tumblerDiscountPct}%</strong> langsung</li>}
+                <li>• <strong>+1 Eco Badge Counter</strong> (progress ke milestone)</li>
+                {settings.tumblerVoucherEnabled && <li>• <strong>Voucher Eco-Reward</strong> otomatis per transaksi</li>}
+              </ul>
+            </div>
           </div>
 
           {/* Fitur Kustomisasi Interaktif */}

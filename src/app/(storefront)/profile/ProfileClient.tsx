@@ -373,28 +373,9 @@ export default function ProfileClient({
                   </div>
                 </div>
 
-                {/* Right: Metrics Grid */}
-                <div className="flex items-center gap-3 shrink-0">
-                  {/* Level Badge */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const targetUrl = `/profile?section=quests`;
-                      window.history.pushState(null, '', targetUrl);
-                      window.dispatchEvent(new PopStateEvent('popstate'));
-                    }}
-                    className="flex-grow sm:flex-initial min-w-[100px] bg-[#FFFBF7] border border-[#D4A574]/25 shadow-sm rounded-2xl px-4 py-2.5 flex items-center gap-3 text-left hover:bg-[#B48A5E]/5 hover:border-[#D4A574]/50 transition-all active:scale-95 group/level cursor-pointer"
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-[#1E3F20] flex items-center justify-center shrink-0 shadow-sm group-hover/level:scale-110 transition-transform">
-                      <Leaf className="w-4 h-4 text-[#D4A574]" />
-                    </div>
-                    <div className="space-y-0.5">
-                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider leading-none">Level Arus</p>
-                      <p className="text-xs font-black text-gray-800 leading-none">{user.isGuest ? '-' : (user.arusLevel || 'Tunas Arus')}</p>
-                    </div>
-                  </button>
-
-                  {/* Points Badge */}
+                {/* Right: Metrics Grid - 3 Cards */}
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                  {/* Loyalty Points Badge - Amber/Gold */}
                   <button
                     type="button"
                     onClick={() => {
@@ -402,16 +383,56 @@ export default function ProfileClient({
                       window.history.pushState(null, '', targetUrl);
                       window.dispatchEvent(new PopStateEvent('popstate'));
                     }}
-                    className="flex-grow sm:flex-initial min-w-[115px] bg-[#FFFBF7] border border-[#D4A574]/25 shadow-sm rounded-2xl px-4 py-2.5 flex items-center gap-3 text-left hover:bg-[#B48A5E]/5 hover:border-[#D4A574]/50 transition-all active:scale-95 group/points cursor-pointer"
+                    className="flex-grow sm:flex-initial min-w-[110px] bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/50 shadow-sm rounded-2xl px-3 py-2.5 flex items-center gap-2.5 text-left hover:shadow-md hover:border-amber-300/70 transition-all active:scale-95 group/points cursor-pointer"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-[#B48A5E] flex items-center justify-center shrink-0 shadow-sm group-hover/points:scale-110 transition-transform">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0 shadow-sm group-hover/points:scale-110 transition-transform">
                       <Coins className="w-4 h-4 text-white" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[9px] text-[#B48A5E]/80 font-bold uppercase tracking-wider leading-none">Arus Poin</p>
-                      <p className="text-xs font-black text-gray-850 leading-none">
-                        {user.isGuest ? '-' : user.points} <span className="text-[8px] text-gray-400 font-bold">pts</span>
+                      <p className="text-[9px] text-amber-700/70 font-bold uppercase tracking-wider leading-none">💎 Loyalty</p>
+                      <p className="text-xs font-black text-amber-900 leading-none">
+                        {user.isGuest ? '-' : user.points} <span className="text-[8px] text-amber-600 font-bold">pts</span>
                       </p>
+                    </div>
+                  </button>
+
+                  {/* Eco Badge - Emerald/Green */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetUrl = `/profile?section=loyalty&tab=eco`;
+                      window.history.pushState(null, '', targetUrl);
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}
+                    className="flex-grow sm:flex-initial min-w-[110px] bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200/50 shadow-sm rounded-2xl px-3 py-2.5 flex items-center gap-2.5 text-left hover:shadow-md hover:border-emerald-300/70 transition-all active:scale-95 group/eco cursor-pointer"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shrink-0 shadow-sm group-hover/eco:scale-110 transition-transform">
+                      <Leaf className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] text-emerald-700/70 font-bold uppercase tracking-wider leading-none">🌿 Eco</p>
+                      <p className="text-xs font-black text-emerald-900 leading-none">
+                        {user.isGuest ? '-' : (user.tumblerCount || 0)}<span className="text-[8px] text-emerald-600 font-bold">/{user.currentTumblerGoal || 10}</span>
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Level Badge - Dark Green */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetUrl = `/profile?section=quests`;
+                      window.history.pushState(null, '', targetUrl);
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                    }}
+                    className="flex-grow sm:flex-initial min-w-[110px] bg-gradient-to-br from-[#FFFBF7] to-[#FFF6EB] border border-[#D4A574]/25 shadow-sm rounded-2xl px-3 py-2.5 flex items-center gap-2.5 text-left hover:shadow-md hover:border-[#D4A574]/50 transition-all active:scale-95 group/level cursor-pointer"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-[#1E3F20] flex items-center justify-center shrink-0 shadow-sm group-hover/level:scale-110 transition-transform">
+                      <Award className="w-4 h-4 text-[#D4A574]" />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider leading-none truncate max-w-[90px]">🏅 Level</p>
+                      <p className="text-[10px] font-black text-gray-800 leading-none truncate max-w-[90px]">{user.isGuest ? '-' : (user.arusLevel || 'Tunas Arus')}</p>
                     </div>
                   </button>
                 </div>
