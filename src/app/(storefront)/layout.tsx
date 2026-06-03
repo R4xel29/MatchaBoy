@@ -115,15 +115,17 @@ export default function StorefrontLayout({
     >
       <div className="min-h-dvh bg-background">
         <AppHeader onSearchClick={() => setSearchOpen(true)} />
-        <main className="pb-20 md:pb-0">{children}</main>
-        <FloatingCart />
+        <main className={pathname === '/spmb' ? "pb-0" : "pb-20 md:pb-0"}>{children}</main>
+        {pathname !== '/spmb' && <FloatingCart />}
         <ActiveOrderPopup />
         <PromoPopup />
         <MatchaVibesPlayer />
 
-        <Suspense fallback={null}>
-          <BottomNav />
-        </Suspense>
+        {pathname !== '/spmb' && (
+          <Suspense fallback={null}>
+            <BottomNav />
+          </Suspense>
+        )}
         <QROverlay 
           key={session?.user?.id ? `qr-${session.user.id}-${qrOpen}` : 'qr-guest'} 
           isOpen={qrOpen} 

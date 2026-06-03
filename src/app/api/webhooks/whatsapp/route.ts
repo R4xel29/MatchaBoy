@@ -93,6 +93,46 @@ export async function POST(req: Request) {
                            lowerText.includes("request link untuk masuk / daftar");
     const isDeleteRequest = lowerText.startsWith("hapus-");
     const isVerificationRequest = lowerText.startsWith("verifikasi-");
+    const isSpmbRequest = lowerText.startsWith("spmb-");
+
+    if (isSpmbRequest) {
+      console.log(`[WHATSAPP_WEBHOOK] Mendeteksi SPMB ORDER REQUEST: ${text}`);
+      const orderId = text.trim().toUpperCase(); // e.g. "SPMB-XXXXXX"
+      
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { items: { include: { product: true } } }
+      });
+
+      if (!order) {
+        console.warn(`[WHATSAPP_WEBHOOK] Order SPMB tidak ditemukan: ${orderId}`);
+        const reply = `Maaf, pesanan dengan ID *${orderId}* tidak ditemukan. Silakan periksa kembali ID pesanan Anda atau lakukan pemesanan ulang.`;
+        return NextResponse.json({ success: false, error: "Order not found", replyMessage: reply });
+      }
+
+      const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`;
+
+      if (order.paymentMethod === 'QRIS') {
+        const paymentSettings = await prisma.paymentSettings.findFirst();
+        const qrisImage = paymentSettings?.qrisImage;
+
+        const reply = `Halo *${order.customerName}*!\n\nBerikut adalah QRIS untuk pembayaran pesanan SPMB Anda *${order.id}*:\n\n*Detail Pesanan:*\n${order.items.map(item => `- ${item.qty}x ${item.product.name}`).join('\n')}\n\n*Total Pembayaran: ${formatCurrency(order.total)}*\n*Jam Pengantaran: ${order.pickupTime}*\n*Alamat: ${order.address}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya ke sini ya! 🍵`;
+        
+        return NextResponse.json({
+          success: true,
+          replyMessage: reply,
+          image: qrisImage || undefined
+        });
+      } else {
+        // COD
+        const reply = `Halo *${order.customerName}*!\n\nPesanan COD Anda *${order.id}* telah terkonfirmasi. ✅\n\n*Detail Pesanan:*\n${order.items.map(item => `- ${item.qty}x ${item.product.name}`).join('\n')}\n\n*Total Pembayaran: ${formatCurrency(order.total)}*\n*Jam Pengantaran: ${order.pickupTime}*\n*Alamat: ${order.address}*\n\nMohon siapkan uang pas saat pesanan diantarkan ya. Terima kasih! 🍵`;
+        
+        return NextResponse.json({
+          success: true,
+          replyMessage: reply
+        });
+      }
+    }
 
     if (isVerificationRequest) {
       console.log(`[WHATSAPP_WEBHOOK] Mendeteksi VERIFICATION REQUEST`);
