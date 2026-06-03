@@ -41,7 +41,8 @@ export async function PATCH(
         notes: true,
         voucherCode: true,
         paymentMethod: true,
-        paymentProofUrl: true
+        paymentProofUrl: true,
+        source: true
       }
     })
 

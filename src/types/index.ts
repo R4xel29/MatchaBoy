@@ -40,6 +40,11 @@ export interface Product {
         discountValue?: number;
         originalPrice?: number;
         promo?: ProductPromo;
+        showMatcha?: boolean;
+        defaultMatcha?: number;
+        showSweetness?: boolean;
+        defaultSugar?: string;
+        defaultIce?: string;
     };
 }
 

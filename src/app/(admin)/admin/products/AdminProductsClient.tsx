@@ -38,6 +38,12 @@ interface ModifiersData {
   discountValue?: number;
   originalPrice?: number;
   promo?: ProductPromo;
+  // Per-product customizer settings
+  showMatcha?: boolean;
+  defaultMatcha?: number;
+  showSweetness?: boolean;
+  defaultSugar?: string;
+  defaultIce?: string;
 }
 
 const ALL_ICE_LEVELS = ['Normal Ice', 'Less Ice', 'No Ice'];
@@ -195,6 +201,13 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [modAddOns, setModAddOns] = useState<AddOnItem[]>([]);
   const [newAddOnName, setNewAddOnName] = useState('');
   const [newAddOnPrice, setNewAddOnPrice] = useState('');
+
+  // Matcha & Sweetness customizer states
+  const [showMatcha, setShowMatcha] = useState<boolean>(true);
+  const [defaultMatcha, setDefaultMatcha] = useState<number>(5);
+  const [showSweetness, setShowSweetness] = useState<boolean>(true);
+  const [defaultSugar, setDefaultSugar] = useState<string>('Biasa');
+  const [defaultIce, setDefaultIce] = useState<string>('Normal Ice');
 
   // Bundle / Combo state
   const [isBundle, setIsBundle] = useState<boolean>(false);
@@ -402,6 +415,13 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setDiscountType(mods.discountType || 'fixed');
       setDiscountValue(mods.discountValue ? mods.discountValue.toString() : '');
 
+      // New customizer fields
+      setShowMatcha(mods.showMatcha !== false);
+      setDefaultMatcha(mods.defaultMatcha ?? 5);
+      setShowSweetness(mods.showSweetness !== false);
+      setDefaultSugar(mods.defaultSugar || 'Biasa');
+      setDefaultIce(mods.defaultIce || 'Normal Ice');
+
       // Promo properties
       setPromoActive(mods.promo?.isActive || false);
       setPromoPrice(mods.promo?.promoPrice ? mods.promo.promoPrice.toString() : '');
@@ -419,6 +439,13 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setFreeShipping(false);
       setDiscountType('fixed');
       setDiscountValue('');
+
+      // New customizer fields defaults
+      setShowMatcha(true);
+      setDefaultMatcha(5);
+      setShowSweetness(true);
+      setDefaultSugar('Biasa');
+      setDefaultIce('Normal Ice');
 
       // Reset promo properties
       setPromoActive(false);
@@ -649,6 +676,11 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       if (modIce.length > 0) modifiers.iceLevel = modIce;
       if (modSugar.length > 0) modifiers.sugarLevel = modSugar;
       if (modAddOns.length > 0) modifiers.addOns = modAddOns;
+      modifiers.showMatcha = showMatcha;
+      modifiers.defaultMatcha = defaultMatcha;
+      modifiers.showSweetness = showSweetness;
+      modifiers.defaultSugar = defaultSugar;
+      modifiers.defaultIce = defaultIce;
     }
 
     if (promoActive) {
@@ -1427,6 +1459,87 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                         <CirclePlus className="w-4 h-4" />
                       </button>
                     </div>
+                  </div>
+
+                  {/* ── Matcha Customizer Toggle ── */}
+                  <div className="pt-4 border-t border-border/30">
+                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-brand-100 bg-brand-50/20 mb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-brand-800 uppercase tracking-wider flex items-center gap-2">
+                          🍵 Kustomisasi Kepekatan Matcha
+                        </h4>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kepekatan matcha untuk produk ini</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowMatcha(!showMatcha)}
+                        className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showMatcha ? 'bg-[#2E5A44]' : 'bg-gray-200'}`}
+                      >
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showMatcha ? 'left-[18px]' : 'left-0.5'}`} />
+                      </button>
+                    </div>
+                    {showMatcha && (
+                      <div className="px-1 pb-1 space-y-2">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Default Kepekatan Matcha (1–10)</label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range" min="1" max="10"
+                            value={defaultMatcha}
+                            onChange={(e) => setDefaultMatcha(parseInt(e.target.value))}
+                            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-emerald-100 to-emerald-900"
+                          />
+                          <span className="text-sm font-black text-[#2E5A44] w-6 text-center">{defaultMatcha}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Sweetness & Ice Toggle ── */}
+                  <div className="pt-4 border-t border-border/30">
+                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
+                          🍯 Kustomisasi Kemanisan & Es
+                        </h4>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kemanisan dan pilihan es untuk produk ini</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowSweetness(!showSweetness)}
+                        className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showSweetness ? 'bg-amber-500' : 'bg-gray-200'}`}
+                      >
+                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showSweetness ? 'left-[18px]' : 'left-0.5'}`} />
+                      </button>
+                    </div>
+                    {showSweetness && (
+                      <div className="grid grid-cols-2 gap-3 bg-muted/10 p-3 rounded-xl border border-border/20">
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Kemanisan</label>
+                          <select
+                            value={defaultSugar}
+                            onChange={(e) => setDefaultSugar(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
+                          >
+                            <option value="Less">Less</option>
+                            <option value="Biasa">Biasa</option>
+                            <option value="Lumayan">Lumayan</option>
+                            <option value="Manis Sekali">Manis Sekali</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Es</label>
+                          <select
+                            value={defaultIce}
+                            onChange={(e) => setDefaultIce(e.target.value)}
+                            className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
+                          >
+                            <option value="Normal Ice">Normal Ice</option>
+                            <option value="Less Ice">Less Ice</option>
+                            <option value="No Ice">No Ice</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

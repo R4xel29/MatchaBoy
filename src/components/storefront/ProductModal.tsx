@@ -225,13 +225,13 @@ export function ProductModal({
           setBundleSelections(loaded);
         }
       } else {
-        setIceLevel('Normal Ice');
-        setSugarLevel('Normal Sugar');
+        setIceLevel((product?.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
+        setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Normal Sugar');
         setSelectedAddOns([]);
         setSize('Normal');
         setSizePrice(0);
         setQuantity(1);
-        setMatchaLevel(5);
+        setMatchaLevel(product?.modifiers?.defaultMatcha ?? 5);
         setHasTumbler(false);
 
         if (product?.modifiers?.isBundle && product.modifiers.bundleGroups) {
@@ -262,14 +262,14 @@ export function ProductModal({
   // Reset state on explicit close (fallback)
   const resetState = () => {
     if (!initialData) {
-      setIceLevel('Normal Ice');
-      setSugarLevel('Normal Sugar');
+      setIceLevel((product?.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
+      setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Normal Sugar');
       setSelectedAddOns([]);
       setSize('Normal');
       setSizePrice(0);
       setQuantity(1);
       setBundleSelections({});
-      setMatchaLevel(5);
+      setMatchaLevel(product?.modifiers?.defaultMatcha ?? 5);
       setHasTumbler(false);
     }
   };
@@ -295,12 +295,28 @@ export function ProductModal({
     return nameLower.includes('matcha') || nameLower.includes('green tea') || descLower.includes('matcha');
   }, [product]);
 
+  const hasSugarOption = useMemo(() => {
+    return !!(product?.modifiers?.sugarLevel && product.modifiers.sugarLevel.length > 0);
+  }, [product]);
+
+  const shouldShowMatchaCustomizer = useMemo(() => {
+    if (!product) return false;
+    const isShown = product.modifiers?.showMatcha === true || (isMatchaProduct && product.modifiers?.showMatcha !== false);
+    return isShown && loyaltySettings?.showMatchaCustomizer !== false;
+  }, [product, isMatchaProduct, loyaltySettings]);
+
+  const shouldShowSweetnessCustomizer = useMemo(() => {
+    if (!product) return false;
+    const isShown = product.modifiers?.showSweetness === true || ((hasSugarOption || isMatchaProduct) && product.modifiers?.showSweetness !== false);
+    return isShown && loyaltySettings?.showSweetnessCustomizer !== false;
+  }, [product, hasSugarOption, isMatchaProduct, loyaltySettings]);
+
   const matchaPremium = useMemo(() => {
-    if (!isMatchaProduct || product?.modifiers?.isBundle) return 0;
+    if (!shouldShowMatchaCustomizer || product?.modifiers?.isBundle) return 0;
     if (matchaLevel === 7 || matchaLevel === 8) return 1000;
     if (matchaLevel === 9 || matchaLevel === 10) return 2000;
     return 0;
-  }, [isMatchaProduct, matchaLevel, product]);
+  }, [shouldShowMatchaCustomizer, matchaLevel, product]);
 
   const activePromo = product ? getActivePromo(product) : null;
   const baseProductPrice = activePromo ? activePromo.promoPrice : (product?.price ?? 0);
@@ -374,7 +390,7 @@ export function ProductModal({
       addOns: product.modifiers?.isBundle ? [] : selectedAddOns,
       isBundle: product.modifiers?.isBundle || false,
       bundleSelections: product.modifiers?.isBundle ? (bundleSelectionsArray as any[]) : undefined,
-      matchaLevel: isMatchaProduct ? matchaLevel : undefined,
+      matchaLevel: shouldShowMatchaCustomizer ? matchaLevel : undefined,
       hasTumbler: loyaltySettings?.showTumblerCustomizer !== false ? hasTumbler : false
     };
 
@@ -389,7 +405,6 @@ export function ProductModal({
   };
 
   const hasIceOption = product?.modifiers?.iceLevel && product.modifiers.iceLevel.length > 0;
-  const hasSugarOption = product?.modifiers?.sugarLevel && product.modifiers.sugarLevel.length > 0;
   const hasAddOns = product?.modifiers?.addOns && product.modifiers.addOns.length > 0;
   const hasSizeOption = product?.modifiers?.sizes && product.modifiers.sizes.length > 0;
   const isBundleProduct = product?.modifiers?.isBundle === true;
@@ -696,7 +711,7 @@ export function ProductModal({
                       /* ── Standard Customization ── */
                       <>
                         {/* Matcha Level Slider (Khusus Produk Matcha) */}
-                        {isMatchaProduct && loyaltySettings?.showMatchaCustomizer !== false && (
+                        {shouldShowMatchaCustomizer && (
                           <div className="space-y-3 bg-[#2E5A44]/5 p-4.5 rounded-3xl border border-[#2E5A44]/15 shadow-[0_4px_20px_rgba(46,90,68,0.02)] relative overflow-hidden mb-4">
                             {/* Visual Cup SVG Dinamis di Samping */}
                             <div className="flex items-center gap-4.5">
@@ -801,7 +816,7 @@ export function ProductModal({
                         )}
 
                         {/* Sugar Level Slider */}
-                        {(hasSugarOption || isMatchaProduct) && loyaltySettings?.showSweetnessCustomizer !== false && (
+                        {shouldShowSweetnessCustomizer && (
                           <div className="space-y-3 bg-amber-500/5 p-4.5 rounded-3xl border border-amber-500/15 shadow-[0_4px_20px_rgba(245,158,11,0.02)] relative overflow-hidden mb-4">
                             <div className="flex items-center gap-4.5">
                               <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
