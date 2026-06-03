@@ -139,3 +139,167 @@ export async function sendCancelledNotification(orderId: string, reason?: string
   }
 }
 
+export async function sendAdminOrderSummary() {
+  try {
+    const storeSettings = await prisma.storeSettings.findFirst();
+    if (!storeSettings || !storeSettings.adminWaNumbers) {
+      console.log('[WHATSAPP_SERVICE] No admin numbers configured for summary notification.');
+      return;
+    }
+
+    const rawNumbers = storeSettings.adminWaNumbers;
+    const adminNumbers = rawNumbers
+      .split(',')
+      .map(n => n.trim())
+      .filter(n => n.length > 0)
+      .map(n => {
+        let std = n.replace(/[^0-9]/g, '');
+        if (std.startsWith('08')) {
+          std = '62' + std.substring(1);
+        } else if (std.startsWith('8')) {
+          std = '62' + std;
+        }
+        return std;
+      });
+
+    if (adminNumbers.length === 0) {
+      console.log('[WHATSAPP_SERVICE] No valid admin numbers found after parsing.');
+      return;
+    }
+
+    // Get today and tomorrow local dates in Jakarta timezone (WIB)
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' });
+    const todayStr = formatter.format(now); // YYYY-MM-DD
+    const tomorrowStr = formatter.format(new Date(now.getTime() + 24 * 60 * 60 * 1000)); // YYYY-MM-DD
+
+    const todayStart = new Date(todayStr);
+    const tomorrowEnd = new Date(tomorrowStr);
+    tomorrowEnd.setHours(23, 59, 59, 999);
+
+    const orders = await prisma.order.findMany({
+      where: {
+        source: 'SPMB',
+        status: { not: 'CANCELLED' },
+        pickupDate: {
+          gte: todayStart,
+          lte: tomorrowEnd
+        }
+      },
+      include: {
+        items: {
+          include: {
+            product: true
+          }
+        }
+      },
+      orderBy: [
+        { pickupDate: 'asc' },
+        { pickupTime: 'asc' }
+      ]
+    });
+
+    if (orders.length === 0) {
+      console.log('[WHATSAPP_SERVICE] No active SPMB orders found for today/tomorrow.');
+      return;
+    }
+
+    // Helper to format date in Indonesian format
+    const formatIndonesianDate = (date: Date): string => {
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const fullMonths = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      
+      try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Jakarta',
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric'
+        });
+        const parts = formatter.formatToParts(date);
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const day = parts.find(p => p.type === 'day')?.value;
+        
+        const d = new Date(Number(year), Number(month) - 1, Number(day));
+        return `${days[d.getDay()]} ${day} ${fullMonths[d.getMonth()]} ${year}`;
+      } catch {
+        return `${days[date.getDay()]} ${date.getDate()} ${fullMonths[date.getMonth()]} ${date.getFullYear()}`;
+      }
+    };
+
+    let message = `┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\n`;
+    message += `┃     *DAFTAR PESANAN SPMB*  ┃\n`;
+    message += `┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+
+    // Group by date
+    const ordersByDate: { [dateStr: string]: typeof orders } = {};
+    for (const order of orders) {
+      const dateStr = formatIndonesianDate(order.pickupDate || order.createdAt);
+      if (!ordersByDate[dateStr]) {
+        ordersByDate[dateStr] = [];
+      }
+      ordersByDate[dateStr].push(order);
+    }
+
+    for (const [dateStr, dateOrders] of Object.entries(ordersByDate)) {
+      message += `*📅 ${dateStr}*\n`;
+      message += `┌────────────────────────────\n`;
+
+      // Group by time slot
+      const ordersByTime: { [timeStr: string]: typeof orders } = {};
+      for (const order of dateOrders) {
+        const timeStr = order.pickupTime || '00:00';
+        if (!ordersByTime[timeStr]) {
+          ordersByTime[timeStr] = [];
+        }
+        ordersByTime[timeStr].push(order);
+      }
+
+      let dateTotal = 0;
+
+      for (const [timeStr, timeOrders] of Object.entries(ordersByTime)) {
+        const formattedTime = timeStr.replace(':', '.');
+        message += `│  *( ${formattedTime} )*\n`;
+
+        timeOrders.forEach((order, index) => {
+          const num = index + 1;
+          const itemsStr = order.items.map(item => `${item.product.name} ${item.qty}x`).join(', ');
+          
+          let payMethodStr = '';
+          if (order.paymentMethod === 'QRIS') {
+            const isPaid = order.status !== 'PENDING_PAYMENT';
+            payMethodStr = `[ Qris ] ${isPaid ? '✅ Lunas' : '❌ belum lunas'}`;
+          } else if (order.paymentMethod === 'COD') {
+            payMethodStr = `[ COD ]`;
+          } else {
+            payMethodStr = `[ ${order.paymentMethod} ]`;
+          }
+
+          const formattedTotal = order.total.toLocaleString('id-ID');
+
+          message += `│  ${num}. *${order.customerName}* - ${itemsStr}\n`;
+          message += `│     ${payMethodStr} (${order.id}) ++ ${formattedTotal}\n`;
+          dateTotal += order.total;
+        });
+        message += `│\n`;
+      }
+      
+      // Remove trailing empty line for neat formatting
+      message = message.replace(/│\n$/, '');
+      message += `└────────────────────────────\n`;
+      message += `💰 *Total:* Rp ${dateTotal.toLocaleString('id-ID')}\n\n`;
+    }
+
+    message = message.trim();
+
+    // Send to all admin numbers
+    for (const adminPhone of adminNumbers) {
+      await sendWhatsAppMessage(adminPhone, message);
+    }
+  } catch (error) {
+    console.error('[WHATSAPP_SERVICE] Gagal mengirim summary ke admin:', error);
+  }
+}
+
+

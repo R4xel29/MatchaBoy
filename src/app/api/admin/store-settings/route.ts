@@ -28,6 +28,7 @@ export async function GET() {
         spmbStartTime: '08:00',
         spmbEndTime: '13:00',
         spmbCloseTime: '16:00',
+        adminWaNumbers: '',
       })
     }
 
@@ -52,6 +53,7 @@ export async function GET() {
       spmbStartTime: settings.spmbStartTime || "08:00",
       spmbEndTime: settings.spmbEndTime || "13:00",
       spmbCloseTime: settings.spmbCloseTime || "16:00",
+      adminWaNumbers: settings.adminWaNumbers || "",
     })
   } catch {
     return NextResponse.json({
@@ -74,6 +76,7 @@ export async function GET() {
       spmbStartTime: "08:00",
       spmbEndTime: "13:00",
       spmbCloseTime: "16:00",
+      adminWaNumbers: "",
     })
   }
 }
@@ -120,6 +123,7 @@ export async function PUT(req: Request) {
           spmbStartTime: body.spmbStartTime !== undefined ? body.spmbStartTime : existing.spmbStartTime,
           spmbEndTime: body.spmbEndTime !== undefined ? body.spmbEndTime : existing.spmbEndTime,
           spmbCloseTime: body.spmbCloseTime !== undefined ? body.spmbCloseTime : existing.spmbCloseTime,
+          adminWaNumbers: body.adminWaNumbers !== undefined ? body.adminWaNumbers : existing.adminWaNumbers,
         },
       })
       return NextResponse.json(updated)
@@ -145,6 +149,7 @@ export async function PUT(req: Request) {
           spmbStartTime: body.spmbStartTime || '08:00',
           spmbEndTime: body.spmbEndTime || '13:00',
           spmbCloseTime: body.spmbCloseTime || '16:00',
+          adminWaNumbers: body.adminWaNumbers || '',
         },
       })
       return NextResponse.json(created)

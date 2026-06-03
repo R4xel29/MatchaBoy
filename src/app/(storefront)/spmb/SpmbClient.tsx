@@ -20,6 +20,8 @@ interface SpmbClientProps {
   spmbStartTime: string;
   spmbEndTime: string;
   spmbCloseTime: string;
+  operationalDays: string;
+  disabledDates: string;
 }
 
 export default function SpmbClient({ 
@@ -28,7 +30,9 @@ export default function SpmbClient({
   botNumber,
   spmbStartTime,
   spmbEndTime,
-  spmbCloseTime
+  spmbCloseTime,
+  operationalDays,
+  disabledDates
 }: SpmbClientProps) {
   // Cart State
   const cartItems = useCartStore((s) => s.items);
@@ -46,6 +50,7 @@ export default function SpmbClient({
   // Form State
   const [name, setName] = useState('');
   const [address, setAddress] = useState('');
+  const [pickupDate, setPickupDate] = useState('');
   const [pickupTime, setPickupTime] = useState('09:00');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'QRIS'>('COD');
   
@@ -72,19 +77,75 @@ export default function SpmbClient({
     }
   }, []);
 
-  const isStoreClosed = useMemo(() => {
-    const currentMin = wibTime.hour * 60 + wibTime.minute;
-    const [startH, startM] = spmbStartTime.split(':').map(Number);
-    const startMin = startH * 60 + startM;
-    const [closeH, closeM] = spmbCloseTime.split(':').map(Number);
-    const closeMin = closeH * 60 + closeM;
+  // availableDates for SPMB (3 days PO limit)
+  const availableDates = useMemo(() => {
+    const dates: { value: string; label: string; dayLabel: string; isToday: boolean }[] = [];
+    let openDays: number[] = [0,1,2,3,4,5,6];
+    try {
+      openDays = JSON.parse(operationalDays || '[0,1,2,3,4,5,6]');
+    } catch {}
+    let closedDates: string[] = [];
+    try {
+      closedDates = JSON.parse(disabledDates || '[]');
+    } catch {}
+    
+    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
 
-    return currentMin >= closeMin || currentMin < startMin;
-  }, [wibTime, spmbStartTime, spmbCloseTime]);
+    const now = new Date();
+    const baseDate = new Date(now.getTime());
+    let iterations = 0;
+    
+    const [endH, endM] = spmbEndTime.split(':').map(Number);
+    const endMinutes = endH * 60 + endM;
+    const leadTimeMinutes = 20;
+
+    while (dates.length < 3 && iterations < 30) {
+      const d = new Date(baseDate.getTime() + iterations * 24 * 60 * 60 * 1000);
+      iterations++;
+      const dayOfWeek = d.getDay();
+      const dateString = d.toLocaleDateString('en-CA');
+      
+      const isOpenDay = openDays.includes(dayOfWeek);
+      const isHoliday = closedDates.includes(dateString);
+      
+      let isAvailable = isOpenDay && !isHoliday;
+      
+      const isToday = dateString === now.toLocaleDateString('en-CA');
+      if (isToday && isAvailable) {
+        // If today's last slot is already passed, exclude today
+        const currentTotalMinutes = wibTime.hour * 60 + wibTime.minute;
+        if (currentTotalMinutes > endMinutes - leadTimeMinutes) {
+          isAvailable = false;
+        }
+      }
+      
+      if (isAvailable) {
+        dates.push({
+          value: dateString,
+          label: `${d.getDate()} ${monthNames[d.getMonth()]}`,
+          dayLabel: isToday ? 'Hari ini' : dayNames[d.getDay()],
+          isToday
+        });
+      }
+    }
+    return dates;
+  }, [operationalDays, disabledDates, spmbEndTime, wibTime]);
+
+  // Sync selected pickupDate to first available date
+  useEffect(() => {
+    if (availableDates.length > 0) {
+      if (!pickupDate || !availableDates.some(d => d.value === pickupDate)) {
+        setPickupDate(availableDates[0].value);
+      }
+    } else {
+      setPickupDate('');
+    }
+  }, [availableDates, pickupDate]);
 
   // Time Slots with 20 minutes lead time
   const timeSlots = useMemo(() => {
-    if (isStoreClosed) return [];
+    if (availableDates.length === 0 || !pickupDate) return [];
     
     const slots = [];
     const currentTotalMinutes = wibTime.hour * 60 + wibTime.minute;
@@ -96,15 +157,18 @@ export default function SpmbClient({
     const startMin = startH * 60 + startM;
     const endMin = endH * 60 + endM;
     
+    const now = new Date();
+    const isToday = pickupDate === now.toLocaleDateString('en-CA');
+
     for (let min = startMin; min <= endMin; min += 30) {
-      if (min - currentTotalMinutes >= leadTimeMinutes) {
+      if (!isToday || (min - currentTotalMinutes >= leadTimeMinutes)) {
         const slotH = Math.floor(min / 60);
         const slotM = min % 60;
         slots.push(`${String(slotH).padStart(2, '0')}:${String(slotM).padStart(2, '0')}`);
       }
     }
     return slots;
-  }, [wibTime, isStoreClosed, spmbStartTime, spmbEndTime]);
+  }, [wibTime, spmbStartTime, spmbEndTime, pickupDate, availableDates]);
 
   // Sync selected pickupTime to first available time slot if invalid
   useEffect(() => {
@@ -177,6 +241,7 @@ export default function SpmbClient({
           name,
           phone: 'SPMB-PENDING',
           address,
+          pickupDate,
           pickupTime,
           paymentMethod,
           items: itemsPayload
@@ -476,19 +541,10 @@ export default function SpmbClient({
                 <form onSubmit={handlePreSubmit} className="space-y-4">
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-left">Informasi Pengantaran</h3>
 
-                  {timeSlots.length === 0 ? (
+                  {availableDates.length === 0 ? (
                     <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-800 text-xs font-medium text-left leading-relaxed">
-                      {isStoreClosed ? (
-                        <>
-                          <span className="font-bold block mb-1 text-amber-900">🏪 Toko Sudah Tutup</span>
-                          Jam operasional kami adalah pukul {spmbStartTime} - {spmbCloseTime} WIB. Pemesanan SPMB dilayani untuk pengantaran pukul {spmbStartTime} - {spmbEndTime} WIB. Silakan kembali besok pagi!
-                        </>
-                      ) : (
-                        <>
-                          <span className="font-bold block mb-1 text-amber-900">⏳ Waktu Pengantaran Hari Ini Habis</span>
-                          Batas pemesanan SPMB untuk pengantaran hari ini (terakhir pukul {spmbEndTime} WIB) telah terlewati. Silakan memesan kembali besok pagi!
-                        </>
-                      )}
+                      <span className="font-bold block mb-1 text-amber-900">🏪 Toko Sedang Libur</span>
+                      Maaf, toko kami saat ini sedang tidak melayani pemesanan SPMB. Silakan periksa jam operasional kami atau hubungi admin.
                     </div>
                   ) : (
                     <>
@@ -520,6 +576,32 @@ export default function SpmbClient({
                           onChange={(e) => setAddress(e.target.value)}
                           className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors resize-none"
                         />
+                      </div>
+
+                      {/* Date Selector */}
+                      <div className="space-y-1.5 text-left">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 pl-0.5">
+                          <Clock className="w-3 h-3 text-[#2E5A44]" /> Tanggal Pengantaran
+                        </label>
+                        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none select-none">
+                          {availableDates.map((date) => {
+                            const isSelected = pickupDate === date.value;
+                            return (
+                              <button
+                                key={date.value}
+                                type="button"
+                                onClick={() => setPickupDate(date.value)}
+                                className={`flex-1 min-w-[90px] p-2.5 rounded-xl border text-center transition-all active:scale-95 cursor-pointer
+                                  ${isSelected
+                                    ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold shadow-sm'
+                                    : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300'}`}
+                              >
+                                <p className="text-[9px] uppercase tracking-wider opacity-75">{date.dayLabel}</p>
+                                <p className="text-xs font-black mt-0.5">{date.label}</p>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       {/* Delivery Time (08:00 - 13:00) */}

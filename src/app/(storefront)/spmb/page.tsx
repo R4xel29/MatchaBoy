@@ -63,6 +63,8 @@ export default async function SpmbPage() {
       spmbStartTime={storeSettings?.spmbStartTime || "08:00"}
       spmbEndTime={storeSettings?.spmbEndTime || "13:00"}
       spmbCloseTime={storeSettings?.spmbCloseTime || "16:00"}
+      operationalDays={storeSettings?.operationalDays || "[0,1,2,3,4,5,6]"}
+      disabledDates={storeSettings?.disabledDates || "[]"}
     />
   )
 }

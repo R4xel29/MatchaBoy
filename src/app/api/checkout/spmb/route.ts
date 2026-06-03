@@ -132,8 +132,44 @@ export async function POST(req: Request) {
     const endMinutes = endH * 60 + endM;
     const currentTotalMinutes = wibHour * 60 + wibMinute;
 
-    if (currentTotalMinutes >= closeMinutes || currentTotalMinutes < startMinutes) {
-      throw new ValidationError(`Toko kami tutup pada pukul ${spmbCloseTime} - ${spmbStartTime} WIB. Silakan lakukan pemesanan besok pagi.`);
+    const now = new Date();
+    const getJakartaDateString = (date: Date) => {
+      try {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(date);
+      } catch {
+        return date.toISOString().split('T')[0];
+      }
+    };
+    const getJakartaTimeString = (date: Date) => {
+      try {
+        return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }).format(date);
+      } catch {
+        return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      }
+    };
+
+    const todayStr = getJakartaDateString(now);
+    const targetDateStr = body.pickupDate ? getJakartaDateString(new Date(body.pickupDate)) : todayStr;
+
+    // Validate operational days
+    let openDays: number[] = [0,1,2,3,4,5,6];
+    try {
+      openDays = JSON.parse(storeSettings?.operationalDays || '[0,1,2,3,4,5,6]');
+    } catch {}
+    let closedDates: string[] = [];
+    try {
+      closedDates = JSON.parse(storeSettings?.disabledDates || '[]');
+    } catch {}
+
+    const [yr, mo, dy] = targetDateStr.split('-').map(Number);
+    const targetDayOfWeek = new Date(yr, mo - 1, dy).getDay();
+
+    if (!openDays.includes(targetDayOfWeek)) {
+      throw new ValidationError('Toko kami tutup pada hari yang dipilih');
+    }
+
+    if (closedDates.includes(targetDateStr)) {
+      throw new ValidationError('Toko kami tutup pada tanggal yang dipilih (hari libur/khusus)');
     }
 
     // Validate delivery time is between spmbStartTime and spmbEndTime
@@ -144,11 +180,20 @@ export async function POST(req: Request) {
       throw new ValidationError(`Waktu pengantaran harus berada di antara jam ${spmbStartTime} - ${spmbEndTime}`);
     }
 
-    // Validate that pickupTime is at least 20 minutes in the future
-    const leadTimeMinutes = 20;
+    // If target date is today, check timing constraints
+    if (targetDateStr === todayStr) {
+      const currentJakartaTime = getJakartaTimeString(now);
+      const [curH, curM] = currentJakartaTime.split(':').map(Number);
+      const currentMinutes = curH * 60 + curM;
+      const leadTimeMinutes = 20;
 
-    if (pickMinutes - currentTotalMinutes < leadTimeMinutes) {
-      throw new ValidationError('Waktu pengantaran tidak valid atau sudah terlewati. Mohon pilih waktu pengantaran yang lain.');
+      if (currentMinutes >= closeMinutes) {
+        throw new ValidationError('Pemesanan SPMB untuk hari ini sudah tutup. Silakan pilih hari lain.');
+      }
+
+      if (pickMinutes - currentMinutes < leadTimeMinutes) {
+        throw new ValidationError('Waktu pengantaran tidak valid atau sudah terlewati. Mohon pilih waktu pengantaran yang lain.');
+      }
     }
 
     // Validate payment method
@@ -252,7 +297,7 @@ export async function POST(req: Request) {
           customerPhone: body.phone,
           address: body.address,
           distanceKm: 0,
-          pickupDate: new Date(), // Today
+          pickupDate: body.pickupDate ? new Date(body.pickupDate) : new Date(),
           pickupTime: body.pickupTime,
           subtotal: secureSubtotal,
           deliveryFee: 0,

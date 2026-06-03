@@ -554,6 +554,7 @@ model StoreSettings {
   spmbStartTime       String   @default("08:00")
   spmbEndTime         String   @default("13:00")
   spmbCloseTime       String   @default("16:00")
+  adminWaNumbers      String   @default("")
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }

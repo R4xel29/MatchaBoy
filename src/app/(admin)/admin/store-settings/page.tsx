@@ -30,6 +30,7 @@ export default function StoreSettingsPage() {
   const [spmbStartTime, setSpmbStartTime] = useState('08:00');
   const [spmbEndTime, setSpmbEndTime] = useState('13:00');
   const [spmbCloseTime, setSpmbCloseTime] = useState('16:00');
+  const [adminWaNumbers, setAdminWaNumbers] = useState('');
 
   // State for Calendar Navigation
   const [currentCalendarDate, setCurrentCalendarDate] = useState(() => new Date());
@@ -207,6 +208,7 @@ export default function StoreSettingsPage() {
         if (d.spmbStartTime) setSpmbStartTime(d.spmbStartTime);
         if (d.spmbEndTime) setSpmbEndTime(d.spmbEndTime);
         if (d.spmbCloseTime) setSpmbCloseTime(d.spmbCloseTime);
+        if (d.adminWaNumbers !== undefined) setAdminWaNumbers(d.adminWaNumbers);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -315,6 +317,7 @@ export default function StoreSettingsPage() {
           spmbStartTime,
           spmbEndTime,
           spmbCloseTime,
+          adminWaNumbers,
         }),
       });
       if (res.ok) {
@@ -705,6 +708,13 @@ export default function StoreSettingsPage() {
                 placeholder="Pesan default saat pembeli mengklik WhatsApp..."
                 className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500 resize-none" />
               <p className="text-xs text-muted-foreground mt-2">Pesan otomatis yang akan terisi di chat WhatsApp pelanggan saat mereka menghubungi Anda.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Nomor WA Admin Notifikasi (SPMB)</label>
+              <input type="text" value={adminWaNumbers} onChange={e => setAdminWaNumbers(e.target.value)}
+                placeholder="Contoh: 081344446442, 08123456789"
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
+              <p className="text-xs text-muted-foreground mt-2">Nomor WhatsApp Admin yang menerima ringkasan order SPMB ketika terkonfirmasi (pisahkan dengan koma jika lebih dari satu nomor, e.g. 081344446442, 08123456789).</p>
             </div>
           </div>
         </div>

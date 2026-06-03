@@ -85,6 +85,11 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    // Trigger admin summary notification
+    import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
+      sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
+    });
+
     const reply = `Bukti pembayaran untuk pesanan *${order.id}* telah terkirim! ✅\n\nAdmin akan segera memverifikasi pembayaran Anda. Mohon tunggu proses selanjutnya. Terima kasih! 🍵`;
 
     return NextResponse.json({

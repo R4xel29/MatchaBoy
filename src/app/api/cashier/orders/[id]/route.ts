@@ -135,6 +135,13 @@ export async function PATCH(
       details: `[Kasir] Mengubah status pesanan #${id.slice(-6).toUpperCase()} (${existingOrder.customerName}) dari ${existingOrder.status} menjadi ${status}${status === 'CANCELLED' && reason ? ` (Alasan: ${reason})` : ''}`
     })
 
+    // Trigger admin summary notification on confirmed/updated order status (if the order is SPMB)
+    if (existingOrder.source === 'SPMB') {
+      import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
+        sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
+      });
+    }
+
     // Stock deduction when order starts being prepared
     if (status === 'PREPARING') {
       deductStockForOrder(id).catch(err =>
