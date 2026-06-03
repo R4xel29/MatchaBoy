@@ -930,6 +930,43 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           )
         )}
 
+        {/* Confirm Received Button for SPMB Orders */}
+        {order.id.startsWith('SPMB') && !['COMPLETED', 'CANCELLED', 'PENDING_PAYMENT'].includes(currentStatus) && (
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3 shadow-sm animate-in fade-in slide-in-from-bottom-3">
+            <div className="flex items-start gap-2.5">
+              <Check className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+              <div className="text-left">
+                <p className="text-xs font-bold text-emerald-900 uppercase tracking-wider mb-0.5">
+                  Konfirmasi Diterima
+                </p>
+                <p className="text-[11px] text-emerald-700 leading-relaxed font-medium">
+                  Apakah pesanan Anda sudah sampai dan Anda terima dengan baik? Klik tombol di bawah untuk menyelesaikan pesanan.
+                </p>
+              </div>
+            </div>
+            {confirmError && (
+              <p className="text-xs text-red-500 font-bold text-left">{confirmError}</p>
+            )}
+            <button
+              onClick={handleConfirmDelivery}
+              disabled={isConfirming}
+              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+            >
+              {isConfirming ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Memproses...
+                </>
+              ) : (
+                <>
+                  <Check className="w-4 h-4" />
+                  Pesanan Sudah Diterima
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
         {/* Contact Admin */}
         <button
           onClick={() => {

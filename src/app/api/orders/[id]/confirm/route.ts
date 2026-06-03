@@ -10,26 +10,41 @@ export async function PUT(
   try {
     const { id } = await params
     const session = await auth()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    // Verify order belongs to user and is in a confirmable state
+    // Verify order exists and is in a confirmable state
     const order = await prisma.order.findUnique({
       where: { id },
-      select: { userId: true, status: true, paymentMethod: true }
+      select: { userId: true, status: true, paymentMethod: true, source: true }
     });
 
-    if (!order || order.userId !== session.user.id) {
-      return NextResponse.json({ error: 'Order not found or forbidden' }, { status: 403 })
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    if (order.paymentMethod === 'COD') {
-      return NextResponse.json({ error: 'Pesanan COD hanya dapat diselesaikan oleh kurir demi keamanan transaksi.' }, { status: 400 })
-    }
+    const isSpmb = order.source === 'SPMB';
 
-    if (order.status !== 'ON_DELIVERY' && order.status !== 'DELIVERED') {
-      return NextResponse.json({ error: 'Order cannot be confirmed at this status' }, { status: 400 })
+    if (!isSpmb) {
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+
+      if (order.userId !== session.user.id) {
+        return NextResponse.json({ error: 'Order not found or forbidden' }, { status: 403 })
+      }
+
+      if (order.paymentMethod === 'COD') {
+        return NextResponse.json({ error: 'Pesanan COD hanya dapat diselesaikan oleh kurir demi keamanan transaksi.' }, { status: 400 })
+      }
+
+      if (order.status !== 'ON_DELIVERY' && order.status !== 'DELIVERED') {
+        return NextResponse.json({ error: 'Order cannot be confirmed at this status' }, { status: 400 })
+      }
+    } else {
+      // For SPMB: allow guests to confirm if status is any active stage
+      const allowedSpmbStatuses = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'TO_STORE', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED'];
+      if (!allowedSpmbStatuses.includes(order.status)) {
+        return NextResponse.json({ error: 'Order cannot be confirmed at this status' }, { status: 400 })
+      }
     }
 
     // Update status to COMPLETED

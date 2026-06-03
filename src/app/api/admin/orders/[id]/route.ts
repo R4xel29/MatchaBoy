@@ -133,6 +133,14 @@ export async function PATCH(
             deductStockForOrder(id).catch(err => console.error('Stock deduction error:', err));
         }
 
+        if (status === 'READY') {
+            import('@/lib/whatsapp-service').then(({ sendReadyNotification }) => {
+                sendReadyNotification(id).catch(err =>
+                    console.error('Failed to send ready WA notification (admin route):', err)
+                );
+            });
+        }
+
         // Restore stock if cancelled
         if (status === 'CANCELLED') {
             restoreStockForOrder(id).catch(err =>

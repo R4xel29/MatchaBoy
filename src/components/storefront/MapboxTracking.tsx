@@ -426,8 +426,8 @@ export function LeafletTracking({
           </div>
         )}
 
-        {/* Swipe to Confirm Button for Non-COD Orders */}
-        {paymentMethod !== 'COD' && (
+        {/* Swipe to Confirm Button for Non-COD or SPMB Orders */}
+        {(paymentMethod !== 'COD' || orderId.startsWith('SPMB')) && (
           <div className="shrink-0 pt-1">
             <p className="text-[11px] text-center text-gray-500 mb-2.5 font-bold">Pesanan sudah sampai di tangan Anda? Geser untuk konfirmasi</p>
             <div 

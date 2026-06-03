@@ -142,6 +142,14 @@ export async function PATCH(
       )
     }
 
+    if (status === 'READY') {
+      import('@/lib/whatsapp-service').then(({ sendReadyNotification }) => {
+        sendReadyNotification(id).catch(err =>
+          console.error('Failed to send ready WA notification (cashier route):', err)
+        )
+      })
+    }
+
     // Restore stock if cancelled
     if (status === 'CANCELLED') {
       restoreStockForOrder(id).catch(err =>
