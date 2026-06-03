@@ -94,6 +94,204 @@ export async function POST(req: Request) {
     const isDeleteRequest = lowerText.startsWith("hapus-");
     const isVerificationRequest = lowerText.startsWith("verifikasi-");
     const isSpmbRequest = lowerText.startsWith("spmb-");
+    const isCekSpmbRequest = lowerText.startsWith("cek spmb-");
+
+    if (isCekSpmbRequest) {
+      console.log(`[WHATSAPP_WEBHOOK] Mendeteksi CEK SPMB ORDER REQUEST: ${text}`);
+      const orderId = text.replace(/^cek\s+/i, '').trim().toUpperCase();
+
+      // Check admin authorization
+      let isAdmin = false;
+      const storeSettings = await prisma.storeSettings.findFirst();
+      if (storeSettings && storeSettings.adminWaNumbers) {
+        const adminNumbers = storeSettings.adminWaNumbers
+          .split(',')
+          .map(n => n.trim())
+          .filter(n => n.length > 0)
+          .map(n => {
+            let std = n.replace(/[^0-9]/g, '');
+            if (std.startsWith('08')) {
+              std = '62' + std.substring(1);
+            } else if (std.startsWith('8')) {
+              std = '62' + std;
+            }
+            return std;
+          });
+          
+        let standardizedSenderPhone = phone.replace(/[^0-9]/g, '');
+        if (standardizedSenderPhone.startsWith('08')) {
+          standardizedSenderPhone = '62' + standardizedSenderPhone.substring(1);
+        } else if (standardizedSenderPhone.startsWith('8')) {
+          standardizedSenderPhone = '62' + standardizedSenderPhone;
+        }
+        
+        isAdmin = adminNumbers.includes(standardizedSenderPhone);
+      }
+
+      if (!isAdmin) {
+        console.warn(`[WHATSAPP_WEBHOOK] Percobaan akses ilegal CEK SPMB oleh nomor: ${phone}`);
+        const reply = `Maaf, nomor WhatsApp Anda (*${phone}*) tidak terdaftar sebagai Admin untuk melihat detail pesanan. ❌`;
+        return NextResponse.json({ success: false, error: "Unauthorized admin", replyMessage: reply });
+      }
+
+      // Fetch the order
+      const order = await prisma.order.findUnique({
+        where: { id: orderId },
+        include: { items: { include: { product: true } } }
+      });
+
+      if (!order) {
+        console.warn(`[WHATSAPP_WEBHOOK] Order SPMB untuk CEK tidak ditemukan: ${orderId}`);
+        const reply = `Maaf, pesanan dengan ID *${orderId}* tidak ditemukan. ❌`;
+        return NextResponse.json({ success: false, error: "Order not found", replyMessage: reply });
+      }
+
+      // Standardize customer phone to a clickable link
+      let custPhone = order.customerPhone.replace(/[^0-9]/g, '');
+      if (custPhone.startsWith('08')) {
+        custPhone = '62' + custPhone.substring(1);
+      } else if (custPhone.startsWith('8')) {
+        custPhone = '62' + custPhone;
+      }
+      const waLink = `wa.me/${custPhone}`;
+
+      // Format items
+      const itemsDetail = order.items.map(item => {
+        let details = `${item.qty}x ${item.product.name}`;
+        if (item.modifiers) {
+          try {
+            const parsed = JSON.parse(item.modifiers);
+            if (typeof parsed === 'object') {
+              const modStrings: string[] = [];
+              if (parsed.iceLevel) modStrings.push(`Ice: ${parsed.iceLevel}`);
+              if (parsed.sugarLevel) modStrings.push(`Sugar: ${parsed.sugarLevel}`);
+              if (parsed.addOns && Array.isArray(parsed.addOns)) {
+                const addons = parsed.addOns.map((a: any) => a.name).join(', ');
+                if (addons) modStrings.push(`Add-ons: ${addons}`);
+              }
+              if (modStrings.length > 0) {
+                details += ` (${modStrings.join(', ')})`;
+              }
+            }
+          } catch {
+            if (item.modifiers.trim()) {
+              details += ` (${item.modifiers})`;
+            }
+          }
+        }
+        return `- ${details}`;
+      }).join('\n');
+
+      // Helper to format date in Indonesian format
+      const formatIndonesianDate = (date: Date): string => {
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const fullMonths = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        
+        try {
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Jakarta',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          });
+          const parts = formatter.formatToParts(date);
+          const year = parts.find(p => p.type === 'year')?.value;
+          const month = parts.find(p => p.type === 'month')?.value;
+          const day = parts.find(p => p.type === 'day')?.value;
+          const hour = parts.find(p => p.type === 'hour')?.value;
+          const minute = parts.find(p => p.type === 'minute')?.value;
+          
+          const d = new Date(Number(year), Number(month) - 1, Number(day));
+          return `${days[d.getDay()]}, ${day} ${fullMonths[d.getMonth()]} ${year} pukul ${hour}:${minute} WIB`;
+        } catch {
+          return `${date.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`;
+        }
+      };
+
+      // Waktu Pengambilan
+      const formatDateOnly = (date: Date | null) => {
+        if (!date) return '-';
+        const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+        const fullMonths = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+        try {
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: 'Asia/Jakarta',
+            year: 'numeric',
+            month: 'numeric',
+            day: 'numeric'
+          });
+          const parts = formatter.formatToParts(date);
+          const year = parts.find(p => p.type === 'year')?.value;
+          const month = parts.find(p => p.type === 'month')?.value;
+          const day = parts.find(p => p.type === 'day')?.value;
+          const d = new Date(Number(year), Number(month) - 1, Number(day));
+          return `${days[d.getDay()]}, ${day} ${fullMonths[d.getMonth()]} ${year}`;
+        } catch {
+          return date.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+        }
+      };
+
+      const pickupDateStr = formatDateOnly(order.pickupDate);
+      const pickupTimeStr = order.pickupTime || '-';
+      const waktuPengambilan = `${pickupDateStr} ${pickupTimeStr !== '-' ? 'pukul ' + pickupTimeStr + ' WIB' : ''}`;
+
+      const confirmTimeStr = formatIndonesianDate(order.updatedAt);
+      const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`;
+
+      // Map Payment Method to readable Indonesian
+      let paymentMethodFriendly = order.paymentMethod;
+      if (order.paymentMethod === 'QRIS') paymentMethodFriendly = 'QRIS';
+      else if (order.paymentMethod === 'COD') paymentMethodFriendly = 'Cash on Delivery (COD)';
+      else if (order.paymentMethod === 'TRANSFER') paymentMethodFriendly = 'Transfer Bank';
+      else if (order.paymentMethod === 'CASH') paymentMethodFriendly = 'Tunai (Cash)';
+      else if (order.paymentMethod === 'MIDTRANS') paymentMethodFriendly = 'Midtrans';
+
+      // Map Status to readable Indonesian
+      let statusFriendly = order.status;
+      if (order.status === 'PENDING_PAYMENT') statusFriendly = 'Menunggu Pembayaran ⏳';
+      else if (order.status === 'PENDING') statusFriendly = 'Menunggu Konfirmasi/Verifikasi ⏳';
+      else if (order.status === 'PREPARING') statusFriendly = 'Sedang Disiapkan 🍵';
+      else if (order.status === 'READY') statusFriendly = 'Siap Diambil/Diantar ✅';
+      else if (order.status === 'COMPLETED') statusFriendly = 'Selesai 🎉';
+      else if (order.status === 'CANCELLED') statusFriendly = 'Dibatalkan ❌';
+
+      let reply = `🍵 *DETAIL PENGGUNA & PESANAN SPMB*\n`;
+      reply += `━━━━━━━━━━━━━━━━━━━\n\n`;
+      reply += `🆔 *ID Pesanan:* ${order.id}\n`;
+      reply += `👤 *Nama:* ${order.customerName}\n`;
+      reply += `📞 *Nomor HP:* ${waLink}\n`;
+      reply += `📍 *Tempat:* ${order.address || '-'}\n\n`;
+      reply += `🛍️ *Pesanan:*\n${itemsDetail}\n\n`;
+      reply += `💵 *Total Belanja:* ${formatCurrency(order.total)}\n`;
+      reply += `💳 *Metode Pembayaran:* ${paymentMethodFriendly}\n`;
+      reply += `🚦 *Status Pesanan:* ${statusFriendly}\n\n`;
+      reply += `📅 *Konfirmasi Terakhir:* ${confirmTimeStr}\n`;
+      reply += `⏰ *Waktu Pengambilan:* ${waktuPengambilan}\n`;
+
+      let hasQrisProof = order.paymentMethod === 'QRIS' && order.paymentProofUrl;
+      let absolutePaymentProofUrl = order.paymentProofUrl;
+      if (hasQrisProof && absolutePaymentProofUrl) {
+        if (!absolutePaymentProofUrl.startsWith('http')) {
+          const slash = absolutePaymentProofUrl.startsWith('/') ? '' : '/';
+          absolutePaymentProofUrl = `${appUrl}${slash}${absolutePaymentProofUrl}`;
+        }
+      }
+      
+      if (order.paymentMethod === 'QRIS') {
+        reply += `🖼️ *Bukti Pembayaran:* ${order.paymentProofUrl ? 'Terlampir' : 'Belum diunggah ❌'}\n`;
+      }
+      
+      reply += `━━━━━━━━━━━━━━━━━━━`;
+
+      return NextResponse.json({
+        success: true,
+        replyMessage: reply,
+        image: hasQrisProof ? absolutePaymentProofUrl : undefined
+      });
+    }
 
     if (isSpmbRequest) {
       console.log(`[WHATSAPP_WEBHOOK] Mendeteksi SPMB ORDER REQUEST: ${text}`);
