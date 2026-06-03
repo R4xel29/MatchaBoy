@@ -394,6 +394,33 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     remainingMs?: number;
     nextAllowedDate?: string;
   } | null>(null);
+
+  // Swipe logic for SPMB orders
+  const swipeContainerRef = useRef<HTMLDivElement>(null);
+  const [swipeDragWidth, setSwipeDragWidth] = useState(0);
+  const swipeX = useMotionValue(0);
+  const swipeTextOpacity = useTransform(swipeX, [0, 150], [1, 0]);
+  const swipeBgWidth = useTransform(swipeX, (value) => `${value + 48}px`);
+
+  useEffect(() => {
+    const updateWidth = () => {
+      if (swipeContainerRef.current) {
+        setSwipeDragWidth(swipeContainerRef.current.offsetWidth - 56);
+      }
+    };
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  const handleSwipeDragEnd = async () => {
+    if (swipeX.get() >= swipeDragWidth * 0.9) {
+      swipeX.set(swipeDragWidth);
+      await handleConfirmDelivery();
+    } else {
+      swipeX.set(0);
+    }
+  };
   const [loadingCooldown, setLoadingCooldown] = useState(false);
   const [submittedReviews, setSubmittedReviews] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -943,30 +970,46 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   Konfirmasi Diterima
                 </p>
                 <p className="text-[11px] text-emerald-700 leading-relaxed font-medium">
-                  Apakah pesanan Anda sudah sampai dan Anda terima dengan baik? Klik tombol di bawah untuk menyelesaikan pesanan.
+                  Apakah pesanan Anda sudah sampai dan Anda terima dengan baik? Silakan geser tombol di bawah untuk menyelesaikan pesanan.
                 </p>
               </div>
             </div>
             {confirmError && (
               <p className="text-xs text-red-500 font-bold text-left">{confirmError}</p>
             )}
-            <button
-              onClick={handleConfirmDelivery}
-              disabled={isConfirming}
-              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+            
+            <div 
+              ref={swipeContainerRef}
+              className="w-full relative overflow-hidden bg-emerald-100 border border-emerald-300 rounded-full p-1 h-14 shadow-inner flex items-center select-none"
             >
-              {isConfirming ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Memproses...
-                </>
-              ) : (
-                <>
-                  <Check className="w-4 h-4" />
-                  Pesanan Sudah Diterima
-                </>
-              )}
-            </button>
+              <motion.div 
+                className="absolute left-1 top-1 bottom-1 bg-emerald-600 rounded-full"
+                style={{ width: swipeBgWidth }}
+              />
+              
+              <motion.div 
+                className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                style={{ opacity: swipeTextOpacity }}
+              >
+                <span className="font-extrabold text-emerald-800 text-xs uppercase tracking-wider">Geser untuk Diterima</span>
+              </motion.div>
+
+              <motion.div
+                drag="x"
+                dragConstraints={{ left: 0, right: swipeDragWidth }}
+                dragElastic={0.05}
+                dragMomentum={false}
+                onDragEnd={handleSwipeDragEnd}
+                style={{ x: swipeX }}
+                className="w-12 h-12 rounded-full bg-white border border-emerald-300 flex items-center justify-center text-emerald-600 shadow-md cursor-grab active:cursor-grabbing z-10 shrink-0"
+              >
+                {isConfirming ? (
+                  <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
+                ) : (
+                  <ChevronRight className="w-6 h-6 text-emerald-500" />
+                )}
+              </motion.div>
+            </div>
           </div>
         )}
 

@@ -9,24 +9,28 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Get the order first to check ownership and existence
+  // Get the order first to check ownership, existence, and source
   const dbOrder = await prisma.order.findUnique({
     where: { id },
-    select: { userId: true }
+    select: { userId: true, source: true }
   });
 
   if (!dbOrder) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
 
-  const isStaff = ['ADMIN', 'CASHIER', 'DRIVER'].includes(session.user.role || '');
-  if (dbOrder.userId !== session.user.id && !isStaff) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const isSpmb = dbOrder.source === 'SPMB';
+
+  if (!isSpmb) {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const isStaff = ['ADMIN', 'CASHIER', 'DRIVER'].includes(session.user.role || '');
+    if (dbOrder.userId !== session.user.id && !isStaff) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   // Auto-expire order if past payment deadline

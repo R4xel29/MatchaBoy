@@ -36,11 +36,6 @@ export function ActiveOrderPopup() {
 
   // Poll for active orders every 10 seconds
   useEffect(() => {
-    if (!session?.user?.id) {
-      setActiveOrder(null);
-      return;
-    }
-
     // Don't show or poll on checkout, orders, or auth pages
     const hideOnPaths = ['/checkout', '/orders', '/login', '/register', '/setup-'];
     if (hideOnPaths.some((p) => pathname?.startsWith(p))) {
@@ -48,6 +43,58 @@ export function ActiveOrderPopup() {
     }
 
     const fetchActiveOrders = async () => {
+      // 1. Check if there's a guest SPMB order in localStorage
+      let spmbOrderId = null;
+      if (typeof window !== 'undefined') {
+        spmbOrderId = localStorage.getItem('spmb_active_order_id');
+      }
+
+      if (spmbOrderId) {
+        try {
+          const res = await fetch(`/api/orders/${spmbOrderId}/status`);
+          if (res.ok) {
+            const data = await res.json();
+            
+            // If the order is finished (COMPLETED or CANCELLED), clear it from localStorage
+            if (['COMPLETED', 'CANCELLED'].includes(data.status)) {
+              localStorage.removeItem('spmb_active_order_id');
+              setActiveOrder(null);
+              setLastSeenStatus(null);
+              return;
+            }
+
+            const currentOrder = {
+              id: data.id,
+              status: data.status,
+              orderType: data.orderType,
+              total: data.total,
+              paymentMethod: data.paymentMethod,
+              itemsSummary: 'Pesanan SPMB Anda',
+              createdAt: data.updatedAt
+            };
+
+            if (lastSeenStatus && currentOrder.status !== lastSeenStatus) {
+              setIsDismissed(false);
+            }
+
+            setActiveOrder(currentOrder);
+            setLastSeenStatus(currentOrder.status);
+            return;
+          } else {
+            // If status API fails with 404/401/etc, the order might be gone or invalid
+            localStorage.removeItem('spmb_active_order_id');
+          }
+        } catch (err) {
+          console.error('Failed to fetch guest SPMB active order:', err);
+        }
+      }
+
+      // 2. Standard flow for logged-in users
+      if (!session?.user?.id) {
+        setActiveOrder(null);
+        return;
+      }
+
       try {
         const res = await fetch('/api/orders/active');
         if (res.ok) {
@@ -55,7 +102,6 @@ export function ActiveOrderPopup() {
           if (data && data.length > 0) {
             const currentOrder = data[0]; // Take the most recent active order
             
-            // If order status changed, reset dismissal so user is notified
             if (lastSeenStatus && currentOrder.status !== lastSeenStatus) {
               setIsDismissed(false);
             }
@@ -89,7 +135,7 @@ export function ActiveOrderPopup() {
   }
 
   // Map status to progress percentage and UI details
-  const getStatusConfig = (status: string) => {
+  const getStatusConfig = (status: string, isSpmb: boolean) => {
     switch (status) {
       case 'PENDING_PAYMENT':
         return {
@@ -117,11 +163,11 @@ export function ActiveOrderPopup() {
         };
       case 'READY':
         return {
-          title: 'Siap Diambil',
-          description: 'Pesanan Anda siap diambil di toko',
+          title: isSpmb ? 'Sedang Diantar' : 'Siap Diambil',
+          description: isSpmb ? 'Pesanan sedang diantar ke kelas/lokasi Anda' : 'Pesanan Anda siap diambil di toko',
           color: 'text-green-500 bg-green-50 border-green-100',
           progress: 85,
-          icon: ShoppingBag,
+          icon: isSpmb ? Truck : ShoppingBag,
         };
       case 'ASSIGNED':
       case 'TO_STORE':
@@ -145,7 +191,8 @@ export function ActiveOrderPopup() {
     }
   };
 
-  const statusConfig = getStatusConfig(activeOrder.status);
+  const isSpmb = activeOrder.id.startsWith('SPMB');
+  const statusConfig = getStatusConfig(activeOrder.status, isSpmb);
   const StatusIcon = statusConfig.icon;
 
   const handleClick = () => {

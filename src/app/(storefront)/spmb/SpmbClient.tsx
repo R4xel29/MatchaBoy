@@ -128,6 +128,11 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
         throw new Error(data.error || 'Gagal memproses pesanan.');
       }
 
+      // Save active order ID in local storage for popup status notifications
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('spmb_active_order_id', data.orderId);
+      }
+
       // Clear local storefront cart state
       clearCart();
       setIsCartOpen(false);
