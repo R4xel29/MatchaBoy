@@ -8,10 +8,6 @@ export const dynamic = 'force-dynamic'
 export default async function OrderQrisPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await auth()
-  if (!session?.user?.id) {
-    redirect('/login')
-  }
-
   const order = await prisma.order.findUnique({
     where: { id },
   })
@@ -20,9 +16,16 @@ export default async function OrderQrisPage({ params }: { params: Promise<{ id: 
     notFound()
   }
 
-  // Security check
-  if (order.userId !== session.user.id && session.user.role === 'CUSTOMER') {
-    notFound()
+  const isSpmb = order.source === 'SPMB';
+
+  if (!isSpmb) {
+    if (!session?.user?.id) {
+      redirect('/login')
+    }
+    // Security check
+    if (order.userId !== session.user.id && session.user.role === 'CUSTOMER') {
+      notFound()
+    }
   }
 
   // Check if QRIS is available

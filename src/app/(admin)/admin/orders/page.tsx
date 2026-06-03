@@ -18,12 +18,16 @@ export default async function AdminOrdersPage() {
     paymentMethod: o.paymentMethod,
     total: o.total,
     status: o.status,
+    notes: o.notes,
+    pickupTime: o.pickupTime,
+    source: o.source,
     createdAt: o.createdAt.toISOString(),
     paymentProofUrl: o.paymentProofUrl,
     items: o.items.map((item) => ({
       id: item.id,
       qty: item.qty,
       price: item.price,
+      modifiers: item.modifiers,
       product: {
         name: item.product.name,
         image: item.product.image,

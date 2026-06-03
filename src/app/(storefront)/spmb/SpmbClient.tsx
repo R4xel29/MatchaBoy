@@ -105,7 +105,7 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
         quantity: item.quantity,
         size: item.size || 'Normal',
         addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
-        modsString: item.iceLevel + ', ' + item.sugarLevel + (item.addOns && item.addOns.length > 0 ? ', ' + item.addOns.map((a: any) => a.name).join(', ') : ''),
+        modsString: (item.matchaLevel !== undefined && item.matchaLevel !== null ? `Matcha Lvl: ${item.matchaLevel}, ` : '') + item.iceLevel + ', ' + item.sugarLevel + (item.addOns && item.addOns.length > 0 ? ', ' + item.addOns.map((a: any) => a.name).join(', ') : ''),
         bundleSelections: item.bundleSelections,
         matchaLevel: (item as any).matchaLevel
       }));

@@ -61,3 +61,41 @@ export async function sendReadyNotification(orderId: string) {
     console.error(`[WHATSAPP_SERVICE] Gagal mengirim ready notification untuk order ${orderId}:`, error);
   }
 }
+
+export async function sendCompletedNotification(orderId: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      console.warn(`[WHATSAPP_SERVICE] Order ${orderId} tidak ditemukan untuk notifikasi.`);
+      return;
+    }
+
+    if (!order.customerPhone || order.customerPhone === 'SPMB-PENDING') {
+      console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping notification.`);
+      return;
+    }
+
+    // Standardize phone number for WhatsApp
+    let standardizedPhone = order.customerPhone.replace(/[^0-9]/g, '');
+    if (standardizedPhone.startsWith('08')) {
+      standardizedPhone = '62' + standardizedPhone.substring(1);
+    } else if (standardizedPhone.startsWith('8')) {
+      standardizedPhone = '62' + standardizedPhone;
+    }
+
+    // Custom message format
+    let message = '';
+    if (order.source === 'SPMB') {
+      message = `Halo *${order.customerName}*!\n\nPesanan SPMB Anda *${order.id}* telah selesai dan sudah diterima. Terima kasih telah memesan di Matchaboy! 🍵`;
+    } else {
+      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah selesai. Terima kasih telah memesan di Matchaboy! 🍵`;
+    }
+
+    await sendWhatsAppMessage(standardizedPhone, message);
+  } catch (error) {
+    console.error(`[WHATSAPP_SERVICE] Gagal mengirim completed notification untuk order ${orderId}:`, error);
+  }
+}

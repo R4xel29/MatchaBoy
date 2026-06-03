@@ -31,6 +31,7 @@ interface OrderItem {
   id: string;
   qty: number;
   price: number;
+  modifiers?: string | null;
   product: { name: string; image: string | null };
 }
 
@@ -51,6 +52,8 @@ interface OrderData {
   pickupDate?: string | null;
   pickupTime?: string | null;
   queueNumber?: string | null;
+  source?: string | null;
+  notes?: string | null;
 }
 
 interface Props {
@@ -572,9 +575,14 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                     </div>
                     <div className="space-y-0.5">
                       {order.items.slice(0, 3).map((item) => (
-                        <p key={item.id} className="text-[12px] text-muted-foreground">
-                          {item.qty}× {item.product.name}
-                        </p>
+                        <div key={item.id} className="text-[12px] text-muted-foreground">
+                          <span>{item.qty}× {item.product.name}</span>
+                          {item.modifiers && (
+                            <span className="text-[10px] text-muted-foreground/80 italic ml-1.5 block pl-3">
+                              ({item.modifiers})
+                            </span>
+                          )}
+                        </div>
                       ))}
                       {order.items.length > 3 && (
                         <p className="text-[11px] text-muted-foreground/60">
@@ -823,7 +831,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                   </div>
                 </div>
 
-                {selectedOrder.orderType === 'DELIVERY' && selectedOrder.address && (
+                {(selectedOrder.orderType === 'DELIVERY' || selectedOrder.source === 'SPMB') && selectedOrder.address && (
                   <div className="pt-2 border-t border-border/20">
                     <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
                       <MapPin className="w-3 h-3" />
@@ -864,6 +872,12 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                     }
                     return null;
                   })()}
+                </div>
+              )}
+
+              {selectedOrder.notes && (
+                <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3 text-xs text-amber-900 leading-relaxed">
+                  <span className="font-bold">Catatan Pesanan:</span> {selectedOrder.notes}
                 </div>
               )}
               </div>
@@ -928,6 +942,11 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                         <div>
                           <p className="text-sm font-semibold text-foreground">{item.product.name}</p>
                           <p className="text-[11px] text-muted-foreground">{formatRupiah(item.price)}</p>
+                          {item.modifiers && (
+                            <p className="text-[10.5px] text-muted-foreground italic mt-0.5">
+                              {item.modifiers}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <p className="text-sm font-bold text-foreground">{formatRupiah(item.price * item.qty)}</p>

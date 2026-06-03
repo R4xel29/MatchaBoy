@@ -160,6 +160,11 @@ export async function PATCH(
     // Loyalty points + notification when order is completed/delivered
     let loyaltyResult = null
     if (status === 'COMPLETED' || status === 'DELIVERED') {
+      import('@/lib/whatsapp-service').then(({ sendCompletedNotification }) => {
+        sendCompletedNotification(id).catch(err =>
+          console.error('Failed to send completed WA notification (cashier route):', err)
+        )
+      })
       try {
         loyaltyResult = await processOrderCompletion(id)
 

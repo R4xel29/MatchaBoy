@@ -10,10 +10,6 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
   const { id } = await params;
   const session = await auth()
   
-  if (!session?.user?.id) {
-    redirect('/login')
-  }
-
   // Auto-expire order if past payment deadline
   await expireOrder(id);
 
@@ -27,22 +23,32 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     notFound()
   }
 
-  const role = session.user.role
-  if (order.userId !== session.user.id && role === 'CUSTOMER') {
-    notFound() // Hide from unauthorized customers
+  const isSpmb = order.source === 'SPMB';
+
+  if (!isSpmb) {
+    if (!session?.user?.id) {
+      redirect('/login')
+    }
+    const role = session.user.role
+    if (order.userId !== session.user.id && role === 'CUSTOMER') {
+      notFound() // Hide from unauthorized customers
+    }
   }
 
-  // Fetch reviews already submitted for this order by this user
-  const existingReviews = await prisma.review.findMany({
-    where: {
-      userId: session.user.id,
-      orderId: id,
-    },
-    select: {
-      productId: true,
-    }
-  })
-  const reviewedProductIds = new Set(existingReviews.map(r => r.productId))
+  // Fetch reviews already submitted for this order by this user (only if logged in)
+  let reviewedProductIds = new Set<string>();
+  if (session?.user?.id) {
+    const existingReviews = await prisma.review.findMany({
+      where: {
+        userId: session.user.id,
+        orderId: id,
+      },
+      select: {
+        productId: true,
+      }
+    })
+    reviewedProductIds = new Set(existingReviews.map(r => r.productId))
+  }
 
   const settings = await prisma.storeSettings.findFirst()
   const cancellationTimeLimit = settings?.cancellationTimeLimit ?? 15

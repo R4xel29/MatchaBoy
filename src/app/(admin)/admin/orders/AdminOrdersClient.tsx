@@ -8,11 +8,14 @@ import { useEffect, useRef } from 'react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 import { useToast } from '@/components/ui/Toast';
 
-interface OrderItem { id: string; qty: number; price: number; product: { name: string; image: string | null; }; }
+interface OrderItem { id: string; qty: number; price: number; modifiers?: string | null; product: { name: string; image: string | null; }; }
 interface OrderData {
   id: string; customerName: string; customerPhone: string; address: string;
   orderType: string; paymentMethod: string; total: number; status: string; createdAt: string; items: OrderItem[];
   paymentProofUrl?: string | null;
+  notes?: string | null;
+  pickupTime?: string | null;
+  source?: string | null;
 }
 interface Props { initialOrders: OrderData[]; }
 
@@ -181,10 +184,11 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                       {order.status.replace('_', ' ')}
                     </span>
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                      order.orderType === 'PICKUP' ? 'bg-purple-50 text-purple-700' :
-                      'bg-sky-50 text-sky-700'
+                      order.source === 'SPMB' ? 'bg-indigo-50 text-indigo-750 border border-indigo-150 shadow-sm' :
+                      order.orderType === 'PICKUP' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                      'bg-sky-50 text-sky-700 border border-sky-100'
                     }`}>
-                      {order.orderType === 'PICKUP' ? 'Pickup' : 'Delivery'}
+                      {order.source === 'SPMB' ? `SPMB: ${order.pickupTime || ''}` : order.orderType === 'PICKUP' ? 'Pickup' : 'Delivery'}
                     </span>
                     {order.paymentProofUrl && (
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">
@@ -210,14 +214,26 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 flex items-center gap-1"><MapPin className="w-3 h-3" /> Address</p>
                       <p className="text-[12px] text-foreground line-clamp-2">{order.address}</p>
                     </div>
+                    {order.notes && (
+                      <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-2 text-[11px] text-amber-900 leading-normal mt-1">
+                        <span className="font-bold">Catatan:</span> {order.notes}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Items ({order.items.length})</p>
-                    <div className="space-y-1 max-h-20 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-20 overflow-y-auto pr-1">
                       {order.items.map((item: any) => (
-                        <div key={item.id} className="flex justify-between text-[12px]">
-                          <span className="text-foreground">{item.qty}× {item.product.name}</span>
-                          <span className="text-muted-foreground ml-2 shrink-0">{formatRupiah(item.price * item.qty)}</span>
+                        <div key={item.id} className="space-y-0.5">
+                          <div className="flex justify-between text-[12px]">
+                            <span className="text-foreground font-medium">{item.qty}× {item.product.name}</span>
+                            <span className="text-muted-foreground ml-2 shrink-0">{formatRupiah(item.price * item.qty)}</span>
+                          </div>
+                          {item.modifiers && (
+                            <p className="text-[10px] text-muted-foreground/80 italic pl-3 leading-tight">
+                              ({item.modifiers})
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>

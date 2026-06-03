@@ -174,6 +174,14 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
             </div>
             <div className="flex items-start gap-2 text-[12px] text-muted-foreground"><MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {order.address}</div>
             <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><CreditCard className="w-3.5 h-3.5 flex-shrink-0" /> {order.paymentMethod}</div>
+            {order.pickupTime && (
+              <div className="flex items-center gap-2 text-[12px] text-muted-foreground"><Clock className="w-3.5 h-3.5 flex-shrink-0" /> Waktu Pengantaran/Ambil: {order.pickupTime}</div>
+            )}
+            {order.notes && (
+              <div className="bg-amber-50/50 rounded-xl p-3 border border-amber-100 text-xs text-amber-900 leading-relaxed mt-2">
+                <span className="font-bold">Catatan:</span> {order.notes}
+              </div>
+            )}
             
             {order.paymentProofUrl && (
               <div className="mt-4 pt-4 border-t border-dashed border-gray-150">
@@ -217,6 +225,9 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
                 <div className="flex-1 min-w-0">
                   <p className="text-[12px] font-medium truncate">{item.product.name}</p>
                   <p className="text-[10px] text-muted-foreground">{item.qty}× @ {formatRupiah(item.price)}</p>
+                  {item.modifiers && (
+                    <p className="text-[10.5px] text-muted-foreground italic mt-0.5">({item.modifiers})</p>
+                  )}
                 </div>
                 <p className="text-[12px] font-bold shrink-0">{formatRupiah(item.price * item.qty)}</p>
               </div>

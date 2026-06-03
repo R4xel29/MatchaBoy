@@ -39,6 +39,8 @@ export async function GET() {
       total: o.total,
       status: o.status,
       cancelReason: o.cancelReason,
+      notes: o.notes,
+      source: o.source,
       createdAt: o.createdAt.toISOString(),
       paymentProofUrl: o.paymentProofUrl,
       pickupDate: o.pickupDate ? o.pickupDate.toISOString() : null,
@@ -48,6 +50,7 @@ export async function GET() {
         id: item.id,
         qty: item.qty,
         price: item.price,
+        modifiers: item.modifiers,
         product: { name: item.product.name, image: item.product.image },
       })),
     }));

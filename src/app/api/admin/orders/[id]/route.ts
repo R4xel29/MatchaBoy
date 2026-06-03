@@ -150,6 +150,11 @@ export async function PATCH(
 
         // Otomatis tambah poin jika status COMPLETED atau DELIVERED
         if (status === 'COMPLETED' || status === 'DELIVERED') {
+            import('@/lib/whatsapp-service').then(({ sendCompletedNotification }) => {
+                sendCompletedNotification(id).catch(err =>
+                    console.error('Failed to send completed WA notification (admin route):', err)
+                );
+            });
             try {
                 const completionResult = await processOrderCompletion(id);
                 

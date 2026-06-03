@@ -53,6 +53,13 @@ export async function PUT(
       data: { status: 'COMPLETED' }
     });
 
+    // Send completed notification via WhatsApp Bot
+    import('@/lib/whatsapp-service').then(({ sendCompletedNotification }) => {
+      sendCompletedNotification(id).catch(err =>
+        console.error('Failed to send completed WA notification (confirm route):', err)
+      )
+    })
+
     // Award points
     try {
       await processOrderCompletion(id);

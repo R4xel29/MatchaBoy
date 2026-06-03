@@ -8,10 +8,6 @@ export const dynamic = 'force-dynamic'
 export default async function OrderPaymentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const session = await auth()
-  if (!session?.user?.id) {
-    redirect('/login')
-  }
-
   const order = await prisma.order.findUnique({
     where: { id },
     include: { items: { include: { product: true } } }
@@ -21,9 +17,16 @@ export default async function OrderPaymentPage({ params }: { params: Promise<{ i
     notFound()
   }
 
-  // Security: only owner or admin can view this page
-  if (order.userId !== session.user.id && session.user.role === 'CUSTOMER') {
-    notFound()
+  const isSpmb = order.source === 'SPMB';
+
+  if (!isSpmb) {
+    if (!session?.user?.id) {
+      redirect('/login')
+    }
+    // Security: only owner or admin can view this page
+    if (order.userId !== session.user.id && session.user.role === 'CUSTOMER') {
+      notFound()
+    }
   }
 
   // If already paid/processing, redirect straight to tracking
