@@ -131,13 +131,18 @@ export async function POST(req: Request) {
       if (order.paymentMethod === 'QRIS') {
         const paymentSettings = await prisma.paymentSettings.findFirst();
         const qrisImage = paymentSettings?.qrisImage;
+        let absoluteQrisImage = qrisImage;
+        if (qrisImage && !qrisImage.startsWith('http')) {
+          const slash = qrisImage.startsWith('/') ? '' : '/';
+          absoluteQrisImage = `${appUrl}${slash}${qrisImage}`;
+        }
 
         const reply = `Halo *${order.customerName}*!\n\nBerikut adalah QRIS untuk pembayaran pesanan SPMB Anda *${order.id}*:\n\n*Detail Pesanan:*\n${order.items.map(item => `- ${item.qty}x ${item.product.name}`).join('\n')}\n\n*Total Pembayaran: ${formatCurrency(order.total)}*\n*Jam Pengantaran: ${order.pickupTime}*\n*Alamat: ${order.address}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya ke sini ya! 🍵`;
         
         return NextResponse.json({
           success: true,
           replyMessage: reply,
-          image: qrisImage || undefined
+          image: absoluteQrisImage || undefined
         });
       } else {
         // COD

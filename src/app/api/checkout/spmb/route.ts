@@ -203,7 +203,7 @@ export async function POST(req: Request) {
         data: {
           id: orderId,
           userId: null, // guest account
-          orderType: 'DELIVERY', // delivery only
+          orderType: 'PICKUP', // pickup style (no courier)
           source: 'SPMB', // origin tag
           customerName: body.name,
           customerPhone: body.phone,

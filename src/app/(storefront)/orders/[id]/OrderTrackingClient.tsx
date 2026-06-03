@@ -64,12 +64,12 @@ type OrderStep = {
 const STATUS_ORDER_PICKUP = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'];
 const STATUS_ORDER_DELIVERY = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED'];
 
-function getOrderSteps(orderType: string, currentStatus: string): OrderStep[] {
+function getOrderSteps(orderType: string, currentStatus: string, isSpmb?: boolean): OrderStep[] {
   if (orderType === 'PICKUP') {
     const steps: OrderStep[] = [
       { key: 'PENDING', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
       { key: 'PREPARING', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: false },
-      { key: 'READY', label: 'Siap Diambil', icon: ShoppingBag, active: false, completed: false },
+      { key: 'READY', label: isSpmb ? 'Siap Diantar' : 'Siap Diambil', icon: ShoppingBag, active: false, completed: false },
       { key: 'COMPLETED', label: 'Selesai', icon: Check, active: false, completed: false },
     ];
     const currentIdx = STATUS_ORDER_PICKUP.indexOf(currentStatus);
@@ -99,14 +99,16 @@ function getOrderSteps(orderType: string, currentStatus: string): OrderStep[] {
   return steps;
 }
 
-function getOrderTypeLabel(type: string) {
+function getOrderTypeLabel(type: string, isSpmb?: boolean) {
+  if (isSpmb) return 'Pengantaran SPMB';
   switch (type) {
     case 'PICKUP': return 'Ambil Sendiri';
     default: return 'Pengiriman';
   }
 }
 
-function getOrderTypeIcon(type: string) {
+function getOrderTypeIcon(type: string, isSpmb?: boolean) {
+  if (isSpmb) return MapPin;
   switch (type) {
     case 'PICKUP': return ShoppingBag;
     default: return Truck;
@@ -579,7 +581,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     try {
       const res = await fetch(`/api/orders/${orderId}/confirm`, { method: 'PUT' });
       if (res.ok) {
-        setCurrentStatus('DELIVERED');
+        setCurrentStatus(order.id.startsWith('SPMB') ? 'COMPLETED' : 'DELIVERED');
       } else {
         const data = await res.json();
         setConfirmError(data.error || 'Gagal konfirmasi pesanan.');
@@ -591,8 +593,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     }
   };
 
-  const OrderTypeIcon = getOrderTypeIcon(order.orderType);
-  const steps = getOrderSteps(order.orderType, currentStatus);
+  const isSpmb = order.id.startsWith('SPMB');
+  const OrderTypeIcon = getOrderTypeIcon(order.orderType, isSpmb);
+  const steps = getOrderSteps(order.orderType, currentStatus, isSpmb);
 
   const isOngoingDelivery = order.orderType === 'DELIVERY' && ['PICKED_UP', 'ON_DELIVERY'].includes(currentStatus);
 
@@ -674,7 +677,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   <span className="text-sm font-bold uppercase">{currentStatus.replace('_', ' ')}</span>
                 </div>
                 <p className="text-brand-200 text-xs font-semibold">
-                  {getOrderTypeLabel(order.orderType)}
+                  {getOrderTypeLabel(order.orderType, isSpmb)}
                 </p>
               </div>
               {order.queueNumber && (
@@ -691,9 +694,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 <OrderTypeIcon className="w-5 h-5" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold">{getOrderTypeLabel(order.orderType)}</p>
+                <p className="text-sm font-semibold">{getOrderTypeLabel(order.orderType, isSpmb)}</p>
                 <p className="text-xs text-brand-200">
-                  {order.orderType === 'DELIVERY' ? 'Diantar ke alamat Anda' : 'Ambil di toko'}
+                  {isSpmb ? 'Diantar ke kelas/lokasi Anda' : order.orderType === 'DELIVERY' ? 'Diantar ke alamat Anda' : 'Ambil di toko'}
                 </p>
               </div>
             </div>
@@ -868,8 +871,8 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           </div>
         </section>
 
-        {/* Delivery Address - only for delivery orders */}
-        {order.orderType === 'DELIVERY' && order.address && (
+        {/* Delivery Address - only for delivery orders or SPMB orders */}
+        {(order.orderType === 'DELIVERY' || order.id.startsWith('SPMB')) && order.address && (
           <section className="rounded-2xl bg-card border border-border/50 px-4 py-3">
             <div className="flex items-start gap-3">
               <MapPin className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
