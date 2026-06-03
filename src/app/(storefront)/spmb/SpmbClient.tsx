@@ -178,7 +178,7 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                Arum Seduh
               </h1>
               <p className="text-sm text-neutral-200 font-medium max-w-xl">
-                Nikmati matcha kualitas premium terbaik kami. Khusus murid SPMB, pesan langsung dan kami antar ke lokasi kelasmu.
+                Nikmati matcha kualitas premium terbaik kami serta Kopi premium yang ramah di kantong. Khusus murid SPMB, pesan langsung dan kami antar (khusus wilayah SMKN 1 Probolinggo) .
               </p>
             </div>
             
@@ -186,7 +186,7 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
               <span className="text-2xl">🍵</span>
               <div className="text-left">
                 <p className="text-[10px] font-black text-amber-300 uppercase tracking-widest leading-none">Status</p>
-                <p className="text-xs font-bold mt-1 text-white">Guest Mode Active</p>
+                <p className="text-xs font-bold mt-1 text-white">Guest Mode </p>
               </div>
             </div>
           </div>
