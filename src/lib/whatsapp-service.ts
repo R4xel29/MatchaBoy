@@ -99,3 +99,43 @@ export async function sendCompletedNotification(orderId: string) {
     console.error(`[WHATSAPP_SERVICE] Gagal mengirim completed notification untuk order ${orderId}:`, error);
   }
 }
+
+export async function sendCancelledNotification(orderId: string, reason?: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      console.warn(`[WHATSAPP_SERVICE] Order ${orderId} tidak ditemukan untuk notifikasi.`);
+      return;
+    }
+
+    if (!order.customerPhone || order.customerPhone === 'SPMB-PENDING') {
+      console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping notification.`);
+      return;
+    }
+
+    // Standardize phone number for WhatsApp
+    let standardizedPhone = order.customerPhone.replace(/[^0-9]/g, '');
+    if (standardizedPhone.startsWith('08')) {
+      standardizedPhone = '62' + standardizedPhone.substring(1);
+    } else if (standardizedPhone.startsWith('8')) {
+      standardizedPhone = '62' + standardizedPhone;
+    }
+
+    // Custom message format
+    let message = '';
+    const reasonText = reason ? `\nAlasan: *${reason}*` : '';
+    if (order.source === 'SPMB') {
+      message = `Halo *${order.customerName}*!\n\nPesanan SPMB Anda *${order.id}* telah ditolak/dibatalkan oleh Admin.${reasonText}\n\nSilakan hubungi admin jika ada pertanyaan. Terima kasih! 🍵`;
+    } else {
+      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah ditolak/dibatalkan oleh Admin.${reasonText}\n\nSilakan hubungi admin jika ada pertanyaan. Terima kasih! 🍵`;
+    }
+
+    await sendWhatsAppMessage(standardizedPhone, message);
+  } catch (error) {
+    console.error(`[WHATSAPP_SERVICE] Gagal mengirim cancelled notification untuk order ${orderId}:`, error);
+  }
+}
+

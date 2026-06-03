@@ -200,3 +200,26 @@ export async function cleanupOldPaymentProofs() {
     console.error('[Cleanup Error] Failed to execute payment proof cleanup:', err);
   }
 }
+
+/**
+ * Automatically deletes guest SPMB orders where customerPhone is 'SPMB-PENDING'
+ * and they are older than 5 minutes.
+ */
+export async function cleanupUnconfirmedSpmbOrders() {
+  try {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const deleteResult = await prisma.order.deleteMany({
+      where: {
+        source: 'SPMB',
+        customerPhone: 'SPMB-PENDING',
+        createdAt: { lt: fiveMinutesAgo }
+      }
+    });
+    if (deleteResult.count > 0) {
+      console.log(`[SPMB Cleanup] Deleted ${deleteResult.count} unconfirmed SPMB orders older than 5 minutes.`);
+    }
+  } catch (err) {
+    console.error('[SPMB Cleanup Error] Failed to delete unconfirmed SPMB orders:', err);
+  }
+}
+

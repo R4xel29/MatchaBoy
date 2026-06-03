@@ -146,6 +146,11 @@ export async function PATCH(
             restoreStockForOrder(id).catch(err =>
                 console.error('Stock restoration error (non-blocking):', err)
             );
+            import('@/lib/whatsapp-service').then(({ sendCancelledNotification }) => {
+                sendCancelledNotification(id, reason).catch(err =>
+                    console.error('Failed to send cancelled WA notification (admin route):', err)
+                );
+            });
         }
 
         // Otomatis tambah poin jika status COMPLETED atau DELIVERED

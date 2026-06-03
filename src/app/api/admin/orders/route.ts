@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { cleanupUnconfirmedSpmbOrders } from '@/lib/order-utils';
 
 // Lightweight JSON endpoint for client-side polling (replaces router.refresh)
 export async function GET() {
@@ -10,7 +11,16 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Clean up old unconfirmed SPMB orders
+    await cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err));
+
     const orders = await prisma.order.findMany({
+      where: {
+        NOT: {
+          source: 'SPMB',
+          customerPhone: 'SPMB-PENDING',
+        }
+      },
       orderBy: { createdAt: 'desc' },
       include: { items: { include: { product: true } } },
     });

@@ -1,23 +1,36 @@
 import { prisma } from '@/lib/prisma';
 import CashierOrdersClient from './CashierOrdersClient';
-import { cleanupOldPaymentProofs } from '@/lib/order-utils';
+import { cleanupOldPaymentProofs, cleanupUnconfirmedSpmbOrders } from '@/lib/order-utils';
 
 export const revalidate = 0;
 
 export default async function AdminCashierOrdersPage() {
   // Background cleanup of old payment proofs
   cleanupOldPaymentProofs().catch(err => console.error('[Background Cleanup Error]', err));
+  
+  // Clean up old unconfirmed SPMB orders
+  cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err));
 
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
   const orders = await prisma.order.findMany({
     where: {
-      OR: [
-        { createdAt: { gte: startOfDay } },
+      AND: [
         {
-          status: {
-            in: ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'TO_STORE', 'PICKED_UP', 'ON_DELIVERY']
+          OR: [
+            { createdAt: { gte: startOfDay } },
+            {
+              status: {
+                in: ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'TO_STORE', 'PICKED_UP', 'ON_DELIVERY']
+              }
+            }
+          ]
+        },
+        {
+          NOT: {
+            source: 'SPMB',
+            customerPhone: 'SPMB-PENDING'
           }
         }
       ]

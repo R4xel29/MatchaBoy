@@ -1,10 +1,20 @@
 import { prisma } from '@/lib/prisma';
 import AdminOrdersClient from './AdminOrdersClient';
+import { cleanupUnconfirmedSpmbOrders } from '@/lib/order-utils';
 
 export const revalidate = 0;
 
 export default async function AdminOrdersPage() {
+  // Clean up old unconfirmed SPMB orders
+  await cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err));
+
   const orders = await prisma.order.findMany({
+    where: {
+      NOT: {
+        source: 'SPMB',
+        customerPhone: 'SPMB-PENDING',
+      }
+    },
     orderBy: { createdAt: 'desc' },
     include: { items: { include: { product: true } } },
   });

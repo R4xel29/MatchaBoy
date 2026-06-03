@@ -155,6 +155,11 @@ export async function PATCH(
       restoreStockForOrder(id).catch(err =>
         console.error('Stock restoration error (non-blocking):', err)
       )
+      import('@/lib/whatsapp-service').then(({ sendCancelledNotification }) => {
+        sendCancelledNotification(id, reason).catch(err =>
+          console.error('Failed to send cancelled WA notification (cashier route):', err)
+        )
+      })
     }
 
     // Loyalty points + notification when order is completed/delivered
