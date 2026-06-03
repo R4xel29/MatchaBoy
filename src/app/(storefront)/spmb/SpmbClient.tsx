@@ -175,7 +175,7 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                 ✨ SPMB Guest Storefront
               </div>
               <h1 className="font-serif text-3xl md:text-4xl font-black tracking-tight text-white">
-                Matchaboy Arum Seduh
+               Arum Seduh
               </h1>
               <p className="text-sm text-neutral-200 font-medium max-w-xl">
                 Nikmati matcha kualitas premium terbaik kami. Khusus murid SPMB, pesan langsung dan kami antar ke lokasi kelasmu.
