@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { useCartStore } from '@/stores/cart-store';
 import { ProductModal } from '@/components/storefront/ProductModal';
-import { formatRupiah } from '@/lib/utils';
+import { PromoCountdown } from '@/components/storefront/PromoCountdown';
+import { formatRupiah, getActivePromo } from '@/lib/utils';
 import type { Product, Category, CartItem } from '@/types';
 
 interface SpmbClientProps {
@@ -42,7 +43,7 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
   // Checkout Status
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [successOrder, setSuccessOrder] = useState<{ id: string; total: number } | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   // Time Slots (08:00 - 13:00)
   const timeSlots = useMemo(() => {
@@ -91,14 +92,18 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
     return true;
   };
 
-  const handleCheckoutSubmit = async (e: React.FormEvent) => {
+  const handlePreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateForm()) return;
     if (cartItems.length === 0) {
       setErrorMsg('Keranjang belanja Anda kosong.');
       return;
     }
+    setShowConfirmModal(true);
+  };
 
+  const executeCheckout = async () => {
+    setShowConfirmModal(false);
     setIsSubmitting(true);
     setErrorMsg('');
 
@@ -133,14 +138,13 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
         throw new Error(data.error || 'Gagal memproses pesanan.');
       }
 
-      setSuccessOrder({
-        id: data.orderId,
-        total: data.total
-      });
-      
       // Clear local storefront cart state
       clearCart();
       setIsCartOpen(false);
+
+      // Redirect immediately to WhatsApp bot
+      const waUrl = getWhatsAppLink(data.orderId);
+      window.location.href = waUrl;
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
     } finally {
@@ -214,6 +218,10 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 relative z-10">
           {filteredProducts.map((product) => {
             const isSoldOut = product.badge === 'sold-out';
+            const promo = getActivePromo(product);
+            const displayPrice = promo ? promo.promoPrice : product.price;
+            const originalPrice = promo ? product.price : (product.modifiers?.originalPrice || null);
+
             return (
               <motion.div
                 key={product.id}
@@ -223,12 +231,23 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                 className={`bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm flex flex-col group relative
                   ${isSoldOut ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-md hover:border-[#2E5A44]/20'}`}
               >
-                {/* Badge (New/Best Seller) */}
-                {product.badge && (
-                  <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider text-white
-                    ${product.badge === 'best-seller' ? 'bg-[#D4A574]' : ''}
-                    ${product.badge === 'new' ? 'bg-[#2E5A44]' : ''}
-                    ${product.badge === 'sold-out' ? 'bg-red-500' : ''}
+                {/* Promo Timer Overlay */}
+                {promo && !isSoldOut && (
+                  <div className="absolute top-2.5 right-2.5 z-20">
+                    <PromoCountdown endDate={promo.endDate} compact />
+                  </div>
+                )}
+
+                {/* Badge (New/Best Seller/Promo) */}
+                {promo && !isSoldOut ? (
+                  <span className="absolute top-2.5 left-2.5 z-10 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase bg-rose-500 text-white shadow-md">
+                    🔥 Promo
+                  </span>
+                ) : product.badge && (
+                  <span className={`absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide uppercase shadow-sm
+                    ${product.badge === 'best-seller' ? 'bg-[#D4A574] text-white' : ''}
+                    ${product.badge === 'new' ? 'bg-[#2E5A44] text-[#FEF08A]' : ''}
+                    ${product.badge === 'sold-out' ? 'bg-gray-400 text-white' : ''}
                   `}>
                     {product.badge === 'best-seller' && 'Best Seller'}
                     {product.badge === 'new' && 'Baru'}
@@ -244,7 +263,8 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                       alt={product.name}
                       fill
                       sizes="(max-width: 768px) 50vw, 25vw"
-                      className="object-cover group-hover:scale-103 transition-transform duration-500"
+                      className={`object-cover group-hover:scale-103 transition-transform duration-500
+                        ${isSoldOut ? 'grayscale opacity-60' : ''}`}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-4xl">🍵</div>
@@ -263,9 +283,16 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                   </div>
                   
                   <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
-                    <span className="font-bold text-sm text-[#2E5A44]">
-                      {formatRupiah(product.price)}
-                    </span>
+                    <div className="flex flex-col text-left">
+                      {originalPrice && originalPrice > displayPrice && (
+                        <span className="text-[10px] text-gray-400 line-through leading-none mb-1">
+                          {formatRupiah(originalPrice)}
+                        </span>
+                      )}
+                      <span className="font-bold text-sm text-[#2E5A44]">
+                        {formatRupiah(displayPrice)}
+                      </span>
+                    </div>
                     
                     {!isSoldOut && (
                       <span className="w-7 h-7 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] flex items-center justify-center text-xs font-bold group-hover:bg-[#2E5A44] group-hover:text-white transition-colors">
@@ -392,7 +419,7 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                 <hr className="border-gray-100" />
 
                 {/* Checkout Form */}
-                <form onSubmit={handleCheckoutSubmit} className="space-y-4">
+                <form onSubmit={handlePreSubmit} className="space-y-4">
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-left">Informasi Pengantaran</h3>
 
                   {/* Name */}
@@ -525,70 +552,41 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
         )}
       </AnimatePresence>
 
-      {/* Checkout Success Modal Overlay */}
+      {/* Confirmation Modal Overlay */}
       <AnimatePresence>
-        {successOrder && (
+        {showConfirmModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 backdrop-blur-md"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              onClick={() => setShowConfirmModal(false)}
             />
             
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-white rounded-[2rem] w-full max-w-md p-6 shadow-2xl relative z-10 text-center border-[3px] border-[#D4A574]/40"
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-gray-100"
             >
-              <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 border border-emerald-100 flex items-center justify-center mx-auto mb-4">
-                <CheckCircle className="w-10 h-10" />
-              </div>
+              <h3 className="font-serif font-black text-xl text-gray-900 mb-2">Konfirmasi Pesanan 🍵</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mb-6">
+                Apakah Anda yakin data pesanan Anda sudah benar? Setelah menekan 'Ya, Kirim', pesanan akan dibuat dan Anda akan langsung diarahkan ke WhatsApp untuk mengirim pesan konfirmasi ke Bot.
+              </p>
 
-              <h2 className="font-serif font-black text-2xl text-gray-900">Pesanan Dibuat! 🎉</h2>
-              <p className="text-xs text-gray-400 font-medium mt-1">Simpan ID pesanan spesial berikut untuk konfirmasi.</p>
-
-              {/* Unique ID Display */}
-              <div className="bg-[#FAF8F5] border border-dashed border-[#D4A574]/70 rounded-2xl p-4 my-5">
-                <p className="text-[10px] font-black text-[#8C6239] uppercase tracking-widest leading-none">ID Spesial Pesanan</p>
-                <p className="text-3xl font-black text-[#2E5A44] font-mono tracking-wider mt-2 select-all">
-                  {successOrder.id}
-                </p>
-              </div>
-
-              <div className="space-y-3.5">
-                <div className="text-left space-y-1 bg-[#FAF8F5]/60 p-3.5 rounded-2xl border text-xs text-gray-600">
-                  <p className="flex justify-between"><span>Status:</span> <span className="font-bold text-[#2E5A44]">Selesai Dibuat</span></p>
-                  <p className="flex justify-between"><span>Metode:</span> <span className="font-bold">{paymentMethod}</span></p>
-                  <p className="flex justify-between"><span>Total:</span> <span className="font-bold">{formatRupiah(successOrder.total)}</span></p>
-                  <p className="flex justify-between"><span>Pengantaran:</span> <span className="font-bold">{pickupTime}</span></p>
-                </div>
-
-                <p className="text-[11px] text-gray-500 font-medium leading-relaxed">
-                  Penting: Klik tombol di bawah untuk mengirim ID pesanan ke WhatsApp Bot agar pesanan Anda dapat diproses.
-                </p>
-
-                <a
-                  href={getWhatsAppLink(successOrder.id)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full py-4 rounded-2xl bg-[#25D366] text-white font-bold text-sm uppercase tracking-wider shadow-md hover:bg-[#1ebd59] transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  Hubungi WhatsApp Bot 💬
-                </a>
-
+              <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setSuccessOrder(null);
-                    setName('');
-                    setPhone('');
-                    setAddress('');
-                    setPaymentMethod('COD');
-                  }}
-                  className="w-full py-3 rounded-2xl border border-gray-200 text-gray-500 font-bold text-xs uppercase tracking-wider hover:bg-gray-50 transition-all cursor-pointer"
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-3.5 rounded-xl border border-gray-200 text-gray-500 font-bold text-xs uppercase tracking-wider hover:bg-gray-50 transition-all cursor-pointer"
                 >
-                  Kembali ke Menu
+                  Batal
+                </button>
+                <button
+                  onClick={executeCheckout}
+                  className="flex-1 py-3.5 rounded-xl bg-[#2E5A44] text-white font-bold text-xs uppercase tracking-wider hover:bg-[#1a3828] transition-all cursor-pointer shadow-md"
+                >
+                  Ya, Kirim
                 </button>
               </div>
             </motion.div>
