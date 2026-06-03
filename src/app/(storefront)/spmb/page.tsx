@@ -60,6 +60,9 @@ export default async function SpmbPage() {
       categories={mappedCategories} 
       products={mappedProducts}
       botNumber={botNumber}
+      spmbStartTime={storeSettings?.spmbStartTime || "08:00"}
+      spmbEndTime={storeSettings?.spmbEndTime || "13:00"}
+      spmbCloseTime={storeSettings?.spmbCloseTime || "16:00"}
     />
   )
 }

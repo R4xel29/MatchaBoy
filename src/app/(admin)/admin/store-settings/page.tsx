@@ -27,6 +27,9 @@ export default function StoreSettingsPage() {
   }>({});
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappMessage, setWhatsappMessage] = useState('Halo Matchaboy, saya ingin bertanya...');
+  const [spmbStartTime, setSpmbStartTime] = useState('08:00');
+  const [spmbEndTime, setSpmbEndTime] = useState('13:00');
+  const [spmbCloseTime, setSpmbCloseTime] = useState('16:00');
 
   // State for Calendar Navigation
   const [currentCalendarDate, setCurrentCalendarDate] = useState(() => new Date());
@@ -201,6 +204,9 @@ export default function StoreSettingsPage() {
         if (d.whatsappNumber !== undefined) setWhatsappNumber(d.whatsappNumber);
         if (d.whatsappMessage !== undefined) setWhatsappMessage(d.whatsappMessage);
         if (d.pickupAlarmLeadTime !== undefined) setPickupAlarmLeadTime(d.pickupAlarmLeadTime);
+        if (d.spmbStartTime) setSpmbStartTime(d.spmbStartTime);
+        if (d.spmbEndTime) setSpmbEndTime(d.spmbEndTime);
+        if (d.spmbCloseTime) setSpmbCloseTime(d.spmbCloseTime);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -306,6 +312,9 @@ export default function StoreSettingsPage() {
           whatsappNumber,
           whatsappMessage,
           pickupAlarmLeadTime,
+          spmbStartTime,
+          spmbEndTime,
+          spmbCloseTime,
         }),
       });
       if (res.ok) {
@@ -350,6 +359,32 @@ export default function StoreSettingsPage() {
                 className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
             </div>
           </div>
+        </div>
+
+        <div className="border-t border-border pt-6">
+          <h3 className="font-bold text-foreground mb-4 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-brand-600" /> Jam Operasional Khusus SPMB
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Mulai Slot Pengantaran</label>
+              <input type="time" value={spmbStartTime} onChange={e => setSpmbStartTime(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Akhir Slot Pengantaran</label>
+              <input type="time" value={spmbEndTime} onChange={e => setSpmbEndTime(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Jam Tutup Checkout</label>
+              <input type="time" value={spmbCloseTime} onChange={e => setSpmbCloseTime(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Atur jam khusus slot pengantaran untuk mahasiswa SPMB dan jam pembatasan penutupan checkout SPMB (toko tutup).
+          </p>
         </div>
 
         {/* Hari Operasional & Kalender Libur */}

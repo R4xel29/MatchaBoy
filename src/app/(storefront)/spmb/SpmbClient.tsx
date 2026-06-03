@@ -17,9 +17,19 @@ interface SpmbClientProps {
   categories: Category[];
   products: Product[];
   botNumber: string;
+  spmbStartTime: string;
+  spmbEndTime: string;
+  spmbCloseTime: string;
 }
 
-export default function SpmbClient({ categories, products, botNumber }: SpmbClientProps) {
+export default function SpmbClient({ 
+  categories, 
+  products, 
+  botNumber,
+  spmbStartTime,
+  spmbEndTime,
+  spmbCloseTime
+}: SpmbClientProps) {
   // Cart State
   const cartItems = useCartStore((s) => s.items);
   const totalPrice = useCartStore((s) => s.totalPrice());
@@ -63,11 +73,16 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
   }, []);
 
   const isStoreClosed = useMemo(() => {
-    // Tutup jam 16 (4 sore) atau sebelum jam 8 pagi
-    return wibTime.hour >= 16 || wibTime.hour < 8;
-  }, [wibTime]);
+    const currentMin = wibTime.hour * 60 + wibTime.minute;
+    const [startH, startM] = spmbStartTime.split(':').map(Number);
+    const startMin = startH * 60 + startM;
+    const [closeH, closeM] = spmbCloseTime.split(':').map(Number);
+    const closeMin = closeH * 60 + closeM;
 
-  // Time Slots (08:00 - 13:00) with 20 minutes lead time
+    return currentMin >= closeMin || currentMin < startMin;
+  }, [wibTime, spmbStartTime, spmbCloseTime]);
+
+  // Time Slots with 20 minutes lead time
   const timeSlots = useMemo(() => {
     if (isStoreClosed) return [];
     
@@ -75,23 +90,21 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
     const currentTotalMinutes = wibTime.hour * 60 + wibTime.minute;
     const leadTimeMinutes = 20;
     
-    for (let h = 8; h <= 13; h++) {
-      // H:00
-      const h00Minutes = h * 60;
-      if (h00Minutes - currentTotalMinutes >= leadTimeMinutes) {
-        slots.push(`${String(h).padStart(2, '0')}:00`);
-      }
-      
-      // H:30
-      if (h !== 13) {
-        const h30Minutes = h * 60 + 30;
-        if (h30Minutes - currentTotalMinutes >= leadTimeMinutes) {
-          slots.push(`${String(h).padStart(2, '0')}:30`);
-        }
+    const [startH, startM] = spmbStartTime.split(':').map(Number);
+    const [endH, endM] = spmbEndTime.split(':').map(Number);
+    
+    const startMin = startH * 60 + startM;
+    const endMin = endH * 60 + endM;
+    
+    for (let min = startMin; min <= endMin; min += 30) {
+      if (min - currentTotalMinutes >= leadTimeMinutes) {
+        const slotH = Math.floor(min / 60);
+        const slotM = min % 60;
+        slots.push(`${String(slotH).padStart(2, '0')}:${String(slotM).padStart(2, '0')}`);
       }
     }
     return slots;
-  }, [wibTime, isStoreClosed]);
+  }, [wibTime, isStoreClosed, spmbStartTime, spmbEndTime]);
 
   // Sync selected pickupTime to first available time slot if invalid
   useEffect(() => {
@@ -468,12 +481,12 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                       {isStoreClosed ? (
                         <>
                           <span className="font-bold block mb-1 text-amber-900">🏪 Toko Sudah Tutup</span>
-                          Jam operasional kami adalah pukul 08:00 - 16:00 WIB. Pemesanan SPMB dilayani untuk pengantaran pukul 08:00 - 13:00 WIB. Silakan kembali besok pagi!
+                          Jam operasional kami adalah pukul {spmbStartTime} - {spmbCloseTime} WIB. Pemesanan SPMB dilayani untuk pengantaran pukul {spmbStartTime} - {spmbEndTime} WIB. Silakan kembali besok pagi!
                         </>
                       ) : (
                         <>
                           <span className="font-bold block mb-1 text-amber-900">⏳ Waktu Pengantaran Hari Ini Habis</span>
-                          Batas pemesanan SPMB untuk pengantaran hari ini (terakhir pukul 13:00 WIB) telah terlewati. Silakan memesan kembali besok pagi!
+                          Batas pemesanan SPMB untuk pengantaran hari ini (terakhir pukul {spmbEndTime} WIB) telah terlewati. Silakan memesan kembali besok pagi!
                         </>
                       )}
                     </div>

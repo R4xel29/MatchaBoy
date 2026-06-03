@@ -25,6 +25,9 @@ export async function GET() {
         storeLat: -7.78125167,
         storeLng: 113.212266,
         pickupAlarmLeadTime: 30,
+        spmbStartTime: '08:00',
+        spmbEndTime: '13:00',
+        spmbCloseTime: '16:00',
       })
     }
 
@@ -46,6 +49,9 @@ export async function GET() {
       whatsappNumber: settings.whatsappNumber || "",
       whatsappMessage: settings.whatsappMessage || "Halo Matchaboy, saya ingin bertanya...",
       pickupAlarmLeadTime: settings.pickupAlarmLeadTime,
+      spmbStartTime: settings.spmbStartTime || "08:00",
+      spmbEndTime: settings.spmbEndTime || "13:00",
+      spmbCloseTime: settings.spmbCloseTime || "16:00",
     })
   } catch {
     return NextResponse.json({
@@ -65,6 +71,9 @@ export async function GET() {
       whatsappNumber: "",
       whatsappMessage: "Halo Matchaboy, saya ingin bertanya...",
       pickupAlarmLeadTime: 30,
+      spmbStartTime: "08:00",
+      spmbEndTime: "13:00",
+      spmbCloseTime: "16:00",
     })
   }
 }
@@ -108,6 +117,9 @@ export async function PUT(req: Request) {
           whatsappNumber: body.whatsappNumber !== undefined ? body.whatsappNumber : existing.whatsappNumber,
           whatsappMessage: body.whatsappMessage !== undefined ? body.whatsappMessage : existing.whatsappMessage,
           pickupAlarmLeadTime: body.pickupAlarmLeadTime !== undefined ? Number(body.pickupAlarmLeadTime) : existing.pickupAlarmLeadTime,
+          spmbStartTime: body.spmbStartTime !== undefined ? body.spmbStartTime : existing.spmbStartTime,
+          spmbEndTime: body.spmbEndTime !== undefined ? body.spmbEndTime : existing.spmbEndTime,
+          spmbCloseTime: body.spmbCloseTime !== undefined ? body.spmbCloseTime : existing.spmbCloseTime,
         },
       })
       return NextResponse.json(updated)
@@ -130,6 +142,9 @@ export async function PUT(req: Request) {
           whatsappNumber: body.whatsappNumber || '',
           whatsappMessage: body.whatsappMessage || 'Halo Matchaboy, saya ingin bertanya...',
           pickupAlarmLeadTime: body.pickupAlarmLeadTime !== undefined ? Number(body.pickupAlarmLeadTime) : 30,
+          spmbStartTime: body.spmbStartTime || '08:00',
+          spmbEndTime: body.spmbEndTime || '13:00',
+          spmbCloseTime: body.spmbCloseTime || '16:00',
         },
       })
       return NextResponse.json(created)
