@@ -83,9 +83,11 @@ export async function POST(req: Request) {
       throw new ValidationError('Nama dan nomor HP wajib diisi');
     }
 
-    const phoneRegex = /^(\+62|62|0)8[0-9]{8,12}$/;
-    if (!phoneRegex.test(body.phone)) {
-      throw new ValidationError('Format nomor HP tidak valid');
+    if (body.phone !== 'SPMB-PENDING') {
+      const phoneRegex = /^(\+62|62|0)8[0-9]{8,12}$/;
+      if (!phoneRegex.test(body.phone)) {
+        throw new ValidationError('Format nomor HP tidak valid');
+      }
     }
 
     if (!body.address || !body.address.trim()) {

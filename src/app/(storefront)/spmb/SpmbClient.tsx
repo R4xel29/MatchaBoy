@@ -35,7 +35,6 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
 
   // Form State
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [pickupTime, setPickupTime] = useState('09:00');
   const [paymentMethod, setPaymentMethod] = useState<'COD' | 'QRIS'>('COD');
@@ -73,15 +72,6 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
   const validateForm = () => {
     if (!name || name.trim().length < 2) {
       setErrorMsg('Nama lengkap minimal 2 karakter.');
-      return false;
-    }
-    const phoneRegex = /^(\+62|62|0)8[0-9]{8,12}$/;
-    if (!phone) {
-      setErrorMsg('Nomor WhatsApp wajib diisi.');
-      return false;
-    }
-    if (!phoneRegex.test(phone)) {
-      setErrorMsg('Format nomor WhatsApp tidak valid (contoh: 081234567890).');
       return false;
     }
     if (!address || address.trim().length < 5) {
@@ -125,7 +115,7 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          phone,
+          phone: 'SPMB-PENDING',
           address,
           pickupTime,
           paymentMethod,
@@ -433,21 +423,6 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors"
-                    />
-                  </div>
-
-                  {/* WhatsApp Phone */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <Phone className="w-3 h-3 text-[#2E5A44]" /> Nomor WhatsApp
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="Contoh: 081234567890"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
                       className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors"
                     />
                   </div>

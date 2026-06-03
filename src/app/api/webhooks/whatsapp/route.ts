@@ -110,6 +110,22 @@ export async function POST(req: Request) {
         return NextResponse.json({ success: false, error: "Order not found", replyMessage: reply });
       }
 
+      let standardizedSenderPhone = phone.replace(/[^0-9]/g, '');
+      if (standardizedSenderPhone.startsWith('08')) {
+        standardizedSenderPhone = '62' + standardizedSenderPhone.substring(1);
+      } else if (standardizedSenderPhone.startsWith('8')) {
+        standardizedSenderPhone = '62' + standardizedSenderPhone;
+      }
+
+      if (order.customerPhone === 'SPMB-PENDING') {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { customerPhone: standardizedSenderPhone }
+        });
+        console.log(`[WHATSAPP_WEBHOOK] Updated SPMB order ${order.id} customerPhone to ${standardizedSenderPhone}`);
+        order.customerPhone = standardizedSenderPhone;
+      }
+
       const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`;
 
       if (order.paymentMethod === 'QRIS') {
