@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -44,18 +44,65 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
   const [errorMsg, setErrorMsg] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Time Slots (08:00 - 13:00)
+  // Get current time in WIB (GMT+7)
+  const wibTime = useMemo(() => {
+    try {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jakarta',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false
+      });
+      const [h, m] = formatter.format(now).split(':').map(Number);
+      return { hour: h, minute: m };
+    } catch {
+      const now = new Date();
+      return { hour: now.getHours(), minute: now.getMinutes() };
+    }
+  }, []);
+
+  const isStoreClosed = useMemo(() => {
+    // Tutup jam 16 (4 sore) atau sebelum jam 8 pagi
+    return wibTime.hour >= 16 || wibTime.hour < 8;
+  }, [wibTime]);
+
+  // Time Slots (08:00 - 13:00) with 20 minutes lead time
   const timeSlots = useMemo(() => {
+    if (isStoreClosed) return [];
+    
     const slots = [];
+    const currentTotalMinutes = wibTime.hour * 60 + wibTime.minute;
+    const leadTimeMinutes = 20;
+    
     for (let h = 8; h <= 13; h++) {
-      const hourStr = String(h).padStart(2, '0');
-      slots.push(`${hourStr}:00`);
+      // H:00
+      const h00Minutes = h * 60;
+      if (h00Minutes - currentTotalMinutes >= leadTimeMinutes) {
+        slots.push(`${String(h).padStart(2, '0')}:00`);
+      }
+      
+      // H:30
       if (h !== 13) {
-        slots.push(`${hourStr}:30`);
+        const h30Minutes = h * 60 + 30;
+        if (h30Minutes - currentTotalMinutes >= leadTimeMinutes) {
+          slots.push(`${String(h).padStart(2, '0')}:30`);
+        }
       }
     }
     return slots;
-  }, []);
+  }, [wibTime, isStoreClosed]);
+
+  // Sync selected pickupTime to first available time slot if invalid
+  useEffect(() => {
+    if (timeSlots.length > 0) {
+      if (!timeSlots.includes(pickupTime)) {
+        setPickupTime(timeSlots[0]);
+      }
+    } else {
+      setPickupTime('');
+    }
+  }, [timeSlots, pickupTime]);
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -413,98 +460,115 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
 
                 <hr className="border-gray-100" />
 
-                {/* Checkout Form */}
                 <form onSubmit={handlePreSubmit} className="space-y-4">
                   <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-left">Informasi Pengantaran</h3>
 
-                  {/* Name */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <User className="w-3 h-3 text-[#2E5A44]" /> Nama Lengkap
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Contoh: Budi Santoso"
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors"
-                    />
-                  </div>
-
-                  {/* Classroom / Location Details */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <MapPin className="w-3 h-3 text-[#2E5A44]" /> Detail Lokasi / Kelas
-                    </label>
-                    <textarea
-                      placeholder="Contoh: Gedung B, Lantai 2, Ruang Kelas 12A"
-                      rows={2}
-                      required
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors resize-none"
-                    />
-                  </div>
-
-                  {/* Delivery Time (08:00 - 13:00) */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <Clock className="w-3 h-3 text-[#2E5A44]" /> Jam Pengantaran
-                    </label>
-                    <select
-                      value={pickupTime}
-                      onChange={(e) => setPickupTime(e.target.value)}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors"
-                    >
-                      {timeSlots.map((slot) => (
-                        <option key={slot} value={slot}>
-                          {slot}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Payment Method */}
-                  <div className="space-y-2 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1">
-                      <CreditCard className="w-3 h-3 text-[#2E5A44]" /> Metode Pembayaran
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors
-                        ${paymentMethod === 'COD' 
-                          ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold' 
-                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          checked={paymentMethod === 'COD'}
-                          onChange={() => setPaymentMethod('COD')}
-                          className="hidden"
-                        />
-                        <Banknote className="w-4 h-4" />
-                        <span className="text-xs">COD</span>
-                      </label>
-
-                      <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors
-                        ${paymentMethod === 'QRIS' 
-                          ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold' 
-                          : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          checked={paymentMethod === 'QRIS'}
-                          onChange={() => setPaymentMethod('QRIS')}
-                          className="hidden"
-                        />
-                        <span className="text-xs font-black uppercase">QRIS</span>
-                      </label>
+                  {timeSlots.length === 0 ? (
+                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-amber-800 text-xs font-medium text-left leading-relaxed">
+                      {isStoreClosed ? (
+                        <>
+                          <span className="font-bold block mb-1 text-amber-900">🏪 Toko Sudah Tutup</span>
+                          Jam operasional kami adalah pukul 08:00 - 16:00 WIB. Pemesanan SPMB dilayani untuk pengantaran pukul 08:00 - 13:00 WIB. Silakan kembali besok pagi!
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-bold block mb-1 text-amber-900">⏳ Waktu Pengantaran Hari Ini Habis</span>
+                          Batas pemesanan SPMB untuk pengantaran hari ini (terakhir pukul 13:00 WIB) telah terlewati. Silakan memesan kembali besok pagi!
+                        </>
+                      )}
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      {/* Name */}
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                          <User className="w-3 h-3 text-[#2E5A44]" /> Nama Lengkap
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Contoh: Budi Santoso"
+                          required
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors"
+                        />
+                      </div>
+
+                      {/* Classroom / Location Details */}
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                          <MapPin className="w-3 h-3 text-[#2E5A44]" /> Detail Lokasi / Kelas
+                        </label>
+                        <textarea
+                          placeholder="Contoh: Gedung B, Lantai 2, Ruang Kelas 12A"
+                          rows={2}
+                          required
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors resize-none"
+                        />
+                      </div>
+
+                      {/* Delivery Time (08:00 - 13:00) */}
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-[#2E5A44]" /> Jam Pengantaran
+                        </label>
+                        <select
+                          value={pickupTime}
+                          onChange={(e) => setPickupTime(e.target.value)}
+                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors"
+                        >
+                          {timeSlots.map((slot) => (
+                            <option key={slot} value={slot}>
+                              {slot}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Payment Method */}
+                      <div className="space-y-2 text-left">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1">
+                          <CreditCard className="w-3 h-3 text-[#2E5A44]" /> Metode Pembayaran
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors
+                            ${paymentMethod === 'COD' 
+                              ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold' 
+                              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              checked={paymentMethod === 'COD'}
+                              onChange={() => setPaymentMethod('COD')}
+                              className="hidden"
+                            />
+                            <Banknote className="w-4 h-4" />
+                            <span className="text-xs">COD</span>
+                          </label>
+
+                          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors
+                            ${paymentMethod === 'QRIS' 
+                              ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold' 
+                              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              checked={paymentMethod === 'QRIS'}
+                              onChange={() => setPaymentMethod('QRIS')}
+                              className="hidden"
+                            />
+                            <span className="text-xs font-black uppercase">QRIS</span>
+                          </label>
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {errorMsg && (
                     <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-semibold text-left">
@@ -514,8 +578,8 @@ export default function SpmbClient({ categories, products, botNumber }: SpmbClie
 
                   <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="w-full py-4 rounded-2xl bg-[#2E5A44] text-white font-bold text-sm uppercase tracking-wider shadow-md hover:bg-[#203f2f] transition-all flex items-center justify-center gap-2 cursor-pointer mt-4"
+                    disabled={isSubmitting || timeSlots.length === 0}
+                    className="w-full py-4 rounded-2xl bg-[#2E5A44] text-white font-bold text-sm uppercase tracking-wider shadow-md hover:bg-[#203f2f] transition-all flex items-center justify-center gap-2 cursor-pointer mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (
                       <>

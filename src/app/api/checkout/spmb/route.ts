@@ -98,6 +98,30 @@ export async function POST(req: Request) {
       throw new ValidationError('Jam pengantaran wajib diisi');
     }
 
+    // Validate current WIB time & closing time (16:00 WIB)
+    let wibHour = 0;
+    let wibMinute = 0;
+    try {
+      const now = new Date();
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Jakarta',
+        hour: 'numeric',
+        minute: 'numeric',
+        hour12: false
+      });
+      const [h, m] = formatter.format(now).split(':').map(Number);
+      wibHour = h;
+      wibMinute = m;
+    } catch {
+      const now = new Date();
+      wibHour = now.getHours();
+      wibMinute = now.getMinutes();
+    }
+
+    if (wibHour >= 16 || wibHour < 8) {
+      throw new ValidationError('Toko kami tutup pada pukul 16:00 - 08:00 WIB. Silakan lakukan pemesanan besok pagi.');
+    }
+
     // Validate delivery time is between 08:00 and 13:00
     const [pickH, pickM] = body.pickupTime.split(':').map(Number);
     const pickMinutes = pickH * 60 + pickM;
@@ -106,6 +130,14 @@ export async function POST(req: Request) {
 
     if (pickMinutes < startMinutes || pickMinutes > endMinutes) {
       throw new ValidationError('Waktu pengantaran harus berada di antara jam 08:00 - 13:00');
+    }
+
+    // Validate that pickupTime is at least 20 minutes in the future
+    const currentTotalMinutes = wibHour * 60 + wibMinute;
+    const leadTimeMinutes = 20;
+
+    if (pickMinutes - currentTotalMinutes < leadTimeMinutes) {
+      throw new ValidationError('Waktu pengantaran tidak valid atau sudah terlewati. Mohon pilih waktu pengantaran yang lain.');
     }
 
     // Validate payment method
