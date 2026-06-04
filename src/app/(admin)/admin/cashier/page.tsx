@@ -7,11 +7,11 @@ export default async function AdminCashierPage() {
   const [products, categories] = await Promise.all([
     prisma.product.findMany({
       where: {
-        AND: [
-          { badge: { not: 'sold-out' } },
+        OR: [
+          { badge: null },
           {
-            OR: [
-              { badge: null },
+            AND: [
+              { badge: { not: 'sold-out' } },
               { badge: { not: 'archived' } }
             ]
           }
