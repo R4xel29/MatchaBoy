@@ -11,7 +11,7 @@ import { formatRupiah, getActivePromo, cn } from '@/lib/utils';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
 import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ChevronDown, ShoppingBag, Clock, Gift, Copy, Check, Share2, Trophy, RefreshCw, FlaskConical, CreditCard, Plus, History, Trash2, ArrowUpRight, Leaf, Award, ShieldAlert, CheckCircle2, CalendarDays, Wallet, Loader2 } from 'lucide-react';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react';
 
 // Lazy-load heavy modal components (only shown on user interaction)
 const ProductModal = dynamic(() => import('@/components/storefront/ProductModal').then(m => ({ default: m.ProductModal })), { ssr: false });
@@ -758,11 +758,11 @@ export default function StorefrontClient({
           </div>
         </div>
 
-        {/* MATCHABOY PAY & ARUS POIN DUAL CARD - MATCHABOY PAY DISABLED (Coming Soon) */}
+        {/* ARUS PAY & ARUS POIN DUAL CARD - ARUS PAY DISABLED (Coming Soon) */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-6 relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             
-            {/* MATCHABOY PAY (WALLET CARD) - DISABLED (Coming Soon) 
+            {/* ARUS PAY (WALLET CARD) - DISABLED (Coming Soon) 
             <div className="bg-gradient-to-tr from-[#2E5A44] via-[#1E3F20] to-[#142C16] text-white rounded-[2rem] p-6 shadow-xl border border-[#D4A574]/35 relative overflow-hidden flex flex-col justify-between min-h-[170px] group transition-all duration-300 hover:shadow-2xl hover:shadow-[#2E5A44]/10">
               Background abstract circles
               <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#FEF08A]/10 rounded-full blur-2xl pointer-events-none group-hover:scale-110 transition-transform duration-500" />
@@ -772,7 +772,7 @@ export default function StorefrontClient({
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-5 h-5 text-[#FEF08A]" />
                   <span className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-300">
-                    Matchaboy Pay
+                    Arus Pay
                   </span>
                 </div>
                 <div className="px-2.5 py-0.5 rounded-full bg-[#FEF08A]/10 border border-[#FEF08A]/20 text-[#FEF08A] text-[9px] font-black tracking-wider uppercase">
@@ -1935,6 +1935,100 @@ function TopUpOverlay({
   const [simulating, setSimulating] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState<boolean>(false);
 
+  // Upload and confirmation states for top-up
+  const [preview, setPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState(false);
+  const [paymentProofUrl, setPaymentProofUrl] = useState<string | null>(null);
+  const [submittingProof, setSubmittingProof] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => setPreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('type', 'payment-proof');
+
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentProofUrl(data.url);
+        setUploaded(true);
+      } else {
+        throw new Error('Gagal unggah');
+      }
+    } catch {
+      showToast('Gagal mengunggah bukti pembayaran. Silakan coba lagi.', 'error');
+      setPreview(null);
+      setUploaded(false);
+      setPaymentProofUrl(null);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSubmitProof = async () => {
+    if (!activeTransaction || !paymentProofUrl) return;
+    setSubmittingProof(true);
+    try {
+      const res = await fetch('/api/user/wallet', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId: activeTransaction.id, paymentProofUrl }),
+      });
+
+      if (res.ok) {
+        showToast('Bukti pembayaran berhasil diunggah! Saldo akan masuk setelah kasir memverifikasi.', 'success');
+        onClose();
+        setAmount('');
+        setActiveTransaction(null);
+        setPreview(null);
+        setUploaded(false);
+        setPaymentProofUrl(null);
+        refreshWallet();
+      } else {
+        const d = await res.json();
+        showToast(d.error || 'Gagal mengirim bukti pembayaran.', 'error');
+      }
+    } catch {
+      showToast('Terjadi kesalahan jaringan.', 'error');
+    } finally {
+      setSubmittingProof(false);
+    }
+  };
+
+  const handleDownloadQr = () => {
+    try {
+      showToast("Mengunduh QRIS...", "success")
+      const canvas = document.getElementById('topup-qris-canvas') as HTMLCanvasElement;
+      if (!canvas) {
+        throw new Error('Canvas not found');
+      }
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `QRIS_TOPUP_${activeTransaction?.paymentCode || 'ARUSPAY'}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error("Gagal mengunduh QRIS:", error)
+      showToast("Gagal mengunduh QRIS.", "error")
+    }
+  };
+
   // Dynamic configurations from database
   const [banks, setBanks] = useState<any[]>([]);
   const [walletSettings, setWalletSettings] = useState<any>({
@@ -1952,6 +2046,9 @@ function TopUpOverlay({
       setStep('select');
       setAmount('');
       setActiveTransaction(null);
+      setPreview(null);
+      setUploaded(false);
+      setPaymentProofUrl(null);
 
       // Fetch dynamic settings and bank details
       fetch('/api/user/wallet')
@@ -2091,10 +2188,10 @@ function TopUpOverlay({
           <div className="p-6 bg-gradient-to-tr from-[#2E5A44] to-[#1E3F20] text-white flex justify-between items-center relative">
             <div className="space-y-0.5">
               <span className="text-[9px] text-[#FEF08A] font-black uppercase tracking-widest bg-white/10 px-2 py-0.5 rounded-full">
-                ✦ Matchaboy Wallet ✦
+                ✦ Arus Pay ✦
               </span>
               <h3 className="font-serif font-black text-xl text-white tracking-tight mt-1">
-                {step === 'select' ? 'Top Up Matchaboy Pay' : 'Petunjuk Pembayaran'}
+                {step === 'select' ? 'Top Up Arus Pay' : 'Petunjuk Pembayaran'}
               </h3>
             </div>
             <button
@@ -2300,21 +2397,116 @@ function TopUpOverlay({
               {/* Tab Contents */}
               <div className="flex-1 bg-[#FFFBF5]/30 border border-[#FAF6EE] rounded-3xl p-5 flex flex-col items-center justify-center min-h-[220px]">
                 {payMethod === 'qris' && (
-                  <div className="text-center space-y-4 flex flex-col items-center">
-                    <div className="relative w-44 h-44 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-sm flex items-center justify-center">
-                      <QRCodeSVG
-                        value={`00020101021226570014ID.DOKU.WWW.01189360091234567890120215MB${activeTransaction?.paymentCode || 'TOPUP'}0303UME5204581153033605802ID5913MATCHABOY COFFEE6007JAKARTA61051212362070703A016304ABCD`}
-                        size={156}
-                        level="M"
-                        includeMargin={false}
-                        className="object-contain"
-                      />
+                  <div className="text-center space-y-4 flex flex-col items-center w-full">
+                    {/* Realistic GPN/QRIS Frame */}
+                    <div className="w-full border border-gray-100 rounded-3xl p-4.5 bg-white flex flex-col items-center shadow-sm">
+                      <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-2 mb-4 shrink-0 select-none">
+                        <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
+                          QR<span className="text-[#e26d5c]">IS</span>
+                        </span>
+                        <span className="text-[8.5px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2 py-0.5 rounded">
+                          GPN Standard
+                        </span>
+                      </div>
+
+                      {/* QR Code Canvas Frame */}
+                      <div className="relative w-44 h-44 bg-white rounded-2xl p-2 border border-gray-100 flex items-center justify-center shadow-inner group">
+                        <QRCodeCanvas
+                          id="topup-qris-canvas"
+                          value={activeTransaction?.paymentQrContent || `00020101021226570014ID.DOKU.WWW.01189360091234567890120215MB${activeTransaction?.paymentCode || 'TOPUP'}0303UME5204581153033605802ID5913MATCHABOY COFFEE6007JAKARTA61051212362070703A016304ABCD`}
+                          size={160}
+                          level="M"
+                          includeMargin={false}
+                          className="object-contain"
+                        />
+                      </div>
+
+                      {/* Merchant Info */}
+                      <div className="text-center mt-3 space-y-0.5 w-full select-none">
+                        <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider">Nama Merchant</p>
+                        <h4 className="text-sm font-serif font-black text-gray-900 leading-tight">ARUS PAY</h4>
+                        <p className="text-[9.5px] text-gray-550 font-mono mt-1 pt-1.5 border-t border-gray-50">
+                          Kode Top-Up: <span className="font-bold">{activeTransaction?.paymentCode}</span>
+                        </p>
+                        <p className="text-base font-black text-[#B48A5E] pt-0.5">{formatRupiah(parseInt(amount))}</p>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-[10px] font-extrabold text-orange-600 uppercase tracking-wider">Metode: QRIS GPN Standard</p>
-                      <p className="text-[10.5px] text-gray-550 font-semibold leading-relaxed px-4">
-                        Pindai kode QR di atas dengan aplikasi bank (BCA, Mandiri, OVO, ShopeePay) untuk simulasi pembayaran.
-                      </p>
+
+                    {/* Download & Screenshot Buttons */}
+                    <div className="grid grid-cols-2 gap-2.5 w-full">
+                      <button
+                        type="button"
+                        onClick={handleDownloadQr}
+                        className="py-3 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold rounded-xl shadow transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-[10.5px]"
+                      >
+                        <span>Unduh QRIS</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showToast("Silakan screenshot QRIS untuk membayar via galeri aplikasi bank/e-wallet Anda.", "info")
+                        }}
+                        className="py-3 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-[10.5px]"
+                      >
+                        <span>Screenshot</span>
+                      </button>
+                    </div>
+
+                    {/* Proof Uploader Box */}
+                    <div className="w-full bg-white border border-gray-100 rounded-3xl p-4.5 space-y-3.5 text-left">
+                      <h4 className="text-[10px] font-black uppercase tracking-wider text-gray-400 pl-1">
+                        Upload Bukti Pembayaran
+                      </h4>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                      {!preview ? (
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          className="w-full py-4 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-1 hover:border-[#B48A5E]/30 hover:bg-[#B48A5E]/5 transition-all active:scale-[0.98] select-none text-gray-400"
+                        >
+                          <span className="text-xs font-bold text-gray-650">Klik untuk upload struk/bukti bayar</span>
+                        </button>
+                      ) : (
+                        <div className="relative rounded-xl overflow-hidden border border-gray-150">
+                          <img src={preview} alt="Struk QRIS" className="w-full h-32 object-cover" />
+                          {uploading && (
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
+                              <Loader2 className="w-6 h-6 text-white animate-spin" />
+                            </div>
+                          )}
+                          {uploaded && (
+                            <div className="absolute top-2.5 right-2.5 bg-green-500 text-white px-2 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                              <span>Selesai</span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            disabled={uploading}
+                            onClick={() => { setPreview(null); setUploaded(false); setPaymentProofUrl(null); }}
+                            className="absolute top-2.5 left-2.5 w-6 h-6 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center border border-gray-100 text-gray-500 hover:text-gray-700 shadow-sm"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={!uploaded || submittingProof || uploading}
+                        onClick={handleSubmitProof}
+                        className={`w-full py-3.5 rounded-xl font-bold text-xs tracking-wide shadow transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]
+                          ${uploaded && !submittingProof
+                            ? 'bg-[#B48A5E] hover:bg-[#946F48] text-white'
+                            : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'}`}
+                      >
+                        {submittingProof ? 'Mengirim...' : 'Konfirmasi Saya Sudah Bayar'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -2734,7 +2926,7 @@ function AutoReorderOverlay({
                             : 'bg-white border-gray-200 text-gray-600'
                         }`}
                       >
-                        {m === 'WALLET' ? 'Matchaboy Pay ⚡' : 'Bayar Ditempat (COD) 💵'}
+                        {m === 'WALLET' ? 'Arus Pay ⚡' : 'Bayar Ditempat (COD) 💵'}
                       </button>
                     ))}
                   </div>
@@ -2818,7 +3010,7 @@ function AutoReorderOverlay({
                         <div className="text-[9.5px] text-gray-500 font-semibold border-t border-b border-gray-100 py-2 space-y-1">
                           <p className="line-clamp-1">📍 Alamat: {s.deliveryAddress}</p>
                           <p className="flex items-center gap-1">
-                            Metode: <span className="font-bold text-gray-800">{s.paymentMethod === 'WALLET' ? 'Matchaboy Pay ⚡' : 'Cash On Delivery (COD) 💵'}</span>
+                            Metode: <span className="font-bold text-gray-800">{s.paymentMethod === 'WALLET' ? 'Arus Pay ⚡' : 'Cash On Delivery (COD) 💵'}</span>
                           </p>
                           {s.nextTriggeredAt && (
                             <p className="text-[#2E5A44] font-bold">

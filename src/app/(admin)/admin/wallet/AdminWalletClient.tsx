@@ -287,6 +287,11 @@ export default function AdminWalletClient() {
                         }`}>
                           {tx.paymentMethod || 'OFFLINE'}
                         </span>
+                        <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded leading-none ${
+                          tx.status === 'VERIFYING' ? 'bg-amber-500 text-white' : 'bg-gray-150 text-gray-750'
+                        }`}>
+                          {tx.status === 'VERIFYING' ? 'Sudah Bayar' : 'Pending'}
+                        </span>
                         <span className="text-[9px] font-mono text-muted-foreground font-semibold">
                           {tx.referenceId}
                         </span>
@@ -301,6 +306,18 @@ export default function AdminWalletClient() {
                     </p>
                   </div>
                 </div>
+
+                {/* Proof of Payment Preview */}
+                {tx.paymentProofUrl && (
+                  <div className="mt-1 border border-border rounded-lg overflow-hidden bg-muted/20 relative group select-none">
+                    <span className="absolute top-1 right-1 bg-black/60 text-white font-black text-[7.5px] px-1.5 py-0.5 rounded uppercase leading-none shadow">
+                      Struk / Bukti Bayar
+                    </span>
+                    <a href={tx.paymentProofUrl} target="_blank" rel="noopener noreferrer">
+                      <img src={tx.paymentProofUrl} alt="Bukti Transfer" className="w-full h-32 object-cover hover:scale-[1.02] transition-transform duration-200 cursor-pointer" />
+                    </a>
+                  </div>
+                )}
 
                 <div className="flex gap-2 select-none border-t border-border/40 pt-2.5">
                   <button

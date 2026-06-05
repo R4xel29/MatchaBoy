@@ -277,7 +277,8 @@ export function generateQrisString(amount: number, orderId: string, customNmid?:
   qris += '54' + String(amtStr.length).padStart(2, '0') + amtStr; // Transaction Amount
   
   qris += '5802ID'; // Country: ID
-  qris += '5909MATCHABOY'; // Merchant Name
+  const merchantName = "ARUS PAY";
+  qris += '59' + String(merchantName.length).padStart(2, '0') + merchantName; // Merchant Name
   qris += '6012PROBOLINGGO'; // City
   qris += '610567215'; // Postal Code
   

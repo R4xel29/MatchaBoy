@@ -1194,7 +1194,7 @@ export default function CheckoutPage() {
       return;
     }
     if (paymentMethod === 'WALLET' && walletBalance < grandTotal) {
-      setToast({ message: `Saldo Wallet tidak mencukupi. Saldo Anda: ${formatRupiah(walletBalance)}, Tagihan: ${formatRupiah(grandTotal)}`, type: 'error' });
+      setToast({ message: `Saldo Arus Pay tidak mencukupi. Saldo Anda: ${formatRupiah(walletBalance)}, Tagihan: ${formatRupiah(grandTotal)}`, type: 'error' });
       return;
     }
     setIsSubmitting(true);
@@ -1858,7 +1858,7 @@ export default function CheckoutPage() {
 
           {/* ── 5. Payment Selector (Brutal Premium Upgraded) ─────────────────── */}
           <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-5">
-            {/* A. MATCHABOY WALLET (Eksklusif & Utama) - Only show if enabled */}
+            {/* A. ARUS PAY (Eksklusif & Utama) - Only show if enabled */}
             {paymentConfig?.wallet?.enabled && (
             <div className="space-y-2">
               <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 pl-1 select-none">Metode Pembayaran Utama</span>
@@ -1886,7 +1886,7 @@ export default function CheckoutPage() {
                     <div className="flex items-center gap-3">
                       <div>
                         <p className={`text-xs font-black uppercase tracking-wider ${paymentMethod === 'WALLET' ? 'text-amber-300' : 'text-gray-400'}`}>
-                          Matchaboy Wallet
+                          Arus Pay
                         </p>
                         <h4 className={`text-lg font-serif font-black tracking-tight mt-0.5 ${paymentMethod === 'WALLET' ? 'text-white' : 'text-gray-900'}`}>
                           {formatRupiah(walletBalance)}
@@ -1989,9 +1989,9 @@ export default function CheckoutPage() {
                 {paymentConfig?.doku?.enabled && (
                   <button
                     type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('QRIS'); }}
+                    onClick={() => { setPaymentMethod('QRIS'); setPaymentChannel(''); }}
                     className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS'
+                      ${paymentMethod === 'QRIS'
                         ? 'border-purple-600 bg-purple-50/20 text-purple-900 shadow-sm shadow-purple-50'
                         : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
                   >
@@ -2002,8 +2002,8 @@ export default function CheckoutPage() {
                       <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">QRIS Instan</p>
                       <p className="text-[8px] font-bold text-purple-600 uppercase tracking-wide leading-none truncate w-full">Scan & Pay</p>
                     </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'QRIS' && <div className="w-1 h-1 rounded-full bg-white" />}
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'QRIS' && <div className="w-1 h-1 rounded-full bg-white" />}
                     </div>
                   </button>
                 )}
@@ -2197,7 +2197,7 @@ export default function CheckoutPage() {
               💡 {paymentMethod === 'COD' 
                 ? 'Bayar langsung di tempat saat pesanan kamu diserahkan kurir atau diambil di toko.' 
                 : paymentMethod === 'WALLET'
-                ? `Bayar instan menggunakan saldo Matchaboy Wallet Anda. Saldo saat ini: ${formatRupiah(walletBalance)}.`
+                ? `Bayar instan menggunakan saldo Arus Pay Anda. Saldo saat ini: ${formatRupiah(walletBalance)}.`
                 : paymentMethod === 'DOKU'
                 ? 'Selesaikan pembayaran Anda menggunakan pilihan instan otomatis via gerbang DOKU.'
                 : 'Selesaikan transaksi dengan mudah lewat sistem pembayaran premium kami setelah checkout.'}
@@ -3349,10 +3349,10 @@ export default function CheckoutPage() {
               {/* Content List Scrollable */}
               <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
                 
-                {/* 1. MATCHABOY WALLET - Only show if enabled */}
+                {/* 1. ARUS PAY - Only show if enabled */}
                 {paymentConfig?.wallet?.enabled && (
                 <div className="space-y-2.5">
-                  <span className="block text-[9.5px] font-black uppercase tracking-wider text-gray-400 pl-1">Matchaboy Wallet (Pilihan Utama)</span>
+                  <span className="block text-[9.5px] font-black uppercase tracking-wider text-gray-400 pl-1">Arus Pay (Pilihan Utama)</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -3371,7 +3371,7 @@ export default function CheckoutPage() {
                         <Wallet className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-xs font-black uppercase tracking-wider text-gray-400">Matchaboy Wallet</p>
+                        <p className="text-xs font-black uppercase tracking-wider text-gray-400">Arus Pay</p>
                         <div className="flex items-center gap-2">
                           <h4 className="text-sm font-black text-gray-900 mt-0.5">{formatRupiah(walletBalance)}</h4>
                           <button
@@ -3453,12 +3453,12 @@ export default function CheckoutPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setPaymentMethod('DOKU');
-                          setPaymentChannel('QRIS');
+                          setPaymentMethod('QRIS');
+                          setPaymentChannel('');
                           setIsAllPaymentsOpen(false);
                         }}
                         className={`w-full text-left rounded-2xl p-4.5 border-2 flex items-center justify-between transition-all active:scale-[0.98] cursor-pointer
-                          ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS'
+                          ${paymentMethod === 'QRIS'
                             ? 'border-purple-600 bg-purple-50/20 text-purple-900'
                             : 'border-gray-150 bg-white text-gray-800 hover:border-gray-200'}`}
                       >
@@ -3472,8 +3472,8 @@ export default function CheckoutPage() {
                           </div>
                         </div>
                         <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0
-                          ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
-                          {paymentMethod === 'DOKU' && paymentChannel === 'QRIS' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          ${paymentMethod === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
+                          {paymentMethod === 'QRIS' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                         </div>
                       </button>
 

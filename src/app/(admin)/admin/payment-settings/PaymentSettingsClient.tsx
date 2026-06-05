@@ -282,7 +282,7 @@ export default function PaymentSettingsClient() {
           </div>
         </div>
 
-        {/* Matchaboy Pay & Unified Top Up Settings (Opsi B) */}
+        {/* Arus Pay & Unified Top Up Settings (Opsi B) */}
         <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] space-y-4">
           <div className="flex items-center justify-between border-b border-border/20 pb-3">
             <div className="flex items-center gap-2">
@@ -290,7 +290,7 @@ export default function PaymentSettingsClient() {
                 <Wallet className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-foreground">Matchaboy Pay (Dompet Digital)</h3>
+                <h3 className="text-sm font-bold text-foreground">Arus Pay (Dompet Digital)</h3>
                 <p className="text-[10px] text-muted-foreground">Kelola pengisian saldo dan skema bonus loyalitas</p>
               </div>
             </div>

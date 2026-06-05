@@ -83,12 +83,12 @@ export async function POST(req: NextRequest) {
         const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
         const claimLink = `${appUrl}/gift-card/claim?code=${giftCard.code}`;
 
-        const waMessage = `🎁 *GIFT CARD MATCHABOY SPECIAL UNTUKMU* 🎁
+        const waMessage = `🎁 *GIFT CARD ARUS PAY SPECIAL UNTUKMU* 🎁
 Dari: *${giftCard.senderName}*
 Jumlah: *Rp ${giftCard.amount.toLocaleString('id-ID')}*
 
 ${giftCard.message ? `Pesan: "${giftCard.message}"\n` : ''}
-Kamu mendapatkan Matchaboy Gift Card! Klik tautan di bawah ini untuk klaim saldo ke Matchaboy Wallet-mu:
+Kamu mendapatkan Arus Pay Gift Card! Klik tautan di bawah ini untuk klaim saldo ke Arus Pay-mu:
 👉 ${claimLink}
 
 Nikmati matcha favoritmu di Arum Seduh Matchaboy! 🍃💚`;

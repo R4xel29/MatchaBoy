@@ -21,11 +21,21 @@ export async function GET(req: Request) {
             if (!tx || tx.userId !== session.user.id) {
                 return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 })
             }
+
+            let paymentQrContent = '';
+            if (tx.paymentMethod === 'QRIS' && tx.status === 'PENDING') {
+                const { generateQrisString } = await import('@/lib/doku')
+                const settings = await prisma.paymentSettings.findFirst();
+                paymentQrContent = generateQrisString(tx.amount, tx.referenceId || tx.id, settings?.qrisNmid || undefined)
+            }
+
             return NextResponse.json({
                 success: true,
                 status: tx.status,
                 amount: tx.amount,
-                paymentCode: tx.referenceId
+                paymentCode: tx.referenceId,
+                paymentProofUrl: tx.paymentProofUrl,
+                paymentQrContent: paymentQrContent
             })
         }
 
@@ -182,6 +192,12 @@ export async function POST(req: Request) {
                 }
             })
 
+            let paymentQrContent = '';
+            if (paymentMethod.toUpperCase() === 'QRIS') {
+                const { generateQrisString } = await import('@/lib/doku')
+                paymentQrContent = generateQrisString(amount, paymentCode, settings?.qrisNmid || undefined)
+            }
+
             return NextResponse.json({
                 success: true,
                 transaction: {
@@ -189,7 +205,8 @@ export async function POST(req: Request) {
                     amount: transaction.amount,
                     paymentCode: transaction.referenceId,
                     status: transaction.status,
-                    paymentMethod: transaction.paymentMethod
+                    paymentMethod: transaction.paymentMethod,
+                    paymentQrContent: paymentQrContent
                 }
             })
         }
@@ -251,6 +268,58 @@ export async function POST(req: Request) {
         })
     } catch (error) {
         logError(error, { route: 'user/wallet-post' });
+        const safeError = getSafeErrorResponse(error);
+        return NextResponse.json(
+            { error: safeError.message, code: safeError.code },
+            { status: safeError.statusCode }
+        );
+    }
+}
+
+export async function PUT(req: Request) {
+    try {
+        const session = await auth()
+        if (!session?.user?.id) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
+        const body = await req.json()
+        const { transactionId, paymentProofUrl } = body
+
+        if (!transactionId || !paymentProofUrl) {
+            return NextResponse.json({ error: 'transactionId dan paymentProofUrl diperlukan' }, { status: 400 })
+        }
+
+        const tx = await prisma.walletTransaction.findUnique({
+            where: { id: transactionId }
+        })
+
+        if (!tx || tx.userId !== session.user.id) {
+            return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 })
+        }
+
+        if (tx.status !== 'PENDING') {
+            return NextResponse.json({ error: 'Transaksi sudah diproses' }, { status: 400 })
+        }
+
+        const updatedTx = await prisma.walletTransaction.update({
+            where: { id: transactionId },
+            data: {
+                paymentProofUrl,
+                status: 'VERIFYING'
+            }
+        })
+
+        return NextResponse.json({
+            success: true,
+            transaction: {
+                id: updatedTx.id,
+                status: updatedTx.status,
+                paymentProofUrl: updatedTx.paymentProofUrl
+            }
+        })
+    } catch (error) {
+        logError(error, { route: 'user/wallet-put' });
         const safeError = getSafeErrorResponse(error);
         return NextResponse.json(
             { error: safeError.message, code: safeError.code },

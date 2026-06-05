@@ -809,6 +809,7 @@ model WalletTransaction {
   status        String   @default("COMPLETED") // COMPLETED, PENDING, VERIFYING, REJECTED
   paymentMethod String?  // QRIS, BANK, OFFLINE
   promoBonus    Int?
+  paymentProofUrl String? // Kolom baru untuk bukti pembayaran top-up
   createdAt     DateTime @default(now())
 }
 
