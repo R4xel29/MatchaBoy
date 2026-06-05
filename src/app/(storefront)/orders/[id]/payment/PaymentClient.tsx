@@ -534,89 +534,66 @@ export default function PaymentClient({
                   </a>
                 )}
               </div>
-            ) : paymentChannel === 'QRIS' && order.paymentQrContent ? (
-              // ── B. QRIS DIRECT SCREEN (Gambar 5 & 6) ──
-              <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-4">
-                {/* QRIS Header */}
-                <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-1 shrink-0">
+            ) : paymentChannel === 'QRIS' ? (
+              // ── B. QRIS VIA DOKU PORTAL ──
+              <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-5 select-none">
+                {/* QRIS Branding Header */}
+                <div className="w-16 h-16 bg-gradient-to-br from-[#1b4353]/10 to-[#e26d5c]/10 border border-[#1b4353]/20 rounded-full flex items-center justify-center mx-auto shadow-inner">
                   <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
                     QR<span className="text-[#e26d5c]">IS</span>
                   </span>
-                  <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
-                    Dinas Standard GPN
-                  </span>
                 </div>
 
-                {/* QR Image */}
-                <div className="relative w-64 h-64 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-inner flex items-center justify-center">
-                  <QRCodeSVG
-                    value={order.paymentQrContent}
-                    size={250}
-                    level="M"
-                    includeMargin={false}
-                    className="w-full h-full object-contain rounded-xl"
-                  />
+                <div className="space-y-1">
+                  <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Bayar dengan QRIS</h3>
+                  <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
+                    Scan kode QRIS di portal DOKU menggunakan aplikasi e-wallet atau mobile banking Anda.
+                  </p>
                 </div>
 
-                <div className="w-full text-center">
-                  <p className="text-[10px] text-gray-400 font-extrabold uppercase">Unduh atau screenshot gambar QRIS</p>
-                  
-                  {/* Download Trigger */}
-                  <a
-                    href={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(order.paymentQrContent)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block mt-3.5 px-6 py-2.5 bg-red-700 hover:bg-red-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    Simpan Gambar QRIS
-                  </a>
-                </div>
-
-                {/* QRIS Instructions Steps (Gambar 6 style) */}
-                <div className="w-full text-left bg-gray-50/50 border border-gray-100 rounded-3xl p-5 space-y-4 font-semibold text-xs text-gray-700 mt-2">
-                  <h4 className="text-gray-800 font-extrabold text-xs uppercase tracking-wider pl-1 mb-1">Cara bayar dengan QRIS</h4>
-                  
-                  <div className="flex gap-3.5 items-center">
-                    <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 shrink-0 shadow-sm p-2">
-                      <Upload className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-800 text-xs">Langkah 1</p>
-                      <p className="text-[10.5px] text-gray-400 leading-tight">Simpan atau screenshot gambar QRIS di atas.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3.5 items-center">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0 shadow-sm p-2">
-                      <CreditCard className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-800 text-xs">Langkah 2</p>
-                      <p className="text-[10.5px] text-gray-400 leading-tight">Buka aplikasi Bank / E-wallet kamu (Gojek, DANA, Shopee, BCA, dll), kemudian pilih pembayaran QRIS.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3.5 items-center">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0 shadow-sm p-2">
-                      <CheckCircle className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-800 text-xs">Langkah 3</p>
-                      <p className="text-[10.5px] text-gray-400 leading-tight">Lakukan pembayaran dengan upload gambar QRIS melalui menu gallery.</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Fallback link to DOKU page */}
                 {order.paymentUrl && (
                   <a
                     href={order.paymentUrl}
                     target="_self"
-                    className="text-[10.5px] text-gray-400 hover:text-gray-605 hover:underline font-bold mt-2 cursor-pointer"
+                    className="w-full py-4 bg-gradient-to-r from-[#1b4353] to-[#2a6478] hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-[#1b4353]/15 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
                   >
-                    Buka di Portal Pembayaran DOKU
+                    <span>Buka QRIS di Portal DOKU</span>
+                    <ArrowRight className="w-4.5 h-4.5" />
                   </a>
                 )}
+
+                {/* Steps */}
+                <div className="w-full text-left bg-gray-50/50 border border-gray-100 rounded-3xl p-5 space-y-4 font-semibold text-xs text-gray-700">
+                  <div className="flex gap-3">
+                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">1</div>
+                    <div>
+                      <p className="font-bold text-gray-800">Buka Portal DOKU</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Ketuk tombol di atas untuk membuka halaman pembayaran QRIS.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">2</div>
+                    <div>
+                      <p className="font-bold text-gray-800">Scan Kode QRIS</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Buka aplikasi <span className="text-[#1b4353] font-extrabold">GoPay, DANA, ShopeePay, OVO, BCA Mobile</span>, atau e-wallet lainnya, lalu scan QR yang tampil.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">3</div>
+                    <div>
+                      <p className="font-bold text-gray-800">Konfirmasi Pembayaran</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Verifikasi nominal <span className="text-[#1b4353] font-extrabold">{formatRupiah(order.total)}</span> dan selesaikan pembayaran. Status pesanan akan terupdate otomatis.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 w-full text-center">
+                  <p className="text-[10px] text-emerald-600 font-bold">
+                    ✅ Status pesanan akan terverifikasi secara otomatis setelah pembayaran berhasil. Anda tidak perlu upload bukti transfer.
+                  </p>
+                </div>
               </div>
             ) : (
               // ── C. STANDARD DOKU CHECKOUT REDIRECT PANEL (Fallback) ──
