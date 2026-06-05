@@ -131,33 +131,45 @@ export async function POST(
       return updated
     })
 
-    // 3. Create fresh Doku checkout session
-    const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
-    const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
-    const dokuResult = await createDokuCheckoutSession({
-      clientId: paymentSettings.dokuClientId,
-      sharedKey: paymentSettings.dokuSharedKey,
-      isSandbox: paymentSettings.dokuSandbox,
-    }, {
-      invoiceNumber: id,
-      amount: secureTotal,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      customerEmail: session.user.email || 'arumseduh@gmail.com',
-      callbackUrl,
-      notificationUrl,
-    })
-
-    if (dokuResult.error) {
-      throw new Error(`DOKU Error: ${dokuResult.error}`)
-    }
-
-    const paymentUrl = dokuResult.url
-
-    // Only generate QRIS if the selected channel was QRIS
+    // 3. Create fresh Doku checkout session or SNAP QRIS
     const channelMatch = order.notes?.match(/\[CHANNEL:\s*([^\]]+)\]/)
     const isQrisChannel = channelMatch?.[1]?.toUpperCase() === 'QRIS'
-    const paymentQrContent = isQrisChannel ? generateQrisString(secureTotal, id) : null
+    
+    let paymentUrl: string | null = null
+    let paymentQrContent: string | null = null
+
+    if (isQrisChannel) {
+      const { generateDokuSnapQris } = await import('@/lib/doku')
+      paymentQrContent = await generateDokuSnapQris({
+        clientId: paymentSettings.dokuClientId,
+        sharedKey: paymentSettings.dokuSharedKey,
+        isSandbox: paymentSettings.dokuSandbox,
+      }, {
+        invoiceNumber: id,
+        amount: secureTotal,
+      })
+    } else {
+      const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
+      const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+      const dokuResult = await createDokuCheckoutSession({
+        clientId: paymentSettings.dokuClientId,
+        sharedKey: paymentSettings.dokuSharedKey,
+        isSandbox: paymentSettings.dokuSandbox,
+      }, {
+        invoiceNumber: id,
+        amount: secureTotal,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        customerEmail: session.user.email || 'arumseduh@gmail.com',
+        callbackUrl,
+        notificationUrl,
+      })
+
+      if (dokuResult.error) {
+        throw new Error(`DOKU Error: ${dokuResult.error}`)
+      }
+      paymentUrl = dokuResult.url
+    }
 
     // 4. Save both payment URL and QRIS content back to the order
     await prisma.order.update({

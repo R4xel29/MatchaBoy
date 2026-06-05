@@ -1989,9 +1989,9 @@ export default function CheckoutPage() {
                 {paymentConfig?.doku?.enabled && (
                   <button
                     type="button"
-                    onClick={() => { setPaymentMethod('QRIS'); setPaymentChannel(''); }}
+                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('QRIS'); }}
                     className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'QRIS'
+                      ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS'
                         ? 'border-purple-600 bg-purple-50/20 text-purple-900 shadow-sm shadow-purple-50'
                         : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
                   >
@@ -2002,8 +2002,8 @@ export default function CheckoutPage() {
                       <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">QRIS Instan</p>
                       <p className="text-[8px] font-bold text-purple-600 uppercase tracking-wide leading-none truncate w-full">Scan & Pay</p>
                     </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'QRIS' && <div className="w-1 h-1 rounded-full bg-white" />}
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'DOKU' && paymentChannel === 'QRIS' && <div className="w-1 h-1 rounded-full bg-white" />}
                     </div>
                   </button>
                 )}
@@ -3453,12 +3453,12 @@ export default function CheckoutPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          setPaymentMethod('QRIS');
-                          setPaymentChannel('');
+                          setPaymentMethod('DOKU');
+                          setPaymentChannel('QRIS');
                           setIsAllPaymentsOpen(false);
                         }}
                         className={`w-full text-left rounded-2xl p-4.5 border-2 flex items-center justify-between transition-all active:scale-[0.98] cursor-pointer
-                          ${paymentMethod === 'QRIS'
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS'
                             ? 'border-purple-600 bg-purple-50/20 text-purple-900'
                             : 'border-gray-150 bg-white text-gray-800 hover:border-gray-200'}`}
                       >
@@ -3472,8 +3472,8 @@ export default function CheckoutPage() {
                           </div>
                         </div>
                         <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0
-                          ${paymentMethod === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
-                          {paymentMethod === 'QRIS' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
+                          {paymentMethod === 'DOKU' && paymentChannel === 'QRIS' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                         </div>
                       </button>
 

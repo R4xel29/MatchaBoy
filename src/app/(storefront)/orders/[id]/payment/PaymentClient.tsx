@@ -545,21 +545,46 @@ export default function PaymentClient({
                 </div>
 
                 <div className="space-y-1">
-                  <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Bayar dengan QRIS</h3>
+                  <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Bayar dengan QRIS Instan</h3>
                   <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
-                    Scan kode QRIS di portal DOKU menggunakan aplikasi e-wallet atau mobile banking Anda.
+                    {order.paymentQrContent 
+                      ? 'Pindai QR Code dinamis resmi di bawah ini menggunakan aplikasi e-wallet atau mobile banking Anda.'
+                      : 'Scan kode QRIS di portal DOKU menggunakan aplikasi e-wallet atau mobile banking Anda.'}
                   </p>
                 </div>
 
-                {order.paymentUrl && (
-                  <a
-                    href={order.paymentUrl}
-                    target="_self"
-                    className="w-full py-4 bg-gradient-to-r from-[#1b4353] to-[#2a6478] hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-[#1b4353]/15 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
-                  >
-                    <span>Buka QRIS di Portal DOKU</span>
-                    <ArrowRight className="w-4.5 h-4.5" />
-                  </a>
+                {order.paymentQrContent ? (
+                  <>
+                    {/* Render QRIS Dinamis dari DOKU secara lokal */}
+                    <div className="relative w-64 h-64 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-inner flex items-center justify-center">
+                      <QRCodeSVG
+                        value={order.paymentQrContent}
+                        size={250}
+                        level="M"
+                        includeMargin={false}
+                        className="w-full h-full object-contain rounded-xl"
+                      />
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/orders/${order.id}/qris`)}
+                      className="w-full py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
+                    >
+                      Unduh / Buka QRIS Lebih Besar
+                    </button>
+                  </>
+                ) : (
+                  order.paymentUrl && (
+                    <a
+                      href={order.paymentUrl}
+                      target="_self"
+                      className="w-full py-4 bg-gradient-to-r from-[#1b4353] to-[#2a6478] hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-[#1b4353]/15 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+                    >
+                      <span>Buka QRIS di Portal DOKU</span>
+                      <ArrowRight className="w-4.5 h-4.5" />
+                    </a>
+                  )
                 )}
 
                 {/* Steps */}
@@ -567,21 +592,13 @@ export default function PaymentClient({
                   <div className="flex gap-3">
                     <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">1</div>
                     <div>
-                      <p className="font-bold text-gray-800">Buka Portal DOKU</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Ketuk tombol di atas untuk membuka halaman pembayaran QRIS.</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex gap-3">
-                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">2</div>
-                    <div>
                       <p className="font-bold text-gray-800">Scan Kode QRIS</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">Buka aplikasi <span className="text-[#1b4353] font-extrabold">GoPay, DANA, ShopeePay, OVO, BCA Mobile</span>, atau e-wallet lainnya, lalu scan QR yang tampil.</p>
                     </div>
                   </div>
 
                   <div className="flex gap-3">
-                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">3</div>
+                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">2</div>
                     <div>
                       <p className="font-bold text-gray-800">Konfirmasi Pembayaran</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">Verifikasi nominal <span className="text-[#1b4353] font-extrabold">{formatRupiah(order.total)}</span> dan selesaikan pembayaran. Status pesanan akan terupdate otomatis.</p>

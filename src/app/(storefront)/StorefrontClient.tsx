@@ -2444,7 +2444,7 @@ function TopUpOverlay({
                       <button
                         type="button"
                         onClick={() => {
-                          showToast("Silakan screenshot QRIS untuk membayar via galeri aplikasi bank/e-wallet Anda.", "info")
+                          showToast("Silakan screenshot QRIS untuk membayar via galeri aplikasi bank/e-wallet Anda.", "success")
                         }}
                         className="py-3 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-[10.5px]"
                       >
