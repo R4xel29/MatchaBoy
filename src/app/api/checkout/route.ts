@@ -794,33 +794,58 @@ export async function POST(req: Request) {
             }
         }
 
-        // Call DOKU Direct SNAP QRIS API outside the database transaction
+        // Call DOKU Hosted Checkout V1 API outside the database transaction
         if (isDoku && paymentSettings) {
             try {
-                const { generateDokuSnapQris } = await import('@/lib/doku')
+                const { createDokuCheckoutSession, generateQrisString } = await import('@/lib/doku')
                 
-                const paymentQrContent = await generateDokuSnapQris({
+                // Map frontend channel to Doku V1 channel
+                let dokuChannel: string | undefined = undefined
+                const channel = body.paymentChannel?.toUpperCase()
+                if (channel === 'QRIS') dokuChannel = 'QRIS'
+                else if (channel === 'OVO') dokuChannel = 'EMONEY_OVO'
+                else if (channel === 'DANA') dokuChannel = 'EMONEY_DANA'
+                else if (channel === 'SHOPEEPAY') dokuChannel = 'EMONEY_SHOPEE_PAY'
+                else if (channel === 'BCA_VA') dokuChannel = 'VIRTUAL_ACCOUNT_BCA'
+                
+                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
+                const dokuResult = await createDokuCheckoutSession({
                     clientId: paymentSettings.dokuClientId,
                     sharedKey: paymentSettings.dokuSharedKey,
                     isSandbox: paymentSettings.dokuSandbox,
                 }, {
                     invoiceNumber: order.id,
                     amount: secureTotal,
+                    customerName: order.customerName,
+                    customerPhone: order.customerPhone,
+                    customerEmail: session.user.email || 'customer@matchaboy.com',
+                    callbackUrl,
+                    paymentChannel: dokuChannel
                 })
 
-                // Save SNAP QRIS content back to the order
+                if (dokuResult.error) {
+                    throw new Error(dokuResult.error)
+                }
+
+                // Generate static/dynamic QRIS if user selected QRIS
+                const paymentQrContent = channel === 'QRIS' 
+                    ? generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid || undefined)
+                    : null
+
+                // Save both payment URL and QRIS content back to the order
                 await prisma.order.update({
                     where: { id: order.id },
                     data: { 
+                        paymentUrl: dokuResult.url,
                         paymentQrContent
                     }
                 })
             } catch (dokuError: any) {
                 console.error('[DOKU INITIALIZATION ERROR]', dokuError)
-                // Set order status to CANCELLED since DOKU SNAP generation failed
+                // Set order status to CANCELLED since DOKU session generation failed
                 await prisma.order.update({
                     where: { id: order.id },
-                    data: { status: 'CANCELLED', notes: `DOKU SNAP Failure: ${dokuError.message}` }
+                    data: { status: 'CANCELLED', notes: `DOKU Session Failure: ${dokuError.message}` }
                 })
                 return NextResponse.json({ error: `Gagal memproses pembayaran DOKU: ${dokuError.message}` }, { status: 500 })
             }
