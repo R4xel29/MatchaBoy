@@ -133,6 +133,7 @@ export async function POST(
 
     // 3. Create fresh Doku checkout session
     const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
+    const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
     const dokuResult = await createDokuCheckoutSession({
       clientId: paymentSettings.dokuClientId,
       sharedKey: paymentSettings.dokuSharedKey,
@@ -142,8 +143,9 @@ export async function POST(
       amount: secureTotal,
       customerName: order.customerName,
       customerPhone: order.customerPhone,
-      customerEmail: session.user.email || 'customer@matchaboy.com',
+      customerEmail: session.user.email || 'arumseduh@gmail.com',
       callbackUrl,
+      notificationUrl,
     })
 
     if (dokuResult.error) {
@@ -151,7 +153,11 @@ export async function POST(
     }
 
     const paymentUrl = dokuResult.url
-    const paymentQrContent = generateQrisString(secureTotal, id)
+
+    // Only generate QRIS if the selected channel was QRIS
+    const channelMatch = order.notes?.match(/\[CHANNEL:\s*([^\]]+)\]/)
+    const isQrisChannel = channelMatch?.[1]?.toUpperCase() === 'QRIS'
+    const paymentQrContent = isQrisChannel ? generateQrisString(secureTotal, id) : null
 
     // 4. Save both payment URL and QRIS content back to the order
     await prisma.order.update({

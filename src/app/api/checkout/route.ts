@@ -770,7 +770,6 @@ export async function POST(req: Request) {
         })
 
         // Generate QRIS string for QRIS payment method
-        let paymentUrl: string | undefined
         const isQris = body.paymentMethod?.toUpperCase() === 'QRIS'
         if (isQris) {
             try {
@@ -809,6 +808,7 @@ export async function POST(req: Request) {
                 else if (channel === 'BCA_VA') dokuChannel = 'VIRTUAL_ACCOUNT_BCA'
                 
                 const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
+                const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
                 const dokuResult = await createDokuCheckoutSession({
                     clientId: paymentSettings.dokuClientId,
                     sharedKey: paymentSettings.dokuSharedKey,
@@ -818,8 +818,9 @@ export async function POST(req: Request) {
                     amount: secureTotal,
                     customerName: order.customerName,
                     customerPhone: order.customerPhone,
-                    customerEmail: session.user.email || 'customer@matchaboy.com',
+                    customerEmail: session.user.email || 'arumseduh@gmail.com',
                     callbackUrl,
+                    notificationUrl,
                     paymentChannel: dokuChannel
                 })
 
@@ -866,7 +867,9 @@ export async function POST(req: Request) {
             console.error('[CHECKOUT] Notification error:', e)
         }
 
-        return NextResponse.json({ success: true, orderId: order.id, total: secureTotal, paymentUrl })
+        // Read paymentUrl from the order record (set by DOKU block above)
+        const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, select: { paymentUrl: true } })
+        return NextResponse.json({ success: true, orderId: order.id, total: secureTotal, paymentUrl: finalOrder?.paymentUrl || undefined })
     } catch (error) {
         // ✅ BUG FIX #7: Proper error handling with safe responses
         logError(error, {

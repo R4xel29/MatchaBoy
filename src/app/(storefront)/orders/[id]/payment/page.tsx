@@ -54,6 +54,7 @@ export default async function OrderPaymentPage({ params }: { params: Promise<{ i
     paymentQrContent: order.paymentQrContent || '',
     paymentUrl: order.paymentUrl || '',
     paymentMethod: order.paymentMethod,
+    notes: order.notes || '',
     items: order.items.map((i: any) => ({
       name: i.product.name,
       qty: i.qty,

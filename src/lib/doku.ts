@@ -15,6 +15,7 @@ interface CheckoutPayload {
   customerPhone: string;
   customerEmail: string;
   callbackUrl: string;
+  notificationUrl?: string; // Webhook URL for DOKU to send payment status
   paymentChannel?: string; // Specific channel code
 }
 
@@ -94,9 +95,14 @@ export async function createDokuCheckoutSession(
     customer: {
       name: payload.customerName || 'Matchaboy Customer',
       phone: cleanPhone || '628123456789',
-      email: payload.customerEmail || 'customer@matchaboy.com',
+      email: payload.customerEmail || 'arumseduh@gmail.com',
     },
   };
+
+  // Add notification URL for webhook callback
+  if (payload.notificationUrl) {
+    requestBody.payment.notification_url = [payload.notificationUrl];
+  }
 
   // Pre-select payment method inside Doku hosted checkout if channel is selected
   if (payload.paymentChannel) {
