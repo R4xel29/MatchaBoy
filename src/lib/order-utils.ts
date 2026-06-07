@@ -207,16 +207,20 @@ export async function cleanupOldPaymentProofs() {
  */
 export async function cleanupUnconfirmedSpmbOrders() {
   try {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const sixtyMinutesAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
     const deleteResult = await prisma.order.deleteMany({
       where: {
         source: 'SPMB',
         customerPhone: { startsWith: 'SPMB-PENDING' },
-        createdAt: { lt: fiveMinutesAgo }
+        OR: [
+          { paymentMethod: 'QRIS', createdAt: { lt: sixtyMinutesAgo } },
+          { paymentMethod: 'COD', createdAt: { lt: thirtyMinutesAgo } }
+        ]
       }
     });
     if (deleteResult.count > 0) {
-      console.log(`[SPMB Cleanup] Deleted ${deleteResult.count} unconfirmed SPMB orders older than 5 minutes.`);
+      console.log(`[SPMB Cleanup] Deleted ${deleteResult.count} unconfirmed SPMB orders.`);
     }
   } catch (err) {
     console.error('[SPMB Cleanup Error] Failed to delete unconfirmed SPMB orders:', err);

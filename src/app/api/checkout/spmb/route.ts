@@ -310,6 +310,7 @@ export async function POST(req: Request) {
           paymentMethod: requestedMethod === 'QRIS_INSTAN' ? 'QRIS' : requestedMethod,
           status: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? 'PENDING_PAYMENT' : 'PENDING',
           notes: body.notes || null,
+          paymentExpiredAt: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? new Date(Date.now() + 60 * 60 * 1000) : null,
           queueNumber,
           items: {
             create: orderItemsToCreate
