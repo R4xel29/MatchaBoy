@@ -376,16 +376,35 @@ export async function POST(req: Request) {
     }
 
     if (requestedMethod === 'QRIS_INSTAN') {
-      try {
-        const paymentSettings = await prisma.paymentSettings.findFirst();
-        if (paymentSettings) {
-          if (!paymentSettings.dokuEnabled) {
+      const paymentSettings = await prisma.paymentSettings.findFirst();
+      let qrisGenerated = false;
+
+      // STRATEGI 1: Coba generate QRIS string otomatis jika NMID tersedia
+      if (paymentSettings?.qrisAutoGenerate && paymentSettings.qrisNmid) {
+        try {
+          const { generateQrisString } = await import('@/lib/doku');
+          const qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid);
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { paymentQrContent: qrContent }
+          });
+          qrisGenerated = true;
+          console.log('[SPMB QRIS INSTAN] Auto-generated QRIS string successfully.');
+        } catch (genError: any) {
+          console.warn('[SPMB QRIS INSTAN] Auto-generate QRIS failed:', genError.message);
+        }
+      }
+
+      // STRATEGI 2 (FALLBACK): Buat Doku Hosted Checkout session
+      if (!qrisGenerated) {
+        try {
+          if (!paymentSettings || !paymentSettings.dokuEnabled) {
             throw new Error('Metode pembayaran Doku sedang tidak aktif.');
           }
 
           const { createDokuCheckoutSession } = await import('@/lib/doku');
           const callbackUrl = `${appUrl}/orders/${order.id}`;
-          const notificationUrl = `${appUrl}/api/payment/doku-webhook`;
+          const notificationUrl = `${appUrl}/api/payment/snap-webhook`;
 
           const dokuResult = await createDokuCheckoutSession({
             clientId: paymentSettings.dokuClientId,
@@ -399,7 +418,7 @@ export async function POST(req: Request) {
             customerEmail: 'arumseduh@gmail.com',
             callbackUrl,
             notificationUrl,
-            paymentChannel: 'QRIS', // Pre-select QRIS so user directly sees QR code on Doku page
+            paymentChannel: 'QRIS',
           });
 
           if (dokuResult.error) {
@@ -413,29 +432,30 @@ export async function POST(req: Request) {
               paymentQrContent: null,
             }
           });
-          console.log('[SPMB QRIS INSTAN] Doku Hosted Checkout with pre-selected QRIS generated successfully.');
+          console.log('[SPMB QRIS INSTAN] Fallback to Doku Hosted Checkout.');
+        } catch (qrisError: any) {
+          console.error('[QRIS INSTAN FALLBACK ERROR]', qrisError);
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { status: 'CANCELLED', notes: `Gagal membuat QRIS Instan: ${qrisError.message}` }
+          });
+          return NextResponse.json({ error: `Gagal membuat QRIS Instan: ${qrisError.message}` }, { status: 500 });
         }
-      } catch (qrisError: any) {
-        console.error('[QRIS INSTAN ERROR]', qrisError);
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { status: 'CANCELLED', notes: `Gagal membuat QRIS Instan: ${qrisError.message}` }
-        });
-        return NextResponse.json({ error: `Gagal membuat QRIS Instan: ${qrisError.message}` }, { status: 500 });
       }
     }
 
     const finalOrder = await prisma.order.findUnique({ 
       where: { id: order.id }, 
-      select: { paymentUrl: true, paymentQrContent: true } 
+      select: { paymentUrl: true, paymentQrContent: true }
     });
+
     return NextResponse.json({
       success: true,
       orderId: order.id,
       queueNumber: order.queueNumber,
       total: secureTotal,
       paymentUrl: finalOrder?.paymentUrl || undefined,
-      paymentQrContent: finalOrder?.paymentQrContent || undefined
+      paymentQrContent: finalOrder?.paymentQrContent || undefined,
     });
   } catch (error) {
     logError(error, {

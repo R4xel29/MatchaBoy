@@ -305,8 +305,15 @@ export default function SpmbClient({
       clearCart();
       setIsCartOpen(false);
 
-      // Redirect immediately to Doku hosted checkout if paymentUrl is returned, otherwise to WhatsApp bot
-      if ((paymentMethod === 'QRIS' || paymentMethod === 'QRIS_INSTAN') && data.paymentUrl) {
+      // If QRIS_INSTAN and paymentQrContent is returned, show QRIS modal directly.
+      // Otherwise, if paymentUrl is returned, redirect to it. Otherwise fallback to WhatsApp bot.
+      if (paymentMethod === 'QRIS_INSTAN' && data.paymentQrContent) {
+        setQrisQrContent(data.paymentQrContent);
+        setQrisOrderId(data.orderId);
+        setQrisTotal(data.total);
+        setQrisPaymentPaid(false);
+        setShowQrisModal(true);
+      } else if (data.paymentUrl) {
         window.location.href = data.paymentUrl;
       } else {
         const waUrl = getWhatsAppLink(data.orderId);
