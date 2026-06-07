@@ -388,6 +388,7 @@ function ProductReviewForm({
 export default function OrderTrackingClient({ order }: { order: TrackingOrderShape }) {
   const router = useRouter();
   const orderId = order.id;
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false);
 
   const [cooldown, setCooldown] = useState<{
     cooldownActive: boolean;
@@ -565,7 +566,8 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     const finalStatuses = ['COMPLETED', 'DELIVERED', 'CANCELLED'];
     if (finalStatuses.includes(currentStatus)) return;
 
-    const interval = setInterval(pollStatus, 10000);
+    const intervalTime = currentStatus === 'PENDING_PAYMENT' ? 3000 : 10000;
+    const interval = setInterval(pollStatus, intervalTime);
     return () => clearInterval(interval);
   }, [pollStatus, currentStatus]);
 
@@ -915,30 +917,48 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
 
         {/* Unified Pay Now Button */}
         {currentStatus === 'PENDING_PAYMENT' && (
-          order.paymentMethod === 'DOKU' && order.paymentUrl ? (
+          (order.paymentMethod === 'DOKU' || order.paymentMethod === 'QRIS') && order.paymentUrl ? (
             <div className="p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50 space-y-3 shadow-sm">
-              <div className="flex items-start gap-2.5">
+              <div className="flex items-start gap-2.5 text-left">
                 <CreditCard className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-0.5">
-                    Menunggu Pembayaran
+                    Menunggu Verifikasi Pembayaran
                   </p>
                   <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">
-                    Segera selesaikan pembayaran via DOKU agar pesanan Anda langsung diproses secara otomatis.
+                    Jika Anda sudah menyelesaikan pembayaran via DOKU/QRIS, mohon tunggu beberapa saat selagi sistem memverifikasi transaksi secara otomatis.
                   </p>
                 </div>
               </div>
-              <a
-                href={order.paymentUrl}
-                className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md active:scale-[0.98]"
-              >
-                <CreditCard className="w-4 h-4" />
-                Bayar Sekarang ({formatRupiah(order.total)})
-              </a>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={async () => {
+                    setIsCheckingStatus(true);
+                    await pollStatus();
+                    setTimeout(() => setIsCheckingStatus(false), 1000);
+                  }}
+                  disabled={isCheckingStatus}
+                  className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-750 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-[0.98] disabled:opacity-50"
+                >
+                  {isCheckingStatus ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  )}
+                  {isCheckingStatus ? 'Memeriksa...' : 'Cek Status Pembayaran'}
+                </button>
+                <a
+                  href={order.paymentUrl}
+                  className="flex-1 py-3 px-4 rounded-xl border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]"
+                >
+                  Bayar / Buka Link DOKU
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
           ) : (
             <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 space-y-3 shadow-sm">
-              <div className="flex items-start gap-2.5">
+              <div className="flex items-start gap-2.5 text-left">
                 <CreditCard className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-0.5">

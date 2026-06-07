@@ -27,18 +27,36 @@ export async function GET(req: NextRequest) {
         }
 
         const [totalOrders, revenue, totalCustomers, recentOrders] = await Promise.all([
-            prisma.order.count({ where: dateFilter }),
+            prisma.order.count({
+                where: {
+                    ...dateFilter,
+                    NOT: {
+                        source: 'SPMB',
+                        customerPhone: { startsWith: 'SPMB-PENDING' }
+                    }
+                }
+            }),
             prisma.order.aggregate({
                 _sum: { total: true },
                 where: {
                     ...dateFilter,
-                    status: { in: ['DELIVERED', 'ON_DELIVERY', 'COMPLETED'] }
+                    status: { in: ['DELIVERED', 'ON_DELIVERY', 'COMPLETED'] },
+                    NOT: {
+                        source: 'SPMB',
+                        customerPhone: { startsWith: 'SPMB-PENDING' }
+                    }
                 }
             }),
             prisma.user.count({ where: { role: 'CUSTOMER', ...dateFilter } }),
             prisma.order.findMany({
                 take: 5,
-                where: dateFilter,
+                where: {
+                    ...dateFilter,
+                    NOT: {
+                        source: 'SPMB',
+                        customerPhone: { startsWith: 'SPMB-PENDING' }
+                    }
+                },
                 orderBy: { createdAt: 'desc' },
                 select: {
                     id: true,

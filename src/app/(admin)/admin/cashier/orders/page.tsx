@@ -30,7 +30,7 @@ export default async function AdminCashierOrdersPage() {
         {
           NOT: {
             source: 'SPMB',
-            customerPhone: 'SPMB-PENDING'
+            customerPhone: { startsWith: 'SPMB-PENDING' }
           }
         }
       ]

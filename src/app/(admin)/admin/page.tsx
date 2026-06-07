@@ -12,15 +12,34 @@ export default async function AdminDashboardPage() {
     recentOrders,
     soldOutProducts
   ] = await Promise.all([
-    prisma.order.count(),
+    prisma.order.count({
+      where: {
+        NOT: {
+          source: 'SPMB',
+          customerPhone: { startsWith: 'SPMB-PENDING' }
+        }
+      }
+    }),
     prisma.product.count(),
     prisma.user.count({ where: { role: 'CUSTOMER' } }),
     prisma.order.aggregate({
       _sum: { total: true },
-      where: { status: { in: ['DELIVERED', 'ON_DELIVERY', 'COMPLETED'] } }
+      where: {
+        status: { in: ['DELIVERED', 'ON_DELIVERY', 'COMPLETED'] },
+        NOT: {
+          source: 'SPMB',
+          customerPhone: { startsWith: 'SPMB-PENDING' }
+        }
+      }
     }),
     prisma.order.findMany({
       take: 5,
+      where: {
+        NOT: {
+          source: 'SPMB',
+          customerPhone: { startsWith: 'SPMB-PENDING' }
+        }
+      },
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
