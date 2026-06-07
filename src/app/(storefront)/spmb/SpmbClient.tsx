@@ -262,9 +262,13 @@ export default function SpmbClient({
       clearCart();
       setIsCartOpen(false);
 
-      // Redirect immediately to WhatsApp bot
-      const waUrl = getWhatsAppLink(data.orderId);
-      window.location.href = waUrl;
+      // Redirect immediately to Doku hosted checkout if paymentUrl is returned, otherwise to WhatsApp bot
+      if (paymentMethod === 'QRIS' && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        const waUrl = getWhatsAppLink(data.orderId);
+        window.location.href = waUrl;
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
     } finally {

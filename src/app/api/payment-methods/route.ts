@@ -35,11 +35,11 @@ export async function GET() {
       label: settings.qrisLabel,
     },
     transfer: {
-      enabled: settings.transferEnabled,
-      banks,
+      enabled: false, // temporarily disabled
+      banks: [],
     },
     doku: {
-      enabled: settings.dokuEnabled,
+      enabled: false, // temporarily disabled
       clientId: settings.dokuClientId,
       sandbox: settings.dokuSandbox,
     },

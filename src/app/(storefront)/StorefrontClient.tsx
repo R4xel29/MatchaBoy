@@ -2102,6 +2102,10 @@ function TopUpOverlay({
       });
       const d = await res.json();
       if (res.ok && d.success && d.transaction) {
+        if (payMethod === 'qris' && d.transaction.paymentUrl) {
+          window.location.href = d.transaction.paymentUrl;
+          return;
+        }
         setActiveTransaction(d.transaction);
         setStep('payment');
       } else {

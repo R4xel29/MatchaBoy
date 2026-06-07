@@ -1256,9 +1256,11 @@ export default function CheckoutPage() {
       
       setIsSubmitting(false);
       
-      // COD and WALLET redirect straight to Order Tracking, online methods redirect to Payment detail page
+      // COD and WALLET redirect straight to Order Tracking, online methods redirect to Payment detail page (or directly to paymentUrl if available)
       if (paymentMethod === 'COD' || paymentMethod === 'WALLET') {
         router.push(`/orders/${responseData.orderId}`);
+      } else if (responseData.paymentUrl) {
+        window.location.href = responseData.paymentUrl;
       } else {
         router.push(`/orders/${responseData.orderId}/payment`);
       }

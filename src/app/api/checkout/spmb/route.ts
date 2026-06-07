@@ -318,30 +318,64 @@ export async function POST(req: Request) {
       timeout: 10000,
     });
 
-    // Auto-generate QRIS string if selected QRIS
+    // Generate QRIS via Doku Hosted Checkout V1 session for QRIS payment method
     if (requestedMethod === 'QRIS') {
       try {
         const paymentSettings = await prisma.paymentSettings.findFirst();
-        if (paymentSettings && paymentSettings.qrisAutoGenerate) {
-          const { generateQrisString } = await import('@/lib/doku');
-          const customNmid = paymentSettings.qrisNmid || undefined;
-          const paymentQrContent = generateQrisString(secureTotal, order.id, customNmid);
+        if (paymentSettings) {
+          if (!paymentSettings.dokuEnabled) {
+            throw new Error('Metode pembayaran Doku sedang tidak aktif.');
+          }
+
+          const { createDokuCheckoutSession } = await import('@/lib/doku');
+          const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`;
+          const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`;
+          
+          const dokuResult = await createDokuCheckoutSession({
+            clientId: paymentSettings.dokuClientId,
+            sharedKey: paymentSettings.dokuSharedKey,
+            isSandbox: paymentSettings.dokuSandbox,
+          }, {
+            invoiceNumber: order.id,
+            amount: secureTotal,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            customerEmail: 'arumseduh@gmail.com', // Guest fallback email
+            callbackUrl,
+            notificationUrl,
+            paymentChannel: undefined // Show all channels including QRIS
+          });
+
+          if (dokuResult.error) {
+            throw new Error(dokuResult.error);
+          }
 
           await prisma.order.update({
             where: { id: order.id },
-            data: { paymentQrContent }
+            data: { 
+              paymentUrl: dokuResult.url,
+              paymentQrContent: null,
+            }
           });
+          console.log('[SPMB QRIS] Doku Hosted Checkout URL generated successfully for QRIS.');
         }
-      } catch (qrisError) {
-        console.error('[QRIS GENERATION ERROR]', qrisError);
+      } catch (qrisError: any) {
+        console.error('[QRIS DOKU CHECKOUT ERROR]', qrisError);
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'CANCELLED', notes: `DOKU Checkout QRIS Failure: ${qrisError.message}` }
+        });
+        return NextResponse.json({ error: `Gagal membuat sesi pembayaran DOKU: ${qrisError.message}` }, { status: 500 });
       }
     }
 
+    const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, select: { paymentUrl: true } });
     return NextResponse.json({
       success: true,
       orderId: order.id,
       queueNumber: order.queueNumber,
-      total: secureTotal
+      total: secureTotal,
+      paymentUrl: finalOrder?.paymentUrl || undefined
     });
   } catch (error) {
     logError(error, {

@@ -56,78 +56,149 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing invoice number' }, { status: 400 });
     }
 
-    // Update matched orders to PREPARING on SUCCESS
+    // Update matched orders or wallet transactions to COMPLETED/PREPARING on SUCCESS
     if (paymentStatus === 'SUCCESS') {
-      const order = await prisma.order.findUnique({
-        where: { id: invoiceNumber },
-      });
-
-      if (!order) {
-        console.error(`[DOKU WEBHOOK] Order not found for invoice: ${invoiceNumber}`);
-        return NextResponse.json({ error: 'Order not found' }, { status: 404 });
-      }
-
-      if (order.status === 'PENDING_PAYMENT') {
-        await prisma.order.update({
-          where: { id: invoiceNumber },
-          data: {
-            status: 'PREPARING',
-            notes: order.notes 
-              ? `${order.notes}\n[DOKU Webhook] Pembayaran otomatis sukses via DOKU.`
-              : '[DOKU Webhook] Pembayaran otomatis sukses via DOKU.',
-          },
+      if (invoiceNumber.startsWith('MB-TOPUP-')) {
+        const tx = await prisma.walletTransaction.findFirst({
+          where: { referenceId: invoiceNumber, status: { in: ['PENDING', 'VERIFYING'] } }
         });
 
-        // Fire real-time notification alerts
-        try {
-          const { sendNotification } = await import('@/lib/notification-service');
-          
-          // 1. Notify the customer
-          await sendNotification({
-            userId: order.userId || '',
-            type: 'order',
-            title: 'Pembayaran Berhasil! 🍵',
-            message: `Pembayaran pesanan ${order.id.slice(0, 8).toUpperCase()} telah berhasil diverifikasi. Kami sedang menyiapkan pesanan Anda!`,
-            linkUrl: `/orders/${order.id}`,
-            data: { orderId: order.id },
-          });
-
-          // 2. Notify admin/cashiers
-          const admins = await prisma.user.findMany({
-            where: { role: 'ADMIN' },
-          });
-          for (const admin of admins) {
-            await sendNotification({
-              userId: admin.id,
-              type: 'order',
-              title: 'Pesanan DOKU Lunas! 💰',
-              message: `Pesanan ${order.id.slice(0, 8).toUpperCase()} (${order.customerName}) lunas via DOKU dan siap dibuat.`,
-              linkUrl: `/admin/orders`,
-              data: { orderId: order.id },
-            });
-          }
-        } catch (notifError) {
-          console.error('[DOKU WEBHOOK] Failed to send webhook push notifications:', notifError);
+        if (!tx) {
+          console.error(`[DOKU WEBHOOK] Wallet transaction not found for invoice: ${invoiceNumber}`);
+          return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
         }
 
-        console.log(`[DOKU WEBHOOK] Order ${invoiceNumber} updated to PREPARING.`);
+        const amount = tx.amount;
+        const settings = await prisma.paymentSettings.findFirst();
+        const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
+        const bonusPercent = settings?.walletBonusPercent ?? 10;
+        const bonusMode = settings?.walletBonusMode ?? "BOTH";
+
+        const isPromoActiveMode = settings?.walletFirstTimePromoEnabled && (bonusMode === "FIRST_TIME" || bonusMode === "BOTH");
+        const isRegularActiveMode = bonusMode === "REGULAR" || bonusMode === "BOTH";
+
+        const isPromoApplied = isPromoActiveMode && tx.promoBonus !== null && tx.promoBonus > 0;
+        const hasBonus = isPromoApplied || (isRegularActiveMode && amount >= bonusMinAmount);
+        const bonusAmount = isPromoApplied ? tx.promoBonus! : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0);
+        const totalTopUp = amount + bonusAmount;
+
+        const { incrementQuestProgress } = await import('@/lib/loyalty-utils');
+
+        await prisma.$transaction(async (prismaTx) => {
+          // Increment user's wallet balance
+          await prismaTx.user.update({
+            where: { id: tx.userId },
+            data: { walletBalance: { increment: totalTopUp } }
+          });
+
+          // Mark transaction as COMPLETED
+          await prismaTx.walletTransaction.update({
+            where: { id: tx.id },
+            data: { status: 'COMPLETED' }
+          });
+
+          // If there's a bonus, create a COMPLETED TOP_UP_BONUS transaction
+          if (bonusAmount > 0) {
+            await prismaTx.walletTransaction.create({
+              data: {
+                userId: tx.userId,
+                amount: bonusAmount,
+                type: 'TOP_UP_BONUS',
+                description: isPromoApplied
+                  ? `Bonus Top-up Pertama sebesar Rp${bonusAmount.toLocaleString('id-ID')}`
+                  : `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+                status: 'COMPLETED',
+                paymentMethod: tx.paymentMethod,
+                referenceId: tx.referenceId
+              }
+            });
+          }
+
+          // C1 Gamification Quests: Atomically increment top-up count quest progress
+          await incrementQuestProgress(tx.userId, 'TOP_UP_COUNT', 1, prismaTx);
+        });
+
+        console.log(`[DOKU WEBHOOK] Wallet top-up transaction ${tx.id} completed successfully via webhook.`);
       } else {
-        console.log(`[DOKU WEBHOOK] Order ${invoiceNumber} was already processed. Current status: ${order.status}`);
+        const order = await prisma.order.findUnique({
+          where: { id: invoiceNumber },
+        });
+
+        if (!order) {
+          console.error(`[DOKU WEBHOOK] Order not found for invoice: ${invoiceNumber}`);
+          return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+        }
+
+        if (order.status === 'PENDING_PAYMENT') {
+          await prisma.order.update({
+            where: { id: invoiceNumber },
+            data: {
+              status: 'PREPARING',
+              notes: order.notes 
+                ? `${order.notes}\n[DOKU Webhook] Pembayaran otomatis sukses via DOKU.`
+                : '[DOKU Webhook] Pembayaran otomatis sukses via DOKU.',
+            },
+          });
+
+          // Fire real-time notification alerts
+          try {
+            const { sendNotification } = await import('@/lib/notification-service');
+            
+            // 1. Notify the customer
+            await sendNotification({
+              userId: order.userId || '',
+              type: 'order',
+              title: 'Pembayaran Berhasil! 🍵',
+              message: `Pembayaran pesanan ${order.id.slice(0, 8).toUpperCase()} telah berhasil diverifikasi. Kami sedang menyiapkan pesanan Anda!`,
+              linkUrl: `/orders/${order.id}`,
+              data: { orderId: order.id },
+            });
+
+            // 2. Notify admin/cashiers
+            const admins = await prisma.user.findMany({
+              where: { role: 'ADMIN' },
+            });
+            for (const admin of admins) {
+              await sendNotification({
+                userId: admin.id,
+                type: 'order',
+                title: 'Pesanan DOKU Lunas! 💰',
+                message: `Pesanan ${order.id.slice(0, 8).toUpperCase()} (${order.customerName}) lunas via DOKU dan siap dibuat.`,
+                linkUrl: `/admin/orders`,
+                data: { orderId: order.id },
+              });
+            }
+          } catch (notifError) {
+            console.error('[DOKU WEBHOOK] Failed to send webhook push notifications:', notifError);
+          }
+
+          console.log(`[DOKU WEBHOOK] Order ${invoiceNumber} updated to PREPARING.`);
+        } else {
+          console.log(`[DOKU WEBHOOK] Order ${invoiceNumber} was already processed. Current status: ${order.status}`);
+        }
       }
     } else if (paymentStatus === 'FAILED' || paymentStatus === 'EXPIRED' || paymentStatus === 'CANCELLED') {
-      console.log(`[DOKU WEBHOOK] Payment failed/expired/cancelled for invoice ${invoiceNumber}. Expiring order...`);
-      const expiredResult = await expireOrder(invoiceNumber, true); // Force cancel order
-      if (expiredResult) {
-        // Appending the specific DOKU cancellation note
-        await prisma.order.update({
-          where: { id: invoiceNumber },
-          data: {
-            notes: expiredResult.notes
-              ? `${expiredResult.notes}\n[DOKU Webhook] Pembayaran kedaluwarsa/gagal dari DOKU.`
-              : '[DOKU Webhook] Pembayaran kedaluwarsa/gagal dari DOKU.',
-          }
+      if (invoiceNumber.startsWith('MB-TOPUP-')) {
+        console.log(`[DOKU WEBHOOK] Top-up payment failed/expired/cancelled for invoice ${invoiceNumber}.`);
+        await prisma.walletTransaction.updateMany({
+          where: { referenceId: invoiceNumber, status: { in: ['PENDING', 'VERIFYING'] } },
+          data: { status: 'REJECTED' }
         });
-        console.log(`[DOKU WEBHOOK] Order ${invoiceNumber} expired and refunded successfully via centralized expireOrder.`);
+      } else {
+        console.log(`[DOKU WEBHOOK] Payment failed/expired/cancelled for invoice ${invoiceNumber}. Expiring order...`);
+        const expiredResult = await expireOrder(invoiceNumber, true); // Force cancel order
+        if (expiredResult) {
+          // Appending the specific DOKU cancellation note
+          await prisma.order.update({
+            where: { id: invoiceNumber },
+            data: {
+              notes: expiredResult.notes
+                ? `${expiredResult.notes}\n[DOKU Webhook] Pembayaran kedaluwarsa/gagal dari DOKU.`
+                : '[DOKU Webhook] Pembayaran kedaluwarsa/gagal dari DOKU.',
+            }
+          });
+          console.log(`[DOKU WEBHOOK] Order ${invoiceNumber} expired and refunded successfully via centralized expireOrder.`);
+        }
       }
     }
 

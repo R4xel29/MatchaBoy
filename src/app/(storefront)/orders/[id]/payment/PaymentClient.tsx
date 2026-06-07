@@ -473,6 +473,45 @@ export default function PaymentClient({
           </motion.div>
         )}
 
+        {/* QRIS Doku Hosted Redirect Panel (when QR code is null but paymentUrl is present) */}
+        {order.paymentMethod === 'QRIS' && order.paymentUrl && !order.paymentQrContent && !qrisConfig?.image && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-5 select-none">
+              <div className="w-16 h-16 bg-gradient-to-br from-[#1b4353]/10 to-[#e26d5c]/10 border border-[#1b4353]/20 rounded-full flex items-center justify-center mx-auto shadow-inner">
+                <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
+                  QR<span className="text-[#e26d5c]">IS</span>
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Bayar dengan QRIS</h3>
+                <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
+                  Silakan buka portal pembayaran DOKU untuk melihat dan memindai QRIS resmi pembayaran Anda.
+                </p>
+              </div>
+
+              <a
+                href={order.paymentUrl}
+                target="_self"
+                className="w-full py-4 bg-gradient-to-r from-[#1b4353] to-[#2a6478] hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-[#1b4353]/15 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <span>Buka Pembayaran DOKU</span>
+                <ArrowRight className="w-4.5 h-4.5" />
+              </a>
+
+              <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 w-full text-center">
+                <p className="text-[10px] text-emerald-600 font-bold">
+                  ✅ Status pesanan akan terverifikasi secara otomatis setelah pembayaran berhasil. Anda tidak perlu upload bukti transfer.
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* DOKU Instan Display Panel */}
         {order.paymentMethod === 'DOKU' && (
           <motion.div

@@ -22,11 +22,40 @@ export async function GET(req: Request) {
                 return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 })
             }
 
-            let paymentQrContent = '';
+            let paymentUrl = '';
             if (tx.paymentMethod === 'QRIS' && tx.status === 'PENDING') {
-                const { generateQrisString } = await import('@/lib/doku')
                 const settings = await prisma.paymentSettings.findFirst();
-                paymentQrContent = generateQrisString(tx.amount, tx.referenceId || tx.id, settings?.qrisNmid || undefined)
+                if (!settings || !settings.dokuEnabled) {
+                    throw new Error('Metode pembayaran QRIS Doku sedang tidak aktif.')
+                }
+                const { createDokuCheckoutSession } = await import('@/lib/doku')
+                
+                const userDb = await prisma.user.findUnique({
+                    where: { id: session.user.id },
+                    select: { phone: true, name: true, email: true }
+                });
+                
+                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/profile`
+                const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                
+                const dokuResult = await createDokuCheckoutSession({
+                    clientId: settings.dokuClientId,
+                    sharedKey: settings.dokuSharedKey,
+                    isSandbox: settings.dokuSandbox,
+                }, {
+                    invoiceNumber: tx.referenceId || tx.id,
+                    amount: tx.amount,
+                    customerName: userDb?.name || session.user.name || 'Matchaboy Customer',
+                    customerPhone: userDb?.phone || '628123456789',
+                    customerEmail: userDb?.email || session.user.email || 'arumseduh@gmail.com',
+                    callbackUrl,
+                    notificationUrl,
+                    paymentChannel: undefined
+                })
+                
+                if (dokuResult.url) {
+                    paymentUrl = dokuResult.url;
+                }
             }
 
             return NextResponse.json({
@@ -35,7 +64,7 @@ export async function GET(req: Request) {
                 amount: tx.amount,
                 paymentCode: tx.referenceId,
                 paymentProofUrl: tx.paymentProofUrl,
-                paymentQrContent: paymentQrContent
+                paymentUrl: paymentUrl
             })
         }
 
@@ -192,10 +221,41 @@ export async function POST(req: Request) {
                 }
             })
 
-            let paymentQrContent = '';
+            let paymentUrl = '';
             if (paymentMethod.toUpperCase() === 'QRIS') {
-                const { generateQrisString } = await import('@/lib/doku')
-                paymentQrContent = generateQrisString(amount, paymentCode, settings?.qrisNmid || undefined)
+                if (!settings || !settings.dokuEnabled) {
+                    throw new ValidationError('Metode pembayaran Doku sedang tidak aktif.')
+                }
+                const { createDokuCheckoutSession } = await import('@/lib/doku')
+                
+                const userDb = await prisma.user.findUnique({
+                    where: { id: session.user.id },
+                    select: { phone: true, name: true, email: true }
+                });
+                
+                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/profile`
+                const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                
+                const dokuResult = await createDokuCheckoutSession({
+                    clientId: settings.dokuClientId,
+                    sharedKey: settings.dokuSharedKey,
+                    isSandbox: settings.dokuSandbox,
+                }, {
+                    invoiceNumber: paymentCode,
+                    amount: amount,
+                    customerName: userDb?.name || session.user.name || 'Matchaboy Customer',
+                    customerPhone: userDb?.phone || '628123456789',
+                    customerEmail: userDb?.email || session.user.email || 'arumseduh@gmail.com',
+                    callbackUrl,
+                    notificationUrl,
+                    paymentChannel: undefined
+                })
+                
+                if (dokuResult.error) {
+                    throw new ValidationError(dokuResult.error)
+                }
+                
+                paymentUrl = dokuResult.url;
             }
 
             return NextResponse.json({
@@ -206,7 +266,7 @@ export async function POST(req: Request) {
                     paymentCode: transaction.referenceId,
                     status: transaction.status,
                     paymentMethod: transaction.paymentMethod,
-                    paymentQrContent: paymentQrContent
+                    paymentUrl: paymentUrl
                 }
             })
         }

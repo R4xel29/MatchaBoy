@@ -569,17 +569,14 @@ export async function POST(req: Request) {
         }
 
         const requestedMethod = body.paymentMethod?.toUpperCase()
+        if (requestedMethod !== 'COD' && requestedMethod !== 'QRIS') {
+            return NextResponse.json({ error: 'Metode pembayaran ini sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
+        }
         if (requestedMethod === 'COD' && !paymentSettings.codEnabled) {
             return NextResponse.json({ error: 'Metode pembayaran COD sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
-        if (requestedMethod === 'TRANSFER' && !paymentSettings.transferEnabled) {
-            return NextResponse.json({ error: 'Metode pembayaran Transfer Bank sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
-        }
         if (requestedMethod === 'QRIS' && !paymentSettings.qrisEnabled) {
             return NextResponse.json({ error: 'Metode pembayaran QRIS sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
-        }
-        if (requestedMethod === 'DOKU' && !paymentSettings.dokuEnabled) {
-            return NextResponse.json({ error: 'Metode pembayaran DOKU sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
 
         const isDoku = requestedMethod === 'DOKU'
@@ -769,27 +766,53 @@ export async function POST(req: Request) {
             timeout: 10000, // 10 second timeout
         })
 
-        // Generate QRIS string for QRIS payment method
+        // Generate QRIS via Doku Hosted Checkout V1 session for QRIS payment method
         const isQris = body.paymentMethod?.toUpperCase() === 'QRIS'
-        if (isQris) {
+        if (isQris && paymentSettings) {
             try {
-                // If paymentSettings exists and has qrisAutoGenerate = false, do not generate QR string
-                if (paymentSettings && !paymentSettings.qrisAutoGenerate) {
-                    console.log('[QRIS] Auto generate is disabled. Skipping...')
-                } else {
-                    const { generateQrisString } = await import('@/lib/doku')
-                    const customNmid = paymentSettings?.qrisNmid || undefined
-                    const paymentQrContent = generateQrisString(secureTotal, order.id, customNmid)
-
-                    // Save QRIS content to the order
-                    await prisma.order.update({
-                        where: { id: order.id },
-                        data: { paymentQrContent }
-                    })
+                if (!paymentSettings.dokuEnabled) {
+                    throw new Error('Metode pembayaran Doku sedang tidak aktif.')
                 }
+
+                const { createDokuCheckoutSession } = await import('@/lib/doku')
+                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
+                const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                
+                const dokuResult = await createDokuCheckoutSession({
+                    clientId: paymentSettings.dokuClientId,
+                    sharedKey: paymentSettings.dokuSharedKey,
+                    isSandbox: paymentSettings.dokuSandbox,
+                }, {
+                    invoiceNumber: order.id,
+                    amount: secureTotal,
+                    customerName: order.customerName,
+                    customerPhone: order.customerPhone,
+                    customerEmail: session.user.email || 'arumseduh@gmail.com',
+                    callbackUrl,
+                    notificationUrl,
+                    paymentChannel: undefined // Show all channels including QRIS on Doku page
+                })
+
+                if (dokuResult.error) {
+                    throw new Error(dokuResult.error)
+                }
+
+                // Save DOKU payment URL to the order and keep paymentQrContent null
+                await prisma.order.update({
+                    where: { id: order.id },
+                    data: { 
+                        paymentUrl: dokuResult.url,
+                        paymentQrContent: null,
+                    }
+                })
+                console.log('[QRIS] Doku Hosted Checkout URL generated successfully for QRIS.')
             } catch (qrisError: any) {
-                console.error('[QRIS GENERATION ERROR]', qrisError)
-                // Non-fatal: order tetap dibuat, user bisa hubungi admin
+                console.error('[QRIS DOKU CHECKOUT ERROR]', qrisError)
+                await prisma.order.update({
+                    where: { id: order.id },
+                    data: { status: 'CANCELLED', notes: `DOKU Checkout QRIS Failure: ${qrisError.message}` }
+                })
+                return NextResponse.json({ error: `Gagal membuat sesi pembayaran DOKU: ${qrisError.message}` }, { status: 500 })
             }
         }
 
@@ -799,22 +822,35 @@ export async function POST(req: Request) {
                 const channel = body.paymentChannel?.toUpperCase()
                 
                 if (channel === 'QRIS') {
-                    const { generateDokuSnapQris } = await import('@/lib/doku')
-                    const qrData = await generateDokuSnapQris({
+                    const { createDokuCheckoutSession } = await import('@/lib/doku')
+                    
+                    const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
+                    const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                    const dokuResult = await createDokuCheckoutSession({
                         clientId: paymentSettings.dokuClientId,
                         sharedKey: paymentSettings.dokuSharedKey,
                         isSandbox: paymentSettings.dokuSandbox,
                     }, {
                         invoiceNumber: order.id,
                         amount: secureTotal,
+                        customerName: order.customerName,
+                        customerPhone: order.customerPhone,
+                        customerEmail: session.user.email || 'arumseduh@gmail.com',
+                        callbackUrl,
+                        notificationUrl,
+                        paymentChannel: undefined
                     })
 
-                    // Save the dynamic DOKU QRIS to paymentQrContent and keep paymentUrl null
+                    if (dokuResult.error) {
+                        throw new Error(dokuResult.error)
+                    }
+
+                    // Save DOKU payment URL to the order and keep paymentQrContent null
                     await prisma.order.update({
                         where: { id: order.id },
                         data: { 
-                            paymentQrContent: qrData,
-                            paymentUrl: null,
+                            paymentUrl: dokuResult.url,
+                            paymentQrContent: null,
                         }
                     })
                 } else {

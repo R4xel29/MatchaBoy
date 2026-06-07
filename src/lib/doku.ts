@@ -244,30 +244,27 @@ export function generateQrisString(amount: number, orderId: string, customNmid?:
   qris += '010212';   // Point of Initiation: 12 (Dynamic QR)
   
   // Merchant Account Information (Matchaboy merchant details)
-  if (customNmid) {
-    // Standardize NMID to remove whitespace/newlines
-    const cleanNmid = customNmid.replace(/\s+/g, '');
-    
-    if (cleanNmid.startsWith('26')) {
-      qris += cleanNmid;
-    } else {
-      // Standard EMVCo Tag 26 format for Indonesia:
-      // Sub-tag 00: Globally Unique Identifier (typically "ID.CO.QRIS.WWW")
-      const sub00 = "ID.CO.QRIS.WWW";
-      // Sub-tag 01: National Merchant ID (NMID), standard is 15 chars (e.g. ID1026519394351)
-      const nmidVal = cleanNmid.length >= 15 ? cleanNmid.substring(0, 15) : cleanNmid.padEnd(15, '0');
-      // Sub-tag 02: Merchant ID / Terminal ID (often defaults to "A01" or similar)
-      const terminalVal = cleanNmid.length > 15 ? cleanNmid.substring(15) : "A01";
-      
-      const subTag00 = "00" + String(sub00.length).padStart(2, '0') + sub00;
-      const subTag01 = "01" + String(nmidVal.length).padStart(2, '0') + nmidVal;
-      const subTag02 = "02" + String(terminalVal.length).padStart(2, '0') + terminalVal;
-      
-      const subTags = subTag00 + subTag01 + subTag02;
-      qris += '26' + String(subTags.length).padStart(2, '0') + subTags;
-    }
+  const nmid = customNmid || 'ID1020211516086';
+  // Standardize NMID to remove whitespace/newlines
+  const cleanNmid = nmid.replace(/\s+/g, '');
+  
+  if (cleanNmid.startsWith('26')) {
+    qris += cleanNmid;
   } else {
-    qris += '26330015ID102021151608601030000203000'; 
+    // Standard EMVCo Tag 26 format for Indonesia:
+    // Sub-tag 00: Globally Unique Identifier (typically "ID.CO.QRIS.WWW")
+    const sub00 = "ID.CO.QRIS.WWW";
+    // Sub-tag 01: National Merchant ID (NMID), standard is 15 chars (e.g. ID1026519394351)
+    const nmidVal = cleanNmid.length >= 15 ? cleanNmid.substring(0, 15) : cleanNmid.padEnd(15, '0');
+    // Sub-tag 02: Merchant ID / Terminal ID (often defaults to "A01" or similar)
+    const terminalVal = cleanNmid.length > 15 ? cleanNmid.substring(15) : "000";
+    
+    const subTag00 = "00" + String(sub00.length).padStart(2, '0') + sub00;
+    const subTag01 = "01" + String(nmidVal.length).padStart(2, '0') + nmidVal;
+    const subTag02 = "02" + String(terminalVal.length).padStart(2, '0') + terminalVal;
+    
+    const subTags = subTag00 + subTag01 + subTag02;
+    qris += '26' + String(subTags.length).padStart(2, '0') + subTags;
   }
   
   qris += '52045812'; // Merchant Category Code (MCC: Restaurants)
@@ -438,6 +435,7 @@ export async function generateDokuSnapQris(
     amount: number;
     merchantId?: string;
     terminalId?: string;
+    postalCode?: string;
   }
 ): Promise<string> {
   const { clientId, sharedKey, isSandbox } = creds;
@@ -459,12 +457,12 @@ export async function generateDokuSnapQris(
       value: payload.amount.toFixed(2), // Wajib 2 desimal
       currency: 'IDR'
     },
-    feeAmount: {
-      value: '0.00',
-      currency: 'IDR'
-    },
     merchantId: payload.merchantId || clientId,
-    terminalId: payload.terminalId || 'TID-001'
+    terminalId: payload.terminalId || 'TID001',
+    additionalInfo: {
+      postalCode: payload.postalCode || '67215',
+      feeType: '1'
+    }
   };
   
   // Calculate Symmetric Signature:
@@ -486,7 +484,8 @@ export async function generateDokuSnapQris(
         'X-TIMESTAMP': timestamp,
         'X-SIGNATURE': signature,
         'X-PARTNER-ID': clientId,
-        'X-EXTERNAL-ID': externalId
+        'X-EXTERNAL-ID': externalId,
+        'CHANNEL-ID': 'H2H'
       },
       body: minifiedBody
     });
@@ -494,14 +493,342 @@ export async function generateDokuSnapQris(
     const data = await response.json();
     console.log('[DOKU SNAP RESPONSE]', JSON.stringify(data, null, 2));
     
-    if (!response.ok || !data.qrData) {
+    const qrContent = data.qrContent || data.qrData || data.qrCode;
+    if (!response.ok || !qrContent) {
       console.error('[DOKU SNAP QRIS ERROR]', data);
       throw new Error(data.responseMessage || 'Failed to generate DOKU SNAP QRIS');
     }
     
-    return data.qrData;
+    return qrContent;
   } catch (err: any) {
     console.error('[DOKU SNAP QRIS EXCEPTION]', err);
     throw err;
   }
 }
+
+/**
+ * Queries the status of a previously generated QRIS transaction.
+ */
+export async function queryDokuSnapQris(
+  creds: DokuCredentials,
+  payload: {
+    originalReferenceNo: string;
+    originalPartnerReferenceNo: string;
+    merchantId: string;
+  }
+): Promise<any> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  const baseUrl = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+  const requestTarget = '/snap-adapter/b2b/v1.0/qr/qr-mpm-query';
+  const endpoint = `${baseUrl}${requestTarget}`;
+
+  const accessToken = await getSnapAccessToken(clientId, isSandbox);
+  const timestamp = getSnapTimestamp();
+  const externalId = `EXT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+  const requestBody = {
+    originalReferenceNo: payload.originalReferenceNo,
+    originalPartnerReferenceNo: payload.originalPartnerReferenceNo,
+    serviceCode: '47',
+    merchantId: payload.merchantId
+  };
+
+  const minifiedBody = JSON.stringify(requestBody);
+  const bodyHash = crypto.createHash('sha256').update(minifiedBody).digest('hex').toLowerCase();
+  const stringToSign = `POST:${requestTarget}:${accessToken}:${bodyHash}:${timestamp}`;
+  const signature = crypto.createHmac('sha512', sharedKey).update(stringToSign).digest('base64');
+
+  try {
+    console.log(`[DOKU SNAP] Querying QRIS status from ${endpoint}...`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-TIMESTAMP': timestamp,
+        'X-SIGNATURE': signature,
+        'X-PARTNER-ID': clientId,
+        'X-EXTERNAL-ID': externalId,
+        'CHANNEL-ID': 'H2H'
+      },
+      body: minifiedBody
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[DOKU SNAP QUERY ERROR]', data);
+      throw new Error(data.responseMessage || `Query QRIS failed with status ${response.status}`);
+    }
+    return data;
+  } catch (err: any) {
+    console.error('[DOKU SNAP QUERY EXCEPTION]', err);
+    throw err;
+  }
+}
+
+/**
+ * Initiates a refund for a successful QRIS transaction.
+ */
+export async function refundDokuSnapQris(
+  creds: DokuCredentials,
+  payload: {
+    merchantId: string;
+    originalPartnerReferenceNo: string;
+    originalReferenceNo: string;
+    partnerRefundNo: string;
+    refundAmountValue: number;
+    reason: string;
+    approvalCode: string;
+  }
+): Promise<any> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  const baseUrl = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+  const requestTarget = '/snap-adapter/b2b/v1.0/qr/qr-mpm-refund';
+  const endpoint = `${baseUrl}${requestTarget}`;
+
+  const accessToken = await getSnapAccessToken(clientId, isSandbox);
+  const timestamp = getSnapTimestamp();
+  const externalId = `EXT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+  const requestBody = {
+    merchantId: payload.merchantId,
+    originalPartnerReferenceNo: payload.originalPartnerReferenceNo,
+    originalReferenceNo: payload.originalReferenceNo,
+    partnerRefundNo: payload.partnerRefundNo,
+    refundAmount: {
+      value: payload.refundAmountValue.toFixed(2),
+      currency: 'IDR'
+    },
+    reason: payload.reason,
+    additionalInfo: {
+      approvalCode: payload.approvalCode
+    }
+  };
+
+  const minifiedBody = JSON.stringify(requestBody);
+  const bodyHash = crypto.createHash('sha256').update(minifiedBody).digest('hex').toLowerCase();
+  const stringToSign = `POST:${requestTarget}:${accessToken}:${bodyHash}:${timestamp}`;
+  const signature = crypto.createHmac('sha512', sharedKey).update(stringToSign).digest('base64');
+
+  try {
+    console.log(`[DOKU SNAP] Requesting QRIS refund from ${endpoint}...`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-TIMESTAMP': timestamp,
+        'X-SIGNATURE': signature,
+        'X-PARTNER-ID': clientId,
+        'X-EXTERNAL-ID': externalId,
+        'CHANNEL-ID': 'H2H'
+      },
+      body: minifiedBody
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[DOKU SNAP REFUND ERROR]', data);
+      throw new Error(data.responseMessage || `Refund QRIS failed with status ${response.status}`);
+    }
+    return data;
+  } catch (err: any) {
+    console.error('[DOKU SNAP REFUND EXCEPTION]', err);
+    throw err;
+  }
+}
+
+/**
+ * Decodes a scanned QRIS code to retrieve transaction/merchant info.
+ */
+export async function decodeDokuSnapQris(
+  creds: DokuCredentials,
+  payload: {
+    partnerReferenceNo: string;
+    qrContent: string;
+    scanTime?: string;
+  }
+): Promise<any> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  const baseUrl = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+  const requestTarget = '/snap-adapter/b2b/v1.0/qr/qr-mpm-decode';
+  const endpoint = `${baseUrl}${requestTarget}`;
+
+  const accessToken = await getSnapAccessToken(clientId, isSandbox);
+  const timestamp = getSnapTimestamp();
+  const externalId = `EXT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+  const requestBody = {
+    partnerReferenceNo: payload.partnerReferenceNo,
+    qrContent: payload.qrContent,
+    scanTime: payload.scanTime || timestamp
+  };
+
+  const minifiedBody = JSON.stringify(requestBody);
+  const bodyHash = crypto.createHash('sha256').update(minifiedBody).digest('hex').toLowerCase();
+  const stringToSign = `POST:${requestTarget}:${accessToken}:${bodyHash}:${timestamp}`;
+  const signature = crypto.createHmac('sha512', sharedKey).update(stringToSign).digest('base64');
+
+  try {
+    console.log(`[DOKU SNAP] Requesting QRIS decode from ${endpoint}...`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-TIMESTAMP': timestamp,
+        'X-SIGNATURE': signature,
+        'X-PARTNER-ID': clientId,
+        'X-EXTERNAL-ID': externalId,
+        'CHANNEL-ID': 'H2H'
+      },
+      body: minifiedBody
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[DOKU SNAP DECODE ERROR]', data);
+      throw new Error(data.responseMessage || `Decode QRIS failed with status ${response.status}`);
+    }
+    return data;
+  } catch (err: any) {
+    console.error('[DOKU SNAP DECODE EXCEPTION]', err);
+    throw err;
+  }
+}
+
+/**
+ * Processes a payment for a decoded QRIS code (B2B2C wallet integration).
+ */
+export async function payDokuSnapQris(
+  creds: DokuCredentials,
+  customerToken: string,
+  payload: {
+    partnerReferenceNo: string;
+    amountValue: number;
+    feeAmountValue?: number;
+    qrContent: string;
+  }
+): Promise<any> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  const baseUrl = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+  const requestTarget = '/snap-adapter/b2b2c/v1.0/qr/qr-mpm-payment';
+  const endpoint = `${baseUrl}${requestTarget}`;
+
+  const accessToken = await getSnapAccessToken(clientId, isSandbox);
+  const timestamp = getSnapTimestamp();
+  const externalId = `EXT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+  const requestBody: any = {
+    partnerReferenceNo: payload.partnerReferenceNo,
+    amount: {
+      value: payload.amountValue.toFixed(2),
+      currency: 'IDR'
+    },
+    additionalInfo: {
+      qrContent: payload.qrContent
+    }
+  };
+
+  if (payload.feeAmountValue !== undefined) {
+    requestBody.feeAmount = {
+      value: payload.feeAmountValue.toFixed(2),
+      currency: 'IDR'
+    };
+  }
+
+  const minifiedBody = JSON.stringify(requestBody);
+  const bodyHash = crypto.createHash('sha256').update(minifiedBody).digest('hex').toLowerCase();
+  const stringToSign = `POST:${requestTarget}:${accessToken}:${bodyHash}:${timestamp}`;
+  const signature = crypto.createHmac('sha512', sharedKey).update(stringToSign).digest('base64');
+
+  try {
+    console.log(`[DOKU SNAP] Sending QRIS payment from ${endpoint}...`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'Authorization-Customer': customerToken.startsWith('Bearer ') ? customerToken : `Bearer ${customerToken}`,
+        'X-TIMESTAMP': timestamp,
+        'X-SIGNATURE': signature,
+        'X-PARTNER-ID': clientId,
+        'X-EXTERNAL-ID': externalId,
+        'CHANNEL-ID': 'H2H'
+      },
+      body: minifiedBody
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[DOKU SNAP PAYMENT ERROR]', data);
+      throw new Error(data.responseMessage || `Payment QRIS failed with status ${response.status}`);
+    }
+    return data;
+  } catch (err: any) {
+    console.error('[DOKU SNAP PAYMENT EXCEPTION]', err);
+    throw err;
+  }
+}
+
+/**
+ * Cancels or sets an expiry status on a QRIS transaction.
+ */
+export async function cancelDokuSnapQris(
+  creds: DokuCredentials,
+  payload: {
+    partnerReferenceNo: string;
+    referenceNo: string;
+    merchantId: string;
+    reason: string;
+  }
+): Promise<any> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  const baseUrl = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+  const requestTarget = '/snap-adapter/b2b/v1.0/qr/qr-expire';
+  const endpoint = `${baseUrl}${requestTarget}`;
+
+  const accessToken = await getSnapAccessToken(clientId, isSandbox);
+  const timestamp = getSnapTimestamp();
+  const externalId = `EXT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
+  const requestBody = {
+    partnerReferenceNo: payload.partnerReferenceNo,
+    referenceNo: payload.referenceNo,
+    merchantId: payload.merchantId,
+    reason: payload.reason
+  };
+
+  const minifiedBody = JSON.stringify(requestBody);
+  const bodyHash = crypto.createHash('sha256').update(minifiedBody).digest('hex').toLowerCase();
+  const stringToSign = `POST:${requestTarget}:${accessToken}:${bodyHash}:${timestamp}`;
+  const signature = crypto.createHmac('sha512', sharedKey).update(stringToSign).digest('base64');
+
+  try {
+    console.log(`[DOKU SNAP] Cancelling QRIS transaction from ${endpoint}...`);
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-TIMESTAMP': timestamp,
+        'X-SIGNATURE': signature,
+        'X-PARTNER-ID': clientId,
+        'X-EXTERNAL-ID': externalId,
+        'CHANNEL-ID': 'H2H'
+      },
+      body: minifiedBody
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error('[DOKU SNAP CANCEL ERROR]', data);
+      throw new Error(data.responseMessage || `Cancel QRIS failed with status ${response.status}`);
+    }
+    return data;
+  } catch (err: any) {
+    console.error('[DOKU SNAP CANCEL EXCEPTION]', err);
+    throw err;
+  }
+}
+

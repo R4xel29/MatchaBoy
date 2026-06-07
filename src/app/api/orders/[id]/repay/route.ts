@@ -139,15 +139,39 @@ export async function POST(
     let paymentQrContent: string | null = null
 
     if (isQrisChannel) {
-      const { generateDokuSnapQris } = await import('@/lib/doku')
-      paymentQrContent = await generateDokuSnapQris({
-        clientId: paymentSettings.dokuClientId,
-        sharedKey: paymentSettings.dokuSharedKey,
-        isSandbox: paymentSettings.dokuSandbox,
-      }, {
-        invoiceNumber: id,
-        amount: secureTotal,
-      })
+      try {
+        const { generateDokuSnapQris } = await import('@/lib/doku')
+        paymentQrContent = await generateDokuSnapQris({
+          clientId: paymentSettings.dokuClientId,
+          sharedKey: paymentSettings.dokuSharedKey,
+          isSandbox: paymentSettings.dokuSandbox,
+        }, {
+          invoiceNumber: id,
+          amount: secureTotal,
+        })
+      } catch (snapError: any) {
+        console.warn('[DOKU SNAP QRIS REPAY FAILED, FALLING BACK TO HOSTED CHECKOUT]', snapError)
+        const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
+        const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+        const dokuResult = await createDokuCheckoutSession({
+          clientId: paymentSettings.dokuClientId,
+          sharedKey: paymentSettings.dokuSharedKey,
+          isSandbox: paymentSettings.dokuSandbox,
+        }, {
+          invoiceNumber: id,
+          amount: secureTotal,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          customerEmail: session.user.email || 'arumseduh@gmail.com',
+          callbackUrl,
+          notificationUrl,
+        })
+
+        if (dokuResult.error) {
+          throw new Error(`DOKU Error: ${dokuResult.error}`)
+        }
+        paymentUrl = dokuResult.url
+      }
     } else {
       const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
       const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
