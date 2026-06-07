@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { createDokuCheckoutSession, generateQrisString } from '@/lib/doku'
+import { createDokuCheckoutSession } from '@/lib/doku'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -131,69 +131,40 @@ export async function POST(
       return updated
     })
 
-    // 3. Create fresh Doku checkout session or SNAP QRIS
+    // 3. Create fresh Doku checkout session
     const channelMatch = order.notes?.match(/\[CHANNEL:\s*([^\]]+)\]/)
     const isQrisChannel = channelMatch?.[1]?.toUpperCase() === 'QRIS'
     
     let paymentUrl: string | null = null
-    let paymentQrContent: string | null = null
 
-    if (isQrisChannel) {
-      try {
-        const { generateQrisString } = await import('@/lib/doku')
-        paymentQrContent = generateQrisString(secureTotal, id, paymentSettings.qrisNmid || undefined)
-      } catch (snapError: any) {
-        console.warn('[DOKU SNAP QRIS REPAY FAILED, FALLING BACK TO HOSTED CHECKOUT]', snapError)
-        const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
-        const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
-        const dokuResult = await createDokuCheckoutSession({
-          clientId: paymentSettings.dokuClientId,
-          sharedKey: paymentSettings.dokuSharedKey,
-          isSandbox: paymentSettings.dokuSandbox,
-        }, {
-          invoiceNumber: id,
-          amount: secureTotal,
-          customerName: order.customerName,
-          customerPhone: order.customerPhone,
-          customerEmail: session.user.email || 'arumseduh@gmail.com',
-          callbackUrl,
-          notificationUrl,
-        })
+    const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
+    const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+    const dokuResult = await createDokuCheckoutSession({
+      clientId: paymentSettings.dokuClientId,
+      sharedKey: paymentSettings.dokuSharedKey,
+      isSandbox: paymentSettings.dokuSandbox,
+    }, {
+      invoiceNumber: id,
+      amount: secureTotal,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      customerEmail: session.user.email || 'arumseduh@gmail.com',
+      callbackUrl,
+      notificationUrl,
+      paymentChannel: isQrisChannel ? 'QRIS' : undefined, // Pre-select QRIS if original order used QRIS
+    })
 
-        if (dokuResult.error) {
-          throw new Error(`DOKU Error: ${dokuResult.error}`)
-        }
-        paymentUrl = dokuResult.url
-      }
-    } else {
-      const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
-      const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
-      const dokuResult = await createDokuCheckoutSession({
-        clientId: paymentSettings.dokuClientId,
-        sharedKey: paymentSettings.dokuSharedKey,
-        isSandbox: paymentSettings.dokuSandbox,
-      }, {
-        invoiceNumber: id,
-        amount: secureTotal,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        customerEmail: session.user.email || 'arumseduh@gmail.com',
-        callbackUrl,
-        notificationUrl,
-      })
-
-      if (dokuResult.error) {
-        throw new Error(`DOKU Error: ${dokuResult.error}`)
-      }
-      paymentUrl = dokuResult.url
+    if (dokuResult.error) {
+      throw new Error(`DOKU Error: ${dokuResult.error}`)
     }
+    paymentUrl = dokuResult.url
 
-    // 4. Save both payment URL and QRIS content back to the order
+    // 4. Save payment URL back to the order
     await prisma.order.update({
       where: { id },
       data: { 
         paymentUrl,
-        paymentQrContent
+        paymentQrContent: null,
       }
     })
 

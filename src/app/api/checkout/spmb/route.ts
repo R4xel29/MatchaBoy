@@ -378,17 +378,37 @@ export async function POST(req: Request) {
             throw new Error('Metode pembayaran Doku sedang tidak aktif.');
           }
 
-          const { generateQrisString } = await import('@/lib/doku');
-          const qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid || undefined);
+          const { createDokuCheckoutSession } = await import('@/lib/doku');
+          const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`;
+          const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`;
+
+          const dokuResult = await createDokuCheckoutSession({
+            clientId: paymentSettings.dokuClientId,
+            sharedKey: paymentSettings.dokuSharedKey,
+            isSandbox: paymentSettings.dokuSandbox,
+          }, {
+            invoiceNumber: order.id,
+            amount: secureTotal,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            customerEmail: 'arumseduh@gmail.com',
+            callbackUrl,
+            notificationUrl,
+            paymentChannel: 'QRIS', // Pre-select QRIS so user directly sees QR code on Doku page
+          });
+
+          if (dokuResult.error) {
+            throw new Error(dokuResult.error);
+          }
 
           await prisma.order.update({
             where: { id: order.id },
             data: { 
-              paymentQrContent: qrContent,
-              paymentUrl: null,
+              paymentUrl: dokuResult.url,
+              paymentQrContent: null,
             }
           });
-          console.log('[SPMB QRIS INSTAN] Dynamic EMVCo QRIS generated successfully.');
+          console.log('[SPMB QRIS INSTAN] Doku Hosted Checkout with pre-selected QRIS generated successfully.');
         }
       } catch (qrisError: any) {
         console.error('[QRIS INSTAN ERROR]', qrisError);
