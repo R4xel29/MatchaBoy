@@ -251,17 +251,13 @@ export function generateQrisString(amount: number, orderId: string, customNmid?:
   if (cleanNmid.startsWith('26')) {
     qris += cleanNmid;
   } else {
-    // Standard EMVCo Tag 26 format for Indonesia:
-    // Sub-tag 00: Globally Unique Identifier (typically "ID.CO.QRIS.WWW")
-    const sub00 = "ID.CO.QRIS.WWW";
-    // Sub-tag 01: National Merchant ID (NMID), standard is 15 chars (e.g. ID1026519394351)
-    const nmidVal = cleanNmid.length >= 15 ? cleanNmid.substring(0, 15) : cleanNmid.padEnd(15, '0');
-    // Sub-tag 02: Merchant ID / Terminal ID (often defaults to "A01" or similar)
-    const terminalVal = cleanNmid.length > 15 ? cleanNmid.substring(15) : "000";
+    const sub00 = cleanNmid;
+    const sub01 = "000";
+    const sub02 = "000";
     
     const subTag00 = "00" + String(sub00.length).padStart(2, '0') + sub00;
-    const subTag01 = "01" + String(nmidVal.length).padStart(2, '0') + nmidVal;
-    const subTag02 = "02" + String(terminalVal.length).padStart(2, '0') + terminalVal;
+    const subTag01 = "01" + String(sub01.length).padStart(2, '0') + sub01;
+    const subTag02 = "02" + String(sub02.length).padStart(2, '0') + sub02;
     
     const subTags = subTag00 + subTag01 + subTag02;
     qris += '26' + String(subTags.length).padStart(2, '0') + subTags;
