@@ -23,9 +23,9 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     notFound()
   }
 
-  const isSpmb = order.source === 'SPMB';
+  const isPublicSource = order.source === 'SPMB' || order.source === 'WA';
 
-  if (!isSpmb) {
+  if (!isPublicSource) {
     if (!session?.user?.id) {
       redirect('/login')
     }
