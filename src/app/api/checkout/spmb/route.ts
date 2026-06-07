@@ -388,6 +388,7 @@ export async function POST(req: Request) {
             }, {
               invoiceNumber: order.id,
               amount: secureTotal,
+              merchantId: paymentSettings.qrisNmid.replace(/[^0-9]/g, '') || undefined,
             });
           } catch (snapErr: any) {
             console.warn('[QRIS INSTAN SNAP ERROR, USING FALLBACK EMVCO GENERATOR]', snapErr);
