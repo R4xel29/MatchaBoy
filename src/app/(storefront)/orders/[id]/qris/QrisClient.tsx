@@ -212,7 +212,7 @@ export default function QrisClient({ order }: { order: any }) {
           {/* Merchant Info */}
           <div className="text-center mt-5 space-y-1 w-full select-none">
             <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Nama Merchant</p>
-            <h3 className="text-base font-serif font-black text-gray-900 leading-tight">MATCHABOY</h3>
+            <h3 className="text-base font-serif font-black text-gray-900 leading-tight">ARUN SEDUH DRINK</h3>
             <p className="text-[11px] text-gray-500 font-mono mt-1.5 pt-2 border-t border-gray-50">
               Invoice ID: <span className="font-bold">{order.id.slice(0, 12).toUpperCase()}</span>
             </p>
@@ -349,7 +349,7 @@ export default function QrisClient({ order }: { order: any }) {
               <div className="w-5.5 h-5.5 rounded-full bg-[#B48A5E]/10 flex items-center justify-center font-bold text-[#B48A5E] shrink-0 text-[10px] mt-0.5">
                 4
               </div>
-              <p className="leading-relaxed">Periksa nominal bayar <strong>{formatRupiah(order.total)}</strong> dan nama merchant <strong>MATCHABOY</strong>. Jika sesuai, selesaikan pembayaran dan upload struknya di uploader atas.</p>
+              <p className="leading-relaxed">Periksa nominal bayar <strong>{formatRupiah(order.total)}</strong> dan nama merchant <strong>ARUN SEDUH DRINK</strong>. Jika sesuai, selesaikan pembayaran dan upload struknya di uploader atas.</p>
             </div>
           </div>
         </div>

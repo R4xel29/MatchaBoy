@@ -244,7 +244,7 @@ export function generateQrisString(amount: number, orderId: string, customNmid?:
   qris += '010212';   // Point of Initiation: 12 (Dynamic QR)
   
   // Merchant Account Information (Matchaboy merchant details)
-  const nmid = customNmid || 'ID1020211516086';
+  const nmid = customNmid || 'ID1026529166724';
   // Standardize NMID to remove whitespace/newlines
   const cleanNmid = nmid.replace(/\s+/g, '');
   
@@ -254,8 +254,8 @@ export function generateQrisString(amount: number, orderId: string, customNmid?:
     // Standard EMVCo Tag 51 format for Indonesia:
     // Sub-tag 00: Globally Unique Identifier (typically "ID.CO.QRIS.WWW")
     const guid = "ID.CO.QRIS.WWW";
-    // Sub-tag 01: National Merchant ID (NMID), standard is 15 chars (e.g. ID1020211516086)
-    const nmidVal = cleanNmid || 'ID1020211516086';
+    // Sub-tag 01: National Merchant ID (NMID), standard is 15 chars (e.g. ID1026529166724)
+    const nmidVal = cleanNmid || 'ID1026529166724';
     // Sub-tag 02: Merchant Criteria (default "000")
     const criteria = "000";
     
@@ -274,10 +274,12 @@ export function generateQrisString(amount: number, orderId: string, customNmid?:
   qris += '54' + String(amtStr.length).padStart(2, '0') + amtStr; // Transaction Amount
   
   qris += '5802ID'; // Country: ID
-  const merchantName = "ARUS PAY";
+  const merchantName = "ARUN SEDUH DRINK";
   qris += '59' + String(merchantName.length).padStart(2, '0') + merchantName; // Merchant Name
-  qris += '6012PROBOLINGGO'; // City
-  qris += '610567215'; // Postal Code
+  const merchantCity = "PROBOLINGGO";
+  qris += '60' + String(merchantCity.length).padStart(2, '0') + merchantCity; // City
+  const postalCode = "67215";
+  qris += '61' + String(postalCode.length).padStart(2, '0') + postalCode; // Postal Code
   
   // Additional Data (Invoice / Order reference)
   const orderTag = '01' + String(orderId.length).padStart(2, '0') + orderId;
