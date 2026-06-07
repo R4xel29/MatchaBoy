@@ -196,23 +196,28 @@ export function verifyDokuWebhookSignature({
     const minified = JSON.stringify(parsed);
     const calculatedDigest = crypto.createHash('sha256').update(minified).digest('base64');
 
-    const calculatedSignature = generateSignature({
-      clientId,
-      sharedKey,
-      requestId: receivedRequestId,
-      timestamp: receivedTimestamp,
-      requestTarget,
-      digest: calculatedDigest,
-    });
-
-    const calculatedBuf = Buffer.from(calculatedSignature);
+    const targets = Array.from(new Set([requestTarget, '/api/payment/doku-webhook']));
     const receivedBuf = Buffer.from(receivedSignature);
 
-    // Safe comparison of the first signature (minified body)
-    const isMinifiedValid = calculatedBuf.length === receivedBuf.length && crypto.timingSafeEqual(
-      calculatedBuf,
-      receivedBuf
-    );
+    let isMinifiedValid = false;
+    for (const target of targets) {
+      const calculatedSignature = generateSignature({
+        clientId,
+        sharedKey,
+        requestId: receivedRequestId,
+        timestamp: receivedTimestamp,
+        requestTarget: target,
+        digest: calculatedDigest,
+      });
+
+      const calculatedBuf = Buffer.from(calculatedSignature);
+
+      if (calculatedBuf.length === receivedBuf.length && crypto.timingSafeEqual(calculatedBuf, receivedBuf)) {
+        isMinifiedValid = true;
+        console.log(`[DOKU WEBHOOK] Minified signature match with target: ${target}`);
+        break;
+      }
+    }
 
     if (isMinifiedValid) {
       return true;
@@ -222,20 +227,26 @@ export function verifyDokuWebhookSignature({
 
     // Fallback: hash the rawBody string directly in case JSON key order gets perturbed
     const rawDigest = crypto.createHash('sha256').update(rawBody).digest('base64');
-    const calculatedSignatureRaw = generateSignature({
-      clientId,
-      sharedKey,
-      requestId: receivedRequestId,
-      timestamp: receivedTimestamp,
-      requestTarget,
-      digest: rawDigest,
-    });
+    for (const target of targets) {
+      const calculatedSignatureRaw = generateSignature({
+        clientId,
+        sharedKey,
+        requestId: receivedRequestId,
+        timestamp: receivedTimestamp,
+        requestTarget: target,
+        digest: rawDigest,
+      });
 
-    const calculatedRawBuf = Buffer.from(calculatedSignatureRaw);
-    return calculatedRawBuf.length === receivedBuf.length && crypto.timingSafeEqual(
-      calculatedRawBuf,
-      receivedBuf
-    );
+      const calculatedRawBuf = Buffer.from(calculatedSignatureRaw);
+      
+      if (calculatedRawBuf.length === receivedBuf.length && crypto.timingSafeEqual(calculatedRawBuf, receivedBuf)) {
+        console.log(`[DOKU WEBHOOK] RawBody signature match with target: ${target}`);
+        return true;
+      }
+    }
+
+    console.error('[DOKU WEBHOOK] Signature verification failed for all combinations');
+    return false;
   } catch (e) {
     console.error('[DOKU WEBHOOK VERIFICATION EXCEPTION]', e);
     return false;

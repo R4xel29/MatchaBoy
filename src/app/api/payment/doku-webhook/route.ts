@@ -6,6 +6,12 @@ import fs from 'fs';
 import path from 'path';
 
 function logWebhookEvent(info: any) {
+  // Always log to stdout so it shows up in Vercel logs
+  console.log('[DOKU WEBHOOK DEBUG]', JSON.stringify({
+    timestamp: new Date().toISOString(),
+    ...info
+  }, null, 2));
+
   try {
     const logFilePath = path.join(process.cwd(), 'doku-webhook-debug.log');
     const logEntry = JSON.stringify({
@@ -14,7 +20,10 @@ function logWebhookEvent(info: any) {
     }, null, 2) + '\n---\n';
     fs.appendFileSync(logFilePath, logEntry, 'utf8');
   } catch (err) {
-    console.error('[DOKU WEBHOOK LOG ERROR]', err);
+    // Only log file writing error if it's not a read-only filesystem error to keep logs clean
+    if (err instanceof Error && !err.message.includes('EROFS') && !err.message.includes('read-only')) {
+      console.error('[DOKU WEBHOOK LOG FILE ERROR]', err);
+    }
   }
 }
 
@@ -48,7 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'DOKU disabled' }, { status: 400 });
     }
 
-    const requestTarget = '/api/payment/doku-webhook';
+    const requestTarget = req.nextUrl.pathname + req.nextUrl.search;
 
     // Extract signature header
     const signatureHeader = headers['signature'];

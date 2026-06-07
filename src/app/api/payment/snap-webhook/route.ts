@@ -9,28 +9,33 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
     const body = JSON.parse(rawBody);
-    console.log('[DOKU SNAP WEBHOOK BODY]', JSON.stringify(body, null, 2));
 
     const headers: Record<string, string> = {};
     req.headers.forEach((val, key) => {
-      headers[key] = val;
+      headers[key.toLowerCase()] = val;
     });
 
-    const signature = headers['x-signature'] || headers['Signature'];
-    const timestamp = headers['x-timestamp'] || headers['X-TIMESTAMP'];
-    const authHeader = headers['authorization'] || headers['Authorization'];
+    console.log('[DOKU SNAP WEBHOOK RECEIVED]', {
+      timestamp: new Date().toISOString(),
+      headers,
+      rawBody
+    });
+
+    const signature = headers['x-signature'];
+    const timestamp = headers['x-timestamp'];
+    const authHeader = headers['authorization'];
 
     if (!signature || !timestamp || !authHeader) {
-      console.error('[DOKU SNAP WEBHOOK] Missing validation headers');
+      console.error('[DOKU SNAP WEBHOOK] Missing validation headers:', { signature: !!signature, timestamp: !!timestamp, authHeader: !!authHeader });
       return NextResponse.json({
         responseCode: "4017300",
         responseMessage: "Unauthorized"
       }, { status: 401 });
     }
 
-    const token = authHeader.replace('Bearer ', '');
+    const token = authHeader.replace(/^[Bb]earer\s+/, '');
     if (token !== 'snap-token-matchaboy-prod') {
-      console.error('[DOKU SNAP WEBHOOK] Invalid access token');
+      console.error('[DOKU SNAP WEBHOOK] Invalid access token received:', token);
       return NextResponse.json({
         responseCode: "4017300",
         responseMessage: "Unauthorized"
@@ -47,28 +52,63 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify Symmetric Signature
-    // Format: POST:/api/payment/snap-webhook:AccessToken:bodyHash:Timestamp
-    const requestTarget = '/api/payment/snap-webhook';
-    const minifiedBody = JSON.stringify(body);
-    const bodyHash = crypto.createHash('sha256').update(minifiedBody).digest('hex').toLowerCase();
-    
-    const stringToSign = `POST:${requestTarget}:${token}:${bodyHash}:${timestamp}`;
-    const calculatedSignature = crypto.createHmac('sha512', paymentSettings.dokuSharedKey)
-      .update(stringToSign)
-      .digest('base64');
+    // Format: POST:EndpointUrl:AccessToken:bodyHash:Timestamp
+    const possibleTargets = Array.from(new Set([
+      req.nextUrl.pathname + req.nextUrl.search,
+      '/api/payment/snap-webhook'
+    ]));
 
-    if (calculatedSignature !== signature) {
-      console.error('[DOKU SNAP WEBHOOK] Signature mismatch. Calculated:', calculatedSignature, 'Received:', signature);
+    const bodyHashMinified = crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex').toLowerCase();
+    const bodyHashRawTrim = crypto.createHash('sha256').update(rawBody.trim()).digest('hex').toLowerCase();
+    const bodyHashRaw = crypto.createHash('sha256').update(rawBody).digest('hex').toLowerCase();
+
+    const possibleBodyHashes = Array.from(new Set([
+      bodyHashMinified,
+      bodyHashRawTrim,
+      bodyHashRaw
+    ]));
+
+    let isValidSignature = false;
+    let usedTarget = '';
+    let usedHash = '';
+
+    for (const target of possibleTargets) {
+      for (const hash of possibleBodyHashes) {
+        const stringToSign = `POST:${target}:${token}:${hash}:${timestamp}`;
+        const calculatedSignature = crypto.createHmac('sha512', paymentSettings.dokuSharedKey)
+          .update(stringToSign)
+          .digest('base64');
+
+        if (calculatedSignature === signature) {
+          isValidSignature = true;
+          usedTarget = target;
+          usedHash = hash;
+          break;
+        }
+      }
+      if (isValidSignature) break;
+    }
+
+    if (!isValidSignature) {
+      console.error('[DOKU SNAP WEBHOOK] Signature mismatch.', {
+        receivedSignature: signature,
+        possibleTargets,
+        possibleBodyHashes,
+        timestamp
+      });
       return NextResponse.json({
         responseCode: "4017300",
         responseMessage: "Unauthorized"
       }, { status: 401 });
     }
 
+    console.log(`[DOKU SNAP WEBHOOK] Signature verified successfully. Target: ${usedTarget}, Hash: ${usedHash}`);
+
     const invoiceNumber = body.partnerReferenceNo;
     const paymentStatus = body.transactionStatus || body.paymentStatus;
 
     if (!invoiceNumber) {
+      console.error('[DOKU SNAP WEBHOOK] partnerReferenceNo is missing in payload');
       return NextResponse.json({
         responseCode: "4007300",
         responseMessage: "Bad Request"
@@ -89,10 +129,14 @@ export async function POST(req: NextRequest) {
 
     if (paymentStatus === 'SUCCESS') {
       if (order.status === 'PENDING_PAYMENT') {
+        const isSpmbPending = order.source === 'SPMB' && order.customerPhone.startsWith('SPMB-PENDING');
+        const cleanPhone = order.customerPhone.replace(/^SPMB-PENDING_/, '');
+
         await prisma.order.update({
           where: { id: invoiceNumber },
           data: {
             status: 'PREPARING',
+            customerPhone: isSpmbPending ? (cleanPhone || 'SPMB-PAID') : order.customerPhone,
             notes: order.notes 
               ? `${order.notes}\n[DOKU SNAP Webhook] Pembayaran otomatis sukses via SNAP QRIS.`
               : '[DOKU SNAP Webhook] Pembayaran otomatis sukses via SNAP QRIS.',
@@ -129,7 +173,7 @@ export async function POST(req: NextRequest) {
           console.error('[DOKU SNAP WEBHOOK] Notification error:', notifError);
         }
 
-        console.log(`[DOKU SNAP WEBHOOK] Order ${invoiceNumber} successfully updated to PREPARING.`);
+        console.log(`[DOKU SNAP WEBHOOK] Order ${invoiceNumber} successfully updated to PREPARING and phone prefix cleaned.`);
       } else {
         console.log(`[DOKU SNAP WEBHOOK] Order ${invoiceNumber} was already processed. Current status: ${order.status}`);
       }
