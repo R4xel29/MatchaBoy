@@ -378,22 +378,8 @@ export async function POST(req: Request) {
             throw new Error('Metode pembayaran Doku sedang tidak aktif.');
           }
 
-          let qrContent = '';
-          try {
-            const { generateDokuSnapQris } = await import('@/lib/doku');
-            qrContent = await generateDokuSnapQris({
-              clientId: paymentSettings.dokuClientId,
-              sharedKey: paymentSettings.dokuSharedKey,
-              isSandbox: paymentSettings.dokuSandbox,
-            }, {
-              invoiceNumber: order.id,
-              amount: secureTotal,
-            });
-          } catch (snapErr: any) {
-            console.warn('[QRIS INSTAN SNAP ERROR, USING FALLBACK EMVCO GENERATOR]', snapErr);
-            const { generateQrisString } = await import('@/lib/doku');
-            qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid || undefined);
-          }
+          const { generateQrisString } = await import('@/lib/doku');
+          const qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid || undefined);
 
           await prisma.order.update({
             where: { id: order.id },
@@ -402,7 +388,7 @@ export async function POST(req: Request) {
               paymentUrl: null,
             }
           });
-          console.log('[SPMB QRIS INSTAN] Dynamic/Fallback QRIS generated successfully.');
+          console.log('[SPMB QRIS INSTAN] Dynamic EMVCo QRIS generated successfully.');
         }
       } catch (qrisError: any) {
         console.error('[QRIS INSTAN ERROR]', qrisError);

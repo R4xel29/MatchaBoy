@@ -140,15 +140,8 @@ export async function POST(
 
     if (isQrisChannel) {
       try {
-        const { generateDokuSnapQris } = await import('@/lib/doku')
-        paymentQrContent = await generateDokuSnapQris({
-          clientId: paymentSettings.dokuClientId,
-          sharedKey: paymentSettings.dokuSharedKey,
-          isSandbox: paymentSettings.dokuSandbox,
-        }, {
-          invoiceNumber: id,
-          amount: secureTotal,
-        })
+        const { generateQrisString } = await import('@/lib/doku')
+        paymentQrContent = generateQrisString(secureTotal, id, paymentSettings.qrisNmid || undefined)
       } catch (snapError: any) {
         console.warn('[DOKU SNAP QRIS REPAY FAILED, FALLING BACK TO HOSTED CHECKOUT]', snapError)
         const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
