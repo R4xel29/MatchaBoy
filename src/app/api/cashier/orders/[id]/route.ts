@@ -54,9 +54,10 @@ export async function PATCH(
     // but they can change to PENDING (Accept) or CANCELLED (Reject/Cancel)
     const isManualPayment = ['QRIS', 'TRANSFER'].includes(existingOrder.paymentMethod)
     const hasNoProof = !existingOrder.paymentProofUrl
+    const isCurrentlyPending = ['PENDING', 'PENDING_PAYMENT'].includes(existingOrder.status)
     const isAttemptingProgress = !['PENDING', 'PENDING_PAYMENT', 'CANCELLED'].includes(status)
 
-    if (isManualPayment && hasNoProof && isAttemptingProgress) {
+    if (isManualPayment && hasNoProof && isCurrentlyPending && isAttemptingProgress) {
       return NextResponse.json({
         error: 'Bukti transaksi belum diunggah. Silakan terima pembayaran (Accept) terlebih dahulu atau tolak/batalkan pesanan.'
       }, { status: 400 })
@@ -137,7 +138,7 @@ export async function PATCH(
     })
 
     // Trigger admin summary notification on confirmed/updated order status (if the order is SPMB)
-    if (existingOrder.source === 'SPMB') {
+    if (existingOrder.source === 'SPMB' && (status === 'COMPLETED' || status === 'DELIVERED')) {
       import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
         sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
       });

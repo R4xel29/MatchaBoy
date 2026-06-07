@@ -88,10 +88,12 @@ export async function sendCompletedNotification(orderId: string) {
 
     // Custom message format
     let message = '';
+    const isCod = order.paymentMethod === 'COD';
+    const lunasSuffix = isCod ? ' (Lunas)' : '';
     if (order.source === 'SPMB') {
-      message = `Halo *${order.customerName}*!\n\nPesanan SPMB Anda *${order.id}* telah selesai dan sudah diterima. Terima kasih telah memesan di Matchaboy! 🍵`;
+      message = `Halo *${order.customerName}*!\n\nPesanan SPMB Anda *${order.id}* telah selesai dan sudah diterima${lunasSuffix}. Terima kasih telah memesan di Matchaboy! 🍵`;
     } else {
-      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah selesai. Terima kasih telah memesan di Matchaboy! 🍵`;
+      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah selesai${lunasSuffix}. Terima kasih telah memesan di Matchaboy! 🍵`;
     }
 
     await sendWhatsAppMessage(standardizedPhone, message);
@@ -271,7 +273,8 @@ export async function sendAdminOrderSummary() {
             const isPaid = order.status !== 'PENDING_PAYMENT';
             payMethodStr = `[ Qris ] ${isPaid ? '✅ Lunas' : '❌ belum lunas'}`;
           } else if (order.paymentMethod === 'COD') {
-            payMethodStr = `[ COD ]`;
+            const isPaid = order.status === 'COMPLETED' || order.status === 'DELIVERED';
+            payMethodStr = `[ COD ] ${isPaid ? '✅ Lunas' : '⏳ bayar di tempat'}`;
           } else {
             payMethodStr = `[ ${order.paymentMethod} ]`;
           }
@@ -299,6 +302,67 @@ export async function sendAdminOrderSummary() {
     }
   } catch (error) {
     console.error('[WHATSAPP_SERVICE] Gagal mengirim summary ke admin:', error);
+  }
+}
+
+export async function sendPickupReminder(orderId: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      console.warn(`[WHATSAPP_SERVICE] Order ${orderId} tidak ditemukan untuk notifikasi pickup reminder.`);
+      return;
+    }
+
+    if (!order.customerPhone || order.customerPhone.startsWith('SPMB-PENDING')) {
+      console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping pickup reminder.`);
+      return;
+    }
+
+    // Standardize phone number for WhatsApp
+    let standardizedPhone = order.customerPhone.replace(/[^0-9]/g, '');
+    if (standardizedPhone.startsWith('08')) {
+      standardizedPhone = '62' + standardizedPhone.substring(1);
+    } else if (standardizedPhone.startsWith('8')) {
+      standardizedPhone = '62' + standardizedPhone;
+    }
+
+    const formatDateOnly = (date: Date | null) => {
+      if (!date) return '';
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const fullMonths = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      try {
+        const formatter = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Jakarta',
+          year: 'numeric',
+          month: 'numeric',
+          day: 'numeric'
+        });
+        const parts = formatter.formatToParts(date);
+        const year = parts.find(p => p.type === 'year')?.value;
+        const month = parts.find(p => p.type === 'month')?.value;
+        const day = parts.find(p => p.type === 'day')?.value;
+        const d = new Date(Number(year), Number(month) - 1, Number(day));
+        return `${days[d.getDay()]}, ${day} ${fullMonths[d.getMonth()]} ${year}`;
+      } catch {
+        return date.toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' });
+      }
+    };
+
+    const pickupDateStr = formatDateOnly(order.pickupDate);
+    const pickupTimeStr = order.pickupTime || '';
+    let waktuPengambilan = '';
+    if (pickupDateStr || pickupTimeStr) {
+      waktuPengambilan = `\n📅 *Waktu Pengambilan:* ${pickupDateStr}${pickupTimeStr ? ' pukul ' + pickupTimeStr + ' WIB' : ''}`;
+    }
+
+    const message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${orderId.slice(-6).toUpperCase()}* sudah READY dan belum diambil di outlet.${waktuPengambilan}\n\nMohon segera diambil ya! Terima kasih! 🍵`;
+
+    await sendWhatsAppMessage(standardizedPhone, message);
+  } catch (error) {
+    console.error(`[WHATSAPP_SERVICE] Gagal mengirim pickup reminder untuk order ${orderId}:`, error);
   }
 }
 

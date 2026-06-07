@@ -191,12 +191,19 @@ export async function POST(req: NextRequest) {
             where: { id: invoiceNumber },
             data: {
               status: 'PREPARING',
+              paymentProofUrl: '/verified-webhook.svg',
               customerPhone: isSpmbPending ? (cleanPhone || 'SPMB-PAID') : order.customerPhone,
               notes: order.notes 
                 ? `${order.notes}\n[DOKU Webhook] Pembayaran otomatis sukses via DOKU.`
                 : '[DOKU Webhook] Pembayaran otomatis sukses via DOKU.',
             },
           });
+
+          if (order.source === 'SPMB') {
+            import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
+              sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
+            });
+          }
 
           // Fire real-time notification alerts
           try {

@@ -323,10 +323,12 @@ export async function POST(req: Request) {
         console.log(`[WHATSAPP_WEBHOOK] Updated SPMB order ${order.id} customerPhone to ${standardizedSenderPhone}`);
         order.customerPhone = standardizedSenderPhone;
 
-        // Trigger admin summary notification
-        import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
-          sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
-        });
+        // Trigger admin summary notification only if COD
+        if (order.paymentMethod === 'COD') {
+          import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
+            sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
+          });
+        }
       }
 
       const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`;

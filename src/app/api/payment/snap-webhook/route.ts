@@ -244,12 +244,19 @@ async function processPayment(body: any, _rawBody: string, _paymentSettings: any
         where: { id: invoiceNumber },
         data: {
           status: 'PREPARING',
+          paymentProofUrl: '/verified-webhook.svg',
           customerPhone: isSpmbPending ? (cleanPhone || 'SPMB-PAID') : order.customerPhone,
           notes: order.notes 
             ? `${order.notes}\n[DOKU SNAP Webhook] Pembayaran otomatis sukses.`
             : '[DOKU SNAP Webhook] Pembayaran otomatis sukses.',
         },
       });
+
+      if (order.source === 'SPMB') {
+        import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
+          sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
+        });
+      }
 
       // Send notifications
       try {
