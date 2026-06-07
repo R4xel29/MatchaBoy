@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     // Parse the payload body
     const payload = JSON.parse(rawBody);
     const invoiceNumber = payload.order?.invoice_number;
-    const paymentStatus = payload.payment?.status;
+    const paymentStatus = payload.transaction?.status || payload.payment?.status;
 
     console.log(`[DOKU WEBHOOK] Signature valid. Invoice: ${invoiceNumber}, Status: ${paymentStatus}`);
     
