@@ -653,6 +653,276 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, message: "Magic link sent", magicLink, replyMessage, sent: true });
     }
 
+    // -------------------------------------------------------------
+    // CONVERSATIONAL ORDER STATE MACHINE
+    // -------------------------------------------------------------
+
+    // Fetch active products (not archived, not sold-out)
+    const products = await prisma.product.findMany({
+      where: {
+        AND: [
+          {
+            OR: [
+              { badge: null },
+              { badge: { not: "archived" } }
+            ]
+          },
+          {
+            OR: [
+              { badge: null },
+              { badge: { not: "sold-out" } }
+            ]
+          }
+        ]
+      },
+      include: { category: true },
+      orderBy: { name: "asc" }
+    });
+
+    const sessionKey = `wa_order_session_${phone}`;
+    const sessionRow = await prisma.waBotSession.findUnique({ where: { key: sessionKey } });
+    const session = sessionRow ? JSON.parse(sessionRow.value || "{}") : null;
+
+    const menuCommands = ["menu", "pesan", "order", "halo", "hi", "hei", "daftar menu"];
+
+    if (menuCommands.includes(lowerText)) {
+      // Delete existing session if any
+      await prisma.waBotSession.deleteMany({ where: { key: sessionKey } });
+
+      // Group products by category, while keeping global sequential index
+      const categoriesMap: { [categoryName: string]: any[] } = {};
+      products.forEach((product, index) => {
+        const catName = product.category?.name || "Lainnya";
+        if (!categoriesMap[catName]) {
+          categoriesMap[catName] = [];
+        }
+        categoriesMap[catName].push({ product, globalIndex: index + 1 });
+      });
+
+      let menuListText = "";
+      for (const catName of Object.keys(categoriesMap)) {
+        menuListText += `${catName}:\n`;
+        for (const item of categoriesMap[catName]) {
+          menuListText += `${item.globalIndex}. ${item.product.name} - Rp${item.product.price.toLocaleString("id-ID")} (Ketik *ORDER ${item.globalIndex}*)\n`;
+        }
+        menuListText += "\n";
+      }
+      menuListText = menuListText.trim();
+
+      const reply = `🍵 *SELAMAT DATANG DI ARUM SEDUH* 🍵\n━━━━━━━━━━━━━━━━━━━\nBerikut adalah menu kami:\n\n${menuListText}\n━━━━━━━━━━━━━━━━━━━\nKetik *ORDER [Nomor Menu]* untuk memesan.\nContoh: *ORDER 1*`;
+
+      return NextResponse.json({
+        success: true,
+        replyMessage: reply
+      });
+    }
+
+    if (session) {
+      const state = session.state;
+
+      if (state === "SELECTING_QUANTITY") {
+        const qty = parseInt(text, 10);
+        if (isNaN(qty) || qty <= 0) {
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Maaf, silakan masukkan jumlah pesanan dalam bentuk angka yang valid (contoh: *2*):"
+          });
+        }
+
+        session.state = "SELECTING_DELIVERY";
+        session.quantity = qty;
+
+        await prisma.waBotSession.update({
+          where: { key: sessionKey },
+          data: { value: JSON.stringify(session) }
+        });
+
+        const reply = `Jumlah pesanan: *${qty}x ${session.productName}* (Total: Rp${qty * session.price}).\n\nPilih metode penyerahan:\n1. *Ambil Sendiri* (PICKUP)\n2. *Diantar* (DELIVERY)\n\nKetik *1* atau *2*.`;
+        return NextResponse.json({ success: true, replyMessage: reply });
+      }
+
+      if (state === "SELECTING_DELIVERY") {
+        const choice = text.trim();
+        if (choice === "1") {
+          session.orderType = "PICKUP";
+          session.state = "ENTERING_NAME";
+          await prisma.waBotSession.update({
+            where: { key: sessionKey },
+            data: { value: JSON.stringify(session) }
+          });
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Metode: *Ambil Sendiri*.\n\nSilakan masukkan nama Anda:"
+          });
+        } else if (choice === "2") {
+          session.orderType = "DELIVERY";
+          session.state = "ENTERING_NAME";
+          await prisma.waBotSession.update({
+            where: { key: sessionKey },
+            data: { value: JSON.stringify(session) }
+          });
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Metode: *Diantar*.\n\nSilakan masukkan nama Anda:"
+          });
+        } else {
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Maaf, pilihan tidak valid. Pilih metode penyerahan:\n1. *Ambil Sendiri* (PICKUP)\n2. *Diantar* (DELIVERY)\n\nKetik *1* atau *2*."
+          });
+        }
+      }
+
+      if (state === "ENTERING_NAME") {
+        const customerName = text.trim();
+        session.customerName = customerName;
+
+        if (session.orderType === "PICKUP") {
+          session.state = "CONFIRMING";
+          await prisma.waBotSession.update({
+            where: { key: sessionKey },
+            data: { value: JSON.stringify(session) }
+          });
+          const reply = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+          return NextResponse.json({ success: true, replyMessage: reply });
+        } else {
+          session.state = "ENTERING_ADDRESS";
+          await prisma.waBotSession.update({
+            where: { key: sessionKey },
+            data: { value: JSON.stringify(session) }
+          });
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Silakan masukkan alamat pengiriman lengkap:"
+          });
+        }
+      }
+
+      if (state === "ENTERING_ADDRESS") {
+        const address = text.trim();
+        session.address = address;
+        session.state = "CONFIRMING";
+        await prisma.waBotSession.update({
+          where: { key: sessionKey },
+          data: { value: JSON.stringify(session) }
+        });
+
+        const reply = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${address}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+        return NextResponse.json({ success: true, replyMessage: reply });
+      }
+
+      if (state === "CONFIRMING") {
+        const confirmation = text.trim().toLowerCase();
+        if (confirmation === "ya") {
+          const orderId = `WA-${Math.floor(100000 + Math.random() * 900000)}`;
+
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+          const endOfToday = new Date();
+          endOfToday.setHours(23, 59, 59, 999);
+
+          const countToday = await prisma.order.count({
+            where: {
+              createdAt: {
+                gte: startOfToday,
+                lte: endOfToday
+              }
+            }
+          });
+
+          const queueNumber = `WA-${String(countToday + 1).padStart(3, "0")}`;
+
+          let cleanPhone = phone.replace(/[^0-9]/g, "");
+          if (cleanPhone.startsWith("08")) {
+            cleanPhone = "62" + cleanPhone.substring(1);
+          } else if (cleanPhone.startsWith("8")) {
+            cleanPhone = "62" + cleanPhone;
+          }
+
+          const order = await prisma.order.create({
+            data: {
+              id: orderId,
+              orderType: session.orderType,
+              source: "WA",
+              customerName: session.customerName,
+              customerPhone: cleanPhone,
+              address: session.address || "",
+              subtotal: session.quantity * session.price,
+              deliveryFee: 0,
+              total: session.quantity * session.price,
+              paymentMethod: "COD",
+              status: "PENDING",
+              queueNumber: queueNumber,
+              items: {
+                create: [
+                  {
+                    productId: session.productId,
+                    qty: session.quantity,
+                    price: session.price
+                  }
+                ]
+              }
+            }
+          });
+
+          await prisma.waBotSession.delete({
+            where: { key: sessionKey }
+          });
+
+          // Trigger admin summary
+          const { sendAdminOrderSummary } = await import("@/lib/whatsapp-service");
+          sendAdminOrderSummary().catch(err => console.error("Gagal mengirim admin summary:", err));
+
+          const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\n\nPesanan Anda akan segera diproses. Terima kasih! 🍵`;
+          return NextResponse.json({ success: true, replyMessage: reply });
+        } else if (confirmation === "batal") {
+          await prisma.waBotSession.delete({
+            where: { key: sessionKey }
+          });
+          return NextResponse.json({
+            success: true,
+            replyMessage: "❌ Pemesanan dibatalkan. Ketik *MENU* untuk mulai kembali."
+          });
+        } else {
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Maaf, pilihan tidak valid. Ketik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan."
+          });
+        }
+      }
+    }
+
+    if (!session) {
+      const orderMatch = lowerText.match(/^order\s+(\d+)$/);
+      if (orderMatch) {
+        const productIndex = parseInt(orderMatch[1], 10);
+        const productItem = products[productIndex - 1]; // 1-indexed to 0-indexed
+
+        if (productItem) {
+          const sessionData = {
+            state: "SELECTING_QUANTITY",
+            productId: productItem.id,
+            productName: productItem.name,
+            price: productItem.price
+          };
+
+          await prisma.waBotSession.upsert({
+            where: { key: sessionKey },
+            update: { value: JSON.stringify(sessionData) },
+            create: { key: sessionKey, value: JSON.stringify(sessionData) }
+          });
+
+          const reply = `Anda memilih *${productItem.name}* (Rp${productItem.price.toLocaleString("id-ID")}).\n\nSilakan masukkan jumlah pesanan (angka saja, contoh: *2*):`;
+          return NextResponse.json({ success: true, replyMessage: reply });
+        } else {
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Nomor menu tidak valid. Silakan ketik *MENU* untuk melihat daftar menu."
+          });
+        }
+      }
+    }
+
     return NextResponse.json({ success: true, message: "Ignored" });
 
   } catch (error) {
