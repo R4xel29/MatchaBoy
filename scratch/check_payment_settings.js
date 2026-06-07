@@ -2,8 +2,22 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
-  const settings = await prisma.paymentSettings.findFirst();
-  console.log('PaymentSettings in DB:', JSON.stringify(settings, null, 2));
+  const recentOrders = await prisma.order.findMany({
+    take: 10,
+    orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      customerName: true,
+      customerPhone: true,
+      total: true,
+      status: true,
+      paymentMethod: true,
+      paymentUrl: true,
+      notes: true,
+      createdAt: true,
+    }
+  });
+  console.log('Recent Orders Detailed:', JSON.stringify(recentOrders, null, 2));
 }
 
 main()

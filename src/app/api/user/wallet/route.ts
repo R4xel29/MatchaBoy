@@ -7,6 +7,10 @@ import { incrementQuestProgress } from '@/lib/loyalty-utils'
 export async function GET(req: Request) {
     try {
         const session = await auth()
+        const requestHeaders = new Headers(req.headers);
+        const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host') || 'localhost:3000';
+        const protocol = requestHeaders.get('x-forwarded-proto') || 'http';
+        const appUrl = `${protocol}://${host}`;
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
@@ -35,8 +39,8 @@ export async function GET(req: Request) {
                     select: { phone: true, name: true, email: true }
                 });
                 
-                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/profile`
-                const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                const callbackUrl = `${appUrl}/profile`
+                const notificationUrl = `${appUrl}/api/payment/doku-webhook`
                 
                 const dokuResult = await createDokuCheckoutSession({
                     clientId: settings.dokuClientId,
@@ -143,6 +147,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
     try {
         const session = await auth()
+        const requestHeaders = new Headers(req.headers);
+        const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host') || 'localhost:3000';
+        const protocol = requestHeaders.get('x-forwarded-proto') || 'http';
+        const appUrl = `${protocol}://${host}`;
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
@@ -233,8 +241,8 @@ export async function POST(req: Request) {
                     select: { phone: true, name: true, email: true }
                 });
                 
-                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/profile`
-                const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                const callbackUrl = `${appUrl}/profile`
+                const notificationUrl = `${appUrl}/api/payment/doku-webhook`
                 
                 const dokuResult = await createDokuCheckoutSession({
                     clientId: settings.dokuClientId,

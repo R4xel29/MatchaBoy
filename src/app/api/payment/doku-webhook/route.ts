@@ -2,32 +2,61 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyDokuWebhookSignature } from '@/lib/doku';
 import { expireOrder } from '@/lib/order-utils';
+import fs from 'fs';
+import path from 'path';
+
+function logWebhookEvent(info: any) {
+  try {
+    const logFilePath = path.join(process.cwd(), 'doku-webhook-debug.log');
+    const logEntry = JSON.stringify({
+      timestamp: new Date().toISOString(),
+      ...info
+    }, null, 2) + '\n---\n';
+    fs.appendFileSync(logFilePath, logEntry, 'utf8');
+  } catch (err) {
+    console.error('[DOKU WEBHOOK LOG ERROR]', err);
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
     
-    // Extract headers into a simple record
+    // Extract headers into a simple record with lowercase keys
     const headers: Record<string, string> = {};
     req.headers.forEach((val, key) => {
-      headers[key] = val;
+      headers[key.toLowerCase()] = val;
     });
 
     // Fetch the merchant configuration singleton
     const paymentSettings = await prisma.paymentSettings.findFirst();
+    
+    logWebhookEvent({
+      event: 'RECEIVED',
+      headers,
+      rawBody,
+      settingsFound: !!paymentSettings,
+      dokuEnabled: paymentSettings?.dokuEnabled,
+      clientId: paymentSettings?.dokuClientId,
+      sharedKeyLength: paymentSettings?.dokuSharedKey?.length || 0,
+      dokuSandbox: paymentSettings?.dokuSandbox
+    });
+
     if (!paymentSettings || !paymentSettings.dokuEnabled) {
       console.warn('[DOKU WEBHOOK] Webhook received but DOKU payment setting is disabled/missing');
+      logWebhookEvent({ event: 'REJECTED_DISABLED', reason: 'Doku disabled or no settings' });
       return NextResponse.json({ error: 'DOKU disabled' }, { status: 400 });
     }
 
     const requestTarget = '/api/payment/doku-webhook';
 
     // Extract signature header
-    const signatureHeader = headers['signature'] || headers['Signature'];
+    const signatureHeader = headers['signature'];
 
     // Handle DOKU dashboard save handshake ping (empty body or missing signature)
     if (!signatureHeader || !rawBody || rawBody.trim() === '') {
       console.log('[DOKU WEBHOOK] Received handshake/ping check from DOKU. Returning 200 OK.');
+      logWebhookEvent({ event: 'HANDSHAKE_OR_PING' });
       return NextResponse.json({ status: 'OK', message: 'Handshake successful' });
     }
 
@@ -38,6 +67,16 @@ export async function POST(req: NextRequest) {
       headers,
       rawBody,
       requestTarget,
+    });
+
+    logWebhookEvent({
+      event: 'SIGNATURE_CHECK',
+      isValid,
+      requestTarget,
+      signatureHeader,
+      receivedClientId: headers['client-id'],
+      receivedRequestId: headers['request-id'],
+      receivedTimestamp: headers['request-timestamp']
     });
 
     if (!isValid) {
@@ -51,6 +90,13 @@ export async function POST(req: NextRequest) {
     const paymentStatus = payload.payment?.status;
 
     console.log(`[DOKU WEBHOOK] Signature valid. Invoice: ${invoiceNumber}, Status: ${paymentStatus}`);
+    
+    logWebhookEvent({
+      event: 'PROCESSING_PAYMENT',
+      invoiceNumber,
+      paymentStatus,
+      payload
+    });
 
     if (!invoiceNumber) {
       return NextResponse.json({ error: 'Missing invoice number' }, { status: 400 });
@@ -208,6 +254,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: 'OK' });
   } catch (error: any) {
     console.error('[DOKU WEBHOOK EXCEPTION]', error);
+    logWebhookEvent({
+      event: 'EXCEPTION',
+      error: error.message || String(error),
+      stack: error.stack
+    });
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }

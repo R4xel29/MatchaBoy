@@ -12,6 +12,10 @@ export async function POST(
 ) {
   try {
     const session = await auth()
+    const requestHeaders = new Headers(req.headers);
+    const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host') || 'localhost:3000';
+    const protocol = requestHeaders.get('x-forwarded-proto') || 'http';
+    const appUrl = `${protocol}://${host}`;
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -137,8 +141,8 @@ export async function POST(
     
     let paymentUrl: string | null = null
 
-    const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${id}`
-    const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+    const callbackUrl = `${appUrl}/orders/${id}`
+    const notificationUrl = `${appUrl}/api/payment/doku-webhook`
     const dokuResult = await createDokuCheckoutSession({
       clientId: paymentSettings.dokuClientId,
       sharedKey: paymentSettings.dokuSharedKey,

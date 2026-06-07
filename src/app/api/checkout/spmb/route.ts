@@ -73,6 +73,10 @@ function calculateSecureItemPrice(item: any, dbProduct: any) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    const requestHeaders = new Headers(req.headers);
+    const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host') || 'localhost:3000';
+    const protocol = requestHeaders.get('x-forwarded-proto') || 'http';
+    const appUrl = `${protocol}://${host}`;
 
     // 1. Validation
     if (!body.items || body.items.length === 0) {
@@ -329,8 +333,8 @@ export async function POST(req: Request) {
           }
 
           const { createDokuCheckoutSession } = await import('@/lib/doku');
-          const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`;
-          const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`;
+          const callbackUrl = `${appUrl}/orders/${order.id}`;
+          const notificationUrl = `${appUrl}/api/payment/doku-webhook`;
           
           const dokuResult = await createDokuCheckoutSession({
             clientId: paymentSettings.dokuClientId,
@@ -379,8 +383,8 @@ export async function POST(req: Request) {
           }
 
           const { createDokuCheckoutSession } = await import('@/lib/doku');
-          const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`;
-          const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`;
+          const callbackUrl = `${appUrl}/orders/${order.id}`;
+          const notificationUrl = `${appUrl}/api/payment/doku-webhook`;
 
           const dokuResult = await createDokuCheckoutSession({
             clientId: paymentSettings.dokuClientId,

@@ -69,6 +69,10 @@ export async function POST(req: Request) {
     try {
         const session = await auth()
         const body = await req.json()
+        const requestHeaders = new Headers(req.headers);
+        const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host') || 'localhost:3000';
+        const protocol = requestHeaders.get('x-forwarded-proto') || 'http';
+        const appUrl = `${protocol}://${host}`;
 
         // Must be logged in
         if (!session?.user?.id) {
@@ -775,8 +779,8 @@ export async function POST(req: Request) {
                 }
 
                 const { createDokuCheckoutSession } = await import('@/lib/doku')
-                const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
-                const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                const callbackUrl = `${appUrl}/orders/${order.id}`
+                const notificationUrl = `${appUrl}/api/payment/doku-webhook`
                 
                 const dokuResult = await createDokuCheckoutSession({
                     clientId: paymentSettings.dokuClientId,
@@ -824,8 +828,8 @@ export async function POST(req: Request) {
                 if (channel === 'QRIS') {
                     const { createDokuCheckoutSession } = await import('@/lib/doku')
                     
-                    const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
-                    const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                    const callbackUrl = `${appUrl}/orders/${order.id}`
+                    const notificationUrl = `${appUrl}/api/payment/doku-webhook`
                     const dokuResult = await createDokuCheckoutSession({
                         clientId: paymentSettings.dokuClientId,
                         sharedKey: paymentSettings.dokuSharedKey,
@@ -863,8 +867,8 @@ export async function POST(req: Request) {
                     else if (channel === 'SHOPEEPAY') dokuChannel = 'EMONEY_SHOPEE_PAY'
                     else if (channel === 'BCA_VA') dokuChannel = 'VIRTUAL_ACCOUNT_BCA'
                     
-                    const callbackUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/orders/${order.id}`
-                    const notificationUrl = `${process.env.AUTH_URL || 'http://localhost:3000'}/api/payment/doku-webhook`
+                    const callbackUrl = `${appUrl}/orders/${order.id}`
+                    const notificationUrl = `${appUrl}/api/payment/doku-webhook`
                     const dokuResult = await createDokuCheckoutSession({
                         clientId: paymentSettings.dokuClientId,
                         sharedKey: paymentSettings.dokuSharedKey,

@@ -169,10 +169,17 @@ export function verifyDokuWebhookSignature({
   requestTarget: string;
 }): boolean {
   try {
-    const receivedSignature = (headers['signature'] as string) || '';
-    const receivedClientId = (headers['client-id'] as string) || '';
-    const receivedRequestId = (headers['request-id'] as string) || '';
-    const receivedTimestamp = (headers['request-timestamp'] as string) || '';
+    const normalizedHeaders: Record<string, string> = {};
+    for (const [key, val] of Object.entries(headers)) {
+      if (val !== undefined) {
+        normalizedHeaders[key.toLowerCase()] = Array.isArray(val) ? val[0] : val;
+      }
+    }
+
+    const receivedSignature = normalizedHeaders['signature'] || '';
+    const receivedClientId = normalizedHeaders['client-id'] || '';
+    const receivedRequestId = normalizedHeaders['request-id'] || '';
+    const receivedTimestamp = normalizedHeaders['request-timestamp'] || '';
 
     if (!receivedSignature || !receivedClientId || !receivedRequestId || !receivedTimestamp) {
       console.error('[DOKU WEBHOOK] Missing validation headers');
