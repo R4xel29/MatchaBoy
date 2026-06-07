@@ -18,7 +18,7 @@ export async function GET() {
       where: {
         NOT: {
           source: 'SPMB',
-          customerPhone: 'SPMB-PENDING',
+          customerPhone: { startsWith: 'SPMB-PENDING' },
         }
       },
       orderBy: { createdAt: 'desc' },

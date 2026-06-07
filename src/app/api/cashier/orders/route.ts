@@ -33,7 +33,7 @@ export async function GET() {
           {
             NOT: {
               source: 'SPMB',
-              customerPhone: 'SPMB-PENDING'
+              customerPhone: { startsWith: 'SPMB-PENDING' }
             }
           }
         ]

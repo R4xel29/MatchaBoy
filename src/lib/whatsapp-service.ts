@@ -34,7 +34,7 @@ export async function sendReadyNotification(orderId: string) {
       return;
     }
 
-    if (!order.customerPhone || order.customerPhone === 'SPMB-PENDING') {
+    if (!order.customerPhone || order.customerPhone.startsWith('SPMB-PENDING')) {
       console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping notification.`);
       return;
     }
@@ -73,7 +73,7 @@ export async function sendCompletedNotification(orderId: string) {
       return;
     }
 
-    if (!order.customerPhone || order.customerPhone === 'SPMB-PENDING') {
+    if (!order.customerPhone || order.customerPhone.startsWith('SPMB-PENDING')) {
       console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping notification.`);
       return;
     }
@@ -111,7 +111,7 @@ export async function sendCancelledNotification(orderId: string, reason?: string
       return;
     }
 
-    if (!order.customerPhone || order.customerPhone === 'SPMB-PENDING') {
+    if (!order.customerPhone || order.customerPhone.startsWith('SPMB-PENDING')) {
       console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping notification.`);
       return;
     }

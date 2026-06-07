@@ -12,7 +12,7 @@ export default async function AdminOrdersPage() {
     where: {
       NOT: {
         source: 'SPMB',
-        customerPhone: 'SPMB-PENDING',
+        customerPhone: { startsWith: 'SPMB-PENDING' },
       }
     },
     orderBy: { createdAt: 'desc' },

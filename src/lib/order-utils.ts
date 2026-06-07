@@ -211,7 +211,7 @@ export async function cleanupUnconfirmedSpmbOrders() {
     const deleteResult = await prisma.order.deleteMany({
       where: {
         source: 'SPMB',
-        customerPhone: 'SPMB-PENDING',
+        customerPhone: { startsWith: 'SPMB-PENDING' },
         createdAt: { lt: fiveMinutesAgo }
       }
     });

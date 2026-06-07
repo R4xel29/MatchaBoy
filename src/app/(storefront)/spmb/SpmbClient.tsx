@@ -7,11 +7,13 @@ import {
   ShoppingBag, Trash2, Plus, Minus, User, Phone, MapPin, Clock, 
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X 
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
 import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
 import type { Product, Category, CartItem } from '@/types';
+import { useEffect as useReactEffect } from 'react';
 
 interface SpmbClientProps {
   categories: Category[];
@@ -49,15 +51,48 @@ export default function SpmbClient({
 
   // Form State
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [pickupDate, setPickupDate] = useState('');
   const [pickupTime, setPickupTime] = useState('09:00');
-  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'QRIS'>('COD');
+  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'QRIS' | 'QRIS_INSTAN'>('COD');
   
   // Checkout Status
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  // QRIS Instan Modal state
+  const [showQrisModal, setShowQrisModal] = useState(false);
+  const [qrisQrContent, setQrisQrContent] = useState('');
+  const [qrisOrderId, setQrisOrderId] = useState('');
+  const [qrisTotal, setQrisTotal] = useState(0);
+  const [qrisPaymentPaid, setQrisPaymentPaid] = useState(false);
+
+  // Poll payment status for QRIS Instan modal
+  useEffect(() => {
+    if (!showQrisModal || !qrisOrderId || qrisPaymentPaid) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/orders/${qrisOrderId}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status !== 'PENDING_PAYMENT' && data.status !== 'CANCELLED') {
+            setQrisPaymentPaid(true);
+            clearInterval(interval);
+            setTimeout(() => {
+              window.location.href = `/orders/${qrisOrderId}`;
+            }, 2500);
+          }
+        }
+      } catch (err) {
+        console.error('Error polling QRIS payment status:', err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [showQrisModal, qrisOrderId, qrisPaymentPaid]);
 
   // Get current time in WIB (GMT+7)
   const wibTime = useMemo(() => {
@@ -198,6 +233,12 @@ export default function SpmbClient({
       setErrorMsg('Nama lengkap minimal 2 karakter.');
       return false;
     }
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const phoneRegex = /^(\+62|62|0)8[0-9]{8,15}$/;
+    if (!phoneRegex.test(cleanPhone)) {
+      setErrorMsg('Format nomor WhatsApp tidak valid (contoh: 081234567890).');
+      return false;
+    }
     if (!address || address.trim().length < 5) {
       setErrorMsg('Alamat / detail kelas pengantaran minimal 5 karakter.');
       return false;
@@ -234,12 +275,14 @@ export default function SpmbClient({
         matchaLevel: (item as any).matchaLevel
       }));
 
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+
       const res = await fetch('/api/checkout/spmb', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          phone: 'SPMB-PENDING',
+          phone: `SPMB-PENDING_${cleanPhone}`,
           address,
           pickupDate,
           pickupTime,
@@ -265,6 +308,12 @@ export default function SpmbClient({
       // Redirect immediately to Doku hosted checkout if paymentUrl is returned, otherwise to WhatsApp bot
       if (paymentMethod === 'QRIS' && data.paymentUrl) {
         window.location.href = data.paymentUrl;
+      } else if (paymentMethod === 'QRIS_INSTAN') {
+        setQrisQrContent(data.paymentQrContent || '');
+        setQrisOrderId(data.orderId);
+        setQrisTotal(data.total);
+        setQrisPaymentPaid(false);
+        setShowQrisModal(true);
       } else {
         const waUrl = getWhatsAppLink(data.orderId);
         window.location.href = waUrl;
@@ -567,6 +616,21 @@ export default function SpmbClient({
                         />
                       </div>
 
+                      {/* Phone */}
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
+                          <Phone className="w-3 h-3 text-[#2E5A44]" /> Nomor WhatsApp
+                        </label>
+                        <input
+                          type="tel"
+                          placeholder="Contoh: 081234567890"
+                          required
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#2E5A44] focus:ring-1 focus:ring-[#2E5A44] transition-colors"
+                        />
+                      </div>
+
                       {/* Classroom / Location Details */}
                       <div className="space-y-1 text-left">
                         <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
@@ -631,11 +695,11 @@ export default function SpmbClient({
                         <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1">
                           <CreditCard className="w-3 h-3 text-[#2E5A44]" /> Metode Pembayaran
                         </label>
-                        <div className="grid grid-cols-2 gap-3">
-                          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors
+                        <div className="grid grid-cols-3 gap-2">
+                          <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border cursor-pointer transition-colors text-center
                             ${paymentMethod === 'COD' 
                               ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold' 
-                              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                              : 'border-gray-200 bg-white text-gray-650 hover:bg-gray-50'
                             }`}
                           >
                             <input
@@ -646,13 +710,30 @@ export default function SpmbClient({
                               className="hidden"
                             />
                             <Banknote className="w-4 h-4" />
-                            <span className="text-xs">COD</span>
+                            <span className="text-[10px] uppercase font-bold">COD</span>
                           </label>
 
-                          <label className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors
+                          <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border cursor-pointer transition-colors text-center
+                            ${paymentMethod === 'QRIS_INSTAN' 
+                              ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold' 
+                              : 'border-gray-200 bg-white text-gray-650 hover:bg-gray-50'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="paymentMethod"
+                              checked={paymentMethod === 'QRIS_INSTAN'}
+                              onChange={() => setPaymentMethod('QRIS_INSTAN')}
+                              className="hidden"
+                            />
+                            <CreditCard className="w-4 h-4" />
+                            <span className="text-[10px] uppercase font-bold">QRIS Instan</span>
+                          </label>
+
+                          <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border cursor-pointer transition-colors text-center
                             ${paymentMethod === 'QRIS' 
                               ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold' 
-                              : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                              : 'border-gray-200 bg-white text-gray-650 hover:bg-gray-50'
                             }`}
                           >
                             <input
@@ -662,7 +743,8 @@ export default function SpmbClient({
                               onChange={() => setPaymentMethod('QRIS')}
                               className="hidden"
                             />
-                            <span className="text-xs font-black uppercase">QRIS</span>
+                            <CreditCard className="w-4 h-4" />
+                            <span className="text-[10px] uppercase font-bold">QRIS (Doku)</span>
                           </label>
                         </div>
                       </div>
@@ -747,6 +829,101 @@ export default function SpmbClient({
         }}
         allProducts={products}
       />
+
+      {/* QRIS Instan Payment Modal */}
+      <AnimatePresence>
+        {showQrisModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => {
+                if (!qrisPaymentPaid) {
+                  setShowQrisModal(false);
+                }
+              }}
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-gray-100 flex flex-col items-center"
+            >
+              {/* Close Button */}
+              {!qrisPaymentPaid && (
+                <button
+                  onClick={() => setShowQrisModal(false)}
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full border bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              )}
+
+              {/* Header */}
+              <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-4 shrink-0 mt-2">
+                <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
+                  QR<span className="text-[#e26d5c]">IS</span>
+                </span>
+                <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
+                  Dynamic GPN
+                </span>
+              </div>
+
+              {qrisPaymentPaid ? (
+                <div className="py-8 space-y-4 flex flex-col items-center">
+                  <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center border border-green-200">
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  </div>
+                  <h3 className="font-serif font-black text-xl text-gray-900">Pembayaran Berhasil!</h3>
+                  <p className="text-xs text-gray-550">Mengarahkan Anda ke halaman rincian pesanan...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="relative w-60 h-60 bg-white rounded-2xl p-2 border border-gray-100 shadow-inner flex items-center justify-center">
+                    <QRCodeSVG
+                      value={qrisQrContent}
+                      size={220}
+                      level="M"
+                      includeMargin={false}
+                      className="w-full h-full object-contain rounded-xl"
+                    />
+                  </div>
+
+                  <div className="mt-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 w-full text-center">
+                    <p className="text-[10px] text-green-600 font-bold">
+                      Scan & bayar otomatis terverifikasi
+                    </p>
+                  </div>
+
+                  <div className="mt-4 text-center">
+                    <p className="text-[10px] text-gray-400 font-extrabold uppercase">Total Pembayaran</p>
+                    <p className="text-2xl font-black font-serif text-[#2E5A44] mt-1">
+                      {formatRupiah(qrisTotal)}
+                    </p>
+                  </div>
+
+                  <div className="mt-5 w-full flex items-center justify-center gap-2 text-xs text-gray-500 font-bold">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#2E5A44]" />
+                    <span>Menunggu pembayaran Anda...</span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      window.location.href = `/orders/${qrisOrderId}`;
+                    }}
+                    className="w-full mt-5 py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
+                  >
+                    Buka Halaman Rincian Pesanan
+                  </button>
+                </>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

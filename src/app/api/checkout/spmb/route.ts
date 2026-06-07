@@ -84,8 +84,9 @@ export async function POST(req: Request) {
     }
 
     if (body.phone !== 'SPMB-PENDING') {
-      const phoneRegex = /^(\+62|62|0)8[0-9]{8,12}$/;
-      if (!phoneRegex.test(body.phone)) {
+      const cleanPhone = body.phone.replace(/^SPMB-PENDING_/, '');
+      const phoneRegex = /^(\+62|62|0)8[0-9]{8,15}$/;
+      if (!phoneRegex.test(cleanPhone)) {
         throw new ValidationError('Format nomor HP tidak valid');
       }
     }
@@ -198,8 +199,8 @@ export async function POST(req: Request) {
 
     // Validate payment method
     const requestedMethod = body.paymentMethod?.toUpperCase();
-    if (requestedMethod !== 'COD' && requestedMethod !== 'QRIS') {
-      throw new ValidationError('Metode pembayaran harus COD atau QRIS');
+    if (requestedMethod !== 'COD' && requestedMethod !== 'QRIS' && requestedMethod !== 'QRIS_INSTAN') {
+      throw new ValidationError('Metode pembayaran harus COD, QRIS, atau QRIS_INSTAN');
     }
 
     // 2. Secure price calculation
@@ -302,8 +303,8 @@ export async function POST(req: Request) {
           subtotal: secureSubtotal,
           deliveryFee: 0,
           total: secureTotal,
-          paymentMethod: requestedMethod,
-          status: requestedMethod === 'QRIS' ? 'PENDING_PAYMENT' : 'PENDING',
+          paymentMethod: requestedMethod === 'QRIS_INSTAN' ? 'QRIS' : requestedMethod,
+          status: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? 'PENDING_PAYMENT' : 'PENDING',
           notes: body.notes || null,
           queueNumber,
           items: {
@@ -369,13 +370,61 @@ export async function POST(req: Request) {
       }
     }
 
-    const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, select: { paymentUrl: true } });
+    if (requestedMethod === 'QRIS_INSTAN') {
+      try {
+        const paymentSettings = await prisma.paymentSettings.findFirst();
+        if (paymentSettings) {
+          if (!paymentSettings.dokuEnabled) {
+            throw new Error('Metode pembayaran Doku sedang tidak aktif.');
+          }
+
+          let qrContent = '';
+          try {
+            const { generateDokuSnapQris } = await import('@/lib/doku');
+            qrContent = await generateDokuSnapQris({
+              clientId: paymentSettings.dokuClientId,
+              sharedKey: paymentSettings.dokuSharedKey,
+              isSandbox: paymentSettings.dokuSandbox,
+            }, {
+              invoiceNumber: order.id,
+              amount: secureTotal,
+            });
+          } catch (snapErr: any) {
+            console.warn('[QRIS INSTAN SNAP ERROR, USING FALLBACK EMVCO GENERATOR]', snapErr);
+            const { generateQrisString } = await import('@/lib/doku');
+            qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid || undefined);
+          }
+
+          await prisma.order.update({
+            where: { id: order.id },
+            data: { 
+              paymentQrContent: qrContent,
+              paymentUrl: null,
+            }
+          });
+          console.log('[SPMB QRIS INSTAN] Dynamic/Fallback QRIS generated successfully.');
+        }
+      } catch (qrisError: any) {
+        console.error('[QRIS INSTAN ERROR]', qrisError);
+        await prisma.order.update({
+          where: { id: order.id },
+          data: { status: 'CANCELLED', notes: `Gagal membuat QRIS Instan: ${qrisError.message}` }
+        });
+        return NextResponse.json({ error: `Gagal membuat QRIS Instan: ${qrisError.message}` }, { status: 500 });
+      }
+    }
+
+    const finalOrder = await prisma.order.findUnique({ 
+      where: { id: order.id }, 
+      select: { paymentUrl: true, paymentQrContent: true } 
+    });
     return NextResponse.json({
       success: true,
       orderId: order.id,
       queueNumber: order.queueNumber,
       total: secureTotal,
-      paymentUrl: finalOrder?.paymentUrl || undefined
+      paymentUrl: finalOrder?.paymentUrl || undefined,
+      paymentQrContent: finalOrder?.paymentQrContent || undefined
     });
   } catch (error) {
     logError(error, {

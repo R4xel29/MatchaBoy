@@ -315,7 +315,7 @@ export async function POST(req: Request) {
         standardizedSenderPhone = '62' + standardizedSenderPhone;
       }
 
-      if (order.customerPhone === 'SPMB-PENDING') {
+      if (order.customerPhone.startsWith('SPMB-PENDING')) {
         await prisma.order.update({
           where: { id: order.id },
           data: { customerPhone: standardizedSenderPhone }
