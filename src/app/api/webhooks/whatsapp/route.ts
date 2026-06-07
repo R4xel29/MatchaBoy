@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { getCurrentProductPrice } from "@/lib/utils";
+
 
 // URL dasar aplikasi akan ditentukan secara dinamis dari origin request jika env tidak diatur
 
@@ -703,7 +705,12 @@ export async function POST(req: Request) {
       for (const catName of Object.keys(categoriesMap)) {
         menuListText += `${catName}:\n`;
         for (const item of categoriesMap[catName]) {
-          menuListText += `${item.globalIndex}. ${item.product.name} - Rp${item.product.price.toLocaleString("id-ID")} (Ketik *ORDER ${item.globalIndex}*)\n`;
+          const activePrice = getCurrentProductPrice(item.product);
+          const hasPromo = activePrice !== item.product.price;
+          const priceText = hasPromo 
+            ? `~Rp${item.product.price.toLocaleString("id-ID")}~ *Rp${activePrice.toLocaleString("id-ID")}* 🔥`
+            : `Rp${item.product.price.toLocaleString("id-ID")}`;
+          menuListText += `${item.globalIndex}. ${item.product.name} - ${priceText} (Ketik *ORDER ${item.globalIndex}*)\n`;
         }
         menuListText += "\n";
       }
@@ -995,11 +1002,12 @@ export async function POST(req: Request) {
         const productItem = products[productIndex - 1]; // 1-indexed to 0-indexed
 
         if (productItem) {
+          const activePrice = getCurrentProductPrice(productItem);
           const sessionData = {
             state: "SELECTING_QUANTITY",
             productId: productItem.id,
             productName: productItem.name,
-            price: productItem.price
+            price: activePrice
           };
 
           await prisma.waBotSession.upsert({
@@ -1008,7 +1016,7 @@ export async function POST(req: Request) {
             create: { key: sessionKey, value: JSON.stringify(sessionData) }
           });
 
-          const reply = `Anda memilih *${productItem.name}* (Rp${productItem.price.toLocaleString("id-ID")}).\n\nSilakan masukkan jumlah pesanan (angka saja, contoh: *2*):`;
+          const reply = `Anda memilih *${productItem.name}* (Rp${activePrice.toLocaleString("id-ID")}).\n\nSilakan masukkan jumlah pesanan (angka saja, contoh: *2*):`;
           return NextResponse.json({ success: true, replyMessage: reply });
         } else {
           return NextResponse.json({
