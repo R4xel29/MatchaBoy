@@ -148,7 +148,6 @@ export async function POST(
         }, {
           invoiceNumber: id,
           amount: secureTotal,
-          merchantId: paymentSettings.qrisNmid.replace(/[^0-9]/g, '') || undefined,
         })
       } catch (snapError: any) {
         console.warn('[DOKU SNAP QRIS REPAY FAILED, FALLING BACK TO HOSTED CHECKOUT]', snapError)

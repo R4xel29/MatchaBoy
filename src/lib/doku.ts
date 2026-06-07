@@ -446,6 +446,23 @@ export async function generateDokuSnapQris(
   const timestamp = getSnapTimestamp();
   const externalId = `EXT-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
   
+  // Auto-extract Merchant ID from Client ID if not explicitly provided.
+  // Doku Client IDs are usually formatted like: CL-sandbox-XXXX-1779122436223
+  let derivedMerchantId = payload.merchantId;
+  if (!derivedMerchantId) {
+    if (process.env.DOKU_MERCHANT_ID) {
+      derivedMerchantId = process.env.DOKU_MERCHANT_ID;
+    } else {
+      const parts = clientId.split('-');
+      const lastPart = parts[parts.length - 1];
+      if (/^\d+$/.test(lastPart)) {
+        derivedMerchantId = lastPart;
+      } else {
+        derivedMerchantId = clientId;
+      }
+    }
+  }
+
   // Payload for DOKU SNAP QR MPM Generate
   const requestBody = {
     partnerReferenceNo: payload.invoiceNumber,
@@ -453,7 +470,7 @@ export async function generateDokuSnapQris(
       value: payload.amount.toFixed(2), // Wajib 2 desimal
       currency: 'IDR'
     },
-    merchantId: payload.merchantId || clientId,
+    merchantId: derivedMerchantId,
     terminalId: payload.terminalId || 'TID001',
     additionalInfo: {
       postalCode: payload.postalCode || '67215',
