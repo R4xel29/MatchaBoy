@@ -778,12 +778,12 @@ export async function POST(req: Request) {
         session.customerName = customerName;
 
         if (session.orderType === "PICKUP") {
-          session.state = "CONFIRMING";
+          session.state = "SELECTING_PAYMENT";
           await prisma.waBotSession.update({
             where: { key: sessionKey },
             data: { value: JSON.stringify(session) }
           });
-          const reply = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+          const reply = `Pilih metode pembayaran:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*.`;
           return NextResponse.json({ success: true, replyMessage: reply });
         } else {
           session.state = "ENTERING_ADDRESS";
@@ -801,14 +801,54 @@ export async function POST(req: Request) {
       if (state === "ENTERING_ADDRESS") {
         const address = text.trim();
         session.address = address;
-        session.state = "CONFIRMING";
+        session.state = "SELECTING_PAYMENT";
         await prisma.waBotSession.update({
           where: { key: sessionKey },
           data: { value: JSON.stringify(session) }
         });
 
-        const reply = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${address}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+        const reply = `Pilih metode pembayaran:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*.`;
         return NextResponse.json({ success: true, replyMessage: reply });
+      }
+
+      if (state === "SELECTING_PAYMENT") {
+        const choice = text.trim();
+        if (choice === "1") {
+          session.paymentMethod = "COD";
+          session.state = "CONFIRMING";
+          await prisma.waBotSession.update({
+            where: { key: sessionKey },
+            data: { value: JSON.stringify(session) }
+          });
+
+          let confirmationMessage = "";
+          if (session.orderType === "PICKUP") {
+            confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n💳 *Pembayaran:* ${session.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+          } else {
+            confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${session.address}\n💳 *Pembayaran:* ${session.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+          }
+          return NextResponse.json({ success: true, replyMessage: confirmationMessage });
+        } else if (choice === "2") {
+          session.paymentMethod = "QRIS";
+          session.state = "CONFIRMING";
+          await prisma.waBotSession.update({
+            where: { key: sessionKey },
+            data: { value: JSON.stringify(session) }
+          });
+
+          let confirmationMessage = "";
+          if (session.orderType === "PICKUP") {
+            confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n💳 *Pembayaran:* ${session.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+          } else {
+            confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${session.quantity * session.price}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${session.address}\n💳 *Pembayaran:* ${session.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
+          }
+          return NextResponse.json({ success: true, replyMessage: confirmationMessage });
+        } else {
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Maaf, pilihan tidak valid. Pilih metode pembayaran:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*."
+          });
+        }
       }
 
       if (state === "CONFIRMING") {
@@ -850,8 +890,8 @@ export async function POST(req: Request) {
               subtotal: session.quantity * session.price,
               deliveryFee: 0,
               total: session.quantity * session.price,
-              paymentMethod: "COD",
-              status: "PENDING",
+              paymentMethod: session.paymentMethod,
+              status: session.paymentMethod === "QRIS" ? "PENDING_PAYMENT" : "PENDING",
               queueNumber: queueNumber,
               items: {
                 create: [
@@ -865,16 +905,72 @@ export async function POST(req: Request) {
             }
           });
 
-          await prisma.waBotSession.delete({
-            where: { key: sessionKey }
-          });
+          if (session.paymentMethod === "QRIS") {
+            const paymentSettings = await prisma.paymentSettings.findFirst();
+            if (paymentSettings && paymentSettings.dokuEnabled) {
+              const { createDokuCheckoutSession } = await import("@/lib/doku");
+              const callbackUrl = `${appUrl}/orders/${orderId}`;
+              const notificationUrl = `${appUrl}/api/payment/snap-webhook`;
 
-          // Trigger admin summary
-          const { sendAdminOrderSummary } = await import("@/lib/whatsapp-service");
-          sendAdminOrderSummary().catch(err => console.error("Gagal mengirim admin summary:", err));
+              const dokuResult = await createDokuCheckoutSession({
+                clientId: paymentSettings.dokuClientId,
+                sharedKey: paymentSettings.dokuSharedKey,
+                isSandbox: paymentSettings.dokuSandbox,
+              }, {
+                invoiceNumber: orderId,
+                amount: session.quantity * session.price,
+                customerName: session.customerName,
+                customerPhone: cleanPhone,
+                customerEmail: 'arumseduh@gmail.com',
+                callbackUrl,
+                notificationUrl,
+                paymentChannel: 'QRIS'
+              });
 
-          const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\n\nPesanan Anda akan segera diproses. Terima kasih! 🍵`;
-          return NextResponse.json({ success: true, replyMessage: reply });
+              if (dokuResult && dokuResult.url) {
+                await prisma.order.update({
+                  where: { id: orderId },
+                  data: {
+                    paymentUrl: dokuResult.url,
+                    paymentExpiredAt: new Date(Date.now() + 60 * 60 * 1000)
+                  }
+                });
+
+                await prisma.waBotSession.delete({
+                  where: { key: sessionKey }
+                });
+
+                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${(session.quantity * session.price).toLocaleString('id-ID')}*\n\nSilakan selesaikan pembayaran QRIS Anda melalui tautan resmi Doku berikut:\n👉 ${dokuResult.url}\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
+                return NextResponse.json({ success: true, replyMessage: reply });
+              } else {
+                console.error("[WHATSAPP_WEBHOOK] Doku checkout generation failed:", dokuResult?.error);
+                return NextResponse.json({
+                  success: false,
+                  error: "Doku checkout generation failed",
+                  replyMessage: "Maaf, terjadi kesalahan saat membuat tautan pembayaran QRIS Doku. Silakan coba lagi nanti atau hubungi admin. ❌"
+                });
+              }
+            } else {
+              console.error("[WHATSAPP_WEBHOOK] Doku is disabled in payment settings.");
+              return NextResponse.json({
+                success: false,
+                error: "Doku is disabled",
+                replyMessage: "Maaf, metode pembayaran QRIS Doku saat ini tidak aktif. Silakan hubungi admin atau gunakan metode pembayaran lain. ❌"
+              });
+            }
+          } else {
+            // COD
+            await prisma.waBotSession.delete({
+              where: { key: sessionKey }
+            });
+
+            // Trigger admin summary
+            const { sendAdminOrderSummary } = await import("@/lib/whatsapp-service");
+            sendAdminOrderSummary().catch(err => console.error("Gagal mengirim admin summary:", err));
+
+            const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\n\nPesanan Anda akan segera diproses. Terima kasih! 🍵`;
+            return NextResponse.json({ success: true, replyMessage: reply });
+          }
         } else if (confirmation === "batal") {
           await prisma.waBotSession.delete({
             where: { key: sessionKey }
