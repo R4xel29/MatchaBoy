@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-interface DokuCredentials {
+export interface DokuCredentials {
   clientId: string;
   sharedKey: string;
   isSandbox: boolean;
@@ -325,6 +325,91 @@ function crc16CcittFalse(str: string): number {
   }
   return crc & 0xFFFF;
 }
+
+/**
+ * Calls the Doku MCP Server to generate a dynamic QRIS string.
+ */
+export async function createDokuMcpQrisPayment(
+  creds: DokuCredentials,
+  payload: {
+    invoiceNumber: string;
+    amount: number;
+    postalCode?: string;
+  }
+): Promise<{ qrContent?: string; error?: string }> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  
+  // Use MCP URL from env, or default to sandbox/production base URL + /doku-mcp-server/mcp
+  const defaultMcpUrl = isSandbox 
+    ? 'https://api-sandbox.doku.com/doku-mcp-server/mcp'
+    : 'https://api.doku.com/doku-mcp-server/mcp';
+  
+  const mcpUrl = process.env.DOKU_MCP_URL || defaultMcpUrl;
+
+  // Base64 encode the sharedKey + ":"
+  const authHeader = 'Basic ' + Buffer.from(`${sharedKey}:`).toString('base64');
+  
+  const amountStr = Number(payload.amount).toFixed(2);
+  const postalCodeStr = payload.postalCode || '67215';
+
+  const requestBody = {
+    jsonrpc: '2.0',
+    id: Date.now(),
+    method: 'tools/call',
+    params: {
+      name: 'create_qris_payment',
+      arguments: {
+        toolRequest: {
+          amount: amountStr,
+          partnerReferenceNo: payload.invoiceNumber,
+          postalCode: postalCodeStr
+        }
+      }
+    }
+  };
+
+  try {
+    const response = await fetch(mcpUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-Id': clientId,
+        'Authorization': authHeader,
+        'Accept': 'application/json, text/event-stream'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      return { error: `DOKU MCP server returned status ${response.status}` };
+    }
+
+    const data = await response.json();
+    if (data.error) {
+      return { error: data.error.message || 'JSON-RPC Error' };
+    }
+
+    const toolResultContent = data.result?.content?.[0]?.text;
+    if (!toolResultContent) {
+      return { error: 'Empty tool response content' };
+    }
+
+    const parsedResult = JSON.parse(toolResultContent);
+    if (parsedResult.error) {
+      return { error: parsedResult.message || parsedResult.error };
+    }
+
+    if (parsedResult.qrContent) {
+      return { qrContent: parsedResult.qrContent };
+    }
+
+    return { error: 'qrContent not found in Doku MCP response' };
+  } catch (error: any) {
+    console.error('[DOKU MCP QRIS EXCEPTION]', error);
+    return { error: error.message || 'DOKU MCP Connection error' };
+  }
+}
+
 
 
 

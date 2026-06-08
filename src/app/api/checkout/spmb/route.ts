@@ -395,7 +395,37 @@ export async function POST(req: Request) {
         }
       }
 
-      // STRATEGI 2 (FALLBACK): Buat Doku Hosted Checkout session
+      // STRATEGI 2: Coba generate QRIS dinamis via DOKU MCP Server
+      if (!qrisGenerated && paymentSettings && paymentSettings.dokuEnabled) {
+        try {
+          const { createDokuMcpQrisPayment } = await import('@/lib/doku');
+          console.log('[SPMB QRIS INSTAN] Attempting to generate QRIS via DOKU MCP Server...');
+          const mcpResult = await createDokuMcpQrisPayment({
+            clientId: paymentSettings.dokuClientId,
+            sharedKey: paymentSettings.dokuSharedKey,
+            isSandbox: paymentSettings.dokuSandbox,
+          }, {
+            invoiceNumber: order.id,
+            amount: secureTotal,
+            postalCode: '67215'
+          });
+
+          if (mcpResult.qrContent) {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: { paymentQrContent: mcpResult.qrContent }
+            });
+            qrisGenerated = true;
+            console.log('[SPMB QRIS INSTAN] Dynamic QRIS generated successfully via DOKU MCP.');
+          } else {
+            console.warn('[SPMB QRIS INSTAN] DOKU MCP generation failed. Error:', mcpResult.error);
+          }
+        } catch (mcpError: any) {
+          console.error('[SPMB QRIS INSTAN MCP ERROR]', mcpError);
+        }
+      }
+
+      // STRATEGI 3 (FALLBACK): Buat Doku Hosted Checkout session
       if (!qrisGenerated) {
         try {
           if (!paymentSettings || !paymentSettings.dokuEnabled) {

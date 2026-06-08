@@ -37,8 +37,8 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    if (order.paymentMethod !== 'DOKU') {
-      return NextResponse.json({ error: 'Pesanan ini tidak menggunakan metode pembayaran DOKU.' }, { status: 400 })
+    if (order.paymentMethod !== 'DOKU' && order.paymentMethod !== 'QRIS') {
+      return NextResponse.json({ error: 'Pesanan ini tidak menggunakan metode pembayaran DOKU atau QRIS.' }, { status: 400 })
     }
 
     // Only allow repaying if order is pending or has been cancelled (timeout/failed)
@@ -135,44 +135,74 @@ export async function POST(
       return updated
     })
 
-    // 3. Create fresh Doku checkout session
+    // 3. Create fresh Doku checkout session or MCP QRIS
+    const isQrisPayment = order.paymentMethod?.toUpperCase() === 'QRIS'
     const channelMatch = order.notes?.match(/\[CHANNEL:\s*([^\]]+)\]/)
-    const isQrisChannel = channelMatch?.[1]?.toUpperCase() === 'QRIS'
+    const isQrisChannel = channelMatch?.[1]?.toUpperCase() === 'QRIS' || isQrisPayment
     
     let paymentUrl: string | null = null
+    let paymentQrContent: string | null = null
 
-    const callbackUrl = `${appUrl}/orders/${id}`
-    const notificationUrl = `${appUrl}/api/payment/doku-webhook`
-    const dokuResult = await createDokuCheckoutSession({
-      clientId: paymentSettings.dokuClientId,
-      sharedKey: paymentSettings.dokuSharedKey,
-      isSandbox: paymentSettings.dokuSandbox,
-    }, {
-      invoiceNumber: id,
-      amount: secureTotal,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      customerEmail: session.user.email || 'arumseduh@gmail.com',
-      callbackUrl,
-      notificationUrl,
-      paymentChannel: isQrisChannel ? 'QRIS' : undefined, // Pre-select QRIS if original order used QRIS
-    })
+    if (isQrisChannel) {
+      try {
+        const { createDokuMcpQrisPayment } = await import('@/lib/doku')
+        console.log('[REPAY QRIS] Attempting to generate QRIS via DOKU MCP Server...')
+        const mcpResult = await createDokuMcpQrisPayment({
+          clientId: paymentSettings.dokuClientId,
+          sharedKey: paymentSettings.dokuSharedKey,
+          isSandbox: paymentSettings.dokuSandbox,
+        }, {
+          invoiceNumber: id,
+          amount: secureTotal,
+          postalCode: '67215'
+        })
 
-    if (dokuResult.error) {
-      throw new Error(`DOKU Error: ${dokuResult.error}`)
+        if (mcpResult.qrContent) {
+          paymentQrContent = mcpResult.qrContent
+          console.log('[REPAY QRIS] Dynamic QRIS generated successfully via DOKU MCP.')
+        } else {
+          console.warn('[REPAY QRIS] DOKU MCP generation failed. Error:', mcpResult.error)
+        }
+      } catch (mcpError) {
+        console.error('[REPAY QRIS MCP ERROR]', mcpError)
+      }
     }
-    paymentUrl = dokuResult.url
 
-    // 4. Save payment URL back to the order
+    if (!paymentQrContent) {
+      console.log('[REPAY] Falling back to Hosted Checkout V1...')
+      const callbackUrl = `${appUrl}/orders/${id}`
+      const notificationUrl = `${appUrl}/api/payment/doku-webhook`
+      const dokuResult = await createDokuCheckoutSession({
+        clientId: paymentSettings.dokuClientId,
+        sharedKey: paymentSettings.dokuSharedKey,
+        isSandbox: paymentSettings.dokuSandbox,
+      }, {
+        invoiceNumber: id,
+        amount: secureTotal,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        customerEmail: session.user.email || 'arumseduh@gmail.com',
+        callbackUrl,
+        notificationUrl,
+        paymentChannel: isQrisChannel ? 'QRIS' : undefined,
+      })
+
+      if (dokuResult.error) {
+        throw new Error(`DOKU Error: ${dokuResult.error}`)
+      }
+      paymentUrl = dokuResult.url
+    }
+
+    // 4. Save payment details back to the order
     await prisma.order.update({
       where: { id },
       data: { 
         paymentUrl,
-        paymentQrContent: null,
+        paymentQrContent,
       }
     })
 
-    return NextResponse.json({ success: true, paymentUrl })
+    return NextResponse.json({ success: true, paymentUrl, paymentQrContent })
   } catch (error: any) {
     console.error('[API ORDER REPAY ERROR]', error)
     return NextResponse.json({ error: error.message || 'Gagal meregenerasi pembayaran' }, { status: 500 })
