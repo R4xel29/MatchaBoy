@@ -476,5 +476,37 @@ export async function sendPaymentSuccessNotification(orderId: string) {
   }
 }
 
+export async function sendOnDeliveryNotification(orderId: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      console.warn(`[WHATSAPP_SERVICE] Order ${orderId} tidak ditemukan untuk notifikasi ON_DELIVERY.`);
+      return;
+    }
+
+    if (!order.customerPhone || order.customerPhone.startsWith('SPMB-PENDING')) {
+      console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping notification.`);
+      return;
+    }
+
+    const standardizedPhone = standardizeJid(order.customerPhone);
+    const orderShortId = order.id.slice(-6).toUpperCase();
+    
+    // Calculate verification PIN deterministically
+    const { getDeliveryPin } = await import('./delivery-utils');
+    const pin = getDeliveryPin(orderId);
+
+    const message = `🛵 *PESANAN SEDANG DIANTAR!* 🛵\n\nHalo *${order.customerName}*,\n\nPesanan Anda *#${orderShortId}* sedang diantarkan oleh kurir kami ke alamat Anda: *${order.address?.split('(')[0]?.trim() || order.address}*.\n\n🔑 *PIN Verifikasi Kurir:* *${pin}*\n\nMohon berikan PIN verifikasi di atas kepada kurir saat pesanan Anda tiba agar kurir dapat menyelesaikan pengiriman. Terima kasih! 🍵`;
+
+    await sendWhatsAppMessage(standardizedPhone, message);
+  } catch (error) {
+    console.error(`[WHATSAPP_SERVICE] Gagal mengirim on-delivery notification untuk order ${orderId}:`, error);
+  }
+}
+
+
 
 

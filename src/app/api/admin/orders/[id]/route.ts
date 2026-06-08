@@ -160,6 +160,15 @@ export async function PATCH(
             });
         }
 
+        if (status === 'ON_DELIVERY') {
+            import('@/lib/whatsapp-service').then(({ sendOnDeliveryNotification }) => {
+                sendOnDeliveryNotification(id).catch(err =>
+                    console.error('Failed to send on-delivery WA notification (admin route):', err)
+                );
+            });
+        }
+
+
         // Restore stock if cancelled
         if (status === 'CANCELLED') {
             restoreStockForOrder(id).catch(err =>

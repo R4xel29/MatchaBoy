@@ -50,6 +50,15 @@ export async function PATCH(
       },
     })
 
+    if (finalStatus === 'ON_DELIVERY') {
+      import('@/lib/whatsapp-service').then(({ sendOnDeliveryNotification }) => {
+        sendOnDeliveryNotification(id).catch(err =>
+          console.error('Failed to send on-delivery WA notification (driver route):', err)
+        );
+      });
+    }
+
+
     // Award points if order is completed
     if (finalStatus === 'COMPLETED') {
       try {
