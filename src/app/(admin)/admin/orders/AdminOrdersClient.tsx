@@ -184,11 +184,20 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                       {order.status.replace('_', ' ')}
                     </span>
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                      order.source === 'SPMB' ? 'bg-indigo-50 text-indigo-750 border border-indigo-150 shadow-sm' :
+                      order.source === 'SPMB' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm' :
+                      order.source === 'WA' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm' :
+                      order.source === 'POS' ? 'bg-amber-50 text-amber-700 border border-amber-100 shadow-sm' :
+                      'bg-sky-50 text-sky-700 border border-sky-100 shadow-sm'
+                    }`}>
+                      {order.source === 'SPMB' ? `SPMB: ${order.pickupTime || ''}` : 
+                       order.source === 'WA' ? 'WhatsApp Bot' : 
+                       order.source === 'POS' ? 'Kasir (POS)' : 'Storefront/Web'}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                       order.orderType === 'PICKUP' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
                       'bg-sky-50 text-sky-700 border border-sky-100'
                     }`}>
-                      {order.source === 'SPMB' ? `SPMB: ${order.pickupTime || ''}` : order.orderType === 'PICKUP' ? 'Pickup' : 'Delivery'}
+                      {order.orderType === 'PICKUP' ? 'Pickup' : 'Delivery'}
                     </span>
                     {order.paymentProofUrl && (
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">
@@ -201,7 +210,7 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                     {new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-
+ 
                 {/* Content Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -238,8 +247,30 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
                       ))}
                     </div>
                     <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
-                      <span className="text-[11px] text-muted-foreground">{order.paymentMethod}</span>
-                      <span className="text-sm font-bold text-foreground">{formatRupiah(order.total)}</span>
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Metode Pembayaran</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] font-medium text-foreground">
+                            {order.paymentMethod === 'QRIS' ? 'QRIS (Doku)' :
+                             order.paymentMethod === 'COD' ? 'Bayar di Tempat (COD)' :
+                             order.paymentMethod === 'CASH' ? 'Tunai (Kasir)' :
+                             order.paymentMethod === 'TRANSFER' ? 'Transfer Bank' : order.paymentMethod}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                            order.status === 'PENDING_PAYMENT' 
+                              ? 'bg-rose-100 text-rose-800' 
+                              : ['CANCELLED'].includes(order.status)
+                              ? 'bg-gray-100 text-gray-700'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {order.status === 'PENDING_PAYMENT' ? 'Belum Bayar' : ['CANCELLED'].includes(order.status) ? 'Batal' : 'Lunas/Diterima'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Total</p>
+                        <p className="text-sm font-bold text-foreground">{formatRupiah(order.total)}</p>
+                      </div>
                     </div>
                   </div>
                 </div>

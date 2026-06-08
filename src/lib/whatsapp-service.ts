@@ -1,5 +1,18 @@
 import { prisma } from './prisma';
 
+export function standardizeJid(phone: string): string {
+  if (phone.endsWith('@g.us')) {
+    return phone;
+  }
+  let standardized = phone.replace(/[^0-9]/g, '');
+  if (standardized.startsWith('08')) {
+    standardized = '62' + standardized.substring(1);
+  } else if (standardized.startsWith('8')) {
+    standardized = '62' + standardized;
+  }
+  return standardized;
+}
+
 export async function sendWhatsAppMessage(phone: string, text: string) {
   const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
   const apiKey = process.env.WA_BOT_API_KEY || "";
@@ -7,13 +20,18 @@ export async function sendWhatsAppMessage(phone: string, text: string) {
   console.log(`[WHATSAPP_SERVICE] Mengirim ke ${phone}: ${text.substring(0, 80)}`);
   
   try {
+    const isGroup = phone.endsWith('@g.us');
     const res = await fetch(waProviderUrl, {
       method: "POST",
       headers: { 
         "Content-Type": "application/json",
         "x-api-key": apiKey
       },
-      body: JSON.stringify({ phone, message: text }),
+      body: JSON.stringify({ 
+        phone: isGroup ? undefined : phone, 
+        message: text,
+        jid: isGroup ? phone : undefined
+      }),
     });
     if (!res.ok) {
       console.error(`[WHATSAPP_SERVICE] Bot API error ${res.status}:`, await res.text());
@@ -40,12 +58,7 @@ export async function sendReadyNotification(orderId: string) {
     }
 
     // Standardize phone number for WhatsApp
-    let standardizedPhone = order.customerPhone.replace(/[^0-9]/g, '');
-    if (standardizedPhone.startsWith('08')) {
-      standardizedPhone = '62' + standardizedPhone.substring(1);
-    } else if (standardizedPhone.startsWith('8')) {
-      standardizedPhone = '62' + standardizedPhone;
-    }
+    const standardizedPhone = standardizeJid(order.customerPhone);
 
     // Custom message format
     let message = '';
@@ -79,12 +92,7 @@ export async function sendCompletedNotification(orderId: string) {
     }
 
     // Standardize phone number for WhatsApp
-    let standardizedPhone = order.customerPhone.replace(/[^0-9]/g, '');
-    if (standardizedPhone.startsWith('08')) {
-      standardizedPhone = '62' + standardizedPhone.substring(1);
-    } else if (standardizedPhone.startsWith('8')) {
-      standardizedPhone = '62' + standardizedPhone;
-    }
+    const standardizedPhone = standardizeJid(order.customerPhone);
 
     // Custom message format
     let message = '';
@@ -119,12 +127,7 @@ export async function sendCancelledNotification(orderId: string, reason?: string
     }
 
     // Standardize phone number for WhatsApp
-    let standardizedPhone = order.customerPhone.replace(/[^0-9]/g, '');
-    if (standardizedPhone.startsWith('08')) {
-      standardizedPhone = '62' + standardizedPhone.substring(1);
-    } else if (standardizedPhone.startsWith('8')) {
-      standardizedPhone = '62' + standardizedPhone;
-    }
+    const standardizedPhone = standardizeJid(order.customerPhone);
 
     // Custom message format
     let message = '';
@@ -154,15 +157,7 @@ export async function sendAdminOrderSummary() {
       .split(',')
       .map(n => n.trim())
       .filter(n => n.length > 0)
-      .map(n => {
-        let std = n.replace(/[^0-9]/g, '');
-        if (std.startsWith('08')) {
-          std = '62' + std.substring(1);
-        } else if (std.startsWith('8')) {
-          std = '62' + std;
-        }
-        return std;
-      });
+      .map(n => standardizeJid(n));
 
     if (adminNumbers.length === 0) {
       console.log('[WHATSAPP_SERVICE] No valid admin numbers found after parsing.');
@@ -322,12 +317,7 @@ export async function sendPickupReminder(orderId: string) {
     }
 
     // Standardize phone number for WhatsApp
-    let standardizedPhone = order.customerPhone.replace(/[^0-9]/g, '');
-    if (standardizedPhone.startsWith('08')) {
-      standardizedPhone = '62' + standardizedPhone.substring(1);
-    } else if (standardizedPhone.startsWith('8')) {
-      standardizedPhone = '62' + standardizedPhone;
-    }
+    const standardizedPhone = standardizeJid(order.customerPhone);
 
     const formatDateOnly = (date: Date | null) => {
       if (!date) return '';
@@ -365,5 +355,126 @@ export async function sendPickupReminder(orderId: string) {
     console.error(`[WHATSAPP_SERVICE] Gagal mengirim pickup reminder untuk order ${orderId}:`, error);
   }
 }
+
+export async function sendAdminNewOrderNotification(orderId: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          include: {
+            product: true
+          }
+        }
+      }
+    });
+
+    if (!order) {
+      console.warn(`[WHATSAPP_SERVICE] Order ${orderId} tidak ditemukan untuk notifikasi admin.`);
+      return;
+    }
+
+    const storeSettings = await prisma.storeSettings.findFirst();
+    if (!storeSettings || !storeSettings.adminWaNumbers) {
+      console.log('[WHATSAPP_SERVICE] No admin numbers configured for new order notification.');
+      return;
+    }
+
+    const rawNumbers = storeSettings.adminWaNumbers;
+    const adminNumbers = rawNumbers
+      .split(',')
+      .map(n => n.trim())
+      .filter(n => n.length > 0)
+      .map(n => standardizeJid(n));
+
+    if (adminNumbers.length === 0) {
+      console.log('[WHATSAPP_SERVICE] No valid admin numbers found after parsing.');
+      return;
+    }
+
+    const itemsStr = order.items.map(item => {
+      const modStr = item.modifiers ? ` (${item.modifiers})` : '';
+      return `- ${item.product.name} ${item.qty}x @ Rp ${item.price.toLocaleString('id-ID')}${modStr}`;
+    }).join('\n');
+
+    const formattedSubtotal = order.subtotal.toLocaleString('id-ID');
+    const formattedDeliveryFee = order.deliveryFee.toLocaleString('id-ID');
+    const formattedTotal = order.total.toLocaleString('id-ID');
+
+    let orderDetails = `*📢 PESANAN BARU MASUK!* 🍵\n\n`;
+    orderDetails += `*ID Pesanan:* ${order.id}\n`;
+    orderDetails += `*Sumber:* ${order.source}\n`;
+    orderDetails += `*Pelanggan:* ${order.customerName} (${order.customerPhone})\n`;
+    
+    if (order.orderType === 'DELIVERY') {
+      orderDetails += `*Tipe:* Pengiriman (Delivery)\n`;
+      orderDetails += `*Alamat:* ${order.address}\n`;
+    } else if (order.orderType === 'PICKUP') {
+      orderDetails += `*Tipe:* Ambil Sendiri (Pickup)\n`;
+      if (order.pickupDate || order.pickupTime) {
+        const dateStr = order.pickupDate ? new Date(order.pickupDate).toLocaleDateString('id-ID') : '';
+        orderDetails += `*Waktu Pickup:* ${dateStr} ${order.pickupTime || ''}\n`;
+      }
+    } else if (order.orderType === 'DINE_IN') {
+      orderDetails += `*Tipe:* Dine In (Makan di Tempat)\n`;
+      if (order.tableNumber) {
+        orderDetails += `*Nomor Meja:* ${order.tableNumber}\n`;
+      }
+    }
+
+    orderDetails += `\n*Daftar Produk:*\n${itemsStr}\n\n`;
+    orderDetails += `*Ringkasan Pembayaran:*\n`;
+    orderDetails += `Subtotal: Rp ${formattedSubtotal}\n`;
+    if (order.orderType === 'DELIVERY') {
+      orderDetails += `Ongkir: Rp ${formattedDeliveryFee}\n`;
+    }
+    orderDetails += `*Total: Rp ${formattedTotal}*\n`;
+    orderDetails += `*Metode Pembayaran:* ${order.paymentMethod}\n`;
+    orderDetails += `*Status:* ${order.status}\n`;
+
+    // Send to all admin numbers
+    for (const adminPhone of adminNumbers) {
+      await sendWhatsAppMessage(adminPhone, orderDetails);
+    }
+  } catch (error) {
+    console.error(`[WHATSAPP_SERVICE] Gagal mengirim new order notification untuk order ${orderId}:`, error);
+  }
+}
+
+export async function sendPaymentSuccessNotification(orderId: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      console.warn(`[WHATSAPP_SERVICE] Order ${orderId} tidak ditemukan untuk notifikasi pembayaran sukses.`);
+      return;
+    }
+
+    if (!order.customerPhone || order.customerPhone.startsWith('SPMB-PENDING')) {
+      console.log(`[WHATSAPP_SERVICE] Phone number is empty or pending for order ${orderId}. Skipping payment success notification.`);
+      return;
+    }
+
+    const standardizedPhone = standardizeJid(order.customerPhone);
+    const formattedTotal = order.total.toLocaleString('id-ID');
+    const orderShortId = order.id.slice(-6).toUpperCase();
+
+    let message = `Halo *${order.customerName}*!\n\nPembayaran untuk pesanan *#${orderShortId}* sebesar *Rp ${formattedTotal}* telah BERHASIL diverifikasi dan diterima. ✅\n\n`;
+    if (order.orderType === 'DELIVERY') {
+      message += `Pesanan Anda sedang dipersiapkan dan akan segera dikirim ke alamat Anda. Silakan pantau status pesanan Anda ya! 🍵`;
+    } else if (order.orderType === 'PICKUP') {
+      message += `Pesanan Anda sedang dipersiapkan. Kami akan mengabari Anda jika pesanan sudah siap untuk diambil. Terima kasih! 🍵`;
+    } else {
+      message += `Pesanan Anda sedang dipersiapkan. Terima kasih telah memesan di Matchaboy! 🍵`;
+    }
+
+    await sendWhatsAppMessage(standardizedPhone, message);
+  } catch (error) {
+    console.error(`[WHATSAPP_SERVICE] Gagal mengirim payment success notification untuk order ${orderId}:`, error);
+  }
+}
+
 
 

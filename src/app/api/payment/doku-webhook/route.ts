@@ -199,6 +199,14 @@ export async function POST(req: NextRequest) {
             },
           });
 
+          // Send WhatsApp payment confirmation
+          try {
+            const { sendPaymentSuccessNotification } = await import('@/lib/whatsapp-service');
+            await sendPaymentSuccessNotification(invoiceNumber);
+          } catch (waErr) {
+            console.error('[DOKU WEBHOOK] WhatsApp success notification error:', waErr);
+          }
+
           if (order.source === 'SPMB') {
             import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
               sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));

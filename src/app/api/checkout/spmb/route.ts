@@ -479,6 +479,14 @@ export async function POST(req: Request) {
       select: { paymentUrl: true, paymentQrContent: true }
     });
 
+    // Send admin notification
+    try {
+      const { sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service');
+      await sendAdminNewOrderNotification(order.id);
+    } catch (e) {
+      console.error('[SPMB CHECKOUT] Admin notification error:', e);
+    }
+
     return NextResponse.json({
       success: true,
       orderId: order.id,

@@ -950,6 +950,14 @@ export async function POST(req: Request) {
             console.error('[CHECKOUT] Notification error:', e)
         }
 
+        // Send admin notification
+        try {
+            const { sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service')
+            await sendAdminNewOrderNotification(order.id)
+        } catch (e) {
+            console.error('[CHECKOUT] Admin notification error:', e)
+        }
+
         // Read paymentUrl from the order record (set by DOKU block above)
         const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, select: { paymentUrl: true } })
         return NextResponse.json({ success: true, orderId: order.id, total: secureTotal, paymentUrl: finalOrder?.paymentUrl || undefined })

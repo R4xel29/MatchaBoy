@@ -252,6 +252,14 @@ export async function POST(req: Request) {
       })
     }
 
+    // Send admin notification
+    try {
+      const { sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service');
+      await sendAdminNewOrderNotification(order.id);
+    } catch (e) {
+      console.error('[POS CHECKOUT] Admin notification error:', e);
+    }
+
     return NextResponse.json({ success: true, orderId: order.id, total: secureTotal })
   } catch (error) {
     console.error('POS order error:', error)

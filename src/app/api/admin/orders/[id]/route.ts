@@ -121,6 +121,16 @@ export async function PATCH(
             return updated;
         });
 
+        const wasPending = ['PENDING', 'PENDING_PAYMENT'].includes(existingOrder.status);
+        const isNowAccepted = !['PENDING_PAYMENT', 'CANCELLED'].includes(status);
+        if (wasPending && isNowAccepted) {
+            import('@/lib/whatsapp-service').then(({ sendPaymentSuccessNotification }) => {
+                sendPaymentSuccessNotification(id).catch(err =>
+                    console.error('Failed to send payment success WA notification:', err)
+                );
+            });
+        }
+
         await logAdminAction({
             userId: session.user.id,
             action: 'UPDATE',
