@@ -144,6 +144,15 @@ export async function PATCH(
       });
     }
 
+    // Trigger payment success notification when order transitions out of PENDING_PAYMENT
+    if (existingOrder.status === 'PENDING_PAYMENT' && (status === 'PENDING' || status === 'PREPARING')) {
+      import('@/lib/whatsapp-service').then(({ sendPaymentSuccessNotification }) => {
+        sendPaymentSuccessNotification(id).catch(err =>
+          console.error('Failed to send payment success WA notification (cashier route):', err)
+        );
+      });
+    }
+
     // Stock deduction when order starts being prepared
     if (status === 'PREPARING') {
       deductStockForOrder(id).catch(err =>

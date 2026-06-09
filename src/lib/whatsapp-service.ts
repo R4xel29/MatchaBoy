@@ -361,6 +361,11 @@ export async function sendAdminNewOrderNotification(orderId: string) {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
       include: {
+        cashier: {
+          select: {
+            name: true
+          }
+        },
         items: {
           include: {
             product: true
@@ -404,6 +409,9 @@ export async function sendAdminNewOrderNotification(orderId: string) {
     let orderDetails = `*📢 PESANAN BARU MASUK!* 🍵\n\n`;
     orderDetails += `*ID Pesanan:* ${order.id}\n`;
     orderDetails += `*Sumber:* ${order.source}\n`;
+    if (order.cashier?.name) {
+      orderDetails += `*Kasir:* ${order.cashier.name}\n`;
+    }
     orderDetails += `*Pelanggan:* ${order.customerName} (${order.customerPhone})\n`;
     
     if (order.orderType === 'DELIVERY') {

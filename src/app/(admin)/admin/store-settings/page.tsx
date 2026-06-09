@@ -710,11 +710,11 @@ export default function StoreSettingsPage() {
               <p className="text-xs text-muted-foreground mt-2">Pesan otomatis yang akan terisi di chat WhatsApp pelanggan saat mereka menghubungi Anda.</p>
             </div>
             <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Nomor WA Admin Notifikasi (SPMB)</label>
+              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Nomor WA / Grup Admin Notifikasi</label>
               <input type="text" value={adminWaNumbers} onChange={e => setAdminWaNumbers(e.target.value)}
-                placeholder="Contoh: 081344446442, 08123456789"
+                placeholder="Contoh: 081344446442, 120363024823940294@g.us"
                 className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
-              <p className="text-xs text-muted-foreground mt-2">Nomor WhatsApp Admin yang menerima ringkasan order SPMB ketika terkonfirmasi (pisahkan dengan koma jika lebih dari satu nomor, e.g. 081344446442, 08123456789).</p>
+              <p className="text-xs text-muted-foreground mt-2">Nomor WhatsApp Admin atau JID Grup WhatsApp yang menerima ringkasan order ketika terkonfirmasi (pisahkan dengan koma jika lebih dari satu, e.g. 081344446442, 120363024823940294@g.us). Anda dapat mengetik <b>.groupid</b> di grup WhatsApp untuk mendapatkan JID grup tersebut.</p>
             </div>
           </div>
         </div>

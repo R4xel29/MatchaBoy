@@ -237,6 +237,7 @@ model Order {
   pickupDate    DateTime?
   pickupTime    String?    // e.g. "14:30"
   pickupReminderSent Boolean @default(false)
+  lastUnpaidReminderSent DateTime?
 
   // Notes
   notes         String?

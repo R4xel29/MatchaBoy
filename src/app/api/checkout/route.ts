@@ -854,37 +854,69 @@ export async function POST(req: Request) {
                 const channel = body.paymentChannel?.toUpperCase()
                 
                 if (channel === 'QRIS') {
-                    const { createDokuCheckoutSession } = await import('@/lib/doku')
+                    const { createDokuMcpQrisPayment, createDokuCheckoutSession, generateQrisString } = await import('@/lib/doku')
                     
-                    const callbackUrl = `${appUrl}/orders/${order.id}`
-                    const notificationUrl = `${appUrl}/api/payment/doku-webhook`
-                    const dokuResult = await createDokuCheckoutSession({
-                        clientId: paymentSettings.dokuClientId,
-                        sharedKey: paymentSettings.dokuSharedKey,
-                        isSandbox: paymentSettings.dokuSandbox,
-                    }, {
-                        invoiceNumber: order.id,
-                        amount: secureTotal,
-                        customerName: order.customerName,
-                        customerPhone: order.customerPhone,
-                        customerEmail: session.user.email || 'arumseduh@gmail.com',
-                        callbackUrl,
-                        notificationUrl,
-                        paymentChannel: undefined
-                    })
-
-                    if (dokuResult.error) {
-                        throw new Error(dokuResult.error)
+                    console.log('[QRIS Instan] Attempting to generate QRIS via DOKU MCP Server...')
+                    let qrContent: string | null = null
+                    try {
+                        const mcpResult = await createDokuMcpQrisPayment({
+                            clientId: paymentSettings.dokuClientId,
+                            sharedKey: paymentSettings.dokuSharedKey,
+                            isSandbox: paymentSettings.dokuSandbox,
+                        }, {
+                            invoiceNumber: order.id,
+                            amount: secureTotal,
+                            postalCode: '67215'
+                        })
+                        if (mcpResult.qrContent) {
+                            qrContent = mcpResult.qrContent
+                        } else {
+                            console.warn('[QRIS Instan] DOKU MCP generation failed/returned no QR content. Error:', mcpResult.error)
+                        }
+                    } catch (mcpErr: any) {
+                        console.error('[QRIS Instan] DOKU MCP request threw exception:', mcpErr)
                     }
 
-                    // Save DOKU payment URL to the order and keep paymentQrContent null
+                    if (!qrContent) {
+                        console.log('[QRIS Instan] Using local dynamic QRIS generator fallback...')
+                        qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid || undefined)
+                    }
+
+                    // Generate backup hosted checkout session URL
+                    let paymentUrl: string | null = null
+                    try {
+                        const callbackUrl = `${appUrl}/orders/${order.id}`
+                        const notificationUrl = `${appUrl}/api/payment/doku-webhook`
+                        const dokuResult = await createDokuCheckoutSession({
+                            clientId: paymentSettings.dokuClientId,
+                            sharedKey: paymentSettings.dokuSharedKey,
+                            isSandbox: paymentSettings.dokuSandbox,
+                        }, {
+                            invoiceNumber: order.id,
+                            amount: secureTotal,
+                            customerName: order.customerName,
+                            customerPhone: order.customerPhone,
+                            customerEmail: session.user.email || 'arumseduh@gmail.com',
+                            callbackUrl,
+                            notificationUrl,
+                            paymentChannel: undefined
+                        })
+                        if (dokuResult && dokuResult.url) {
+                            paymentUrl = dokuResult.url
+                        }
+                    } catch (sessionErr) {
+                        console.error('[QRIS Instan] Failed to generate backup hosted session:', sessionErr)
+                    }
+
+                    // Save both to the order record (keep paymentUrl for portal redirect option)
                     await prisma.order.update({
                         where: { id: order.id },
                         data: { 
-                            paymentUrl: dokuResult.url,
-                            paymentQrContent: null,
+                            paymentQrContent: qrContent,
+                            paymentUrl: paymentUrl
                         }
                     })
+                    console.log('[QRIS Instan] Dynamic QRIS successfully populated.')
                 } else {
                     const { createDokuCheckoutSession } = await import('@/lib/doku')
                     

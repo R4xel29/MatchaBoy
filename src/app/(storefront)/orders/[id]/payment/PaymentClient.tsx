@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft, Clock, CreditCard, ChevronDown, ChevronUp, AlertCircle,
-  ShoppingBag, MessageCircle, ArrowRight, Copy, Check, Upload, CheckCircle, X, Loader2
+  ShoppingBag, MessageCircle, ArrowRight, Copy, Check, Upload, CheckCircle, X, Loader2, Download
 } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
-import { QRCodeSVG } from 'qrcode.react'
+import { QRCodeSVG, QRCodeCanvas } from 'qrcode.react'
 
 interface BankAccount {
   id: string;
@@ -44,6 +44,28 @@ export default function PaymentClient({
   const [percentLeft, setPercentLeft] = useState(100)
   const [isExpired, setIsExpired] = useState(false)
   const [showItems, setShowItems] = useState(false)
+  const [showQrisModal, setShowQrisModal] = useState(paymentChannel === 'QRIS' && !!order.paymentQrContent)
+
+  const handleDownloadQr = () => {
+    try {
+      showToast("Mengunduh QRIS...", "info")
+      const canvas = document.getElementById('qris-modal-canvas') as HTMLCanvasElement;
+      if (!canvas) {
+        throw new Error('Canvas not found');
+      }
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `QRIS_MATCHABOY_${order.id.slice(0, 8).toUpperCase()}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      showToast("QRIS berhasil diunduh!", "success")
+    } catch (error) {
+      console.error("Gagal mengunduh QRIS:", error)
+      showToast("Gagal mengunduh QRIS.", "error")
+    }
+  }
   
   // Upload state
   const [preview, setPreview] = useState<string | null>(null)
@@ -607,10 +629,10 @@ export default function PaymentClient({
                     
                     <button
                       type="button"
-                      onClick={() => router.push(`/orders/${order.id}/qris`)}
+                      onClick={() => setShowQrisModal(true)}
                       className="w-full py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
                     >
-                      Unduh / Buka QRIS Lebih Besar
+                      Tampilkan Popup / Unduh QRIS
                     </button>
                   </>
                 ) : (
@@ -854,6 +876,91 @@ export default function PaymentClient({
                 />
               </div>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Sedang mengarahkan ke halaman pelacakan...</p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Dynamic QRIS Pop-up Modal */}
+      <AnimatePresence>
+        {showQrisModal && (
+          <div className="fixed inset-0 z-[99] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ type: 'spring', duration: 0.5 }}
+              className="w-full max-w-sm bg-white rounded-[2.5rem] shadow-2xl p-6 border border-gray-100 text-center relative overflow-hidden space-y-4"
+            >
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={() => setShowQrisModal(false)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 border border-gray-100 shadow-sm transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* QRIS Logo Header */}
+              <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-2 shrink-0 select-none">
+                <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
+                  QR<span className="text-[#e26d5c]">IS</span>
+                </span>
+                <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
+                  DOKU Instan
+                </span>
+              </div>
+
+              {/* Countdown Expiry */}
+              <div className="bg-amber-50/60 border border-amber-100/60 rounded-2xl px-4 py-2 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 text-amber-700 font-bold select-none">
+                  <Clock className="w-3.5 h-3.5 animate-pulse" />
+                  <span>Sisa Waktu Bayar</span>
+                </div>
+                <span className="font-mono font-black text-gray-900">{timeLeft}</span>
+              </div>
+
+              {/* QR Canvas */}
+              <div className="relative w-64 h-64 bg-white rounded-3xl p-3 border border-gray-100 flex items-center justify-center shadow-inner mx-auto">
+                <QRCodeCanvas
+                  id="qris-modal-canvas"
+                  value={order.paymentQrContent}
+                  size={236}
+                  level="M"
+                  includeMargin={false}
+                  className="object-contain"
+                />
+              </div>
+
+              {/* Merchant & Order Details */}
+              <div className="space-y-1 select-none">
+                <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider">Nama Merchant</p>
+                <h3 className="text-base font-serif font-black text-gray-900 leading-tight">MATCHABOY HQ</h3>
+                <p className="text-[10px] text-gray-400 font-mono mt-1">
+                  Invoice ID: <span className="font-bold">{order.id.slice(0, 12).toUpperCase()}</span>
+                </p>
+                <p className="text-2xl font-black text-[#B48A5E] pt-1">{formatRupiah(order.total)}</p>
+              </div>
+
+              {/* Buttons */}
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadQr}
+                  className="py-3 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Unduh QR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowQrisModal(false)}
+                  className="py-3 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-xs"
+                >
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                  <span>Sudah Bayar</span>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

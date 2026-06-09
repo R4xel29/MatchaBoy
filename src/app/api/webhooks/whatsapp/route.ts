@@ -818,7 +818,7 @@ export async function POST(req: Request) {
           });
           return NextResponse.json({
             success: true,
-            replyMessage: "Silakan masukkan alamat pengiriman lengkap:"
+            replyMessage: "Silakan masukkan alamat pengiriman lengkap atau kirim lokasi Anda (Share Location) via WhatsApp:"
           });
         }
       }
@@ -837,20 +837,24 @@ export async function POST(req: Request) {
         let deliveryFee = 0;
         let bestDisplayName = address;
 
-        try {
-          const geocodeUrl = `${appUrl}/api/geocode?q=${encodeURIComponent(address)}`;
-          const geocodeRes = await fetch(geocodeUrl);
-          if (geocodeRes.ok) {
-            const geocodeData = await geocodeRes.json();
-            if (Array.isArray(geocodeData) && geocodeData.length > 0) {
+        if (body.location && typeof body.location.latitude === 'number' && typeof body.location.longitude === 'number') {
+          lat = body.location.latitude;
+          lng = body.location.longitude;
+          bestDisplayName = body.location.address || address;
+          console.log(`[WHATSAPP_WEBHOOK] Using WhatsApp GPS coordinates: lat=${lat}, lng=${lng}, address=${bestDisplayName}`);
+        } else {
+          try {
+            const { geocodeAddressDirect } = await import("@/lib/geocode-helper");
+            const geocodeData = await geocodeAddressDirect(address, storeLat, storeLng);
+            if (geocodeData && geocodeData.length > 0) {
               const bestMatch = geocodeData[0];
               lat = parseFloat(bestMatch.lat);
               lng = parseFloat(bestMatch.lon);
               bestDisplayName = bestMatch.display_name;
             }
+          } catch (err) {
+            console.error("[WHATSAPP_WEBHOOK] Direct geocoding error:", err);
           }
-        } catch (err) {
-          console.error("[WHATSAPP_WEBHOOK] Geocoding error:", err);
         }
 
         const { calculateDistance, calculateDeliveryFee } = await import("@/lib/delivery-utils");
@@ -869,13 +873,13 @@ export async function POST(req: Request) {
           data: { value: JSON.stringify(session) }
         });
 
-        const reply = `Pilih metode pembayaran:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*.`;
+        const reply = `Pilih metode pembayaran:\n1. *Bayar di Tempat* (COD)\n2. *QRIS*\n\nKetik *1* atau *2*.`;
         return NextResponse.json({
           success: true,
           replyMessage: reply,
           buttons: [
             { id: "1", text: "Bayar di Tempat (COD)", title: "Bayar di Tempat (COD)" },
-            { id: "2", text: "QRIS (Otomatis via Doku)", title: "QRIS (Otomatis via Doku)" }
+            { id: "2", text: "QRIS", title: "QRIS" }
           ]
         });
       }
@@ -1036,12 +1040,39 @@ export async function POST(req: Request) {
                 });
               }
             } else {
-              console.error("[WHATSAPP_WEBHOOK] Doku is disabled in payment settings.");
-              return NextResponse.json({
-                success: false,
-                error: "Doku is disabled",
-                replyMessage: "Maaf, metode pembayaran QRIS Doku saat ini tidak aktif. Silakan hubungi admin atau gunakan metode pembayaran lain. ❌"
-              });
+              if (paymentSettings && paymentSettings.qrisEnabled) {
+                await prisma.waBotSession.delete({
+                  where: { key: sessionKey }
+                });
+
+                try {
+                  const { sendAdminNewOrderNotification } = await import("@/lib/whatsapp-service");
+                  await sendAdminNewOrderNotification(orderId);
+                } catch (waErr) {
+                  console.error("Gagal mengirim admin new order notification:", waErr);
+                }
+
+                const qrisImage = paymentSettings.qrisImage;
+                let absoluteQrisImage = qrisImage;
+                if (qrisImage && !qrisImage.startsWith('http')) {
+                  const slash = qrisImage.startsWith('/') ? '' : '/';
+                  absoluteQrisImage = `${appUrl}${slash}${qrisImage}`;
+                }
+
+                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nBerikut adalah QRIS untuk pembayaran pesanan Anda. Silakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya (screenshot/struk) ke sini ya! 🍵`;
+                return NextResponse.json({
+                  success: true,
+                  replyMessage: reply,
+                  image: absoluteQrisImage || undefined
+                });
+              } else {
+                console.error("[WHATSAPP_WEBHOOK] QRIS is disabled in payment settings.");
+                return NextResponse.json({
+                  success: false,
+                  error: "QRIS is disabled",
+                  replyMessage: "Maaf, metode pembayaran QRIS saat ini tidak aktif. Silakan hubungi admin atau gunakan metode pembayaran COD. ❌"
+                });
+              }
             }
           } else {
             // COD
