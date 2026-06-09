@@ -336,7 +336,7 @@ export async function createDokuMcpQrisPayment(
     amount: number;
     postalCode?: string;
   }
-): Promise<{ qrContent?: string; error?: string }> {
+): Promise<{ qrContent?: string; qrImageUrl?: string; error?: string }> {
   const { clientId, sharedKey, isSandbox } = creds;
   
   // Use MCP URL from env, or default to sandbox/production base URL + /doku-mcp-server/mcp
@@ -400,7 +400,10 @@ export async function createDokuMcpQrisPayment(
     }
 
     if (parsedResult.qrContent) {
-      return { qrContent: parsedResult.qrContent };
+      return { 
+        qrContent: parsedResult.qrContent,
+        qrImageUrl: parsedResult.qrImageUrl 
+      };
     }
 
     return { error: 'qrContent not found in Doku MCP response' };

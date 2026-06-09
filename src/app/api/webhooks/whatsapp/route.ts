@@ -339,9 +339,18 @@ export async function POST(req: Request) {
         const paymentSettings = await prisma.paymentSettings.findFirst();
         const qrisImage = paymentSettings?.qrisImage;
         let absoluteQrisImage = qrisImage;
-        if (qrisImage && !qrisImage.startsWith('http')) {
-          const slash = qrisImage.startsWith('/') ? '' : '/';
-          absoluteQrisImage = `${appUrl}${slash}${qrisImage}`;
+
+        if (paymentSettings?.dokuEnabled && order.paymentQrContent) {
+          if (order.paymentUrl && order.paymentUrl.startsWith('http') && order.paymentUrl.includes('doku')) {
+            absoluteQrisImage = order.paymentUrl;
+          } else {
+            const isSandbox = paymentSettings.dokuSandbox;
+            const apiDomain = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+            absoluteQrisImage = `${apiDomain}/doku-mcp-server/api/qr/generate?qr=${encodeURIComponent(order.paymentQrContent)}`;
+          }
+        } else if (absoluteQrisImage && !absoluteQrisImage.startsWith('http')) {
+          const slash = absoluteQrisImage.startsWith('/') ? '' : '/';
+          absoluteQrisImage = `${appUrl}${slash}${absoluteQrisImage}`;
         }
 
         const reply = `Halo *${order.customerName}*!\n\nBerikut adalah QRIS untuk pembayaran pesanan SPMB Anda *${order.id}*:\n\n*Detail Pesanan:*\n${order.items.map(item => `- ${item.qty}x ${item.product.name}`).join('\n')}\n\n*Total Pembayaran: ${formatCurrency(order.total)}*\n*Jam Pengantaran: ${order.pickupTime}*\n*Alamat: ${order.address}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya ke sini ya! 🍵`;
@@ -989,30 +998,25 @@ export async function POST(req: Request) {
           if (session.paymentMethod === "QRIS") {
             const paymentSettings = await prisma.paymentSettings.findFirst();
             if (paymentSettings && paymentSettings.dokuEnabled) {
-              const { createDokuCheckoutSession } = await import("@/lib/doku");
-              const callbackUrl = `${appUrl}/orders/${orderId}`;
-              const notificationUrl = `${appUrl}/api/payment/snap-webhook`;
+              const { createDokuMcpQrisPayment } = await import("@/lib/doku");
 
-              const dokuResult = await createDokuCheckoutSession({
+              console.log("[WHATSAPP_WEBHOOK] Generating dynamic QRIS via Doku MCP Server...");
+              const mcpResult = await createDokuMcpQrisPayment({
                 clientId: paymentSettings.dokuClientId,
                 sharedKey: paymentSettings.dokuSharedKey,
                 isSandbox: paymentSettings.dokuSandbox,
               }, {
                 invoiceNumber: orderId,
                 amount: total,
-                customerName: session.customerName,
-                customerPhone: cleanPhone,
-                customerEmail: 'arumseduh@gmail.com',
-                callbackUrl,
-                notificationUrl,
-                paymentChannel: 'QRIS'
+                postalCode: '67215'
               });
 
-              if (dokuResult && dokuResult.url) {
+              if (mcpResult && mcpResult.qrContent) {
                 await prisma.order.update({
                   where: { id: orderId },
                   data: {
-                    paymentUrl: dokuResult.url,
+                    paymentQrContent: mcpResult.qrContent,
+                    paymentUrl: mcpResult.qrImageUrl || null,
                     paymentExpiredAt: new Date(Date.now() + 60 * 60 * 1000)
                   }
                 });
@@ -1029,14 +1033,18 @@ export async function POST(req: Request) {
                   console.error("Gagal mengirim admin new order notification:", waErr);
                 }
 
-                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan selesaikan pembayaran QRIS Anda melalui tautan resmi Doku berikut:\n👉 ${dokuResult.url}\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
-                return NextResponse.json({ success: true, replyMessage: reply });
+                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran.\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
+                return NextResponse.json({
+                  success: true,
+                  replyMessage: reply,
+                  image: mcpResult.qrImageUrl || undefined
+                });
               } else {
-                console.error("[WHATSAPP_WEBHOOK] Doku checkout generation failed:", dokuResult?.error);
+                console.error("[WHATSAPP_WEBHOOK] Doku MCP QRIS generation failed:", mcpResult?.error);
                 return NextResponse.json({
                   success: false,
-                  error: "Doku checkout generation failed",
-                  replyMessage: "Maaf, terjadi kesalahan saat membuat tautan pembayaran QRIS Doku. Silakan coba lagi nanti atau hubungi admin. ❌"
+                  error: "Doku MCP QRIS generation failed",
+                  replyMessage: `Maaf, terjadi kesalahan saat membuat pembayaran QRIS Doku: ${mcpResult?.error || 'Unknown error'}. Silakan coba lagi nanti atau hubungi admin. ❌`
                 });
               }
             } else {
