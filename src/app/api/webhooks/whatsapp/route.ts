@@ -1025,13 +1025,12 @@ export async function POST(req: Request) {
                   where: { key: sessionKey }
                 });
 
-                // Trigger admin new order notification
-                try {
-                  const { sendAdminNewOrderNotification } = await import("@/lib/whatsapp-service");
-                  await sendAdminNewOrderNotification(orderId);
-                } catch (waErr) {
-                  console.error("Gagal mengirim admin new order notification:", waErr);
-                }
+                // Trigger admin new order notification (non-blocking)
+                import("@/lib/whatsapp-service").then(({ sendAdminNewOrderNotification }) => {
+                  sendAdminNewOrderNotification(orderId).catch(waErr => 
+                    console.error("Gagal mengirim admin new order notification:", waErr)
+                  );
+                });
 
                 const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran.\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
                 return NextResponse.json({
@@ -1053,12 +1052,12 @@ export async function POST(req: Request) {
                   where: { key: sessionKey }
                 });
 
-                try {
-                  const { sendAdminNewOrderNotification } = await import("@/lib/whatsapp-service");
-                  await sendAdminNewOrderNotification(orderId);
-                } catch (waErr) {
-                  console.error("Gagal mengirim admin new order notification:", waErr);
-                }
+                // Trigger admin new order notification (non-blocking)
+                import("@/lib/whatsapp-service").then(({ sendAdminNewOrderNotification }) => {
+                  sendAdminNewOrderNotification(orderId).catch(waErr => 
+                    console.error("Gagal mengirim admin new order notification:", waErr)
+                  );
+                });
 
                 const qrisImage = paymentSettings.qrisImage;
                 let absoluteQrisImage = qrisImage;
@@ -1088,13 +1087,12 @@ export async function POST(req: Request) {
               where: { key: sessionKey }
             });
 
-            // Trigger admin new order notification
-            try {
-              const { sendAdminNewOrderNotification } = await import("@/lib/whatsapp-service");
-              await sendAdminNewOrderNotification(orderId);
-            } catch (waErr) {
-              console.error("Gagal mengirim admin new order notification:", waErr);
-            }
+            // Trigger admin new order notification (non-blocking)
+            import("@/lib/whatsapp-service").then(({ sendAdminNewOrderNotification }) => {
+              sendAdminNewOrderNotification(orderId).catch(waErr => 
+                console.error("Gagal mengirim admin new order notification:", waErr)
+              );
+            });
 
             // Trigger admin summary
             const { sendAdminOrderSummary } = await import("@/lib/whatsapp-service");
