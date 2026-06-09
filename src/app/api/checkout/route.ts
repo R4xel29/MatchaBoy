@@ -858,6 +858,7 @@ export async function POST(req: Request) {
                     
                     console.log('[QRIS Instan] Attempting to generate QRIS via DOKU MCP Server...')
                     let qrContent: string | null = null
+                    let mcpError: string | null = null
                     try {
                         const mcpResult = await createDokuMcpQrisPayment({
                             clientId: paymentSettings.dokuClientId,
@@ -871,15 +872,16 @@ export async function POST(req: Request) {
                         if (mcpResult.qrContent) {
                             qrContent = mcpResult.qrContent
                         } else {
+                            mcpError = mcpResult.error || 'Empty QR content'
                             console.warn('[QRIS Instan] DOKU MCP generation failed/returned no QR content. Error:', mcpResult.error)
                         }
                     } catch (mcpErr: any) {
+                        mcpError = mcpErr.message || String(mcpErr)
                         console.error('[QRIS Instan] DOKU MCP request threw exception:', mcpErr)
                     }
 
                     if (!qrContent) {
-                        console.log('[QRIS Instan] Using local dynamic QRIS generator fallback...')
-                        qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid || undefined)
+                        throw new Error(`Gagal menghasilkan QRIS otomatis dari Doku API: ${mcpError || 'Unknown error'}`)
                     }
 
                     // Generate backup hosted checkout session URL

@@ -342,7 +342,7 @@ export async function createDokuMcpQrisPayment(
   // Use MCP URL from env, or default to sandbox/production base URL + /doku-mcp-server/mcp
   const defaultMcpUrl = isSandbox 
     ? 'https://api-sandbox.doku.com/doku-mcp-server/mcp'
-    : 'https://api.doku.com/doku-mcp-server/mcp';
+    : 'https://mcp.doku.com/mcp';
   
   const mcpUrl = process.env.DOKU_MCP_URL || defaultMcpUrl;
 
