@@ -13,7 +13,7 @@ export function standardizeJid(phone: string): string {
   return standardized;
 }
 
-export async function sendWhatsAppMessage(phone: string, text: string) {
+export async function sendWhatsAppMessage(phone: string, text: string, imageUrl?: string) {
   const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
   const apiKey = process.env.WA_BOT_API_KEY || "";
   
@@ -30,7 +30,8 @@ export async function sendWhatsAppMessage(phone: string, text: string) {
       body: JSON.stringify({ 
         phone: isGroup ? undefined : phone, 
         message: text,
-        jid: isGroup ? phone : undefined
+        jid: isGroup ? phone : undefined,
+        image: imageUrl
       }),
     });
     if (!res.ok) {

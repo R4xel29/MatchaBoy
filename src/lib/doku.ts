@@ -400,9 +400,19 @@ export async function createDokuMcpQrisPayment(
     }
 
     if (parsedResult.qrContent) {
+      let qrImageUrl = parsedResult.qrImageUrl;
+      if (qrImageUrl) {
+        if (!isSandbox) {
+          // Production uses mcp.doku.com/api/qr/generate instead of api.doku.com/doku-mcp-server
+          qrImageUrl = qrImageUrl.replace('api.doku.com/doku-mcp-server', 'mcp.doku.com');
+        } else {
+          // Sandbox uses api-sandbox.doku.com/doku-mcp-server
+          qrImageUrl = qrImageUrl.replace('api.doku.com', 'api-sandbox.doku.com');
+        }
+      }
       return { 
         qrContent: parsedResult.qrContent,
-        qrImageUrl: parsedResult.qrImageUrl 
+        qrImageUrl: qrImageUrl 
       };
     }
 

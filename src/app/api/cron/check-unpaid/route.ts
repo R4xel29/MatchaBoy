@@ -141,18 +141,30 @@ export async function GET(req: Request) {
             }
           });
 
-          // Send WhatsApp reminder
-          let reminderMsg = `⚠️ *PENGINGAT PEMBAYARAN* ⚠️\n\nHalo *${order.customerName}*,\n\nPesanan Anda *${order.id}* dengan total *Rp ${order.total.toLocaleString("id-ID")}* belum terbayar.\n\nMohon segera lakukan pembayaran agar pesanan Anda dapat kami proses. Pesanan akan dibatalkan otomatis oleh sistem jika belum terbayar dalam waktu 30 menit sejak pemesanan.`;
-          
-          if (order.paymentUrl) {
-            reminderMsg += `\n\n👉 Link Pembayaran: ${order.paymentUrl}`;
+          // Resolve QRIS image URL (dynamic or static fallback)
+          let imageUrl = order.paymentUrl;
+          if (imageUrl) {
+            if (imageUrl.includes('api.doku.com/doku-mcp-server')) {
+              imageUrl = imageUrl.replace('api.doku.com/doku-mcp-server', 'mcp.doku.com');
+            }
           } else {
-            reminderMsg += `\n\nSilakan kirimkan bukti transfer/pembayaran QRIS Anda di chat ini untuk diverifikasi admin.`;
+            const paymentSettings = await prisma.paymentSettings.findFirst();
+            if (paymentSettings && paymentSettings.qrisEnabled && paymentSettings.qrisImage) {
+              const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
+              const qrisImage = paymentSettings.qrisImage;
+              imageUrl = qrisImage;
+              if (qrisImage && !qrisImage.startsWith('http')) {
+                const slash = qrisImage.startsWith('/') ? '' : '/';
+                imageUrl = `${appUrl}${slash}${qrisImage}`;
+              }
+            }
           }
-          reminderMsg += `\n\nTerima kasih! 🍵`;
+
+          // Send WhatsApp reminder
+          const reminderMsg = `⚠️ *PENGINGAT PEMBAYARAN* ⚠️\n\nHalo *${order.customerName}*,\n\nPesanan Anda *${order.id}* dengan total *Rp ${order.total.toLocaleString("id-ID")}* belum terbayar.\n\n*Cara Pembayaran QRIS:*\n1. Simpan/Screenshot gambar QRIS di atas.\n2. Buka aplikasi e-wallet Anda (GoPay, OVO, DANA, ShopeePay, dll.) atau M-Banking.\n3. Pilih menu *Scan / Bayar* lalu unggah gambar QRIS tadi dari galeri.\n4. Konfirmasi pembayaran dan masukkan PIN Anda.\n\n_Pesanan akan dibatalkan otomatis oleh sistem jika belum terbayar dalam waktu 30 menit sejak pemesanan._\n\nTerima kasih! 🍵`;
 
           try {
-            await sendWhatsAppMessage(standardizeJid(order.customerPhone), reminderMsg);
+            await sendWhatsAppMessage(standardizeJid(order.customerPhone), reminderMsg, imageUrl || undefined);
           } catch (waErr) {
             console.error(`[CHECK_UNPAID_CRON] Failed to send WA reminder for order ${order.id}:`, waErr);
           }
