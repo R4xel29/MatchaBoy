@@ -40,7 +40,7 @@ export async function GET() {
       const totalOrdersCount = completedOrders.length;
       return {
         id: ref.id,
-        name: ref.name || 'Pengguna Matchaboy',
+        name: ref.name || 'Pengguna Arum Seduh',
         joinedAt: ref.createdAt,
         bonusClaimed: ref.referralBonusPaid,
         highestOrderAmount,

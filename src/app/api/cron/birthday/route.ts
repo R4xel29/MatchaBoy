@@ -92,7 +92,7 @@ export async function GET(req: Request) {
 
       // Send WhatsApp notification if user has phone
       if (user.phone && user.phoneVerified) {
-        const waMessage = `Selamat Ulang Tahun, *${user.name || 'Matcha Lover'}*! 🎉🎂\n\nSebagai kado spesial dari Matchaboy, nikmati voucher *${description}* dengan kode *${voucherCode}*.\n\nSelamat merayakan hari spesialmu dengan secangkir matcha hangat! 🍵✨\n\n_Voucher ini berlaku selama 30 hari dan dapat ditukarkan di storefront/kasir Matchaboy._`;
+        const waMessage = `Selamat Ulang Tahun, *${user.name || 'Pelanggan Setia'}*! 🎉🎂\n\nSebagai kado spesial dari Arum Seduh, nikmati voucher *${description}* dengan kode *${voucherCode}*.\n\nSelamat merayakan hari spesialmu dengan secangkir matcha hangat! 🍵✨\n\n_Voucher ini berlaku selama 30 hari dan dapat ditukarkan di storefront/kasir Arum Seduh._`;
         
         try {
           const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";

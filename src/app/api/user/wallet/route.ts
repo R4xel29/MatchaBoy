@@ -49,7 +49,7 @@ export async function GET(req: Request) {
                 }, {
                     invoiceNumber: tx.referenceId || tx.id,
                     amount: tx.amount,
-                    customerName: userDb?.name || session.user.name || 'Matchaboy Customer',
+                    customerName: userDb?.name || session.user.name || 'Arum Seduh Customer',
                     customerPhone: userDb?.phone || '628123456789',
                     customerEmail: userDb?.email || session.user.email || 'arumseduh@gmail.com',
                     callbackUrl,
@@ -212,7 +212,7 @@ export async function POST(req: Request) {
 
         // If payment method is specified and not DIRECT, create a PENDING transaction
         if (paymentMethod && paymentMethod !== 'DIRECT') {
-            const paymentCode = `MB-TOPUP-${Math.floor(1000 + Math.random() * 9000)}`
+            const paymentCode = `AS-TOPUP-${Math.floor(1000 + Math.random() * 9000)}`
             
             const transaction = await prisma.walletTransaction.create({
                 data: {
@@ -251,7 +251,7 @@ export async function POST(req: Request) {
                 }, {
                     invoiceNumber: paymentCode,
                     amount: amount,
-                    customerName: userDb?.name || session.user.name || 'Matchaboy Customer',
+                    customerName: userDb?.name || session.user.name || 'Arum Seduh Customer',
                     customerPhone: userDb?.phone || '628123456789',
                     customerEmail: userDb?.email || session.user.email || 'arumseduh@gmail.com',
                     callbackUrl,

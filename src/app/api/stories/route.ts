@@ -23,7 +23,7 @@ const FALLBACK_STORIES = [
   },
   {
     id: 'seed-story-3',
-    title: 'Matchaboy Secret: Seni Pengocokan Chasen 🍵',
+    title: 'Arum Seduh Secret: Seni Pengocokan Chasen 🍵',
     mediaUrl: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=720',
     mediaType: 'IMAGE',
     linkUrl: '/custom-studio',

@@ -67,7 +67,7 @@ export async function sendReadyNotification(orderId: string) {
       message = `Halo *${order.customerName}*!\n\nPesanan SPMB Anda *${order.id}* sudah siap (READY) dan sedang dalam proses pengantaran ke kelas/lokasi Anda: *${order.address}*.\n\nJika sudah sampai, mohon klik tombol *Pesanan Diterima* di halaman pelacakan pesanan Anda ya! 🍵`;
     } else {
       const typeLabel = order.orderType === 'DELIVERY' ? 'diantar' : 'diambil';
-      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* sudah siap (READY) dan siap untuk ${typeLabel}.\n\nTerima kasih telah memesan di Matchaboy! 🍵`;
+      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* sudah siap (READY) dan siap untuk ${typeLabel}.\n\nTerima kasih telah memesan di Arum Seduh! 🍵`;
     }
 
     await sendWhatsAppMessage(standardizedPhone, message);
@@ -100,10 +100,12 @@ export async function sendCompletedNotification(orderId: string) {
     const isCod = order.paymentMethod === 'COD';
     const lunasSuffix = isCod ? ' (Lunas)' : '';
     if (order.source === 'SPMB') {
-      message = `Halo *${order.customerName}*!\n\nPesanan SPMB Anda *${order.id}* telah selesai dan sudah diterima${lunasSuffix}. Terima kasih telah memesan di Matchaboy! 🍵`;
+      message = `Halo *${order.customerName}*!\n\nPesanan SPMB Anda *${order.id}* telah selesai dan sudah diterima${lunasSuffix}. Terima kasih telah memesan di Arum Seduh! 🍵`;
     } else {
-      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah selesai${lunasSuffix}. Terima kasih telah memesan di Matchaboy! 🍵`;
+      message = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah selesai${lunasSuffix}. Terima kasih telah memesan di Arum Seduh! 🍵`;
     }
+
+    message += `\n\n💡 *Promo Menarik & Referral:*\nGunakan web resmi kami di https://arumseduh.vercel.app untuk pemesanan berikutnya. Dengan login menggunakan web, dapatkan banyak promo menarik serta referral dan berbagai keuntungan lainnya! ✨`;
 
     await sendWhatsAppMessage(standardizedPhone, message);
   } catch (error) {
@@ -476,7 +478,7 @@ export async function sendPaymentSuccessNotification(orderId: string) {
     } else if (order.orderType === 'PICKUP') {
       message += `Pesanan Anda sedang dipersiapkan. Kami akan mengabari Anda jika pesanan sudah siap untuk diambil. Terima kasih! 🍵`;
     } else {
-      message += `Pesanan Anda sedang dipersiapkan. Terima kasih telah memesan di Matchaboy! 🍵`;
+      message += `Pesanan Anda sedang dipersiapkan. Terima kasih telah memesan di Arum Seduh! 🍵`;
     }
 
     await sendWhatsAppMessage(standardizedPhone, message);

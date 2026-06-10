@@ -146,7 +146,7 @@ export async function PATCH(req: Request) {
       data: {
         userId,
         type: voucherType || 'DISCOUNT_RP',
-        description: description || 'Selamat Ulang Tahun! 🎂 Voucher spesial dari Matchaboy',
+        description: description || 'Selamat Ulang Tahun! 🎂 Voucher spesial dari Arum Seduh',
         discountAmount: voucherValue || 25000,
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days validity
       },
@@ -163,7 +163,7 @@ export async function PATCH(req: Request) {
         userId,
         type: 'promo',
         title: 'Selamat Ulang Tahun! 🎂🎉',
-        message: `Matchaboy mengucapkan selamat ulang tahun! Kami memberikan voucher spesial senilai Rp ${(voucherValue || 25000).toLocaleString('id-ID')} untukmu. Cek di halaman voucher ya!`,
+        message: `Arum Seduh mengucapkan selamat ulang tahun! Kami memberikan voucher spesial senilai Rp ${(voucherValue || 25000).toLocaleString('id-ID')} untukmu. Cek di halaman voucher ya!`,
       },
     })
 

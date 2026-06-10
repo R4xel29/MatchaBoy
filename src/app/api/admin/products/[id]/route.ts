@@ -60,7 +60,7 @@ export async function PATCH(
 
                     for (const sub of subscriptions) {
                         if (sub.phone) {
-                            const message = `Kabar gembira! 🍵✨\n\nProduk favoritmu *${product.name}* sudah tersedia kembali di Matchaboy! Yuk, pesan sekarang sebelum kehabisan lagi: ${appUrl}`;
+                            const message = `Kabar gembira! 🍵✨\n\nProduk favoritmu *${product.name}* sudah tersedia kembali di Arum Seduh! Yuk, pesan sekarang sebelum kehabisan lagi: ${appUrl}`;
                             try {
                                 await fetch(waProviderUrl, {
                                     method: "POST",

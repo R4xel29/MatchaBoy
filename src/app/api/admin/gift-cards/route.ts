@@ -84,7 +84,7 @@ export async function POST(req: Request) {
       data: {
         code,
         amount: Number(amount),
-        senderName: senderName || 'Matchaboy Admin',
+        senderName: senderName || 'Arum Seduh Admin',
         recipientPhone: recipientPhone || '',
         message: message || null,
         expiresAt,

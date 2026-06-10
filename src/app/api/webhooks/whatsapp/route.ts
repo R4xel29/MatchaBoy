@@ -584,7 +584,7 @@ export async function POST(req: Request) {
       console.log(`[WHATSAPP_WEBHOOK] Akun user ${user.id} berhasil dihapus.`);
 
       // Send WhatsApp confirmation back to the user
-      const deleteMessage = `Akun Anda dengan nama *${user.name || "Matcha Lover"}* telah berhasil dihapus secara permanen dari sistem *Arum Seduh*! ❌\n\nTerima kasih telah bersama kami. Semoga kita bisa bertemu kembali di lain kesempatan.`;
+      const deleteMessage = `Akun Anda dengan nama *${user.name || "Pelanggan Setia"}* telah berhasil dihapus secara permanen dari sistem *Arum Seduh*! ❌\n\nTerima kasih telah bersama kami. Semoga kita bisa bertemu kembali di lain kesempatan.`;
       try {
         await sendWhatsAppMessage(standardizedSenderPhone, deleteMessage, jid);
       } catch {}
@@ -734,6 +734,27 @@ export async function POST(req: Request) {
     }
 
     if (session) {
+      const sendConfirmationMessage = (sess: any, key: string, appUrl: string) => {
+        let confirmationMessage = "";
+        const subtotal = sess.quantity * sess.price;
+        if (sess.orderType === "PICKUP") {
+          confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${sess.customerName}\n🛍️ *Pesanan:* ${sess.quantity}x ${sess.productName}\n💰 *Total:* Rp${subtotal.toLocaleString('id-ID')}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n💳 *Pembayaran:* ${sess.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, *EDIT* untuk mengubah, atau *BATAL* untuk membatalkan.`;
+        } else {
+          const deliveryFee = sess.deliveryFee || 0;
+          const total = subtotal + deliveryFee;
+          confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${sess.customerName}\n🛍️ *Pesanan:* ${sess.quantity}x ${sess.productName}\n💵 *Subtotal:* Rp${subtotal.toLocaleString('id-ID')}\n🚚 *Ongkir:* Rp${deliveryFee.toLocaleString('id-ID')}\n💰 *Total:* Rp${total.toLocaleString('id-ID')}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${sess.address}\n💳 *Pembayaran:* ${sess.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, *EDIT* untuk mengubah, atau *BATAL* untuk membatalkan.`;
+        }
+        return NextResponse.json({
+          success: true,
+          replyMessage: confirmationMessage,
+          buttons: [
+            { id: "ya", text: "YA", title: "YA" },
+            { id: "edit", text: "EDIT", title: "EDIT" },
+            { id: "batal", text: "BATAL", title: "BATAL" }
+          ]
+        });
+      };
+
       const state = session.state;
 
       if (state === "SELECTING_QUANTITY") {
@@ -903,24 +924,7 @@ export async function POST(req: Request) {
             data: { value: JSON.stringify(session) }
           });
 
-          let confirmationMessage = "";
-          if (session.orderType === "PICKUP") {
-            const subtotal = session.quantity * session.price;
-            confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💰 *Total:* Rp${subtotal.toLocaleString('id-ID')}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n💳 *Pembayaran:* ${session.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
-          } else {
-            const subtotal = session.quantity * session.price;
-            const deliveryFee = session.deliveryFee || 0;
-            const total = subtotal + deliveryFee;
-            confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${session.customerName}\n🛍️ *Pesanan:* ${session.quantity}x ${session.productName}\n💵 *Subtotal:* Rp${subtotal.toLocaleString('id-ID')}\n🚚 *Ongkir:* Rp${deliveryFee.toLocaleString('id-ID')}\n💰 *Total:* Rp${total.toLocaleString('id-ID')}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${session.address}\n💳 *Pembayaran:* ${session.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan.`;
-          }
-          return NextResponse.json({
-            success: true,
-            replyMessage: confirmationMessage,
-            buttons: [
-              { id: "ya", text: "YA", title: "YA" },
-              { id: "batal", text: "BATAL", title: "BATAL" }
-            ]
-          });
+          return sendConfirmationMessage(session, sessionKey, appUrl);
         } else {
           return NextResponse.json({
             success: true,
@@ -1101,6 +1105,39 @@ export async function POST(req: Request) {
             const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nPesanan Anda akan segera diproses. Terima kasih! 🍵`;
             return NextResponse.json({ success: true, replyMessage: reply });
           }
+        } else if (confirmation === "edit") {
+          session.state = "SELECTING_EDIT_FIELD";
+          await prisma.waBotSession.update({
+            where: { key: sessionKey },
+            data: { value: JSON.stringify(session) }
+          });
+
+          let editMenu = "";
+          let buttons: any[] = [];
+          if (session.orderType === "PICKUP") {
+            editMenu = `⚙️ *EDIT PESANAN*\n\nPilih data yang ingin Anda ubah:\n1. *Jumlah Pesanan* (Kuantitas)\n2. *Metode Penyerahan* (Pickup/Delivery)\n3. *Nama Penerima*\n4. *Metode Pembayaran*\n\nKetik nomor *1* - *4* untuk memilih.`;
+            buttons = [
+              { id: "edit_qty", text: "Jumlah Pesanan", title: "Kuantitas" },
+              { id: "edit_type", text: "Metode Penyerahan", title: "Metode" },
+              { id: "edit_name", text: "Nama Penerima", title: "Nama" },
+              { id: "edit_payment", text: "Metode Pembayaran", title: "Pembayaran" }
+            ];
+          } else {
+            editMenu = `⚙️ *EDIT PESANAN*\n\nPilih data yang ingin Anda ubah:\n1. *Jumlah Pesanan* (Kuantitas)\n2. *Metode Penyerahan* (Pickup/Delivery)\n3. *Nama Penerima*\n4. *Alamat Pengiriman*\n5. *Metode Pembayaran*\n\nKetik nomor *1* - *5* untuk memilih.`;
+            buttons = [
+              { id: "edit_qty", text: "Jumlah Pesanan", title: "Kuantitas" },
+              { id: "edit_type", text: "Metode Penyerahan", title: "Metode" },
+              { id: "edit_name", text: "Nama Penerima", title: "Nama" },
+              { id: "edit_address", text: "Alamat Pengiriman", title: "Alamat" },
+              { id: "edit_payment", text: "Metode Pembayaran", title: "Pembayaran" }
+            ];
+          }
+
+          return NextResponse.json({
+            success: true,
+            replyMessage: editMenu,
+            buttons
+          });
         } else if (confirmation === "batal") {
           await prisma.waBotSession.delete({
             where: { key: sessionKey }
@@ -1112,8 +1149,187 @@ export async function POST(req: Request) {
         } else {
           return NextResponse.json({
             success: true,
-            replyMessage: "Maaf, pilihan tidak valid. Ketik *YA* untuk konfirmasi, atau *BATAL* untuk membatalkan."
+            replyMessage: "Maaf, pilihan tidak valid. Ketik *YA* untuk konfirmasi, *EDIT* untuk mengubah, atau *BATAL* untuk membatalkan.",
+            buttons: [
+              { id: "ya", text: "YA", title: "YA" },
+              { id: "edit", text: "EDIT", title: "EDIT" },
+              { id: "batal", text: "BATAL", title: "BATAL" }
+            ]
           });
+        }
+      }
+
+      if (state === "SELECTING_EDIT_FIELD") {
+        const choice = text.trim().toLowerCase();
+        if (choice === "1" || choice === "edit_qty") {
+          session.state = "EDITING_QUANTITY";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return NextResponse.json({
+            success: true,
+            replyMessage: `Masukkan jumlah pesanan baru untuk *${session.productName}*:`
+          });
+        } else if (choice === "2" || choice === "edit_type") {
+          session.state = "EDITING_ORDER_TYPE";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return NextResponse.json({
+            success: true,
+            replyMessage: `Pilih metode penyerahan baru:\n1. *Ambil Sendiri* (PICKUP)\n2. *Diantar* (DELIVERY)\n\nKetik *1* atau *2*.`,
+            buttons: [
+              { id: "1", text: "Ambil Sendiri (PICKUP)", title: "Ambil Sendiri" },
+              { id: "2", text: "Diantar (DELIVERY)", title: "Diantar" }
+            ]
+          });
+        } else if (choice === "3" || choice === "edit_name") {
+          session.state = "EDITING_NAME";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return NextResponse.json({
+            success: true,
+            replyMessage: `Masukkan nama lengkap penerima yang baru:`
+          });
+        } else if (
+          (session.orderType === "DELIVERY" && (choice === "4" || choice === "edit_address")) ||
+          (session.orderType === "PICKUP" && (choice === "4" || choice === "edit_payment"))
+        ) {
+          if (session.orderType === "DELIVERY") {
+            session.state = "EDITING_ADDRESS";
+            await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Kirimkan lokasi Anda (Share Location) dari WhatsApp, atau ketik alamat pengiriman lengkap yang baru:`
+            });
+          } else {
+            session.state = "EDITING_PAYMENT";
+            await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Pilih metode pembayaran baru:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*.`,
+              buttons: [
+                { id: "1", text: "Bayar di Tempat (COD)", title: "COD" },
+                { id: "2", text: "QRIS (Otomatis via Doku)", title: "QRIS" }
+              ]
+            });
+          }
+        } else if (session.orderType === "DELIVERY" && (choice === "5" || choice === "edit_payment")) {
+          session.state = "EDITING_PAYMENT";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return NextResponse.json({
+            success: true,
+            replyMessage: `Pilih metode pembayaran baru:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*.`,
+            buttons: [
+              { id: "1", text: "Bayar di Tempat (COD)", title: "COD" },
+              { id: "2", text: "QRIS (Otomatis via Doku)", title: "QRIS" }
+            ]
+          });
+        } else {
+          const menuText = session.orderType === "DELIVERY"
+            ? "Pilihan tidak valid. Silakan pilih nomor *1* hingga *5*."
+            : "Pilihan tidak valid. Silakan pilih nomor *1* hingga *4*.";
+          return NextResponse.json({ success: true, replyMessage: menuText });
+        }
+      }
+
+      if (state === "EDITING_QUANTITY") {
+        const qty = parseInt(text.trim(), 10);
+        if (!isNaN(qty) && qty > 0) {
+          session.quantity = qty;
+          session.state = "CONFIRMING";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return sendConfirmationMessage(session, sessionKey, appUrl);
+        } else {
+          return NextResponse.json({ success: true, replyMessage: "Jumlah tidak valid. Masukkan angka positif saja (contoh: *2*):" });
+        }
+      }
+
+      if (state === "EDITING_ORDER_TYPE") {
+        const choice = text.trim();
+        if (choice === "1" || choice === "2") {
+          session.orderType = choice === "1" ? "PICKUP" : "DELIVERY";
+          if (session.orderType === "PICKUP") {
+            session.state = "CONFIRMING";
+            await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+            return sendConfirmationMessage(session, sessionKey, appUrl);
+          } else {
+            session.state = "EDITING_ADDRESS";
+            await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+            return NextResponse.json({
+              success: true,
+              replyMessage: "Kirimkan lokasi Anda (Share Location) dari WhatsApp, atau ketik alamat pengiriman lengkap yang baru:"
+            });
+          }
+        } else {
+          return NextResponse.json({ success: true, replyMessage: "Pilihan tidak valid. Pilih metode penyerahan:\n1. *Ambil Sendiri* (PICKUP)\n2. *Diantar* (DELIVERY)\n\nKetik *1* atau *2*." });
+        }
+      }
+
+      if (state === "EDITING_NAME") {
+        const newName = text.trim();
+        if (newName.length > 1) {
+          session.customerName = newName;
+          session.state = "CONFIRMING";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return sendConfirmationMessage(session, sessionKey, appUrl);
+        } else {
+          return NextResponse.json({ success: true, replyMessage: "Nama terlalu pendek. Masukkan nama lengkap penerima yang baru:" });
+        }
+      }
+
+      if (state === "EDITING_ADDRESS") {
+        const address = text.trim();
+        const storeSettings = await prisma.storeSettings.findFirst();
+        const storeLat = storeSettings?.storeLat ?? -7.756928;
+        const storeLng = storeSettings?.storeLng ?? 113.211502;
+        const perKmFee = storeSettings?.deliveryFeePerKm ?? 2000;
+
+        let lat = storeLat;
+        let lng = storeLng;
+        let distanceKm = 0;
+        let deliveryFee = 0;
+        let bestDisplayName = address;
+
+        if (body.location && typeof body.location.latitude === 'number' && typeof body.location.longitude === 'number') {
+          lat = body.location.latitude;
+          lng = body.location.longitude;
+          bestDisplayName = body.location.address || address;
+          console.log(`[WHATSAPP_WEBHOOK] Using WhatsApp GPS coordinates during edit: lat=${lat}, lng=${lng}, address=${bestDisplayName}`);
+        } else {
+          try {
+            const { geocodeAddressDirect } = await import("@/lib/geocode-helper");
+            const geocodeData = await geocodeAddressDirect(address, storeLat, storeLng);
+            if (geocodeData && geocodeData.length > 0) {
+              const bestMatch = geocodeData[0];
+              lat = parseFloat(bestMatch.lat);
+              lng = parseFloat(bestMatch.lon);
+              bestDisplayName = bestMatch.display_name;
+            }
+          } catch (err) {
+            console.error("[WHATSAPP_WEBHOOK] Direct geocoding error during edit:", err);
+          }
+        }
+
+        const { calculateDistance, calculateDeliveryFee } = await import("@/lib/delivery-utils");
+        distanceKm = calculateDistance(storeLat, storeLng, lat, lng);
+        deliveryFee = calculateDeliveryFee(distanceKm, perKmFee);
+
+        session.address = bestDisplayName;
+        session.lat = lat;
+        session.lng = lng;
+        session.distanceKm = distanceKm;
+        session.deliveryFee = deliveryFee;
+
+        session.state = "CONFIRMING";
+        await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+        return sendConfirmationMessage(session, sessionKey, appUrl);
+      }
+
+      if (state === "EDITING_PAYMENT") {
+        const choice = text.trim();
+        if (choice === "1" || choice === "2") {
+          session.paymentMethod = choice === "1" ? "COD" : "QRIS";
+          session.state = "CONFIRMING";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return sendConfirmationMessage(session, sessionKey, appUrl);
+        } else {
+          return NextResponse.json({ success: true, replyMessage: "Pilihan tidak valid. Pilih metode pembayaran:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*." });
         }
       }
     }

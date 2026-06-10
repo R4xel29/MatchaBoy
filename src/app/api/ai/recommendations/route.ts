@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
                 const rationales = [
                     "Bestseller teratas kami! Diramu khusus untuk memberikan tendangan matcha premium yang lembut namun berenergi tinggi.",
                     "Favorit komunitas! Kombinasi rasa gurih khas matcha premium dengan sensasi manis-gurih yang seimbang.",
-                    "Sangat direkomendasikan untuk petualangan rasa pertamamu di Matchaboy HQ. Segar dan autentik!"
+                    "Sangat direkomendasikan untuk petualangan rasa pertamamu di Arum Seduh HQ. Segar dan autentik!"
                 ]
                 return {
                     product,
@@ -122,7 +122,7 @@ export async function GET(req: NextRequest) {
             if (biscoff && !addedIds.has(biscoff.id)) {
                 recommended.push({
                     product: biscoff,
-                    rationale: "Untuk sensasi manis-gurih dingin yang sempurna, Matchaboy Biscoff dengan saus karamel ini sangat cocok dengan seleramu!"
+                    rationale: "Untuk sensasi manis-gurih dingin yang sempurna, Arum Seduh Biscoff dengan saus karamel ini sangat cocok dengan seleramu!"
                 })
                 addedIds.add(biscoff.id)
             }
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
             if (!addedIds.has(p.id)) {
                 recommended.push({
                     product: p,
-                    rationale: "Pilihan terbaik kurasi AI berdasarkan racikan terfavorit komunitas Matchaboy minggu ini!"
+                    rationale: "Pilihan terbaik kurasi AI berdasarkan racikan terfavorit komunitas Arum Seduh minggu ini!"
                 })
                 addedIds.add(p.id)
             }

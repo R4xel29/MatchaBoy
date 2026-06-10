@@ -79,7 +79,7 @@ export async function sendDigitalReceipt(orderId: string) {
       }
     }
 
-    const receiptMessage = `🍵 *ARUM SEDUH MATCHABOY* 🍵
+    const receiptMessage = `🍵 *ARUM SEDUH* 🍵
 ----------------------------------------
 No. Antrean: *${order.queueNumber || 'N/A'}*
 No. Pesanan: \`${shortId}\`
@@ -95,7 +95,7 @@ Metode Bayar: *${order.paymentMethod}*
 ----------------------------------------
 Poin Didapat: *+${order.pointsEarned} Poin*
 ----------------------------------------
-Terima kasih telah berbelanja di *Arum Seduh Matchaboy*! Nikmati matcha terbaikmu! 🍃💚`;
+Terima kasih telah berbelanja di *Arum Seduh*! Nikmati matcha terbaikmu! 🍃💚`;
 
     const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
     const apiKey = process.env.WA_BOT_API_KEY || "";

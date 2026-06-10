@@ -93,7 +93,7 @@ export async function createDokuCheckoutSession(
       payment_due_date: 60, // 60 minutes expiry
     },
     customer: {
-      name: payload.customerName || 'Matchaboy Customer',
+      name: payload.customerName || 'Arum Seduh Customer',
       phone: cleanPhone || '628123456789',
       email: payload.customerEmail || 'arumseduh@gmail.com',
     },

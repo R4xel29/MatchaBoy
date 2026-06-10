@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
                 data: {
                     code,
                     senderId: session.user.id,
-                    senderName: sender.name || "Matchaboy Customer",
+                    senderName: sender.name || "Arum Seduh Customer",
                     recipientPhone: stdPhone,
                     amount: parsedAmount,
                     message: message || null
@@ -91,7 +91,7 @@ ${giftCard.message ? `Pesan: "${giftCard.message}"\n` : ''}
 Kamu mendapatkan Arus Pay Gift Card! Klik tautan di bawah ini untuk klaim saldo ke Arus Pay-mu:
 👉 ${claimLink}
 
-Nikmati matcha favoritmu di Arum Seduh Matchaboy! 🍃💚`;
+Nikmati matcha favoritmu di Arum Seduh! 🍃💚`;
 
         const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
         const apiKey = process.env.WA_BOT_API_KEY || "";

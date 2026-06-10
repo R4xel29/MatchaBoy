@@ -14,11 +14,11 @@ interface GachaPrize {
 
 const PRIZE_POOL: GachaPrize[] = [
   { id: 'p1', type: 'POINTS', value: '5', label: '5 Arus Poin', description: 'Bonus 5 Arus Poin langsung masuk ke akunmu!', probability: 0.35 },
-  { id: 'p2', type: 'VOUCHER', value: 'FREE_TOPPING', label: 'Voucher Free Topping', description: 'Voucher Gratis Topping untuk minuman Matchaboy favoritmu!', probability: 0.25 },
+  { id: 'p2', type: 'VOUCHER', value: 'FREE_TOPPING', label: 'Voucher Free Topping', description: 'Voucher Gratis Topping untuk minuman Arum Seduh favoritmu!', probability: 0.25 },
   { id: 'p3', type: 'POINTS', value: '15', label: '15 Arus Poin', description: 'Bonus 15 Arus Poin ekstra!', probability: 0.15 },
   { id: 'p4', type: 'VOUCHER', value: 'UPGRADE_SIZE', label: 'Voucher Free Upgrade Size', description: 'Voucher Upgrade Ukuran Minuman gratis!', probability: 0.15 },
   { id: 'p5', type: 'POINTS', value: '50', label: '50 Arus Poin Super', description: 'Mendapatkan 50 Arus Poin!', probability: 0.07 },
-  { id: 'p6', type: 'MERCH', value: 'STICKER_PACK', label: 'Matchaboy Sticker Pack', description: 'Klaim Sticker Pack Eksklusif Matchaboy di kasir terdekat!', probability: 0.03 },
+  { id: 'p6', type: 'MERCH', value: 'STICKER_PACK', label: 'Arum Seduh Sticker Pack', description: 'Klaim Sticker Pack Eksklusif Arum Seduh di kasir terdekat!', probability: 0.03 },
 ];
 
 // Helper to select a prize based on probability weights
