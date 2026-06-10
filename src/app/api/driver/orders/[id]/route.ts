@@ -66,6 +66,13 @@ export async function PATCH(
       } catch (err) {
         console.error('Failed to process order completion:', err);
       }
+
+      // Send WA notification that the order has been completed/received
+      import('@/lib/whatsapp-service').then(({ sendCompletedNotification }) => {
+        sendCompletedNotification(id).catch(err =>
+          console.error('Failed to send completed WA notification (driver route):', err)
+        );
+      });
     }
 
     return NextResponse.json({ success: true, status: finalStatus })
