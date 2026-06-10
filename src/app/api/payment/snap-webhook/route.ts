@@ -254,8 +254,15 @@ async function processPayment(body: any, _rawBody: string, _paymentSettings: any
 
       // Send WhatsApp payment confirmation
       try {
-        const { sendPaymentSuccessNotification } = await import('@/lib/whatsapp-service');
+        const { sendPaymentSuccessNotification, sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service');
         await sendPaymentSuccessNotification(invoiceNumber);
+
+        // If the order is from WhatsApp (source === 'WA'), notify admin now since it is paid (lunas)
+        if (order.source === 'WA') {
+          await sendAdminNewOrderNotification(invoiceNumber).catch(err =>
+            console.error('[DOKU SNAP WEBHOOK] Failed to send admin new order notification:', err)
+          );
+        }
       } catch (waErr) {
         console.error('[DOKU SNAP WEBHOOK] WhatsApp success notification error:', waErr);
       }

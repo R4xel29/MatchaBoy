@@ -1140,6 +1140,7 @@ export async function POST(req: Request) {
               });
 
               if (mcpResult && mcpResult.qrContent) {
+                // Admin notification is skipped during checkout for QRIS orders (will be sent when paid/lunas)
                 await prisma.order.update({
                   where: { id: orderId },
                   data: {
@@ -1153,12 +1154,6 @@ export async function POST(req: Request) {
                   where: { key: sessionKey }
                 });
 
-                // Trigger admin new order notification (non-blocking)
-                import("@/lib/whatsapp-service").then(({ sendAdminNewOrderNotification }) => {
-                  sendAdminNewOrderNotification(orderId).catch(waErr => 
-                    console.error("Gagal mengirim admin new order notification:", waErr)
-                  );
-                });
 
                 const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran.\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
                 return NextResponse.json({
@@ -1180,12 +1175,7 @@ export async function POST(req: Request) {
                   where: { key: sessionKey }
                 });
 
-                // Trigger admin new order notification (non-blocking)
-                import("@/lib/whatsapp-service").then(({ sendAdminNewOrderNotification }) => {
-                  sendAdminNewOrderNotification(orderId).catch(waErr => 
-                    console.error("Gagal mengirim admin new order notification:", waErr)
-                  );
-                });
+                // Admin notification is skipped during checkout for QRIS orders (will be sent when paid/lunas)
 
                 const qrisImage = paymentSettings.qrisImage;
                 let absoluteQrisImage = qrisImage;
@@ -1514,9 +1504,10 @@ export async function POST(req: Request) {
       if (orderMatch) {
         const { isClosedToday } = await getStoreStatus();
         if (isClosedToday) {
+          const reply = `Maaf, toko kami sedang libur/tutup hari ini. ❌\n\nNamun, Anda tetap dapat melakukan pemesanan Pre-Order (PO) dan menikmati berbagai keuntungan seperti promo menarik, voucher diskon, serta pengumpulan poin loyalitas dengan login dan memesan langsung melalui website resmi kami:\n👉 https://arumseduh.vercel.app 🌐✨\n\nTerima kasih atas pengertiannya! 🍵`;
           return NextResponse.json({
             success: true,
-            replyMessage: "Maaf, toko kami sedang libur/tutup hari ini. Silakan hubungi kami kembali di hari/jam operasional. Terima kasih! 🍵"
+            replyMessage: reply
           });
         }
 
