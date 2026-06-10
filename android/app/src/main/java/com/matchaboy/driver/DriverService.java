@@ -293,19 +293,28 @@ public class DriverService extends Service {
         isAlerting = true;
         Log.d("DriverService", "Starting alert for order: " + orderId);
         
-        // Force alarm stream volume to maximum
-        try {
-            AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-            if (audioManager != null) {
-                int maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM);
-                audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVolume, 0);
+        // Read preferences
+        android.content.SharedPreferences sharedPref = getSharedPreferences("DriverPrefs", Context.MODE_PRIVATE);
+        boolean alarmEnabled = sharedPref.getBoolean("alarm_enabled", true);
+        boolean vibrateEnabled = sharedPref.getBoolean("vibrate_enabled", true);
+        boolean forceMaxVolume = sharedPref.getBoolean("force_max_volume", true);
+        boolean loopAlarm = sharedPref.getBoolean("loop_alarm", true);
+        
+        // Force alarm stream volume to maximum (if enabled)
+        if (forceMaxVolume) {
+            try {
+                AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                if (audioManager != null) {
+                    int maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM);
+                    audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxVolume, 0);
+                }
+            } catch (Exception e) {
+                Log.e("DriverService", "Failed to set volume to max: " + e.getMessage());
             }
-        } catch (Exception e) {
-            Log.e("DriverService", "Failed to set volume to max: " + e.getMessage());
         }
         
-        // Play system alarm / ringtone at max volume in loop
-        if (mediaPlayer == null) {
+        // Play system alarm / ringtone at max volume in loop (if enabled)
+        if (alarmEnabled && mediaPlayer == null) {
             try {
                 Uri alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
                 if (alarmUri == null) {
@@ -315,7 +324,7 @@ public class DriverService extends Service {
                 mediaPlayer = new MediaPlayer();
                 mediaPlayer.setDataSource(this, alarmUri);
                 mediaPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
-                mediaPlayer.setLooping(true);
+                mediaPlayer.setLooping(loopAlarm);
                 mediaPlayer.prepare();
                 mediaPlayer.start();
             } catch (Exception e) {
@@ -323,16 +332,16 @@ public class DriverService extends Service {
             }
         }
         
-        // Vibrate aggressively and continuously
-        if (vibrator == null) {
+        // Vibrate aggressively and continuously (if enabled)
+        if (vibrateEnabled && vibrator == null) {
             try {
                 vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
                 if (vibrator != null) {
                     long[] pattern = {0, 1200, 400, 1200, 400};
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0));
+                        vibrator.vibrate(VibrationEffect.createWaveform(pattern, loopAlarm ? 0 : -1));
                     } else {
-                        vibrator.vibrate(pattern, 0);
+                        vibrator.vibrate(pattern, loopAlarm ? 0 : -1);
                     }
                 }
             } catch (Exception e) {

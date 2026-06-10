@@ -67,14 +67,20 @@ function useOrderNotificationSound() {
   }, []);
 
   const playAlarm = useCallback(() => {
-    try {
-      const ctx = getAudioContext();
-      if (ctx.state === 'suspended') ctx.resume();
+    // Read current settings from localStorage
+    const alarmEnabled = typeof window !== 'undefined' ? localStorage.getItem("alarm_enabled") !== "false" : true;
+    const vibrateEnabled = typeof window !== 'undefined' ? localStorage.getItem("vibrate_enabled") !== "false" : true;
 
+    try {
       // === VIBRATE DEVICE ===
-      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      if (vibrateEnabled && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
         navigator.vibrate([800, 400, 800]);
       }
+
+      if (!alarmEnabled) return;
+
+      const ctx = getAudioContext();
+      if (ctx.state === 'suspended') ctx.resume();
 
       const now = ctx.currentTime;
       const duration = 1.4;
@@ -140,11 +146,15 @@ function useOrderNotificationSound() {
     isPlayingRef.current = true;
     setIsSoundPlaying(true);
 
-    // Play immediately, then loop aggressively
+    const loopAlarm = typeof window !== 'undefined' ? localStorage.getItem("loop_alarm") !== "false" : true;
+
+    // Play immediately, then loop aggressively if enabled
     playAlarm();
-    intervalRef.current = setInterval(() => {
-      playAlarm();
-    }, 2000); // repeat every 2 seconds — relentless
+    if (loopAlarm) {
+      intervalRef.current = setInterval(() => {
+        playAlarm();
+      }, 2000); // repeat every 2 seconds — relentless
+    }
   }, [playAlarm]);
 
   const stopLoop = useCallback(() => {
@@ -173,6 +183,56 @@ export default function DriverDashboardPage() {
   const { showToast } = useToast();
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<'deliveries' | 'history' | 'profile'>('deliveries');
+  
+  // Local Alarm Settings (For Driver customization)
+  const [alarmEnabled, setAlarmEnabled] = useState(true);
+  const [vibrateEnabled, setVibrateEnabled] = useState(true);
+  const [forceMaxVolume, setForceMaxVolume] = useState(true);
+  const [loopAlarm, setLoopAlarm] = useState(true);
+
+  useEffect(() => {
+    let localAlarm = true;
+    let localVibrate = true;
+    let localForceMax = true;
+    let localLoop = true;
+
+    if (typeof window !== 'undefined') {
+      if ((window as any).AndroidDriverSettings) {
+        try {
+          localAlarm = (window as any).AndroidDriverSettings.getAlarmBooleanSetting("alarm_enabled", true);
+          localVibrate = (window as any).AndroidDriverSettings.getAlarmBooleanSetting("vibrate_enabled", true);
+          localForceMax = (window as any).AndroidDriverSettings.getAlarmBooleanSetting("force_max_volume", true);
+          localLoop = (window as any).AndroidDriverSettings.getAlarmBooleanSetting("loop_alarm", true);
+        } catch (e) {
+          console.error("Failed to read native settings:", e);
+        }
+      } else {
+        localAlarm = localStorage.getItem("alarm_enabled") !== "false";
+        localVibrate = localStorage.getItem("vibrate_enabled") !== "false";
+        localForceMax = localStorage.getItem("force_max_volume") !== "false";
+        localLoop = localStorage.getItem("loop_alarm") !== "false";
+      }
+    }
+
+    setAlarmEnabled(localAlarm);
+    setVibrateEnabled(localVibrate);
+    setForceMaxVolume(localForceMax);
+    setLoopAlarm(localLoop);
+  }, []);
+
+  const updateSetting = (key: string, value: boolean, setter: (val: boolean) => void) => {
+    setter(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, String(value));
+      if ((window as any).AndroidDriverSettings) {
+        try {
+          (window as any).AndroidDriverSettings.setAlarmBooleanSetting(key, value);
+        } catch (e) {
+          console.error("Failed to write native setting:", e);
+        }
+      }
+    }
+  };
   
   // Dashboard & Order States
   const [isOnline, setIsOnline] = useState(false);
@@ -1106,6 +1166,81 @@ export default function DriverDashboardPage() {
                         Hubungkan
                       </button>
                     )}
+                  </div>
+                </div>
+
+                {/* Alarm Settings */}
+                <div className="border-t border-gray-100 pt-4 space-y-3">
+                  <label className="text-xs font-semibold text-gray-600 block pl-1">Pengaturan Alarm</label>
+                  
+                  <div className="space-y-4 pt-1">
+                    {/* Suara Alarm */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h5 className="text-xs font-bold text-gray-800">Suara Alarm</h5>
+                        <p className="text-[10px] text-gray-400 font-medium">Bunyi alarm sirene saat ada pesanan baru</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={alarmEnabled}
+                          onChange={(e) => updateSetting("alarm_enabled", e.target.checked, setAlarmEnabled)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B48A5E]"></div>
+                      </label>
+                    </div>
+
+                    {/* Getaran */}
+                    <div className="flex items-center justify-between border-t border-gray-50 pt-3">
+                      <div>
+                        <h5 className="text-xs font-bold text-gray-800">Getaran Kuat</h5>
+                        <p className="text-[10px] text-gray-400 font-medium">Getarkan HP saat alarm berbunyi</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={vibrateEnabled}
+                          onChange={(e) => updateSetting("vibrate_enabled", e.target.checked, setVibrateEnabled)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B48A5E]"></div>
+                      </label>
+                    </div>
+
+                    {/* Volume Maksimal Paksa */}
+                    <div className="flex items-center justify-between border-t border-gray-50 pt-3">
+                      <div>
+                        <h5 className="text-xs font-bold text-gray-800">Volume Maksimal</h5>
+                        <p className="text-[10px] text-gray-400 font-medium">Paksa volume alarm ke tingkat maksimal</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={forceMaxVolume}
+                          onChange={(e) => updateSetting("force_max_volume", e.target.checked, setForceMaxVolume)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B48A5E]"></div>
+                      </label>
+                    </div>
+
+                    {/* Ulangi Terus */}
+                    <div className="flex items-center justify-between border-t border-gray-50 pt-3">
+                      <div>
+                        <h5 className="text-xs font-bold text-gray-800">Ulangi Terus (Loop)</h5>
+                        <p className="text-[10px] text-gray-400 font-medium">Ulangi alarm terus menerus seperti telepon</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={loopAlarm}
+                          onChange={(e) => updateSetting("loop_alarm", e.target.checked, setLoopAlarm)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#B48A5E]"></div>
+                      </label>
+                    </div>
                   </div>
                 </div>
 

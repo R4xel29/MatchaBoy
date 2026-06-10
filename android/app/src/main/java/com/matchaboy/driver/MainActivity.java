@@ -45,6 +45,8 @@ public class MainActivity extends BridgeActivity {
         WebView webView = (WebView) this.getBridge().getWebView();
         if (webView != null) {
             webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+            // Add Javascript Interface for local driver settings
+            webView.addJavascriptInterface(new WebAppInterface(this), "AndroidDriverSettings");
         }
 
         // Request notification and location permissions dynamically
@@ -215,5 +217,41 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         }).start();
+    }
+
+    public class WebAppInterface {
+        Context mContext;
+
+        WebAppInterface(Context c) {
+            mContext = c;
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setAlarmSetting(String key, String value) {
+            SharedPreferences sharedPref = mContext.getSharedPreferences("DriverPrefs", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = sharedPref.edit();
+            editor.putString(key, value);
+            editor.apply();
+        }
+
+        @android.webkit.JavascriptInterface
+        public String getAlarmSetting(String key, String defaultValue) {
+            SharedPreferences sharedPref = mContext.getSharedPreferences("DriverPrefs", Context.MODE_PRIVATE);
+            return sharedPref.getString(key, defaultValue);
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setAlarmBooleanSetting(String key, boolean value) {
+            SharedPreferences sharedPref = mContext.getSharedPreferences("DriverPrefs", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = sharedPref.edit();
+            editor.putBoolean(key, value);
+            editor.apply();
+        }
+
+        @android.webkit.JavascriptInterface
+        public boolean getAlarmBooleanSetting(String key, boolean defaultValue) {
+            SharedPreferences sharedPref = mContext.getSharedPreferences("DriverPrefs", Context.MODE_PRIVATE);
+            return sharedPref.getBoolean(key, defaultValue);
+        }
     }
 }
