@@ -471,14 +471,15 @@ export async function sendPaymentSuccessNotification(orderId: string) {
     const standardizedPhone = standardizeJid(order.customerPhone);
     const formattedTotal = order.total.toLocaleString('id-ID');
     const orderShortId = order.id.slice(-6).toUpperCase();
+    const trackingUrl = `https://arumseduh.vercel.app/orders/${orderId}`;
 
     let message = `Halo *${order.customerName}*!\n\nPembayaran untuk pesanan *#${orderShortId}* sebesar *Rp ${formattedTotal}* telah BERHASIL diverifikasi dan diterima. ✅\n\n`;
     if (order.orderType === 'DELIVERY') {
-      message += `Pesanan Anda sedang dipersiapkan dan akan segera dikirim ke alamat Anda. Silakan pantau status pesanan Anda ya! 🍵`;
+      message += `Pesanan Anda sedang dipersiapkan dan akan segera dikirim ke alamat Anda. Silakan pantau status pesanan Anda secara realtime di sini:\n📍 ${trackingUrl}\n\nTerima kasih! 🍵`;
     } else if (order.orderType === 'PICKUP') {
-      message += `Pesanan Anda sedang dipersiapkan. Kami akan mengabari Anda jika pesanan sudah siap untuk diambil. Terima kasih! 🍵`;
+      message += `Pesanan Anda sedang dipersiapkan. Kami akan mengabari Anda jika pesanan sudah siap untuk diambil. Anda juga dapat memantau status pesanan Anda di sini:\n📍 ${trackingUrl}\n\nTerima kasih! 🍵`;
     } else {
-      message += `Pesanan Anda sedang dipersiapkan. Terima kasih telah memesan di Arum Seduh! 🍵`;
+      message += `Pesanan Anda sedang dipersiapkan. Anda dapat memantau status pesanan Anda di sini:\n📍 ${trackingUrl}\n\nTerima kasih telah memesan di Arum Seduh! 🍵`;
     }
 
     await sendWhatsAppMessage(standardizedPhone, message);
@@ -533,7 +534,8 @@ export async function sendOnDeliveryNotification(orderId: string) {
       }
     }
 
-    const message = `🛵 *PESANAN SEDANG DIANTAR!* 🛵\n\nHalo *${order.customerName}*,\n\nPesanan Anda *#${orderShortId}* sedang diantarkan oleh kurir kami ke alamat Anda: *${order.address?.split('(')[0]?.trim() || order.address}*.${driverInfoText}\n\n🔑 *PIN Verifikasi Kurir:* *${pin}*\n\nMohon berikan PIN verifikasi di atas kepada kurir saat pesanan Anda tiba agar kurir dapat menyelesaikan pengiriman. Terima kasih! 🍵`;
+    const trackingUrl = `https://arumseduh.vercel.app/orders/${orderId}`;
+    const message = `🛵 *PESANAN SEDANG DIANTAR!* 🛵\n\nHalo *${order.customerName}*,\n\nPesanan Anda *#${orderShortId}* sedang diantarkan oleh kurir kami ke alamat Anda: *${order.address?.split('(')[0]?.trim() || order.address}*.${driverInfoText}\n\n📍 *Lacak Lokasi Kurir:* ${trackingUrl}\n\n🔑 *PIN Verifikasi Kurir:* *${pin}*\n\nMohon berikan PIN verifikasi di atas kepada kurir saat pesanan Anda tiba agar kurir dapat menyelesaikan pengiriman. Terima kasih! 🍵`;
 
     await sendWhatsAppMessage(standardizedPhone, message);
   } catch (error) {

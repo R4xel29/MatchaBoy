@@ -1155,7 +1155,7 @@ export async function POST(req: Request) {
                 });
 
 
-                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran.\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
+                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran.\n\nPantau status pesanan Anda di sini:\n📍 ${appUrl}/orders/${order.id}\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
                 return NextResponse.json({
                   success: true,
                   replyMessage: reply,
@@ -1184,7 +1184,7 @@ export async function POST(req: Request) {
                   absoluteQrisImage = `${appUrl}${slash}${qrisImage}`;
                 }
 
-                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nBerikut adalah QRIS untuk pembayaran pesanan Anda. Silakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya (screenshot/struk) ke sini ya! 🍵`;
+                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nBerikut adalah QRIS untuk pembayaran pesanan Anda. Silakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya (screenshot/struk) ke sini ya!\n\nPantau status pesanan Anda di sini:\n📍 ${appUrl}/orders/${order.id} 🍵`;
                 return NextResponse.json({
                   success: true,
                   replyMessage: reply,
@@ -1216,7 +1216,7 @@ export async function POST(req: Request) {
             const { sendAdminOrderSummary } = await import("@/lib/whatsapp-service");
             sendAdminOrderSummary().catch(err => console.error("Gagal mengirim admin summary:", err));
 
-            const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nPesanan Anda akan segera diproses. Terima kasih! 🍵`;
+            const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nPantau status pesanan Anda secara realtime di sini:\n📍 ${appUrl}/orders/${order.id}\n\nPesanan Anda akan segera diproses. Terima kasih! 🍵`;
             return NextResponse.json({ success: true, replyMessage: reply });
           }
         } else if (confirmation === "edit") {
