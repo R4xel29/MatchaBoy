@@ -63,6 +63,7 @@ export function LeafletTracking({
   const [routeInfo, setRouteInfo] = useState<{ distance: number; duration: number } | null>(null);
   const prevDriverPos = useRef<{ lat: number; lng: number } | null>(null);
   const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const [isSheetMinimized, setIsSheetMinimized] = useState(false);
 
   // Store default coordinates (Probolinggo)
   const storeLat = -7.78125167;
@@ -332,13 +333,25 @@ export function LeafletTracking({
       <div className="z-10 bg-white rounded-t-[36px] shadow-[0_-10px_35px_rgba(0,0,0,0.12)] border-t border-gray-150 p-6 pb-10 max-h-[85vh] overflow-y-auto max-w-md mx-auto w-full flex flex-col space-y-4 animate-in slide-in-from-bottom duration-300">
         
         {/* Drag Handle Decorator */}
-        <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto shrink-0 mb-1" />
+        <button
+          onClick={() => setIsSheetMinimized(!isSheetMinimized)}
+          className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto shrink-0 mb-1 cursor-pointer hover:bg-gray-300 transition-colors"
+          aria-label="Toggle details sheet"
+        />
 
         {/* ETA & Status Section */}
-        <div className="flex items-center justify-between border-b border-gray-100 pb-3 shrink-0">
+        <div 
+          onClick={() => setIsSheetMinimized(!isSheetMinimized)}
+          className="flex items-center justify-between border-b border-gray-100 pb-3 shrink-0 cursor-pointer hover:bg-gray-50/50 p-2 -mx-2 rounded-2xl transition-all"
+        >
           <div>
-            <h3 className="font-heading font-black text-gray-900 text-lg">
+            <h3 className="font-heading font-black text-gray-900 text-lg flex items-center gap-1.5 select-none">
               {routeInfo ? `Tiba dalam ~${Math.ceil(routeInfo.duration)} mnt` : 'Sedang dikirim'}
+              {isSheetMinimized ? (
+                <ChevronUp className="w-5 h-5 text-gray-400 shrink-0" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-gray-400 shrink-0" />
+              )}
             </h3>
             <p className="text-xs text-gray-500 font-semibold mt-0.5 flex items-center gap-1.5">
               <Navigation className="w-3.5 h-3.5 text-emerald-600" />
@@ -407,121 +420,126 @@ export function LeafletTracking({
           </div>
         )}
 
-        {/* Security PIN for COD Payment Method */}
-        {paymentMethod === 'COD' && (
-          <div className="p-4 bg-amber-50 border border-amber-200 rounded-3xl text-center space-y-2.5 shrink-0">
-            <div className="flex items-center gap-2 justify-center text-amber-800 font-extrabold text-xs">
-              <ShieldCheck className="w-4.5 h-4.5 text-amber-600 animate-pulse" />
-              <span>KODE VERIFIKASI PENGANTARAN COD</span>
-            </div>
-            <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
-              Sebutkan kode PIN ini kepada kurir saat pesanan Anda tiba untuk menyelesaikan pembayaran tunai & pengantaran.
-            </p>
-            <div className="inline-flex gap-2 items-center justify-center px-6 py-2.5 bg-white border border-amber-300 rounded-2xl shadow-inner select-all font-mono font-black text-xl text-amber-900 tracking-wider">
-              {deliveryPin}
-            </div>
-            <p className="text-[10px] text-amber-600/80 font-bold animate-pulse">
-              Menunggu kurir melakukan verifikasi PIN...
-            </p>
-          </div>
-        )}
-
-        {/* Swipe to Confirm Button for Non-COD or SPMB Orders */}
-        {(paymentMethod !== 'COD' || orderId.startsWith('SPMB')) && (
-          <div className="shrink-0 pt-1">
-            <p className="text-[11px] text-center text-gray-500 mb-2.5 font-bold">Pesanan sudah sampai di tangan Anda? Geser untuk konfirmasi</p>
-            <div 
-              ref={swipeContainerRef}
-              className="w-full relative overflow-hidden bg-emerald-50 border border-emerald-200 rounded-full p-1 h-14 shadow-inner flex items-center select-none"
-            >
-              <motion.div 
-                className="absolute left-1 top-1 bottom-1 bg-emerald-500 rounded-full"
-                style={{ width: swipeBgWidth }}
-              />
-              
-              <motion.div 
-                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{ opacity: swipeTextOpacity }}
-              >
-                <span className="font-extrabold text-emerald-700 text-sm">Geser untuk Konfirmasi</span>
-              </motion.div>
-
-              <motion.div
-                drag="x"
-                dragConstraints={{ left: 0, right: swipeDragWidth }}
-                dragElastic={0.05}
-                dragMomentum={false}
-                onDragEnd={handleDragEnd}
-                style={{ x: swipeX }}
-                className="w-12 h-12 rounded-full bg-white border border-emerald-300 flex items-center justify-center text-emerald-600 shadow-md cursor-grab active:cursor-grabbing z-10 shrink-0"
-              >
-                {isConfirming ? (
-                  <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
-                ) : (
-                  <ChevronRight className="w-6 h-6 text-emerald-500" />
-                )}
-              </motion.div>
-            </div>
-            {confirmError && <p className="text-xs text-red-500 text-center mt-2 font-bold">{confirmError}</p>}
-          </div>
-        )}
-
-        {/* Collapsible Order Details Summary */}
-        <div className="border-t border-gray-100 pt-3">
-          <button
-            onClick={() => setDetailsExpanded(!detailsExpanded)}
-            className="w-full flex items-center justify-between text-gray-700 font-extrabold text-xs py-2 hover:bg-gray-50 rounded-xl px-2 transition-all"
-          >
-            <span>Rincian Pesanan ({items.length} Item)</span>
-            {detailsExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-          </button>
-
-          <AnimatePresence>
-            {detailsExpanded && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden space-y-3 pt-2 px-2"
-              >
-                <div className="divide-y divide-gray-100 max-h-36 overflow-y-auto pr-1">
-                  {items.map((item, index) => (
-                    <div key={index} className="py-2.5 flex justify-between text-xs">
-                      <div>
-                        <p className="font-extrabold text-gray-900">{item.qty}x {item.name}</p>
-                        {item.mods && <p className="text-[10px] text-gray-500 mt-0.5 font-medium">{item.mods}</p>}
-                      </div>
-                      <span className="font-bold text-gray-800 shrink-0">{formatRupiah(item.price * item.qty)}</span>
-                    </div>
-                  ))}
+        {/* Collapsible Details Area */}
+        {!isSheetMinimized && (
+          <>
+            {/* Security PIN for COD Payment Method */}
+            {paymentMethod === 'COD' && (
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-3xl text-center space-y-2.5 shrink-0 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 justify-center text-amber-800 font-extrabold text-xs">
+                  <ShieldCheck className="w-4.5 h-4.5 text-amber-600 animate-pulse" />
+                  <span>KODE VERIFIKASI PENGANTARAN COD</span>
                 </div>
-
-                <div className="bg-gray-50 rounded-2xl p-3.5 space-y-2 border border-gray-100">
-                  <div className="flex justify-between text-xs font-semibold text-gray-600">
-                    <span>Subtotal</span>
-                    <span>{formatRupiah(subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-semibold text-gray-600">
-                    <span>Ongkir</span>
-                    <span>{formatRupiah(deliveryFee)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs font-black text-gray-950 pt-2 border-t border-gray-200">
-                    <span>Total Pembayaran</span>
-                    <span className="text-[#B48A5E]">{formatRupiah(total)}</span>
-                  </div>
+                <p className="text-[11px] text-amber-700 leading-relaxed font-medium">
+                  Sebutkan kode PIN ini kepada kurir saat pesanan Anda tiba untuk menyelesaikan pembayaran tunai & pengantaran.
+                </p>
+                <div className="inline-flex gap-2 items-center justify-center px-6 py-2.5 bg-white border border-amber-300 rounded-2xl shadow-inner select-all font-mono font-black text-xl text-amber-900 tracking-wider">
+                  {deliveryPin}
                 </div>
-
-                <div className="flex items-start gap-2.5 p-3.5 bg-gray-50 rounded-2xl text-xs text-gray-600 border border-gray-100">
-                  <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-[9px] font-black uppercase text-gray-400">Alamat Pengiriman</p>
-                    <p className="mt-0.5 font-medium leading-relaxed">{address.split('(')[0].trim()}</p>
-                  </div>
-                </div>
-              </motion.div>
+                <p className="text-[10px] text-amber-600/80 font-bold animate-pulse">
+                  Menunggu kurir melakukan verifikasi PIN...
+                </p>
+              </div>
             )}
-          </AnimatePresence>
-        </div>
+
+            {/* Swipe to Confirm Button for Non-COD or SPMB Orders */}
+            {(paymentMethod !== 'COD' || orderId.startsWith('SPMB')) && (
+              <div className="shrink-0 pt-1 animate-in fade-in duration-200">
+                <p className="text-[11px] text-center text-gray-500 mb-2.5 font-bold">Pesanan sudah sampai di tangan Anda? Geser untuk konfirmasi</p>
+                <div 
+                  ref={swipeContainerRef}
+                  className="w-full relative overflow-hidden bg-emerald-50 border border-emerald-200 rounded-full p-1 h-14 shadow-inner flex items-center select-none"
+                >
+                  <motion.div 
+                    className="absolute left-1 top-1 bottom-1 bg-emerald-500 rounded-full"
+                    style={{ width: swipeBgWidth }}
+                  />
+                  
+                  <motion.div 
+                    className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                    style={{ opacity: swipeTextOpacity }}
+                  >
+                    <span className="font-extrabold text-emerald-700 text-sm">Geser untuk Konfirmasi</span>
+                  </motion.div>
+
+                  <motion.div
+                    drag="x"
+                    dragConstraints={{ left: 0, right: swipeDragWidth }}
+                    dragElastic={0.05}
+                    dragMomentum={false}
+                    onDragEnd={handleDragEnd}
+                    style={{ x: swipeX }}
+                    className="w-12 h-12 rounded-full bg-white border border-emerald-300 flex items-center justify-center text-emerald-600 shadow-md cursor-grab active:cursor-grabbing z-10 shrink-0"
+                  >
+                    {isConfirming ? (
+                      <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
+                    ) : (
+                      <ChevronRight className="w-6 h-6 text-emerald-500" />
+                    )}
+                  </motion.div>
+                </div>
+                {confirmError && <p className="text-xs text-red-500 text-center mt-2 font-bold">{confirmError}</p>}
+              </div>
+            )}
+
+            {/* Collapsible Order Details Summary */}
+            <div className="border-t border-gray-100 pt-3 animate-in fade-in duration-200">
+              <button
+                onClick={() => setDetailsExpanded(!detailsExpanded)}
+                className="w-full flex items-center justify-between text-gray-700 font-extrabold text-xs py-2 hover:bg-gray-50 rounded-xl px-2 transition-all"
+              >
+                <span>Rincian Pesanan ({items.length} Item)</span>
+                {detailsExpanded ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
+              </button>
+
+              <AnimatePresence>
+                {detailsExpanded && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden space-y-3 pt-2 px-2"
+                  >
+                    <div className="divide-y divide-gray-100 max-h-36 overflow-y-auto pr-1">
+                      {items.map((item, index) => (
+                        <div key={index} className="py-2.5 flex justify-between text-xs">
+                          <div>
+                            <p className="font-extrabold text-gray-900">{item.qty}x {item.name}</p>
+                            {item.mods && <p className="text-[10px] text-gray-500 mt-0.5 font-medium">{item.mods}</p>}
+                          </div>
+                          <span className="font-bold text-gray-800 shrink-0">{formatRupiah(item.price * item.qty)}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="bg-gray-50 rounded-2xl p-3.5 space-y-2 border border-gray-100">
+                      <div className="flex justify-between text-xs font-semibold text-gray-600">
+                        <span>Subtotal</span>
+                        <span>{formatRupiah(subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-semibold text-gray-600">
+                        <span>Ongkir</span>
+                        <span>{formatRupiah(deliveryFee)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs font-black text-gray-950 pt-2 border-t border-gray-200">
+                        <span>Total Pembayaran</span>
+                        <span className="text-[#B48A5E]">{formatRupiah(total)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 p-3.5 bg-gray-50 rounded-2xl text-xs text-gray-600 border border-gray-100">
+                      <MapPin className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-[9px] font-black uppercase text-gray-400">Alamat Pengiriman</p>
+                        <p className="mt-0.5 font-medium leading-relaxed">{address.split('(')[0].trim()}</p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </>
+        )}
 
       </div>
     </div>
