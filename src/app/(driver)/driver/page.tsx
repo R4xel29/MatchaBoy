@@ -71,6 +71,11 @@ function useOrderNotificationSound() {
       const ctx = getAudioContext();
       if (ctx.state === 'suspended') ctx.resume();
 
+      // === VIBRATE DEVICE ===
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        navigator.vibrate([800, 400, 800]);
+      }
+
       const now = ctx.currentTime;
       const duration = 1.4;
 

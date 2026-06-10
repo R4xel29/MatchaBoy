@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Matchaboy Driver</string>
+    <string name="title_activity_main">Matchaboy Driver</string>
+    <string name="package_name">com.matchaboy.driver</string>
+    <string name="custom_url_scheme">com.matchaboy.driver</string>
+</resources>

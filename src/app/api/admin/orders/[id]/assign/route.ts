@@ -36,6 +36,20 @@ export async function PUT(
       },
     })
 
+    // Send push and in-app notification to driver
+    try {
+      const { sendNotification } = await import('@/lib/notification-service')
+      await sendNotification({
+        userId: driverId,
+        type: 'order',
+        title: 'Pesanan Baru Ditugaskan! 🛵',
+        message: `Ada pesanan baru #${id.slice(-4).toUpperCase()} untuk diantar ke ${order.customerName}. Ketuk untuk detail.`,
+        linkUrl: `/driver`,
+      })
+    } catch (notifErr) {
+      console.error('Notification error (non-blocking):', notifErr)
+    }
+
     return NextResponse.json(order)
   } catch (error) {
     console.error('Assign driver error:', error)

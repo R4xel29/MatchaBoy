@@ -1,0 +1,9 @@
+{
+  "appId": "com.matchaboy.driver",
+  "appName": "Matchaboy Driver",
+  "webDir": "public",
+  "server": {
+    "url": "https://arumseduh.vercel.app/driver",
+    "cleartext": true
+  }
+}

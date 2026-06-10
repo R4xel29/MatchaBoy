@@ -337,7 +337,7 @@ export function DriverNavigationMap({
       )}
 
       {/* Map Container */}
-      <div className="relative w-full h-[320px] rounded-3xl overflow-hidden border border-gray-200 shadow-sm">
+      <div className="relative z-10 w-full h-[320px] rounded-3xl overflow-hidden border border-gray-200 shadow-sm">
         <div ref={mapContainer} className="absolute inset-0" />
         <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm text-xs font-bold text-emerald-700 flex items-center gap-1.5 border border-white z-[1000]">
           <span className="relative flex h-2 w-2">
