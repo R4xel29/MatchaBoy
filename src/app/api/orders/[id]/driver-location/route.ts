@@ -9,14 +9,13 @@ export async function GET(
   try {
     const { id } = await params
     const session = await auth()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     // Get order with driver relation and address info
     const order = await prisma.order.findUnique({
-      where: { id, userId: session.user.id },
+      where: { id },
       select: {
+        userId: true,
+        source: true,
         address: true,
         driver: {
           select: {
@@ -34,7 +33,23 @@ export async function GET(
       }
     })
 
-    if (!order?.driver?.driverProfile) {
+    if (!order) {
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+    }
+
+    const isPublicSource = order.source === 'SPMB' || order.source === 'WA'
+
+    if (!isPublicSource) {
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const isStaff = ['ADMIN', 'CASHIER', 'DRIVER'].includes(session.user.role || '')
+      if (order.userId !== session.user.id && !isStaff) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    }
+
+    if (!order.driver?.driverProfile) {
       return NextResponse.json({ lat: null, lng: null })
     }
 

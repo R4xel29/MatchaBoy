@@ -385,7 +385,7 @@ export function LeafletTracking({
                     <Phone className="w-4 h-4" />
                   </a>
                   <a
-                    href={`https://wa.me/${formattedWhatsAppNumber(driverInfo.driverPhone)}?text=${encodeURIComponent(`Halo kurir Matchaboy, posisi di mana ya?`)}`}
+                    href={`https://wa.me/${formattedWhatsAppNumber(driverInfo.driverPhone)}?text=${encodeURIComponent(`Halo kurir Arum Seduh, posisi di mana ya?`)}`}
                     target="_blank"
                     rel="noreferrer"
                     className="w-10 h-10 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 hover:bg-emerald-100 active:scale-90 transition-all"

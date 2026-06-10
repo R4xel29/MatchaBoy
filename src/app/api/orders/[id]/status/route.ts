@@ -19,9 +19,9 @@ export async function GET(
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
 
-  const isSpmb = dbOrder.source === 'SPMB';
+  const isPublicSource = dbOrder.source === 'SPMB' || dbOrder.source === 'WA';
 
-  if (!isSpmb) {
+  if (!isPublicSource) {
     const session = await auth();
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

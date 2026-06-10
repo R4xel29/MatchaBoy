@@ -490,7 +490,14 @@ export async function sendPaymentSuccessNotification(orderId: string) {
 export async function sendOnDeliveryNotification(orderId: string) {
   try {
     const order = await prisma.order.findUnique({
-      where: { id: orderId }
+      where: { id: orderId },
+      include: {
+        driver: {
+          include: {
+            driverProfile: true
+          }
+        }
+      }
     });
 
     if (!order) {
@@ -510,7 +517,23 @@ export async function sendOnDeliveryNotification(orderId: string) {
     const { getDeliveryPin } = await import('./delivery-utils');
     const pin = getDeliveryPin(orderId);
 
-    const message = `🛵 *PESANAN SEDANG DIANTAR!* 🛵\n\nHalo *${order.customerName}*,\n\nPesanan Anda *#${orderShortId}* sedang diantarkan oleh kurir kami ke alamat Anda: *${order.address?.split('(')[0]?.trim() || order.address}*.\n\n🔑 *PIN Verifikasi Kurir:* *${pin}*\n\nMohon berikan PIN verifikasi di atas kepada kurir saat pesanan Anda tiba agar kurir dapat menyelesaikan pengiriman. Terima kasih! 🍵`;
+    // Build driver info text if driver is assigned
+    let driverInfoText = '';
+    if (order.driver) {
+      const dp = order.driver.driverProfile;
+      driverInfoText = `\n\n👤 *Informasi Kurir:*\nNama: *${order.driver.name}*`;
+      if (order.driver.phone) {
+        driverInfoText += `\nNo. WA/Telp: *${order.driver.phone}*`;
+      }
+      if (dp) {
+        driverInfoText += `\nKendaraan: *${dp.vehicleType || 'Motor'}*`;
+        if (dp.plateNumber) {
+          driverInfoText += ` (${dp.plateNumber})`;
+        }
+      }
+    }
+
+    const message = `🛵 *PESANAN SEDANG DIANTAR!* 🛵\n\nHalo *${order.customerName}*,\n\nPesanan Anda *#${orderShortId}* sedang diantarkan oleh kurir kami ke alamat Anda: *${order.address?.split('(')[0]?.trim() || order.address}*.${driverInfoText}\n\n🔑 *PIN Verifikasi Kurir:* *${pin}*\n\nMohon berikan PIN verifikasi di atas kepada kurir saat pesanan Anda tiba agar kurir dapat menyelesaikan pengiriman. Terima kasih! 🍵`;
 
     await sendWhatsAppMessage(standardizedPhone, message);
   } catch (error) {
