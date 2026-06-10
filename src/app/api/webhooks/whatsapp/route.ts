@@ -90,6 +90,68 @@ export async function POST(req: Request) {
 
     console.log(`[WHATSAPP_WEBHOOK] Request diterima: phone=${phone}, text="${text}"`);
 
+    const getStoreStatus = async () => {
+      const storeSettings = await prisma.storeSettings.findFirst();
+      const jakartaDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+      const dayOfWeek = jakartaDate.getDay(); // 0 (Sunday) to 6 (Saturday)
+      
+      const yyyy = jakartaDate.getFullYear();
+      const mm = String(jakartaDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(jakartaDate.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+      
+      // Check operational days
+      const opDays = JSON.parse(storeSettings?.operationalDays || "[0,1,2,3,4,5,6]");
+      const isOpDay = opDays.includes(dayOfWeek);
+      
+      // Check disabled dates
+      const disabledDates = JSON.parse(storeSettings?.disabledDates || "[]");
+      const isDisabledDate = disabledDates.includes(dateStr);
+      
+      const isClosedToday = !isOpDay || isDisabledDate;
+      
+      let openTime = storeSettings?.openTime || "08:00";
+      let closeTime = storeSettings?.closeTime || "21:00";
+      
+      try {
+        const custom = JSON.parse(storeSettings?.customHours || "{}");
+        if (custom.dates?.[dateStr]) {
+          openTime = custom.dates[dateStr].openTime;
+          closeTime = custom.dates[dateStr].closeTime;
+        } else if (custom.weekdays?.[String(dayOfWeek)]) {
+          openTime = custom.weekdays[String(dayOfWeek)].openTime;
+          closeTime = custom.weekdays[String(dayOfWeek)].closeTime;
+        }
+      } catch (e) {
+        console.error("Error parsing customHours:", e);
+      }
+      
+      // Calculate default slot (current time + 20 minutes rounded to nearest interval)
+      const interval = storeSettings?.pickupSlotInterval || 5;
+      const prepBuffer = 20; // 20 minutes buffer
+      const prepTime = new Date(jakartaDate.getTime() + prepBuffer * 60 * 1000);
+      const minutes = prepTime.getMinutes();
+      const roundedMinutes = Math.ceil(minutes / interval) * interval;
+      prepTime.setMinutes(roundedMinutes);
+      prepTime.setSeconds(0);
+      
+      const defaultSlot = `${String(prepTime.getHours()).padStart(2, '0')}:${String(prepTime.getMinutes()).padStart(2, '0')}`;
+      
+      // Current time as string
+      const currentH = jakartaDate.getHours();
+      const currentM = jakartaDate.getMinutes();
+      const currentTimeStr = `${String(currentH).padStart(2, '0')}:${String(currentM).padStart(2, '0')}`;
+      
+      return {
+        isClosedToday,
+        openTime,
+        closeTime,
+        defaultSlot,
+        currentTimeStr,
+        storeSettings
+      };
+    };
+
     const lowerText = text.toLowerCase();
     const isLoginRequest = lowerText.startsWith("login-") || 
                            lowerText.includes("request link untuk masuk / daftar");
@@ -737,12 +799,13 @@ export async function POST(req: Request) {
       const sendConfirmationMessage = (sess: any, key: string, appUrl: string) => {
         let confirmationMessage = "";
         const subtotal = sess.quantity * sess.price;
+        const timeLabel = sess.orderType === "PICKUP" ? "Waktu Pengambilan" : "Waktu Pengantaran";
         if (sess.orderType === "PICKUP") {
-          confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${sess.customerName}\n🛍️ *Pesanan:* ${sess.quantity}x ${sess.productName}\n💰 *Total:* Rp${subtotal.toLocaleString('id-ID')}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n💳 *Pembayaran:* ${sess.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, *EDIT* untuk mengubah, atau *BATAL* untuk membatalkan.`;
+          confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${sess.customerName}\n🛍️ *Pesanan:* ${sess.quantity}x ${sess.productName}\n💰 *Total:* Rp${subtotal.toLocaleString('id-ID')}\n🚦 *Metode:* Ambil Sendiri (PICKUP)\n⏰ *${timeLabel}:* ${sess.pickupTime || '-'}\n💳 *Pembayaran:* ${sess.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, *EDIT* untuk mengubah, atau *BATAL* untuk membatalkan.`;
         } else {
           const deliveryFee = sess.deliveryFee || 0;
           const total = subtotal + deliveryFee;
-          confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${sess.customerName}\n🛍️ *Pesanan:* ${sess.quantity}x ${sess.productName}\n💵 *Subtotal:* Rp${subtotal.toLocaleString('id-ID')}\n🚚 *Ongkir:* Rp${deliveryFee.toLocaleString('id-ID')}\n💰 *Total:* Rp${total.toLocaleString('id-ID')}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${sess.address}\n💳 *Pembayaran:* ${sess.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, *EDIT* untuk mengubah, atau *BATAL* untuk membatalkan.`;
+          confirmationMessage = `📝 *KONFIRMASI PESANAN*\n━━━━━━━━━━━━━━━━━━━\n👤 *Nama:* ${sess.customerName}\n🛍️ *Pesanan:* ${sess.quantity}x ${sess.productName}\n💵 *Subtotal:* Rp${subtotal.toLocaleString('id-ID')}\n🚚 *Ongkir:* Rp${deliveryFee.toLocaleString('id-ID')}\n💰 *Total:* Rp${total.toLocaleString('id-ID')}\n🚦 *Metode:* Diantar (DELIVERY)\n📍 *Alamat:* ${sess.address}\n⏰ *${timeLabel}:* ${sess.pickupTime || '-'}\n💳 *Pembayaran:* ${sess.paymentMethod}\n━━━━━━━━━━━━━━━━━━━\nApakah data di atas sudah benar?\nKetik *YA* untuk konfirmasi, *EDIT* untuk mengubah, atau *BATAL* untuk membatalkan.`;
         }
         return NextResponse.json({
           success: true,
@@ -826,18 +889,18 @@ export async function POST(req: Request) {
         session.customerName = customerName;
 
         if (session.orderType === "PICKUP") {
-          session.state = "SELECTING_PAYMENT";
+          session.state = "SELECTING_TIME";
           await prisma.waBotSession.update({
             where: { key: sessionKey },
             data: { value: JSON.stringify(session) }
           });
-          const reply = `Pilih metode pembayaran:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*.`;
+          const { openTime, closeTime, defaultSlot } = await getStoreStatus();
+          const reply = `Kapan Anda ingin mengambil pesanan?\n\nPilih waktu:\n1. *Ambil Sekarang* (Estimasi siap pukul *${defaultSlot}* WIB)\n\nAtau ketik jam pengambilan lainnya antara *${openTime}* - *${closeTime}* WIB dengan format *HH:MM* (contoh: *14:30*):`;
           return NextResponse.json({
             success: true,
             replyMessage: reply,
             buttons: [
-              { id: "1", text: "Bayar di Tempat (COD)", title: "Bayar di Tempat (COD)" },
-              { id: "2", text: "QRIS (Otomatis via Doku)", title: "QRIS (Otomatis via Doku)" }
+              { id: "ambil_sekarang", text: "Ambil Sekarang", title: "Ambil Sekarang" }
             ]
           });
         } else {
@@ -896,8 +959,67 @@ export async function POST(req: Request) {
         session.lng = lng;
         session.distanceKm = distanceKm;
         session.deliveryFee = deliveryFee;
-        session.state = "SELECTING_PAYMENT";
+        session.state = "SELECTING_TIME";
 
+        await prisma.waBotSession.update({
+          where: { key: sessionKey },
+          data: { value: JSON.stringify(session) }
+        });
+
+        const { openTime, closeTime, defaultSlot } = await getStoreStatus();
+        const reply = `Kapan Anda ingin pesanan diantarkan?\n\nPilih waktu:\n1. *Kirim Sekarang* (Estimasi sampai pukul *${defaultSlot}* WIB)\n\nAtau ketik jam pengantaran lainnya antara *${openTime}* - *${closeTime}* WIB dengan format *HH:MM* (contoh: *14:30*):`;
+        return NextResponse.json({
+          success: true,
+          replyMessage: reply,
+          buttons: [
+            { id: "kirim_sekarang", text: "Kirim Sekarang", title: "Kirim Sekarang" }
+          ]
+        });
+      }
+
+      if (state === "SELECTING_TIME") {
+        const input = text.trim().toLowerCase();
+        const { openTime, closeTime, defaultSlot, currentTimeStr } = await getStoreStatus();
+
+        let chosenTime = "";
+        if (input === "1" || input === "ambil_sekarang" || input === "kirim_sekarang" || input === "ambil sekarang" || input === "kirim sekarang") {
+          chosenTime = defaultSlot;
+        } else {
+          // Validate format HH:MM
+          const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+          if (!timePattern.test(input)) {
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Format waktu tidak valid. Silakan ketik *1* untuk *Sekarang*, atau masukkan format *HH:MM* (contoh: *14:30*) antara pukul *${openTime}* - *${closeTime}* WIB:`
+            });
+          }
+
+          // Compare times
+          const compareTime = (t1: string, t2: string) => {
+            const [h1, m1] = t1.split(':').map(Number);
+            const [h2, m2] = t2.split(':').map(Number);
+            return (h1 * 60 + m1) - (h2 * 60 + m2);
+          };
+
+          if (compareTime(input, openTime) < 0 || compareTime(input, closeTime) > 0) {
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Waktu berada di luar jam operasional (*${openTime}* - *${closeTime}* WIB). Silakan ketik *1* untuk *Sekarang*, atau masukkan jam operasional yang valid:`
+            });
+          }
+
+          if (compareTime(input, currentTimeStr) < 0) {
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Waktu tidak boleh di masa lalu (sekarang pukul *${currentTimeStr}* WIB). Silakan ketik *1* untuk *Sekarang*, atau masukkan waktu yang akan datang:`
+            });
+          }
+
+          chosenTime = input;
+        }
+
+        session.pickupTime = chosenTime;
+        session.state = "SELECTING_PAYMENT";
         await prisma.waBotSession.update({
           where: { key: sessionKey },
           data: { value: JSON.stringify(session) }
@@ -987,6 +1109,8 @@ export async function POST(req: Request) {
               paymentMethod: session.paymentMethod,
               status: session.paymentMethod === "QRIS" ? "PENDING_PAYMENT" : "PENDING",
               queueNumber: queueNumber,
+              pickupDate: new Date(),
+              pickupTime: session.pickupTime || null,
               items: {
                 create: [
                   {
@@ -1115,20 +1239,22 @@ export async function POST(req: Request) {
           let editMenu = "";
           let buttons: any[] = [];
           if (session.orderType === "PICKUP") {
-            editMenu = `⚙️ *EDIT PESANAN*\n\nPilih data yang ingin Anda ubah:\n1. *Jumlah Pesanan* (Kuantitas)\n2. *Metode Penyerahan* (Pickup/Delivery)\n3. *Nama Penerima*\n4. *Metode Pembayaran*\n\nKetik nomor *1* - *4* untuk memilih.`;
+            editMenu = `⚙️ *EDIT PESANAN*\n\nPilih data yang ingin Anda ubah:\n1. *Jumlah Pesanan* (Kuantitas)\n2. *Metode Penyerahan* (Pickup/Delivery)\n3. *Nama Penerima*\n4. *Waktu Pengambilan*\n5. *Metode Pembayaran*\n\nKetik nomor *1* - *5* untuk memilih.`;
             buttons = [
               { id: "edit_qty", text: "Jumlah Pesanan", title: "Kuantitas" },
               { id: "edit_type", text: "Metode Penyerahan", title: "Metode" },
               { id: "edit_name", text: "Nama Penerima", title: "Nama" },
+              { id: "edit_time", text: "Waktu Pengambilan", title: "Waktu" },
               { id: "edit_payment", text: "Metode Pembayaran", title: "Pembayaran" }
             ];
           } else {
-            editMenu = `⚙️ *EDIT PESANAN*\n\nPilih data yang ingin Anda ubah:\n1. *Jumlah Pesanan* (Kuantitas)\n2. *Metode Penyerahan* (Pickup/Delivery)\n3. *Nama Penerima*\n4. *Alamat Pengiriman*\n5. *Metode Pembayaran*\n\nKetik nomor *1* - *5* untuk memilih.`;
+            editMenu = `⚙️ *EDIT PESANAN*\n\nPilih data yang ingin Anda ubah:\n1. *Jumlah Pesanan* (Kuantitas)\n2. *Metode Penyerahan* (Pickup/Delivery)\n3. *Nama Penerima*\n4. *Alamat Pengiriman*\n5. *Waktu Pengantaran*\n6. *Metode Pembayaran*\n\nKetik nomor *1* - *6* untuk memilih.`;
             buttons = [
               { id: "edit_qty", text: "Jumlah Pesanan", title: "Kuantitas" },
               { id: "edit_type", text: "Metode Penyerahan", title: "Metode" },
               { id: "edit_name", text: "Nama Penerima", title: "Nama" },
               { id: "edit_address", text: "Alamat Pengiriman", title: "Alamat" },
+              { id: "edit_time", text: "Waktu Pengantaran", title: "Waktu" },
               { id: "edit_payment", text: "Metode Pembayaran", title: "Pembayaran" }
             ];
           }
@@ -1186,30 +1312,32 @@ export async function POST(req: Request) {
             success: true,
             replyMessage: `Masukkan nama lengkap penerima yang baru:`
           });
+        } else if (session.orderType === "DELIVERY" && (choice === "4" || choice === "edit_address")) {
+          session.state = "EDITING_ADDRESS";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          return NextResponse.json({
+            success: true,
+            replyMessage: `Kirimkan lokasi Anda (Share Location) dari WhatsApp, atau ketik alamat pengiriman lengkap yang baru:`
+          });
         } else if (
-          (session.orderType === "DELIVERY" && (choice === "4" || choice === "edit_address")) ||
-          (session.orderType === "PICKUP" && (choice === "4" || choice === "edit_payment"))
+          (session.orderType === "PICKUP" && (choice === "4" || choice === "edit_time")) ||
+          (session.orderType === "DELIVERY" && (choice === "5" || choice === "edit_time"))
         ) {
-          if (session.orderType === "DELIVERY") {
-            session.state = "EDITING_ADDRESS";
-            await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
-            return NextResponse.json({
-              success: true,
-              replyMessage: `Kirimkan lokasi Anda (Share Location) dari WhatsApp, atau ketik alamat pengiriman lengkap yang baru:`
-            });
-          } else {
-            session.state = "EDITING_PAYMENT";
-            await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
-            return NextResponse.json({
-              success: true,
-              replyMessage: `Pilih metode pembayaran baru:\n1. *Bayar di Tempat* (COD)\n2. *QRIS* (Otomatis via Doku)\n\nKetik *1* atau *2*.`,
-              buttons: [
-                { id: "1", text: "Bayar di Tempat (COD)", title: "COD" },
-                { id: "2", text: "QRIS (Otomatis via Doku)", title: "QRIS" }
-              ]
-            });
-          }
-        } else if (session.orderType === "DELIVERY" && (choice === "5" || choice === "edit_payment")) {
+          session.state = "EDITING_TIME";
+          await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+          const { openTime, closeTime, defaultSlot } = await getStoreStatus();
+          const term = session.orderType === "PICKUP" ? "pengambilan" : "pengantaran";
+          return NextResponse.json({
+            success: true,
+            replyMessage: `Pilih waktu ${term} baru:\n1. *Sekarang* (Estimasi siap pukul *${defaultSlot}* WIB)\n\nAtau ketik jam ${term} lainnya antara *${openTime}* - *${closeTime}* WIB dengan format *HH:MM* (contoh: *14:30*):`,
+            buttons: [
+              { id: "ambil_sekarang", text: "Sekarang", title: "Sekarang" }
+            ]
+          });
+        } else if (
+          (session.orderType === "PICKUP" && (choice === "5" || choice === "edit_payment")) ||
+          (session.orderType === "DELIVERY" && (choice === "6" || choice === "edit_payment"))
+        ) {
           session.state = "EDITING_PAYMENT";
           await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
           return NextResponse.json({
@@ -1222,8 +1350,8 @@ export async function POST(req: Request) {
           });
         } else {
           const menuText = session.orderType === "DELIVERY"
-            ? "Pilihan tidak valid. Silakan pilih nomor *1* hingga *5*."
-            : "Pilihan tidak valid. Silakan pilih nomor *1* hingga *4*.";
+            ? "Pilihan tidak valid. Silakan pilih nomor *1* hingga *6*."
+            : "Pilihan tidak valid. Silakan pilih nomor *1* hingga *5*.";
           return NextResponse.json({ success: true, replyMessage: menuText });
         }
       }
@@ -1321,6 +1449,53 @@ export async function POST(req: Request) {
         return sendConfirmationMessage(session, sessionKey, appUrl);
       }
 
+      if (state === "EDITING_TIME") {
+        const input = text.trim().toLowerCase();
+        const { openTime, closeTime, defaultSlot, currentTimeStr } = await getStoreStatus();
+
+        let chosenTime = "";
+        if (input === "1" || input === "ambil_sekarang" || input === "kirim_sekarang" || input === "ambil sekarang" || input === "kirim sekarang") {
+          chosenTime = defaultSlot;
+        } else {
+          // Validate format HH:MM
+          const timePattern = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+          if (!timePattern.test(input)) {
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Format waktu tidak valid. Silakan ketik *1* untuk *Sekarang*, atau masukkan format *HH:MM* (contoh: *14:30*) antara pukul *${openTime}* - *${closeTime}* WIB:`
+            });
+          }
+
+          // Compare times
+          const compareTime = (t1: string, t2: string) => {
+            const [h1, m1] = t1.split(':').map(Number);
+            const [h2, m2] = t2.split(':').map(Number);
+            return (h1 * 60 + m1) - (h2 * 60 + m2);
+          };
+
+          if (compareTime(input, openTime) < 0 || compareTime(input, closeTime) > 0) {
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Waktu berada di luar jam operasional (*${openTime}* - *${closeTime}* WIB). Silakan ketik *1* untuk *Sekarang*, atau masukkan jam operasional yang valid:`
+            });
+          }
+
+          if (compareTime(input, currentTimeStr) < 0) {
+            return NextResponse.json({
+              success: true,
+              replyMessage: `Waktu tidak boleh di masa lalu (sekarang pukul *${currentTimeStr}* WIB). Silakan ketik *1* untuk *Sekarang*, atau masukkan waktu yang akan datang:`
+            });
+          }
+
+          chosenTime = input;
+        }
+
+        session.pickupTime = chosenTime;
+        session.state = "CONFIRMING";
+        await prisma.waBotSession.update({ where: { key: sessionKey }, data: { value: JSON.stringify(session) } });
+        return sendConfirmationMessage(session, sessionKey, appUrl);
+      }
+
       if (state === "EDITING_PAYMENT") {
         const choice = text.trim();
         if (choice === "1" || choice === "2") {
@@ -1337,6 +1512,14 @@ export async function POST(req: Request) {
     if (!session) {
       const orderMatch = lowerText.match(/^order\s+(\d+)$/);
       if (orderMatch) {
+        const { isClosedToday } = await getStoreStatus();
+        if (isClosedToday) {
+          return NextResponse.json({
+            success: true,
+            replyMessage: "Maaf, toko kami sedang libur/tutup hari ini. Silakan hubungi kami kembali di hari/jam operasional. Terima kasih! 🍵"
+          });
+        }
+
         const productIndex = parseInt(orderMatch[1], 10);
         const productItem = products[productIndex - 1]; // 1-indexed to 0-indexed
 
@@ -1355,8 +1538,18 @@ export async function POST(req: Request) {
             create: { key: sessionKey, value: JSON.stringify(sessionData) }
           });
 
+          let productImage = productItem.image;
+          if (productImage && !productImage.startsWith('http')) {
+            const slash = productImage.startsWith('/') ? '' : '/';
+            productImage = `${appUrl}${slash}${productImage}`;
+          }
+
           const reply = `Anda memilih *${productItem.name}* (Rp${activePrice.toLocaleString("id-ID")}).\n\nSilakan masukkan jumlah pesanan (angka saja, contoh: *2*):`;
-          return NextResponse.json({ success: true, replyMessage: reply });
+          return NextResponse.json({
+            success: true,
+            replyMessage: reply,
+            image: productImage || undefined
+          });
         } else {
           return NextResponse.json({
             success: true,
