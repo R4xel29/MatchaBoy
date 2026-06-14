@@ -22,7 +22,7 @@ export default auth((req) => {
             if (!isLoggedIn) {
                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
             }
-            const isPublicAdminRoute = pathname === '/api/admin/loyalty/settings' || pathname === '/api/admin/store-settings'
+            const isPublicAdminRoute = pathname === '/api/admin/loyalty/settings' || pathname === '/api/admin/store-settings' || pathname === '/api/admin/tables'
             const isGetRequest = req.method === 'GET'
             
             if (!(isPublicAdminRoute && isGetRequest)) {
