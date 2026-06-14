@@ -186,6 +186,77 @@ function NavItem({
   );
 }
 
+function CollapsibleSection({
+  title,
+  items,
+  pathname,
+  onNavigate,
+  activeColorClass,
+  iconHoverClass,
+  pendingCount,
+  colorClass = 'text-brand-600/70',
+}: {
+  title: string;
+  items: any[];
+  pathname: string;
+  onNavigate?: () => void;
+  activeColorClass?: string;
+  iconHoverClass?: string;
+  pendingCount: number;
+  colorClass?: string;
+}) {
+  const hasActiveItem = items.some(item => {
+    return pathname === item.href || (item.href !== '/admin' && item.href !== '/admin/cashier' && pathname.startsWith(item.href));
+  });
+
+  const [isOpen, setIsOpen] = useState(hasActiveItem);
+
+  useEffect(() => {
+    if (hasActiveItem) {
+      setIsOpen(true);
+    }
+  }, [hasActiveItem]);
+
+  return (
+    <div className="space-y-1">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60 hover:text-foreground transition-colors duration-150 text-left"
+      >
+        <span className={colorClass}>{title}</span>
+        <ChevronRight 
+          className={`w-3 h-3 text-muted-foreground/60 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
+        />
+      </button>
+      
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeInOut' }}
+            className="overflow-hidden space-y-0.5"
+          >
+            {items.map((item) => (
+              <NavItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                onNavigate={onNavigate}
+                activeColorClass={activeColorClass}
+                iconHoverClass={iconHoverClass}
+                showBadge={item.hasBadge}
+                badgeCount={pendingCount}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: string; onNavigate?: () => void; pendingCount: number }) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -228,172 +299,137 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
       <div className="mx-5 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto custom-scrollbar">
+      <nav className="flex-1 px-3 py-5 space-y-3 overflow-y-auto custom-scrollbar">
         {/* Utama Section */}
-        <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">
-          Utama
-        </p>
-        {MAIN_ITEMS.map((item) => (
-          <NavItem key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
-        ))}
+        <CollapsibleSection
+          title="Utama"
+          items={MAIN_ITEMS}
+          pathname={pathname}
+          onNavigate={onNavigate}
+          pendingCount={pendingCount}
+          colorClass="text-muted-foreground/60"
+        />
 
         {/* Cashier Section */}
-        <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-        <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-amber-600/70">
-          Kasir (POS)
-        </p>
-        {CASHIER_ITEMS.map((item) => (
-          <NavItem 
-            key={item.href} 
-            item={item} 
-            pathname={pathname} 
-            onNavigate={onNavigate}
-            activeColorClass="bg-gradient-to-r from-amber-600 to-amber-500 shadow-amber-700/15"
-            iconHoverClass="group-hover:text-amber-600"
-            showBadge={(item as any).hasBadge}
-            badgeCount={pendingCount}
-          />
-        ))}
+        <CollapsibleSection
+          title="Kasir (POS)"
+          items={CASHIER_ITEMS}
+          pathname={pathname}
+          onNavigate={onNavigate}
+          activeColorClass="bg-gradient-to-r from-amber-600 to-amber-500 shadow-amber-700/15"
+          iconHoverClass="group-hover:text-amber-600"
+          pendingCount={pendingCount}
+          colorClass="text-amber-600/70"
+        />
 
         {/* Admin-only sections */}
         {isAdmin && (
           <>
             {/* Manajemen Produk Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-brand-600/70">
-              Manajemen Produk
-            </p>
-            {PRODUCT_ITEMS.map((item) => (
-              <NavItem key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
-            ))}
+            <CollapsibleSection
+              title="Manajemen Produk"
+              items={PRODUCT_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              pendingCount={pendingCount}
+              colorClass="text-brand-600/70"
+            />
 
             {/* Keuangan Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-rose-600/70">
-              Keuangan
-            </p>
-            {FINANCE_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-rose-600 to-rose-500 shadow-rose-700/15"
-                iconHoverClass="group-hover:text-rose-600"
-              />
-            ))}
+            <CollapsibleSection
+              title="Keuangan"
+              items={FINANCE_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-rose-600 to-rose-500 shadow-rose-700/15"
+              iconHoverClass="group-hover:text-rose-600"
+              pendingCount={pendingCount}
+              colorClass="text-rose-600/70"
+            />
 
             {/* Loyalty Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-emerald-600/70">
-              Loyalty & Referral
-            </p>
-            {LOYALTY_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-emerald-700/15"
-                iconHoverClass="group-hover:text-emerald-600"
-              />
-            ))}
+            <CollapsibleSection
+              title="Loyalty & Referral"
+              items={LOYALTY_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-emerald-600 to-emerald-500 shadow-emerald-700/15"
+              iconHoverClass="group-hover:text-emerald-600"
+              pendingCount={pendingCount}
+              colorClass="text-emerald-600/70"
+            />
 
             {/* Delivery Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-sky-600/70">
-              Delivery
-            </p>
-            {DELIVERY_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-sky-600 to-sky-500 shadow-sky-700/15"
-                iconHoverClass="group-hover:text-sky-600"
-              />
-            ))}
+            <CollapsibleSection
+              title="Delivery"
+              items={DELIVERY_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-sky-600 to-sky-500 shadow-sky-700/15"
+              iconHoverClass="group-hover:text-sky-600"
+              pendingCount={pendingCount}
+              colorClass="text-sky-600/70"
+            />
 
             {/* Fitur Pelanggan Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-violet-600/70">
-              Fitur Pelanggan
-            </p>
-            {CUSTOMER_FEATURE_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-violet-600 to-violet-500 shadow-violet-700/15"
-                iconHoverClass="group-hover:text-violet-600"
-              />
-            ))}
+            <CollapsibleSection
+              title="Fitur Pelanggan"
+              items={CUSTOMER_FEATURE_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-violet-600 to-violet-500 shadow-violet-700/15"
+              iconHoverClass="group-hover:text-violet-600"
+              pendingCount={pendingCount}
+              colorClass="text-violet-600/70"
+            />
 
             {/* Engagement Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-orange-600/70">
-              Engagement
-            </p>
-            {ENGAGEMENT_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-orange-600 to-orange-500 shadow-orange-700/15"
-                iconHoverClass="group-hover:text-orange-600"
-              />
-            ))}
+            <CollapsibleSection
+              title="Engagement"
+              items={ENGAGEMENT_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-orange-600 to-orange-500 shadow-orange-700/15"
+              iconHoverClass="group-hover:text-orange-600"
+              pendingCount={pendingCount}
+              colorClass="text-orange-600/70"
+            />
 
             {/* Kolaborasi Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-cyan-600/70">
-              Kolaborasi
-            </p>
-            {COLLABORATION_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-cyan-600 to-cyan-500 shadow-cyan-700/15"
-                iconHoverClass="group-hover:text-cyan-600"
-              />
-            ))}
+            <CollapsibleSection
+              title="Kolaborasi"
+              items={COLLABORATION_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-cyan-600 to-cyan-500 shadow-cyan-700/15"
+              iconHoverClass="group-hover:text-cyan-600"
+              pendingCount={pendingCount}
+              colorClass="text-cyan-600/70"
+            />
 
-            {/* Akun & Log Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-indigo-600/70">
-              Keamanan & Akun
-            </p>
-            {USER_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-indigo-700/15"
-                iconHoverClass="group-hover:text-indigo-600"
-              />
-            ))}
+            {/* Keamanan & Akun Section */}
+            <CollapsibleSection
+              title="Keamanan & Akun"
+              items={USER_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-indigo-600 to-indigo-500 shadow-indigo-700/15"
+              iconHoverClass="group-hover:text-indigo-600"
+              pendingCount={pendingCount}
+              colorClass="text-indigo-600/70"
+            />
 
             {/* Pengaturan Section */}
-            <div className="mx-3 my-3 h-px bg-gradient-to-r from-border via-border/50 to-transparent" />
-            <p className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600/70">
-              Pengaturan
-            </p>
-            {SETTING_ITEMS.map((item) => (
-              <NavItem 
-                key={item.href} 
-                item={item} 
-                pathname={pathname} 
-                onNavigate={onNavigate}
-                activeColorClass="bg-gradient-to-r from-slate-600 to-slate-500 shadow-slate-700/15"
-                iconHoverClass="group-hover:text-slate-600"
-              />
-            ))}
+            <CollapsibleSection
+              title="Pengaturan"
+              items={SETTING_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              activeColorClass="bg-gradient-to-r from-slate-600 to-slate-500 shadow-slate-700/15"
+              iconHoverClass="group-hover:text-slate-600"
+              pendingCount={pendingCount}
+              colorClass="text-slate-600/70"
+            />
           </>
         )}
       </nav>
