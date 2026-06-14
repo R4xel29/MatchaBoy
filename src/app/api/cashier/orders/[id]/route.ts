@@ -52,7 +52,7 @@ export async function PATCH(
 
     // Validation: if no proof uploaded yet for QRIS/TRANSFER, cashier cannot change to PREPARING or beyond,
     // but they can change to PENDING (Accept) or CANCELLED (Reject/Cancel)
-    const isManualPayment = ['QRIS', 'TRANSFER'].includes(existingOrder.paymentMethod)
+    const isManualPayment = existingOrder.paymentMethod === 'TRANSFER'
     const hasNoProof = !existingOrder.paymentProofUrl
     const isCurrentlyPending = ['PENDING', 'PENDING_PAYMENT'].includes(existingOrder.status)
     const isAttemptingProgress = !['PENDING', 'PENDING_PAYMENT', 'CANCELLED'].includes(status)

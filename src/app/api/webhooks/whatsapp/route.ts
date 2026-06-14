@@ -399,10 +399,8 @@ export async function POST(req: Request) {
 
       if (order.paymentMethod === 'QRIS') {
         const paymentSettings = await prisma.paymentSettings.findFirst();
-        const qrisImage = paymentSettings?.qrisImage;
-        let absoluteQrisImage = qrisImage;
-
         if (paymentSettings?.dokuEnabled && order.paymentQrContent) {
+          let absoluteQrisImage = '';
           if (order.paymentUrl && order.paymentUrl.startsWith('http') && order.paymentUrl.includes('doku')) {
             absoluteQrisImage = order.paymentUrl;
           } else {
@@ -410,18 +408,21 @@ export async function POST(req: Request) {
             const apiDomain = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
             absoluteQrisImage = `${apiDomain}/doku-mcp-server/api/qr/generate?qr=${encodeURIComponent(order.paymentQrContent)}`;
           }
-        } else if (absoluteQrisImage && !absoluteQrisImage.startsWith('http')) {
-          const slash = absoluteQrisImage.startsWith('/') ? '' : '/';
-          absoluteQrisImage = `${appUrl}${slash}${absoluteQrisImage}`;
-        }
 
-        const reply = `Halo *${order.customerName}*!\n\nBerikut adalah QRIS untuk pembayaran pesanan SPMB Anda *${order.id}*:\n\n*Detail Pesanan:*\n${order.items.map(item => `- ${item.qty}x ${item.product.name}`).join('\n')}\n\n*Total Pembayaran: ${formatCurrency(order.total)}*\n*Jam Pengantaran: ${order.pickupTime}*\n*Alamat: ${order.address}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya ke sini ya! 🍵`;
-        
-        return NextResponse.json({
-          success: true,
-          replyMessage: reply,
-          image: absoluteQrisImage || undefined
-        });
+          const reply = `Halo *${order.customerName}*!\n\nBerikut adalah QRIS untuk pembayaran pesanan SPMB Anda *${order.id}*:\n\n*Detail Pesanan:*\n${order.items.map(item => `- ${item.qty}x ${item.product.name}`).join('\n')}\n\n*Total Pembayaran: ${formatCurrency(order.total)}*\n*Jam Pengantaran: ${order.pickupTime}*\n*Alamat: ${order.address}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran. Pembayaran Anda akan otomatis terverifikasi secara instan oleh sistem. 🍵`;
+          
+          return NextResponse.json({
+            success: true,
+            replyMessage: reply,
+            image: absoluteQrisImage || undefined
+          });
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: "QRIS is disabled",
+            replyMessage: "Maaf, metode pembayaran QRIS saat ini sedang tidak aktif. Silakan hubungi admin atau gunakan metode pembayaran COD. ❌"
+          });
+        }
       } else {
         // COD
         const reply = `Halo *${order.customerName}*!\n\nPesanan COD Anda *${order.id}* telah terkonfirmasi. ✅\n\n*Detail Pesanan:*\n${order.items.map(item => `- ${item.qty}x ${item.product.name}`).join('\n')}\n\n*Total Pembayaran: ${formatCurrency(order.total)}*\n*Jam Pengantaran: ${order.pickupTime}*\n*Alamat: ${order.address}*\n\nMohon siapkan uang pas saat pesanan diantarkan ya. Terima kasih! 🍵`;
@@ -1125,7 +1126,7 @@ export async function POST(req: Request) {
 
           if (session.paymentMethod === "QRIS") {
             const paymentSettings = await prisma.paymentSettings.findFirst();
-            if (paymentSettings && paymentSettings.dokuEnabled) {
+            if (paymentSettings && paymentSettings.dokuEnabled && paymentSettings.qrisEnabled) {
               const { createDokuMcpQrisPayment } = await import("@/lib/doku");
 
               console.log("[WHATSAPP_WEBHOOK] Generating dynamic QRIS via Doku MCP Server...");
@@ -1154,8 +1155,7 @@ export async function POST(req: Request) {
                   where: { key: sessionKey }
                 });
 
-
-                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran.\n\nPantau status pesanan Anda di sini:\n📍 ${appUrl}/orders/${order.id}\n\nSetelah pembayaran sukses terverifikasi oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
+                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nSilakan scan QRIS di atas untuk melakukan pembayaran.\n\nPantau status pesanan Anda di sini:\n📍 ${appUrl}/orders/${order.id}\n\nSetelah pembayaran sukses terverifikasi secara otomatis oleh sistem, pesanan Anda akan otomatis mulai disiapkan! 🍵`;
                 return NextResponse.json({
                   success: true,
                   replyMessage: reply,
@@ -1170,34 +1170,12 @@ export async function POST(req: Request) {
                 });
               }
             } else {
-              if (paymentSettings && paymentSettings.qrisEnabled) {
-                await prisma.waBotSession.delete({
-                  where: { key: sessionKey }
-                });
-
-                // Admin notification is skipped during checkout for QRIS orders (will be sent when paid/lunas)
-
-                const qrisImage = paymentSettings.qrisImage;
-                let absoluteQrisImage = qrisImage;
-                if (qrisImage && !qrisImage.startsWith('http')) {
-                  const slash = qrisImage.startsWith('/') ? '' : '/';
-                  absoluteQrisImage = `${appUrl}${slash}${qrisImage}`;
-                }
-
-                const reply = `✅ *PESANAN BERHASIL DIBUAT!*\n\nID Pesanan Anda: *${order.id}*\nNomor Antrean: *${order.queueNumber}*\nTotal: *Rp${total.toLocaleString('id-ID')}*\n\nBerikut adalah QRIS untuk pembayaran pesanan Anda. Silakan scan QRIS di atas untuk melakukan pembayaran dan kirimkan bukti bayarnya (screenshot/struk) ke sini ya!\n\nPantau status pesanan Anda di sini:\n📍 ${appUrl}/orders/${order.id} 🍵`;
-                return NextResponse.json({
-                  success: true,
-                  replyMessage: reply,
-                  image: absoluteQrisImage || undefined
-                });
-              } else {
-                console.error("[WHATSAPP_WEBHOOK] QRIS is disabled in payment settings.");
-                return NextResponse.json({
-                  success: false,
-                  error: "QRIS is disabled",
-                  replyMessage: "Maaf, metode pembayaran QRIS saat ini tidak aktif. Silakan hubungi admin atau gunakan metode pembayaran COD. ❌"
-                });
-              }
+              console.error("[WHATSAPP_WEBHOOK] QRIS/Doku is disabled or not configured in payment settings.");
+              return NextResponse.json({
+                success: false,
+                error: "QRIS is disabled",
+                replyMessage: "Maaf, metode pembayaran QRIS saat ini tidak aktif. Silakan hubungi admin atau gunakan metode pembayaran COD. ❌"
+              });
             }
           } else {
             // COD

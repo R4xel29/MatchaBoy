@@ -74,7 +74,7 @@ export default async function OrderPaymentPage({ params }: { params: Promise<{ i
 
   const qrisConfig = paymentSettings ? {
     enabled: paymentSettings.qrisEnabled,
-    image: paymentSettings.qrisImage,
+    image: null,
     label: paymentSettings.qrisLabel
   } : null;
 

@@ -43,12 +43,9 @@ export default async function OrderPaymentFailedPage({ params }: { params: Promi
     paymentMethod: order.paymentMethod,
   }
 
-  const isStaticQris = !!paymentSettings?.qrisImage && paymentSettings?.qrisEnabled
-
   return (
     <PaymentFailedClient 
       order={mappedOrder}
-      isStaticQris={isStaticQris}
     />
   )
 }

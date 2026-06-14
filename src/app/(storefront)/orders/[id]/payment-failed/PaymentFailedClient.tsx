@@ -7,7 +7,7 @@ import { XCircle, RefreshCw, ShoppingBag, Home, AlertTriangle } from 'lucide-rea
 import { formatRupiah } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
 
-export default function PaymentFailedClient({ order, isStaticQris }: { order: any; isStaticQris?: boolean }) {
+export default function PaymentFailedClient({ order }: { order: any }) {
   const router = useRouter()
   const { showToast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -78,7 +78,7 @@ export default function PaymentFailedClient({ order, isStaticQris }: { order: an
 
         {/* Primary actions */}
         <div className="space-y-3 pt-2">
-          {!(isCancelled && order.paymentMethod === 'QRIS' && isStaticQris) && (
+          {!isCancelled && (
             <button
               onClick={handleRepay}
               disabled={loading}

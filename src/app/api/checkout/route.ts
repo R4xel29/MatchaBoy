@@ -854,7 +854,7 @@ export async function POST(req: Request) {
                 const channel = body.paymentChannel?.toUpperCase()
                 
                 if (channel === 'QRIS') {
-                    const { createDokuMcpQrisPayment, createDokuCheckoutSession, generateQrisString } = await import('@/lib/doku')
+                    const { createDokuMcpQrisPayment, createDokuCheckoutSession } = await import('@/lib/doku')
                     
                     console.log('[QRIS Instan] Attempting to generate QRIS via DOKU MCP Server...')
                     let qrContent: string | null = null

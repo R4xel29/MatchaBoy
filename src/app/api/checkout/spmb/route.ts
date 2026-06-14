@@ -379,23 +379,7 @@ export async function POST(req: Request) {
       const paymentSettings = await prisma.paymentSettings.findFirst();
       let qrisGenerated = false;
 
-      // STRATEGI 1: Coba generate QRIS string otomatis jika NMID tersedia
-      if (paymentSettings?.qrisAutoGenerate && paymentSettings.qrisNmid) {
-        try {
-          const { generateQrisString } = await import('@/lib/doku');
-          const qrContent = generateQrisString(secureTotal, order.id, paymentSettings.qrisNmid);
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { paymentQrContent: qrContent }
-          });
-          qrisGenerated = true;
-          console.log('[SPMB QRIS INSTAN] Auto-generated QRIS string successfully.');
-        } catch (genError: any) {
-          console.warn('[SPMB QRIS INSTAN] Auto-generate QRIS failed:', genError.message);
-        }
-      }
-
-      // STRATEGI 2: Coba generate QRIS dinamis via DOKU MCP Server
+      // STRATEGI 1: Coba generate QRIS dinamis via DOKU MCP Server
       if (!qrisGenerated && paymentSettings && paymentSettings.dokuEnabled) {
         try {
           const { createDokuMcpQrisPayment } = await import('@/lib/doku');

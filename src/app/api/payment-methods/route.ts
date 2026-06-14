@@ -30,8 +30,8 @@ export async function GET() {
     },
     qris: {
       enabled: settings.qrisEnabled,
-      image: settings.qrisImage,
-      logo: settings.qrisLogo,
+      image: null,
+      logo: null,
       label: settings.qrisLabel,
     },
     transfer: {

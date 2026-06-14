@@ -30,6 +30,7 @@ export async function GET(req: Request) {
         lastUnpaidReminderSent: true,
         total: true,
         paymentUrl: true,
+        paymentQrContent: true,
         paymentMethod: true,
         notes: true,
         userId: true,
@@ -141,23 +142,16 @@ export async function GET(req: Request) {
             }
           });
 
-          // Resolve QRIS image URL (dynamic or static fallback)
+          // Resolve QRIS image URL (dynamic QRIS)
           let imageUrl = order.paymentUrl;
           if (imageUrl) {
             if (imageUrl.includes('api.doku.com/doku-mcp-server')) {
               imageUrl = imageUrl.replace('api.doku.com/doku-mcp-server', 'mcp.doku.com');
             }
-          } else {
-            const paymentSettings = await prisma.paymentSettings.findFirst();
-            if (paymentSettings && paymentSettings.qrisEnabled && paymentSettings.qrisImage) {
-              const appUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
-              const qrisImage = paymentSettings.qrisImage;
-              imageUrl = qrisImage;
-              if (qrisImage && !qrisImage.startsWith('http')) {
-                const slash = qrisImage.startsWith('/') ? '' : '/';
-                imageUrl = `${appUrl}${slash}${qrisImage}`;
-              }
-            }
+          } else if (order.paymentQrContent) {
+            const isSandbox = process.env.DOKU_SANDBOX === 'true';
+            const apiDomain = isSandbox ? 'https://api-sandbox.doku.com' : 'https://api.doku.com';
+            imageUrl = `${apiDomain}/doku-mcp-server/api/qr/generate?qr=${encodeURIComponent(order.paymentQrContent)}`;
           }
 
           // Send WhatsApp reminder
