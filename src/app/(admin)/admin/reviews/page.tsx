@@ -44,10 +44,12 @@ export default async function AdminReviewsPage() {
 
   // Calculate stats
   const totalReviews = reviews.length;
-  const avgRating = totalReviews > 0
-    ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews) * 10) / 10
+  const activeReviews = reviews.filter(r => !r.isHidden);
+  const avgRating = activeReviews.length > 0
+    ? Math.round((activeReviews.reduce((sum, r) => sum + r.rating, 0) / activeReviews.length) * 10) / 10
     : 0;
-  const featuredCount = reviews.filter(r => r.isFeatured).length;
+  const featuredCount = reviews.filter(r => r.isFeatured && !r.isHidden).length;
+  const hiddenCount = reviews.filter(r => r.isHidden).length;
 
   return (
     <div className="space-y-5">
@@ -60,7 +62,7 @@ export default async function AdminReviewsPage() {
         initialStats={{
           totalReviews,
           avgRating,
-          pendingCount: totalReviews,
+          pendingCount: hiddenCount,
           featuredCount,
         }}
       />

@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import {
   Search, Star, Eye, EyeOff, Award, Trash2, ChevronDown, ChevronUp,
-  MessageSquare, ShieldAlert, Filter, Calendar, TrendingUp,
+  MessageSquare, ShieldAlert, Filter, Calendar, TrendingUp, Send
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
@@ -51,6 +51,7 @@ interface Review {
   comment: string | null;
   images: string | null;
   isFeatured: boolean;
+  isHidden: boolean;
   createdAt: string;
   updatedAt: string;
   user: ReviewUser;
@@ -95,10 +96,12 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
   const [stats, setStats] = useState<Stats>(initialStats);
   const [searchTerm, setSearchTerm] = useState('');
   const [ratingFilter, setRatingFilter] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'FEATURED' | 'REGULAR'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'FEATURED' | 'REGULAR' | 'HIDDEN'>('ALL');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState<{ [reviewId: string]: string }>({});
+  const [replyLoading, setReplyLoading] = useState<{ [reviewId: string]: boolean }>({});
 
   const { showToast } = useToast();
 
@@ -113,9 +116,10 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
       const matchesRating = ratingFilter === 'ALL' || r.rating === parseInt(ratingFilter);
 
       const matchesStatus =
-        statusFilter === 'ALL' ||
-        (statusFilter === 'FEATURED' && r.isFeatured) ||
-        (statusFilter === 'REGULAR' && !r.isFeatured);
+        (statusFilter === 'ALL' && !r.isHidden) ||
+        (statusFilter === 'FEATURED' && r.isFeatured && !r.isHidden) ||
+        (statusFilter === 'REGULAR' && !r.isFeatured && !r.isHidden) ||
+        (statusFilter === 'HIDDEN' && r.isHidden);
 
       return matchesSearch && matchesRating && matchesStatus;
     });
@@ -143,7 +147,8 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
       const updatedReviews = reviews.map(r => r.id === id ? { ...r, ...data.review } : r);
       setStats(prev => ({
         ...prev,
-        featuredCount: updatedReviews.filter(r => r.isFeatured).length,
+        featuredCount: updatedReviews.filter(r => r.isFeatured && !r.isHidden).length,
+        pendingCount: updatedReviews.filter(r => r.isHidden).length,
       }));
 
       const messages: Record<string, string> = {
@@ -159,6 +164,44 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
       showToast(message, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle post reply from Admin
+  const handlePostReply = async (reviewId: string) => {
+    const text = replyText[reviewId];
+    if (!text || !text.trim()) return;
+
+    setReplyLoading(prev => ({ ...prev, [reviewId]: true }));
+    try {
+      const res = await fetch(`/api/reviews/${reviewId}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comment: text.trim() }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      const data = await res.json();
+
+      setReviews(prev =>
+        prev.map(r => {
+          if (r.id === reviewId) {
+            return {
+              ...r,
+              replies: [...r.replies, data.reply],
+            };
+          }
+          return r;
+        })
+      );
+      setReplyText(prev => ({ ...prev, [reviewId]: '' }));
+      showToast('Balasan berhasil dikirim! 💬', 'success');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Gagal mengirim balasan.';
+      showToast(message, 'error');
+    } finally {
+      setReplyLoading(prev => ({ ...prev, [reviewId]: false }));
     }
   };
 
@@ -257,13 +300,13 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
 
         <div className="bg-card rounded-2xl border border-border p-4 space-y-1">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center">
-              <TrendingUp className="w-4 h-4 text-blue-600" />
+            <div className="w-8 h-8 rounded-xl bg-gray-50 flex items-center justify-center">
+              <EyeOff className="w-4 h-4 text-gray-500" />
             </div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Pending</span>
+            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Tersembunyi</span>
           </div>
           <p className="text-2xl font-black text-foreground">{stats.pendingCount}</p>
-          <p className="text-[10px] text-muted-foreground">Perlu moderasi</p>
+          <p className="text-[10px] text-muted-foreground">Ulasan disembunyikan</p>
         </div>
 
         <div className="bg-card rounded-2xl border border-border p-4 space-y-1">
@@ -304,12 +347,13 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
 
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'FEATURED' | 'REGULAR')}
+          onChange={(e) => setStatusFilter(e.target.value as 'ALL' | 'FEATURED' | 'REGULAR' | 'HIDDEN')}
           className="px-4 py-2 text-sm rounded-xl border border-border bg-card focus:outline-none focus:border-brand-500"
         >
           <option value="ALL">Semua Status</option>
           <option value="FEATURED">Featured ⭐</option>
           <option value="REGULAR">Regular</option>
+          <option value="HIDDEN">Tersembunyi 👁️‍🗨️</option>
         </select>
       </div>
 
@@ -322,7 +366,7 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
             statusFilter === 'ALL' ? 'border-brand-600 text-brand-700' : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
-          Semua ({reviews.length})
+          Semua ({reviews.filter(r => !r.isHidden).length})
         </button>
         <button
           onClick={() => setStatusFilter('FEATURED')}
@@ -332,7 +376,7 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
           )}
         >
           <Award className="w-3.5 h-3.5" />
-          Featured ({stats.featuredCount})
+          Featured ({reviews.filter(r => r.isFeatured && !r.isHidden).length})
         </button>
         <button
           onClick={() => setStatusFilter('REGULAR')}
@@ -341,7 +385,17 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
             statusFilter === 'REGULAR' ? 'border-brand-600 text-brand-700' : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
-          Regular ({reviews.length - stats.featuredCount})
+          Regular ({reviews.filter(r => !r.isFeatured && !r.isHidden).length})
+        </button>
+        <button
+          onClick={() => setStatusFilter('HIDDEN')}
+          className={cn(
+            "px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5",
+            statusFilter === 'HIDDEN' ? 'border-brand-600 text-brand-700' : 'border-transparent text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <EyeOff className="w-3.5 h-3.5" />
+          Tersembunyi ({reviews.filter(r => r.isHidden).length})
         </button>
       </div>
 
@@ -357,6 +411,7 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
               className={cn(
                 "bg-card rounded-2xl border overflow-hidden transition-all",
                 review.isFeatured ? 'border-amber-300 shadow-amber-100/50 shadow-md' : 'border-border',
+                review.isHidden && 'opacity-65 bg-muted/30 border-dashed'
               )}
             >
               {/* Featured badge */}
@@ -466,45 +521,70 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
                     </div>
 
                     {/* Replies section */}
-                    {review.replies && review.replies.length > 0 && (
-                      <div className="mt-4 space-y-2.5 pl-4 border-l-2 border-brand-500/30">
-                        <h5 className="text-[11px] font-bold text-foreground mb-1.5 flex items-center gap-1">
-                          <span>💬</span> Balasan Pelanggan & Admin:
-                        </h5>
-                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                          {review.replies.map(reply => (
-                            <div key={reply.id} className="p-2.5 bg-muted/40 rounded-xl space-y-1 relative group transition-all border border-border/10">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  {reply.user.image ? (
-                                    <div className="relative w-5 h-5 rounded-full overflow-hidden shrink-0 border">
-                                      <Image src={reply.user.image} alt={reply.user.name || ''} fill className="object-cover" />
-                                    </div>
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700">
-                                      {(reply.user.name || '?')[0].toUpperCase()}
-                                    </div>
-                                  )}
-                                  <span className="text-xs font-bold text-foreground">{reply.user.name || 'Anonymous'}</span>
-                                  <span className="text-[9px] text-muted-foreground">
-                                    {new Date(reply.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
-                                  </span>
+                    <div className="mt-4 space-y-2.5 pl-4 border-l-2 border-brand-500/30">
+                      {review.replies && review.replies.length > 0 && (
+                        <>
+                          <h5 className="text-[11px] font-bold text-foreground mb-1.5 flex items-center gap-1">
+                            <span>💬</span> Balasan Pelanggan & Admin:
+                          </h5>
+                          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                            {review.replies.map(reply => (
+                              <div key={reply.id} className="p-2.5 bg-muted/40 rounded-xl space-y-1 relative group transition-all border border-border/10">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    {reply.user.image ? (
+                                      <div className="relative w-5 h-5 rounded-full overflow-hidden shrink-0 border">
+                                        <Image src={reply.user.image} alt={reply.user.name || ''} fill className="object-cover" />
+                                      </div>
+                                    ) : (
+                                      <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700">
+                                        {(reply.user.name || '?')[0].toUpperCase()}
+                                      </div>
+                                    )}
+                                    <span className="text-xs font-bold text-foreground">{reply.user.name || 'Anonymous'}</span>
+                                    <span className="text-[9px] text-muted-foreground">
+                                      {new Date(reply.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={() => handleDeleteReply(review.id, reply.id)}
+                                    disabled={loading}
+                                    className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded hover:bg-red-50"
+                                    title="Hapus Balasan"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
                                 </div>
-                                <button
-                                  onClick={() => handleDeleteReply(review.id, reply.id)}
-                                  disabled={loading}
-                                  className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded hover:bg-red-50"
-                                  title="Hapus Balasan"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
+                                <p className="text-xs text-foreground/80 pl-7 leading-relaxed">{reply.comment}</p>
                               </div>
-                              <p className="text-xs text-foreground/80 pl-7 leading-relaxed">{reply.comment}</p>
-                            </div>
-                          ))}
-                        </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Admin Add Reply Form */}
+                      <div className="mt-3 flex items-center gap-2 pt-1 border-t border-border/20">
+                        <textarea
+                          placeholder="Tulis balasan resmi admin..."
+                          value={replyText[review.id] || ''}
+                          onChange={(e) => setReplyText(prev => ({ ...prev, [review.id]: e.target.value }))}
+                          rows={1}
+                          className="flex-1 px-3 py-1.5 text-xs rounded-xl border border-border bg-card focus:outline-none focus:border-brand-500 resize-none max-h-20"
+                        />
+                        <button
+                          onClick={() => handlePostReply(review.id)}
+                          disabled={loading || replyLoading[review.id] || !replyText[review.id]?.trim()}
+                          className="p-2 rounded-xl bg-brand-700 hover:bg-brand-800 text-white transition-colors shrink-0 disabled:opacity-50 disabled:hover:bg-brand-700 flex items-center justify-center"
+                          title="Kirim Balasan"
+                        >
+                          {replyLoading[review.id] ? (
+                            <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin block" />
+                          ) : (
+                            <Send className="w-3.5 h-3.5" />
+                          )}
+                        </button>
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
 
@@ -530,23 +610,25 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
                     </button>
                   )}
 
-                  <button
-                    onClick={() => handleAction(review.id, 'approve')}
-                    disabled={loading}
-                    className="py-2 px-3 text-[11px] font-bold rounded-xl border border-emerald-300 text-emerald-700 bg-emerald-50/20 hover:bg-emerald-50/50 transition-colors flex items-center gap-1"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    Approve
-                  </button>
-
-                  <button
-                    onClick={() => handleAction(review.id, 'hide')}
-                    disabled={loading}
-                    className="py-2 px-3 text-[11px] font-bold rounded-xl border border-gray-300 text-gray-600 bg-gray-50/20 hover:bg-gray-50/50 transition-colors flex items-center gap-1"
-                  >
-                    <EyeOff className="w-3.5 h-3.5" />
-                    Hide
-                  </button>
+                  {review.isHidden ? (
+                    <button
+                      onClick={() => handleAction(review.id, 'approve')}
+                      disabled={loading}
+                      className="py-2 px-3 text-[11px] font-bold rounded-xl border border-emerald-300 text-emerald-700 bg-emerald-50/20 hover:bg-emerald-50/50 transition-colors flex items-center gap-1"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      Approve
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleAction(review.id, 'hide')}
+                      disabled={loading}
+                      className="py-2 px-3 text-[11px] font-bold rounded-xl border border-gray-300 text-gray-650 bg-gray-55/10 hover:bg-gray-50 transition-colors flex items-center gap-1"
+                    >
+                      <EyeOff className="w-3.5 h-3.5" />
+                      Hide
+                    </button>
+                  )}
 
                   {review.comment && (
                     <button

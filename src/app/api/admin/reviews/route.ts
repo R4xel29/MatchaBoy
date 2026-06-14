@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     }
 
     const { searchParams } = new URL(req.url)
-    const status = searchParams.get('status') // 'pending' | 'approved' | 'hidden' | 'featured'
+    const status = searchParams.get('status') // 'pending' | 'approved' | 'hidden' | 'featured' | 'all'
     const rating = searchParams.get('rating')
     const dateFrom = searchParams.get('dateFrom')
     const dateTo = searchParams.get('dateTo')
@@ -32,10 +32,13 @@ export async function GET(req: Request) {
     // Filter by status
     if (status === 'featured') {
       where.isFeatured = true
+      where.isHidden = false
     } else if (status === 'hidden') {
-      where.comment = null // We use a 'hiddenAt' approach via updatedAt trick — but schema has no status field
-      // Since Review model has no explicit status, we'll use a convention:
-      // We store status in a JSON-like approach. For now, filter via isFeatured
+      where.isHidden = true
+    } else if (status === 'approved') {
+      where.isHidden = false
+    } else if (status !== 'all') {
+      where.isHidden = false
     }
 
     if (rating) {
@@ -87,22 +90,28 @@ export async function GET(req: Request) {
       },
     })
 
-    // Calculate stats
-    const allReviews = await prisma.review.findMany({
-      select: { rating: true, isFeatured: true },
-    })
-    const totalReviews = allReviews.length
-    const avgRating = totalReviews > 0
-      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
-      : 0
-    const featuredCount = allReviews.filter(r => r.isFeatured).length
+    // Calculate stats using database aggregations for optimal performance
+    const [totalReviews, aggregateStats, featuredCount, hiddenCount] = await prisma.$transaction([
+      prisma.review.count(),
+      prisma.review.aggregate({
+        _avg: {
+          rating: true,
+        },
+      }),
+      prisma.review.count({
+        where: { isFeatured: true, isHidden: false },
+      }),
+      prisma.review.count({
+        where: { isHidden: true },
+      }),
+    ])
 
     return NextResponse.json({
       reviews,
       stats: {
         totalReviews,
-        avgRating: Math.round(avgRating * 10) / 10,
-        pendingCount: totalReviews, // All reviews could need moderation
+        avgRating: Math.round((aggregateStats._avg.rating || 0) * 10) / 10,
+        pendingCount: hiddenCount, // Send hidden count in place of pendingCount
         featuredCount,
       },
     })
@@ -137,11 +146,11 @@ export async function PATCH(req: Request) {
         updateData = { isFeatured: false }
         break
       case 'approve':
-        updateData = { isFeatured: false } // Just ensure it's visible
+        updateData = { isHidden: false } // Make it visible
         break
       case 'hide':
-        // Since there's no status field, we keep the review but unfeature it
-        updateData = { isFeatured: false }
+        // Hide and unfeature
+        updateData = { isHidden: true, isFeatured: false }
         break
       case 'delete-comment':
         updateData = { comment: null }

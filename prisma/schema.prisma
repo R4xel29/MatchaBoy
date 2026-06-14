@@ -841,6 +841,7 @@ model Review {
   comment     String?
   images      String?  // JSON array string of image URLs
   isFeatured  Boolean  @default(false)
+  isHidden    Boolean  @default(false)
   orderId     String?
   
   likes       ReviewLike[]

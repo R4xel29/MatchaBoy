@@ -11,8 +11,17 @@ export async function GET(
     const session = await auth();
     const currentUserId = session?.user?.id || null;
 
+    const { searchParams } = new URL(request.url);
+    const pageStr = searchParams.get('page');
+    const limitStr = searchParams.get('limit');
+    
+    const page = pageStr ? parseInt(pageStr) : null;
+    const limit = limitStr ? parseInt(limitStr) : null;
+
     const reviews = await prisma.review.findMany({
-      where: { productId: id },
+      where: { productId: id, isHidden: false },
+      skip: page && limit ? (page - 1) * limit : undefined,
+      take: page && limit ? limit : undefined,
       include: {
         user: {
           select: {
@@ -42,6 +51,10 @@ export async function GET(
       },
     });
 
+    const totalCount = await prisma.review.count({
+      where: { productId: id, isHidden: false }
+    });
+
     const formattedReviews = reviews.map(review => {
       const likesCount = review.likes.length;
       const isLiked = currentUserId ? review.likes.some(like => like.userId === currentUserId) : false;
@@ -52,7 +65,7 @@ export async function GET(
       };
     });
 
-    return NextResponse.json({ reviews: formattedReviews });
+    return NextResponse.json({ reviews: formattedReviews, total: totalCount });
   } catch (error) {
     console.error('Error fetching reviews:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
@@ -92,6 +105,46 @@ export async function POST(
       return new NextResponse('Product not found', { status: 404 });
     }
 
+    // Verify purchase
+    if (orderId) {
+      const order = await prisma.order.findFirst({
+        where: {
+          id: orderId,
+          userId,
+          status: { in: ['COMPLETED', 'DELIVERED'] },
+          items: {
+            some: {
+              productId,
+            },
+          },
+        },
+      });
+      if (!order) {
+        return NextResponse.json(
+          { error: 'Anda belum memesan produk ini atau pesanan Anda belum selesai.' },
+          { status: 403 }
+        );
+      }
+    } else {
+      const purchase = await prisma.order.findFirst({
+        where: {
+          userId,
+          status: { in: ['COMPLETED', 'DELIVERED'] },
+          items: {
+            some: {
+              productId,
+            },
+          },
+        },
+      });
+      if (!purchase) {
+        return NextResponse.json(
+          { error: 'Anda hanya dapat memberikan ulasan untuk produk yang telah Anda beli.' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Check PointHistory for any EARN_REVIEW type in the last 72 hours (3 days)
     const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
     const recentEarnReview = await prisma.pointHistory.findFirst({
@@ -113,6 +166,7 @@ export async function POST(
         comment: comment || null,
         images: images ? JSON.stringify(images) : null,
         isFeatured: false, // Default is not featured, admin will mark it featured
+        isHidden: false,
         orderId: orderId || null,
       },
       include: {

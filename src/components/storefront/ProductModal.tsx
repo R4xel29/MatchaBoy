@@ -10,6 +10,7 @@ import { useCartStore } from '@/stores/cart-store';
 import { ADD_ONS } from '@/lib/constants';
 import { PromoCountdown } from './PromoCountdown';
 import { useSession } from 'next-auth/react';
+import { useToast } from '@/components/ui/Toast';
 
 const SWEETNESS_VALUES: SugarLevel[] = ['Less', 'Biasa', 'Lumayan', 'Manis Sekali'];
 const SWEETNESS_MAP: { [key: string]: number } = {
@@ -60,6 +61,7 @@ export function ProductModal({
   const [bundleSelections, setBundleSelections] = useState<{ [groupId: string]: any }>({});
 
   const { data: session } = useSession();
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (isOpen) {
@@ -100,7 +102,7 @@ export function ProductModal({
 
   const handleToggleLike = async (reviewId: string) => {
     if (!session) {
-      alert('Silakan login terlebih dahulu untuk menyukai ulasan.');
+      showToast('Silakan login terlebih dahulu untuk menyukai ulasan.', 'error');
       return;
     }
     try {
@@ -115,7 +117,7 @@ export function ProductModal({
 
   const handlePostReply = async (reviewId: string) => {
     if (!session) {
-      alert('Silakan login terlebih dahulu untuk membalas ulasan.');
+      showToast('Silakan login terlebih dahulu untuk membalas ulasan.', 'error');
       return;
     }
     const comment = replyComment[reviewId];
