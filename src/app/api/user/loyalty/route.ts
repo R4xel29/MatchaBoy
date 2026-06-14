@@ -14,7 +14,7 @@ export async function GET() {
 
     const userId = session.user.id;
 
-    const [user, vouchers, pointHistory, loyaltySettings] = await Promise.all([
+    const [user, vouchers, pointHistory, loyaltySettings, easterEggVoucher] = await Promise.all([
       prisma.user.findUnique({
         where: { id: userId },
         select: {
@@ -38,21 +38,22 @@ export async function GET() {
         take: 30,
       }),
       prisma.loyaltySettings.findFirst(),
+      prisma.voucher.findFirst({
+        where: { 
+          userId,
+          type: 'CUSTOM',
+          description: {
+            startsWith: 'Easter Egg'
+          }
+        }
+      })
     ]);
 
     if (!user) {
       return new NextResponse('User not found', { status: 404 });
     }
 
-    const hasClaimedEasterEgg = loyaltySettings ? await prisma.voucher.findFirst({
-      where: { 
-        userId,
-        type: 'CUSTOM',
-        description: {
-          startsWith: 'Easter Egg'
-        }
-      }
-    }).then(v => !!v) : false;
+    const hasClaimedEasterEgg = !!easterEggVoucher;
 
     return NextResponse.json({
       points: user.points,

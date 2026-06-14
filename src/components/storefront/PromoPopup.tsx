@@ -177,7 +177,7 @@ export function PromoPopup() {
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', stiffness: 350, damping: 26 }}
               onClick={popup.linkUrl ? handleImageClick : undefined}
-              className={`relative max-h-[70vh] w-full rounded-[2rem] overflow-hidden bg-transparent shadow-2xl border border-white/10 group ${
+              className={`relative aspect-[4/5] w-full rounded-[2rem] overflow-hidden bg-slate-950 shadow-2xl border border-white/10 group ${
                 popup.linkUrl ? 'cursor-pointer active:scale-[0.98] transition-transform duration-150' : ''
               }`}
             >
@@ -185,7 +185,7 @@ export function PromoPopup() {
               <img
                 src={popup.image}
                 alt={popup.title}
-                className="max-h-[70vh] w-full h-auto object-contain rounded-[2rem] mx-auto block"
+                className="w-full h-full object-cover rounded-[2rem] mx-auto block"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = 'https://placehold.co/400x500/18442D/FFF?text=Promo+Matchaboy';
                 }}

@@ -14,7 +14,7 @@
 import { Redis } from '@upstash/redis';
 
 // Initialize Redis client (will use env vars automatically)
-let redis: Redis | null = null;
+export let redis: Redis | null = null;
 
 try {
   if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
@@ -172,3 +172,44 @@ export const RateLimitPresets = {
   // Generous limits for public endpoints
   PUBLIC: { maxRequests: 100, windowMs: 60_000 }, // 100 per minute
 };
+
+/**
+ * Atomic queue sequence generation using Redis.
+ * Falls back to DB count + 1 if Redis is not configured or fails.
+ */
+export async function getNextQueueSequence(prefix: string): Promise<string> {
+  if (redis) {
+    try {
+      const now = new Date();
+      // Format as YYYY-MM-DD in Jakarta timezone
+      const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
+      const redisKey = `seq:order:${prefix.toLowerCase()}:${todayStr}`;
+      
+      const nextVal = await redis.incr(redisKey);
+      // Set expiry to 36 hours so it cleans up after the day ends
+      await redis.expire(redisKey, 36 * 3600);
+      
+      return String(nextVal).padStart(3, '0');
+    } catch (error) {
+      console.error('[Queue Sequence] Redis sequence error, falling back to DB count:', error);
+    }
+  }
+
+  // Fallback to database count + 1 (non-blocking count query)
+  try {
+    const { prisma } = await import('./prisma');
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const countToday = await prisma.order.count({
+      where: {
+        createdAt: { gte: startOfDay }
+      }
+    });
+    return String(countToday + 1).padStart(3, '0');
+  } catch (dbError) {
+    console.error('[Queue Sequence] DB fallback error:', dbError);
+    // Ultimate fallback: random 3-digit number to avoid crashes
+    return String(Math.floor(Math.random() * 900) + 100);
+  }
+}
+

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getActivePromo } from '@/lib/utils';
 import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors';
+import { getNextQueueSequence } from '@/lib/rate-limit-redis';
 
 const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`;
 
@@ -277,20 +278,10 @@ export async function POST(req: Request) {
       throw new Error('Gagal men-generate ID Pesanan unik, silakan coba lagi.');
     }
 
+    const queueNumber = `SPMB-${await getNextQueueSequence('SPMB')}`;
+
     // 3. Create the order
     const order = await prisma.$transaction(async (tx) => {
-      // Advisory lock for serializing order counts
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(424242);');
-
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      const countToday = await tx.order.count({
-        where: {
-          createdAt: { gte: startOfDay }
-        }
-      });
-      const nextSeq = String(countToday + 1).padStart(3, '0');
-      const queueNumber = `SPMB-${nextSeq}`;
 
       const newOrder = await tx.order.create({
         data: {

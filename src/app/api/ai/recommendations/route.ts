@@ -8,7 +8,17 @@ export async function GET(req: NextRequest) {
         const userId = session?.user?.id
 
         // Fetch all active products
+        const targetIds = [
+            'brand-signature', 'brand-strawberry', 'brand-biscoff',
+            'yuzu-matcha', 'hot-matcha', 'dirty-matcha'
+        ];
         const allProducts = await prisma.product.findMany({
+            where: {
+                OR: [
+                    { id: { in: targetIds } },
+                    { badge: 'best-seller' }
+                ]
+            },
             include: { category: true }
         })
 

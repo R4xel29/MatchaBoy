@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { cleanupUnconfirmedSpmbOrders } from '@/lib/order-utils'
+import { getNextQueueSequence } from '@/lib/rate-limit-redis'
 
 // Lightweight JSON endpoint for client-side polling (replaces router.refresh)
 export async function GET() {
@@ -194,20 +195,11 @@ export async function POST(req: Request) {
       initialStatus = 'ASSIGNED'
     }
 
+    const prefix = orderType === 'DELIVERY' ? 'DLV' : 'POS'
+    const queueNumber = `${prefix}-${await getNextQueueSequence(prefix)}`
+
     // Create the order with sequential queue number in a transaction
     const order = await prisma.$transaction(async (tx) => {
-      // Acquire a transaction-level advisory lock to serialize queue number generation and other concurrent POS checkout writes
-      await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(424242);');
-      const startOfDay = new Date()
-      startOfDay.setHours(0, 0, 0, 0)
-      const countToday = await tx.order.count({
-        where: {
-          createdAt: { gte: startOfDay }
-        }
-      })
-      const nextSeq = String(countToday + 1).padStart(3, '0')
-      const prefix = orderType === 'DELIVERY' ? 'DLV' : 'POS'
-      const queueNumber = `${prefix}-${nextSeq}`
 
       return await tx.order.create({
         data: {

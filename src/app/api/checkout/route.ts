@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { rateLimit, getClientId } from '@/lib/rate-limit-redis'
+import { rateLimit, getClientId, getNextQueueSequence } from '@/lib/rate-limit-redis'
 import { calculateDeliveryFee } from '@/lib/delivery-utils'
 import { getActivePromo } from '@/lib/utils'
 import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors'
@@ -592,12 +592,12 @@ export async function POST(req: Request) {
 
         const isWallet = requestedMethod === 'WALLET';
 
+        const prefix = orderType === 'PICKUP' ? 'PKP' : 'DLV'
+        const queueNumber = `${prefix}-${await getNextQueueSequence(prefix)}`
+
         // Wrap database operations in a single interactive transaction to ensure data atomicity
         // ✅ BUG FIX #4 & #5: Added row-level locking and atomic operations
         const order = await prisma.$transaction(async (tx) => {
-            // Acquire a transaction-level advisory lock to serialize queue number generation and other concurrent checkout writes
-            await tx.$executeRawUnsafe('SELECT pg_advisory_xact_lock(424242);');
-
             // 0. Process Wallet Deduction
             if (isWallet) {
                 // Atomic decrement with condition check to prevent race conditions
@@ -689,16 +689,6 @@ export async function POST(req: Request) {
             }
 
             // 3. Create the order
-            const startOfDay = new Date()
-            startOfDay.setHours(0, 0, 0, 0)
-            const countToday = await tx.order.count({
-                where: {
-                    createdAt: { gte: startOfDay }
-                }
-            })
-            const nextSeq = String(countToday + 1).padStart(3, '0')
-            const prefix = orderType === 'PICKUP' ? 'PKP' : 'DLV'
-            const queueNumber = `${prefix}-${nextSeq}`
 
             const newOrder = await tx.order.create({
                 data: {
@@ -764,10 +754,6 @@ export async function POST(req: Request) {
             }
 
             return newOrder
-        }, {
-            // ✅ FIX: Set transaction isolation level for better consistency
-            isolationLevel: 'Serializable',
-            timeout: 10000, // 10 second timeout
         })
 
         // Generate QRIS via Doku MCP Server or Doku Hosted Checkout V1 session for QRIS payment method

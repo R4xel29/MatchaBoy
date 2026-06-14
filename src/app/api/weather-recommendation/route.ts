@@ -74,7 +74,14 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        const allProducts = await prisma.product.findMany()
+        const targetIds = [
+            'hot-matcha', 'brand-croissant', 'dirty-matcha',
+            'brand-strawberry', 'yuzu-matcha', 'brand-signature',
+            'brand-biscoff', 'brand-tiramisu', 'brand-cookie'
+        ];
+        const allProducts = await prisma.product.findMany({
+            where: { id: { in: targetIds } }
+        });
 
         // Determine if it is night time (either via client hour or weather icon ending in 'n')
         const isNight = hour >= 18 || hour < 6 || (weatherData.icon && weatherData.icon.endsWith('n'))
