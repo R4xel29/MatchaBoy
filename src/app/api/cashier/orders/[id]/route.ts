@@ -42,7 +42,8 @@ export async function PATCH(
         voucherCode: true,
         paymentMethod: true,
         paymentProofUrl: true,
-        source: true
+        source: true,
+        tableNumber: true
       }
     })
 
@@ -123,6 +124,13 @@ export async function PATCH(
             })
           }
         }
+      }
+
+      if ((status === 'COMPLETED' || status === 'CANCELLED') && existingOrder.tableNumber) {
+        await tx.diningTable.update({
+          where: { number: existingOrder.tableNumber },
+          data: { status: 'AVAILABLE' }
+        })
       }
 
       return updated

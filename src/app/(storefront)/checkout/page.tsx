@@ -12,7 +12,7 @@ import {
   ArrowLeft, Phone, User, CreditCard, Banknote,
   ChevronDown, ChevronUp, ChevronRight, Trash2, Plus, Minus,
   ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle, MapPin,
-  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet, Check
+  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet, Check, Coffee, Utensils
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const MapPicker = dynamic(() => import('@/components/checkout/MapPicker').then(m => m.MapPicker), { ssr: false });
@@ -33,7 +33,7 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormData = z.infer<typeof checkoutSchema>;
-type OrderType = 'PICKUP' | 'DELIVERY';
+type OrderType = 'PICKUP' | 'DELIVERY' | 'DINE_IN';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -45,6 +45,7 @@ export default function CheckoutPage() {
   const updateQuantity = useCartStore((s) => s.updateQuantity);
   const removeItem = useCartStore((s) => s.removeItem);
   const clearCart = useCartStore((s) => s.clearCart);
+  const tableNumber = useCartStore((s) => s.tableNumber);
 
   const [groupCartItems, setGroupCartItems] = useState<any[]>([]);
   const [loadingGroupCart, setLoadingGroupCart] = useState<boolean>(false);
@@ -91,6 +92,27 @@ export default function CheckoutPage() {
   }, [groupCartId, groupCartItems, items]);
 
   const [orderType, setOrderType] = useState<OrderType>('PICKUP');
+  const [selectedTable, setSelectedTable] = useState<string>('');
+  const [dbTables, setDbTables] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/admin/tables')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setDbTables(data);
+        }
+      })
+      .catch(err => console.error('Failed to load tables list:', err));
+  }, []);
+
+  useEffect(() => {
+    if (tableNumber) {
+      setSelectedTable(tableNumber);
+      setOrderType('DINE_IN');
+    }
+  }, [tableNumber]);
+
   const [pickupDate, setPickupDate] = useState<string | null>(null);
   const [tempPickupDate, setTempPickupDate] = useState<string | null>(null);
   const [pickupTime, setPickupTime] = useState<string | null>('Sekarang');
@@ -1144,8 +1166,12 @@ export default function CheckoutPage() {
   const canSubmit = useMemo(() => {
     if (items.length === 0) return false;
     
+    if (orderType === 'DINE_IN') {
+      if (!selectedTable) return false;
+    }
+
     // Check if selecting "Sekarang" but store is currently closed/not open
-    if (pickupTime === 'Sekarang' && (!isStoreCurrentlyOpen || isStoreClosedToday)) {
+    if (orderType !== 'DINE_IN' && pickupTime === 'Sekarang' && (!isStoreCurrentlyOpen || isStoreClosedToday)) {
       return false;
     }
 
@@ -1172,7 +1198,7 @@ export default function CheckoutPage() {
     }
     if (!paymentMethod) return false;
     return true;
-  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod, isStoreClosedToday, isStoreCurrentlyOpen, getTimeSlotsForDate]);
+  }, [items.length, orderType, pickupDate, pickupTime, deliveryAddress, paymentMethod, isStoreClosedToday, isStoreCurrentlyOpen, getTimeSlotsForDate, selectedTable]);
 
   const onSubmit = (data: CheckoutFormData) => {
     if (!canSubmit) return;
@@ -1208,6 +1234,7 @@ export default function CheckoutPage() {
           : tempFormData.phone,
         notes: tempFormData.notes,
         orderType,
+        tableNumber: orderType === 'DINE_IN' ? selectedTable : undefined,
         hasTumbler,
         voucherCode: appliedVoucher?.code || undefined,
         pointsUsed: usePoints ? Math.min(pointsToUse, maxPointsAllowed) : 0,
@@ -1445,34 +1472,39 @@ export default function CheckoutPage() {
             <h2 className="font-serif font-bold text-base text-gray-900 mb-4 flex items-center gap-2">
               <Store className="w-4.5 h-4.5 text-[#B48A5E]" /> Metode Pengambilan
             </h2>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => setOrderType('PICKUP')}
-                className={`flex items-center gap-3.5 px-5 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-left
+                className={`flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-center
                   ${orderType === 'PICKUP'
                     ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm shadow-[#B48A5E]/5'
                     : 'border-gray-150 bg-white hover:border-gray-300'}`}
               >
-                <Store className={`w-5.5 h-5.5 shrink-0 ${orderType === 'PICKUP' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
-                <div>
-                  <p className="text-sm font-bold text-gray-900">Ambil Langsung</p>
-                  <p className="text-[10px] text-gray-400 leading-none mt-0.5">Pre-order & pickup di toko</p>
-                </div>
+                <Store className={`w-5 h-5 shrink-0 ${orderType === 'PICKUP' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
+                <span className="text-xs font-bold text-gray-900">Pickup</span>
               </button>
               <button
                 type="button"
                 onClick={() => setOrderType('DELIVERY')}
-                className={`flex items-center gap-3.5 px-5 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-left
+                className={`flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-center
                   ${orderType === 'DELIVERY'
                     ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm shadow-[#B48A5E]/5'
                     : 'border-gray-150 bg-white hover:border-gray-300'}`}
               >
-                <Truck className={`w-5.5 h-5.5 shrink-0 ${orderType === 'DELIVERY' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
-                <div>
-                  <p className="text-sm font-bold text-gray-900">Delivery</p>
-                  <p className="text-[10px] text-gray-400 leading-none mt-0.5">Kirim ke alamat tujuan</p>
-                </div>
+                <Truck className={`w-5 h-5 shrink-0 ${orderType === 'DELIVERY' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
+                <span className="text-xs font-bold text-gray-900">Delivery</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderType('DINE_IN')}
+                className={`flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-center
+                  ${orderType === 'DINE_IN'
+                    ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm shadow-[#B48A5E]/5'
+                    : 'border-gray-150 bg-white hover:border-gray-300'}`}
+              >
+                <Coffee className={`w-5 h-5 shrink-0 ${orderType === 'DINE_IN' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
+                <span className="text-xs font-bold text-gray-900">Dine In</span>
               </button>
             </div>
 
@@ -1500,6 +1532,46 @@ export default function CheckoutPage() {
               </div>
             )}
           </section>
+
+          {/* ── Dine-In Table Selection ────────────────────────── */}
+          {orderType === 'DINE_IN' && (
+            <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
+              <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
+                <Coffee className="w-4.5 h-4.5 text-[#B48A5E]" /> Informasi Meja Dine-In
+              </h2>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Nomor Meja</label>
+                {tableNumber ? (
+                  <div className="flex items-center justify-between p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                    <span className="text-sm font-bold text-emerald-800">Meja Terkunci: Meja {tableNumber}</span>
+                    <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">Scan QR ✓</span>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedTable}
+                    onChange={(e) => setSelectedTable(e.target.value)}
+                    className="w-full px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner animate-pulse-once"
+                  >
+                    <option value="">Pilih Nomor Meja</option>
+                    {dbTables.map(t => (
+                      <option key={t.id} value={t.number} disabled={t.status === 'OCCUPIED'}>
+                        Meja {t.number} ({t.status === 'AVAILABLE' ? 'Tersedia' : t.status === 'OCCUPIED' ? 'Terisi' : t.status})
+                      </option>
+                    ))}
+                    {dbTables.length === 0 && (
+                      <>
+                        <option value="1">Meja 1</option>
+                        <option value="2">Meja 2</option>
+                        <option value="3">Meja 3</option>
+                        <option value="4">Meja 4</option>
+                        <option value="5">Meja 5</option>
+                      </>
+                    )}
+                  </select>
+                )}
+              </div>
+            </motion.section>
+          )}
 
           {/* ── 2. Delivery Address (Leaflet Map) ────────────────────────────────── */}
           {orderType === 'DELIVERY' && (
@@ -1636,7 +1708,7 @@ export default function CheckoutPage() {
           </section>
 
           {/* ── 3b. Tumbler Toggle (Eco Card Glassmorphic) ──────────────────── */}
-          {tumblerEnabled && orderType === 'PICKUP' && (
+          {tumblerEnabled && (orderType === 'PICKUP' || orderType === 'DINE_IN') && (
             <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
               <button
                 type="button"

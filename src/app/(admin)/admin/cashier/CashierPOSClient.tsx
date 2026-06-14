@@ -21,6 +21,7 @@ import {
   Camera,
   CheckCircle2,
   Leaf,
+  Coffee,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
@@ -79,6 +80,19 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [lastOrderId, setLastOrderId] = useState('');
   const [hasTumbler, setHasTumbler] = useState(false);
   const [loyaltySettings, setLoyaltySettings] = useState<{ tumblerBonusPoints: number; tumblerDiscountPct: number } | null>(null);
+  const [selectedTable, setSelectedTable] = useState('');
+  const [activeTables, setActiveTables] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/admin/tables')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setActiveTables(data);
+        }
+      })
+      .catch((err) => console.error('Failed to fetch tables:', err));
+  }, []);
 
   // QR Scan + Points state
   const [showQRModal, setShowQRModal] = useState(false);
@@ -261,6 +275,12 @@ export default function CashierPOSClient({ products, categories }: Props) {
   // Submit order
   const handleSubmitOrder = async () => {
     if (cart.length === 0 || !customerName) return;
+    
+    if (orderType === 'DINE_IN' && !selectedTable) {
+      showToast('Harap pilih meja terlebih dahulu', 'error');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -268,7 +288,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
         orderType,
         customerName,
         customerPhone: customerPhone || '-',
-        address: orderType === 'DELIVERY' ? address : '',
+        address: orderType === 'DELIVERY' ? address : (orderType === 'DINE_IN' ? `Dine In - Meja ${selectedTable}` : ''),
+        tableNumber: orderType === 'DINE_IN' ? selectedTable : undefined,
         notes,
         paymentMethod,
         hasTumbler,
@@ -299,6 +320,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setAddress('');
       setNotes('');
       setHasTumbler(false);
+      setSelectedTable('');
 
       // Show QR scan modal instead of success toast
       setShowQRModal(true);
@@ -405,10 +427,11 @@ export default function CashierPOSClient({ products, categories }: Props) {
         <div className="xl:col-span-2 space-y-4">
           {/* Order Type Tabs */}
           <div className="bg-white rounded-2xl border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-1.5">
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {([
                 { type: 'PICKUP' as OrderType, label: 'Pickup', icon: ShoppingBag },
                 { type: 'DELIVERY' as OrderType, label: 'Delivery', icon: Truck },
+                { type: 'DINE_IN' as OrderType, label: 'Dine In', icon: Coffee },
               ]).map(({ type, label, icon: Icon }) => (
                 <button
                   key={type}
@@ -483,6 +506,33 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 rows={2}
                 className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all resize-none"
               />
+            )}
+
+            {orderType === 'DINE_IN' && (
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1 pl-1">Nomor Meja *</label>
+                <select
+                  value={selectedTable}
+                  onChange={(e) => setSelectedTable(e.target.value)}
+                  className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
+                >
+                  <option value="">Pilih Nomor Meja</option>
+                  {activeTables.map((t) => (
+                    <option key={t.id} value={t.number} disabled={t.status === 'OCCUPIED'}>
+                      Meja {t.number} ({t.status === 'AVAILABLE' ? 'Tersedia' : t.status === 'OCCUPIED' ? 'Terisi' : t.status})
+                    </option>
+                  ))}
+                  {activeTables.length === 0 && (
+                    <>
+                      <option value="1">Meja 1</option>
+                      <option value="2">Meja 2</option>
+                      <option value="3">Meja 3</option>
+                      <option value="4">Meja 4</option>
+                      <option value="5">Meja 5</option>
+                    </>
+                  )}
+                </select>
+              </div>
             )}
 
             <input

@@ -1016,4 +1016,17 @@ model ReviewReply {
   updatedAt DateTime @updatedAt
 }
 
+model DiningTable {
+  id        String   @id @default(cuid())
+  number    String   @unique
+  capacity  Int      @default(2)
+  status    String   @default("AVAILABLE") // AVAILABLE, OCCUPIED, BILLING, CLEANING
+  shape     String   @default("RECTANGLE") // RECTANGLE, ROUND
+  x         Int      @default(0)
+  y         Int      @default(0)
+  qrUrl     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 

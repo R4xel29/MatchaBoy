@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react';
 import dynamic from 'next/dynamic';
 import { useToast } from '@/components/ui/Toast';
 import { useStorefrontContext } from './layout';
+import { useCartStore } from '@/stores/cart-store';
 import type { Product, Category } from '@/types';
 import Image from 'next/image';
 import { formatRupiah, getActivePromo, cn } from '@/lib/utils';
@@ -166,6 +167,15 @@ export default function StorefrontClient({
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
+      
+      const table = params.get('table');
+      if (table) {
+        useCartStore.getState().setTableNumber(table);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('table');
+        window.history.replaceState({}, '', url.pathname + url.search);
+      }
+
       const refCode = params.get('ref');
       if (refCode) {
         document.cookie = `pending_referral_code=${encodeURIComponent(refCode)}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;

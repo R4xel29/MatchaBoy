@@ -21,7 +21,8 @@ import {
   Eye,
   MapPin,
   ImageIcon,
-  MessageCircle
+  MessageCircle,
+  Coffee
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
@@ -66,11 +67,13 @@ interface Props {
 const ORDER_TYPE_LABELS: Record<string, string> = {
   DELIVERY: 'Delivery',
   PICKUP: 'Pickup',
+  DINE_IN: 'Dine In',
 };
 
 const ORDER_TYPE_ICONS: Record<string, React.ElementType> = {
   DELIVERY: Truck,
   PICKUP: ShoppingBag,
+  DINE_IN: Coffee,
 };
 
 type TabType = 'antrian' | 'selesai';
@@ -143,7 +146,18 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('antrian');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [tableFilter, setTableFilter] = useState('ALL');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
+
+  const uniqueTableNumbers = useMemo(() => {
+    const numbers = new Set<string>();
+    orders.forEach((o) => {
+      if (o.tableNumber) {
+        numbers.add(o.tableNumber);
+      }
+    });
+    return Array.from(numbers).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [orders]);
   const [orders, setOrders] = useState(initialOrders);
   const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(initialPickupAlarmLeadTime);
 
@@ -281,7 +295,8 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
       o.id.toLowerCase().includes(search.toLowerCase()) ||
       o.customerName.toLowerCase().includes(search.toLowerCase());
     const matchesType = typeFilter === 'ALL' || o.orderType === typeFilter;
-    return matchesSearch && matchesType;
+    const matchesTable = tableFilter === 'ALL' || o.tableNumber === tableFilter;
+    return matchesSearch && matchesType && matchesTable;
   });
 
   const getNextStatus = (status: string, orderType: string, paymentMethod?: string, paymentProofUrl?: string | null) => {
@@ -392,6 +407,8 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
         return 'bg-purple-50 text-purple-700';
       case 'DELIVERY':
         return 'bg-sky-50 text-sky-700';
+      case 'DINE_IN':
+        return 'bg-amber-50 text-amber-700';
       default:
         return 'bg-slate-100 text-slate-600';
     }
@@ -489,7 +506,23 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
           <option value="ALL">Semua Tipe</option>
           <option value="PICKUP">Pickup</option>
           <option value="DELIVERY">Delivery</option>
+          <option value="DINE_IN">Dine In</option>
         </select>
+
+        {uniqueTableNumbers.length > 0 && (
+          <select
+            value={tableFilter}
+            onChange={(e) => setTableFilter(e.target.value)}
+            className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+          >
+            <option value="ALL">Semua Meja</option>
+            {uniqueTableNumbers.map((num) => (
+              <option key={num} value={num}>
+                Meja {num}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Order Cards */}
@@ -519,6 +552,11 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                       {order.queueNumber && (
                         <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 font-extrabold text-[11px] rounded-lg border border-amber-200 uppercase shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
                           {order.queueNumber}
+                        </span>
+                      )}
+                      {order.tableNumber && (
+                        <span className="px-2.5 py-0.5 bg-rose-100 text-rose-800 font-extrabold text-[11px] rounded-lg border border-rose-250 uppercase shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
+                          Meja {order.tableNumber}
                         </span>
                       )}
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${

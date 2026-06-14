@@ -158,9 +158,19 @@ export async function POST(req: Request) {
         // Fetch store settings early
         const storeSettings = await prisma.storeSettings.findFirst()
 
-        // Validate pickup fields
+        // Validate pickup / dine-in fields
         const orderType = body.orderType || 'PICKUP'
-        if (orderType === 'PICKUP' && (!body.pickupDate || !body.pickupTime)) {
+        if (orderType === 'DINE_IN') {
+            if (!body.tableNumber) {
+                return NextResponse.json({ error: 'Nomor meja wajib diisi untuk Dine-In' }, { status: 400 })
+            }
+            const table = await prisma.diningTable.findUnique({
+                where: { number: body.tableNumber }
+            })
+            if (!table) {
+                return NextResponse.json({ error: `Meja ${body.tableNumber} tidak ditemukan` }, { status: 400 })
+            }
+        } else if (orderType === 'PICKUP' && (!body.pickupDate || !body.pickupTime)) {
             return NextResponse.json({ error: 'Tanggal dan jam pengambilan wajib diisi' }, { status: 400 })
         }
 
@@ -573,7 +583,7 @@ export async function POST(req: Request) {
         }
 
         const requestedMethod = body.paymentMethod?.toUpperCase()
-        if (requestedMethod !== 'COD' && requestedMethod !== 'QRIS') {
+        if (requestedMethod !== 'COD' && requestedMethod !== 'QRIS' && requestedMethod !== 'WALLET' && requestedMethod !== 'DOKU') {
             return NextResponse.json({ error: 'Metode pembayaran ini sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
         if (requestedMethod === 'COD' && !paymentSettings.codEnabled) {
@@ -588,11 +598,13 @@ export async function POST(req: Request) {
         // Build address string
         const address = orderType === 'PICKUP'
             ? 'Ambil di toko'
+            : orderType === 'DINE_IN'
+            ? `Dine In - Meja ${body.tableNumber}`
             : `${body.address?.label || ''} - ${body.address?.detail || ''} | Detail: ${body.address?.streetDetail || ''} (${body.address?.lat || 0}, ${body.address?.lng || 0})`
 
         const isWallet = requestedMethod === 'WALLET';
 
-        const prefix = orderType === 'PICKUP' ? 'PKP' : 'DLV'
+        const prefix = orderType === 'PICKUP' ? 'PKP' : (orderType === 'DINE_IN' ? 'DIN' : 'DLV')
         const queueNumber = `${prefix}-${await getNextQueueSequence(prefix)}`
 
         // Wrap database operations in a single interactive transaction to ensure data atomicity
@@ -698,6 +710,7 @@ export async function POST(req: Request) {
                     customerPhone: body.phone,
                     address,
                     distanceKm,
+                    tableNumber: orderType === 'DINE_IN' ? body.tableNumber : null,
                     pickupDate: body.pickupDate ? new Date(body.pickupDate) : null,
                     pickupTime: body.pickupTime || null,
                     paymentProofUrl: isWallet ? '/verified-wallet.svg' : (body.paymentProofUrl || null),
@@ -718,6 +731,13 @@ export async function POST(req: Request) {
                     }
                 }
             })
+
+            if (orderType === 'DINE_IN') {
+                await tx.diningTable.update({
+                    where: { number: body.tableNumber },
+                    data: { status: 'OCCUPIED' }
+                });
+            }
 
             // If a Group Cart was checked out, mark it as CHECKED_OUT within the transaction
             if (body.groupCartId) {

@@ -107,6 +107,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Alamat pengiriman wajib diisi untuk delivery' }, { status: 400 })
     }
 
+    if (orderType === 'DINE_IN') {
+      if (!body.tableNumber) {
+        return NextResponse.json({ error: 'Nomor meja wajib diisi untuk Dine-In' }, { status: 400 })
+      }
+      const table = await prisma.diningTable.findUnique({
+        where: { number: body.tableNumber }
+      })
+      if (!table) {
+        return NextResponse.json({ error: `Meja ${body.tableNumber} tidak ditemukan` }, { status: 400 })
+      }
+    }
+
     // --- SECURE SERVER-SIDE PRICE CALCULATION ---
     const productIds = body.items.map((item: any) => item.productId)
     const dbProducts = await prisma.product.findMany({
@@ -190,18 +202,21 @@ export async function POST(req: Request) {
     // Determine initial status based on order type
     // Walk-in POS orders → directly COMPLETED
     // Delivery → ASSIGNED (needs processing)
+    // Dine In → PREPARING (goes to kitchen queue)
     let initialStatus = 'COMPLETED'
     if (orderType === 'DELIVERY') {
       initialStatus = 'ASSIGNED'
+    } else if (orderType === 'DINE_IN') {
+      initialStatus = 'PREPARING'
     }
 
-    const prefix = orderType === 'DELIVERY' ? 'DLV' : 'POS'
+    const prefix = orderType === 'DELIVERY' ? 'DLV' : (orderType === 'DINE_IN' ? 'DIN' : 'POS')
     const queueNumber = `${prefix}-${await getNextQueueSequence(prefix)}`
 
     // Create the order with sequential queue number in a transaction
     const order = await prisma.$transaction(async (tx) => {
 
-      return await tx.order.create({
+      const newOrder = await tx.order.create({
         data: {
           userId: null, // POS orders don't need a user
           cashierId: session.user.id,
@@ -224,6 +239,15 @@ export async function POST(req: Request) {
           }
         }
       })
+
+      if (orderType === 'DINE_IN' && body.tableNumber) {
+        await tx.diningTable.update({
+          where: { number: body.tableNumber },
+          data: { status: 'OCCUPIED' }
+        })
+      }
+
+      return newOrder
     })
 
     // Update shift stats if cashier has an active shift

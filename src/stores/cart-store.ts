@@ -7,12 +7,14 @@ import type { CartItem, IceLevel, SugarLevel, AddOn } from '@/types';
 interface CartState {
     items: CartItem[];
     appliedVoucher: any | null;
+    tableNumber: string | null;
     addItem: (item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
     editItem: (oldId: string, item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
     removeItem: (id: string) => void;
     updateQuantity: (id: string, quantity: number) => void;
     clearCart: () => void;
     setAppliedVoucher: (voucher: any | null) => void;
+    setTableNumber: (table: string | null) => void;
     totalItems: () => number;
     totalPrice: () => number;
     getVoucherDiscount: () => number;
@@ -73,6 +75,7 @@ export const useCartStore = create<CartState>()(
         (set, get) => ({
             items: [],
             appliedVoucher: null,
+            tableNumber: null,
 
             addItem: (item) => {
                 const id = generateCartItemId(
@@ -181,9 +184,11 @@ export const useCartStore = create<CartState>()(
                             ),
                 })),
 
-            clearCart: () => set({ items: [], appliedVoucher: null }),
+            clearCart: () => set({ items: [], appliedVoucher: null, tableNumber: null }),
 
             setAppliedVoucher: (voucher) => set({ appliedVoucher: voucher }),
+
+            setTableNumber: (table) => set({ tableNumber: table }),
 
             totalItems: () => get().items.reduce((sum, i) => sum + i.quantity, 0),
 
