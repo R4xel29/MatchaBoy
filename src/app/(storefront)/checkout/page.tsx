@@ -1573,8 +1573,20 @@ export default function CheckoutPage() {
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Nomor Meja</label>
                   {tableNumber ? (
                     <div className="flex items-center justify-between p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                      <span className="text-sm font-bold text-emerald-800">Meja Terkunci: Meja {tableNumber}</span>
-                      <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">Scan QR ✓</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-emerald-800">Meja Terkunci: Meja {tableNumber}</span>
+                        <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full mt-0.5 self-start">Scan QR ✓</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          useCartStore.getState().setTableNumber(null);
+                          setSelectedTable('');
+                        }}
+                        className="px-3.5 py-2 bg-white border border-emerald-200 hover:border-amber-450 text-xs font-black text-emerald-800 hover:text-amber-800 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                      >
+                        Pindah Meja
+                      </button>
                     </div>
                   ) : (
                     <select
