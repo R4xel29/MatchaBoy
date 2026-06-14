@@ -82,6 +82,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [loyaltySettings, setLoyaltySettings] = useState<{ tumblerBonusPoints: number; tumblerDiscountPct: number } | null>(null);
   const [selectedTable, setSelectedTable] = useState('');
   const [activeTables, setActiveTables] = useState<any[]>([]);
+  const [showTableManagerModal, setShowTableManagerModal] = useState(false);
+  const [posPeopleCount, setPosPeopleCount] = useState(1);
 
   useEffect(() => {
     fetch('/api/admin/tables')
@@ -272,6 +274,24 @@ export default function CashierPOSClient({ products, categories }: Props) {
     setModifierProduct(null);
   };
 
+  const handleUpdateTableSeats = async (id: string, newOccupied: number) => {
+    try {
+      const res = await fetch(`/api/admin/tables/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ occupiedSeats: newOccupied })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui kursi');
+      
+      // Update local activeTables state
+      setActiveTables(prev => prev.map(t => t.id === id ? data : t));
+      showToast(`Meja ${data.number} diperbarui menjadi ${newOccupied} kursi terisi`, 'success');
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
   // Submit order
   const handleSubmitOrder = async () => {
     if (cart.length === 0 || !customerName) return;
@@ -290,6 +310,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
         customerPhone: customerPhone || '-',
         address: orderType === 'DELIVERY' ? address : (orderType === 'DINE_IN' ? `Dine In - Meja ${selectedTable}` : ''),
         tableNumber: orderType === 'DINE_IN' ? selectedTable : undefined,
+        peopleCount: orderType === 'DINE_IN' ? posPeopleCount : undefined,
         notes,
         paymentMethod,
         hasTumbler,
@@ -321,6 +342,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setNotes('');
       setHasTumbler(false);
       setSelectedTable('');
+      setPosPeopleCount(1);
 
       // Show QR scan modal instead of success toast
       setShowQRModal(true);
@@ -453,12 +475,22 @@ export default function CashierPOSClient({ products, categories }: Props) {
           <div className="bg-white rounded-2xl border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4 space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">Info Pelanggan</p>
-              <button
-                onClick={() => setShowPreScanQR(true)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
-              >
-                <Camera className="w-3 h-3" /> Scan QR
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTableManagerModal(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
+                >
+                  <Coffee className="w-3 h-3" /> Kelola Meja
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPreScanQR(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
+                >
+                  <Camera className="w-3 h-3" /> Scan QR
+                </button>
+              </div>
             </div>
 
             {/* Phone with auto-lookup */}
@@ -509,29 +541,42 @@ export default function CashierPOSClient({ products, categories }: Props) {
             )}
 
             {orderType === 'DINE_IN' && (
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1 pl-1">Nomor Meja *</label>
-                <select
-                  value={selectedTable}
-                  onChange={(e) => setSelectedTable(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
-                >
-                  <option value="">Pilih Nomor Meja</option>
-                  {activeTables.map((t) => (
-                    <option key={t.id} value={t.number} disabled={t.status === 'OCCUPIED'}>
-                      Meja {t.number} ({t.status === 'AVAILABLE' ? 'Tersedia' : t.status === 'OCCUPIED' ? 'Terisi' : t.status})
-                    </option>
-                  ))}
-                  {activeTables.length === 0 && (
-                    <>
-                      <option value="1">Meja 1</option>
-                      <option value="2">Meja 2</option>
-                      <option value="3">Meja 3</option>
-                      <option value="4">Meja 4</option>
-                      <option value="5">Meja 5</option>
-                    </>
-                  )}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1 pl-1">Nomor Meja *</label>
+                  <select
+                    value={selectedTable}
+                    onChange={(e) => setSelectedTable(e.target.value)}
+                    className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
+                  >
+                    <option value="">Pilih Nomor Meja</option>
+                    {activeTables.map((t) => (
+                      <option key={t.id} value={t.number} disabled={(t.occupiedSeats || 0) >= t.capacity}>
+                        Meja {t.number} ({t.occupiedSeats || 0}/{t.capacity} terisi)
+                      </option>
+                    ))}
+                    {activeTables.length === 0 && (
+                      <>
+                        <option value="1">Meja 1</option>
+                        <option value="2">Meja 2</option>
+                        <option value="3">Meja 3</option>
+                        <option value="4">Meja 4</option>
+                        <option value="5">Meja 5</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1 pl-1">Jumlah Orang *</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={posPeopleCount}
+                    onChange={(e) => setPosPeopleCount(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
+                  />
+                </div>
               </div>
             )}
 
@@ -978,6 +1023,100 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   onScan={handlePreScanResult}
                   placeholder="Masukkan kode referral..."
                 />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Table Manager Modal */}
+      <AnimatePresence>
+        {showTableManagerModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
+            onClick={() => setShowTableManagerModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-2xl rounded-2xl bg-white shadow-xl border border-border overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-border/30 flex items-center justify-between bg-gradient-to-r from-amber-50 to-amber-100/30">
+                <div className="flex items-center gap-2">
+                  <Coffee className="w-5 h-5 text-amber-600" />
+                  <h3 className="font-heading font-bold text-base text-foreground">Kelola Status Meja & Kursi (Manual)</h3>
+                </div>
+                <button onClick={() => setShowTableManagerModal(false)} className="p-1.5 hover:bg-muted rounded-lg">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Kasir/Admin dapat mengisi atau mengosongkan kapasitas kursi pada masing-masing meja secara manual. Perubahan akan langsung disinkronkan ke database.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {activeTables.map((t) => {
+                    const remaining = t.capacity - (t.occupiedSeats || 0);
+                    return (
+                      <div key={t.id} className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-3">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <h4 className="font-bold text-sm text-foreground">Meja {t.number}</h4>
+                            <span className="text-[10px] text-muted-foreground">
+                              Kapasitas: {t.capacity} Kursi ({remaining} Tersisa)
+                            </span>
+                          </div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold ${
+                            t.status === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-800' :
+                            t.status === 'OCCUPIED' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {t.status === 'AVAILABLE' ? 'Tersedia' : t.status === 'OCCUPIED' ? 'Terisi' : t.status}
+                          </span>
+                        </div>
+
+                        {/* Chairs dot indicator */}
+                        <div className="flex gap-1.5 flex-wrap py-1">
+                          {Array.from({ length: t.capacity }).map((_, idx) => (
+                            <span
+                              key={idx}
+                              className={`w-3.5 h-3.5 rounded-full border border-slate-200 ${
+                                idx < (t.occupiedSeats || 0) ? 'bg-rose-500' : 'bg-emerald-400'
+                              }`}
+                            />
+                          ))}
+                        </div>
+
+                        <div className="flex justify-between items-center gap-2 pt-2 border-t border-border/30">
+                          <span className="text-xs font-bold text-foreground">Kursi Terisi: {t.occupiedSeats || 0}</span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateTableSeats(t.id, (t.occupiedSeats || 0) - 1)}
+                              disabled={(t.occupiedSeats || 0) <= 0}
+                              className="w-8 h-8 rounded-lg bg-muted hover:bg-muted/80 text-foreground flex items-center justify-center font-black disabled:opacity-40"
+                            >
+                              -
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateTableSeats(t.id, (t.occupiedSeats || 0) + 1)}
+                              disabled={(t.occupiedSeats || 0) >= t.capacity}
+                              className="w-8 h-8 rounded-lg bg-muted hover:bg-muted/80 text-foreground flex items-center justify-center font-black disabled:opacity-40"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {activeTables.length === 0 && (
+                    <div className="col-span-2 text-center py-6 text-xs text-muted-foreground">
+                      Tidak ada data meja aktif. Silakan tambahkan meja di halaman Desainer Meja.
+                    </div>
+                  )}
+                </div>
               </div>
             </motion.div>
           </motion.div>

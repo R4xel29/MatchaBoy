@@ -732,11 +732,18 @@ export async function POST(req: Request) {
                 }
             })
 
-            if (orderType === 'DINE_IN') {
-                await tx.diningTable.update({
-                    where: { number: body.tableNumber },
-                    data: { status: 'OCCUPIED' }
+            if (orderType === 'DINE_IN' && body.tableNumber) {
+                const tbl = await tx.diningTable.findUnique({
+                    where: { number: body.tableNumber }
                 });
+                if (tbl) {
+                    const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1;
+                    const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats);
+                    await tx.diningTable.update({
+                        where: { number: body.tableNumber },
+                        data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
+                    });
+                }
             }
 
             // If a Group Cart was checked out, mark it as CHECKED_OUT within the transaction

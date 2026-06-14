@@ -129,7 +129,7 @@ export async function PATCH(
       if ((status === 'COMPLETED' || status === 'CANCELLED') && existingOrder.tableNumber) {
         await tx.diningTable.update({
           where: { number: existingOrder.tableNumber },
-          data: { status: 'AVAILABLE' }
+          data: { status: 'AVAILABLE', occupiedSeats: 0 }
         })
       }
 

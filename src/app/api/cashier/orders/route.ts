@@ -241,10 +241,17 @@ export async function POST(req: Request) {
       })
 
       if (orderType === 'DINE_IN' && body.tableNumber) {
-        await tx.diningTable.update({
-          where: { number: body.tableNumber },
-          data: { status: 'OCCUPIED' }
+        const tbl = await tx.diningTable.findUnique({
+          where: { number: body.tableNumber }
         })
+        if (tbl) {
+          const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1
+          const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats)
+          await tx.diningTable.update({
+            where: { number: body.tableNumber },
+            data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
+          })
+        }
       }
 
       return newOrder

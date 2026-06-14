@@ -11,6 +11,7 @@ interface DiningTable {
   id: string;
   number: string;
   capacity: number;
+  occupiedSeats: number;
   status: string; // AVAILABLE, OCCUPIED, BILLING, CLEANING
   shape: string;  // RECTANGLE, ROUND
   x: number;
@@ -175,6 +176,103 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
     } catch (err: any) {
       showToast(err.message, 'error');
     }
+  };
+
+  const handleQuickCapacityChange = async (diff: number) => {
+    if (!selectedTableId || !selectedTable) return;
+    const newCapacity = Math.min(20, Math.max(1, selectedTable.capacity + diff));
+    try {
+      const res = await fetch(`/api/admin/tables/${selectedTableId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          capacity: newCapacity
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal mengubah kapasitas');
+
+      showToast(`Kapasitas meja diubah menjadi ${newCapacity}`, 'success');
+      setTables(prev => prev.map(t => t.id === selectedTableId ? data : t));
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const renderChairs = (capacity: number, occupiedSeats: number, shape: string) => {
+    const chairs = [];
+    const isRound = shape === 'ROUND';
+    
+    if (isRound) {
+      const radius = 38; // px dari pusat
+      for (let i = 0; i < capacity; i++) {
+        const angle = (i * 2 * Math.PI) / capacity - Math.PI / 2;
+        const x = Math.cos(angle) * radius;
+        const y = Math.sin(angle) * radius;
+        const isOccupied = i < occupiedSeats;
+        chairs.push(
+          <div
+            key={`chair-${i}`}
+            style={{
+              position: 'absolute',
+              left: `calc(50% + ${x}px - 5px)`,
+              top: `calc(50% + ${y}px - 5px)`,
+            }}
+            className={`w-2.5 h-2.5 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
+              isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
+            }`}
+          />
+        );
+      }
+    } else {
+      const topCount = Math.ceil(capacity / 2);
+      const bottomCount = Math.floor(capacity / 2);
+      let chairIndex = 0;
+      
+      // Kursi atas
+      for (let i = 0; i < topCount; i++) {
+        const leftPercent = topCount === 1 ? 50 : 12 + (i * 76) / (topCount - 1);
+        const isOccupied = chairIndex < occupiedSeats;
+        chairIndex++;
+        chairs.push(
+          <div
+            key={`chair-top-${i}`}
+            style={{
+              position: 'absolute',
+              left: `${leftPercent}%`,
+              top: '-12px',
+              transform: 'translateX(-50%)',
+            }}
+            className={`w-2.5 h-2.5 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
+              isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
+            }`}
+          />
+        );
+      }
+      
+      // Kursi bawah
+      for (let i = 0; i < bottomCount; i++) {
+        const leftPercent = bottomCount === 1 ? 50 : 12 + (i * 76) / (bottomCount - 1);
+        const isOccupied = chairIndex < occupiedSeats;
+        chairIndex++;
+        chairs.push(
+          <div
+            key={`chair-bottom-${i}`}
+            style={{
+              position: 'absolute',
+              left: `${leftPercent}%`,
+              bottom: '-12px',
+              transform: 'translateX(-50%)',
+            }}
+            className={`w-2.5 h-2.5 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
+              isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
+            }`}
+          />
+        );
+      }
+    }
+    return chairs;
   };
 
   // Drag operations
@@ -363,9 +461,31 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="font-serif font-black text-xl text-foreground">Meja {selectedTable.number}</h2>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">Kapasitas: {selectedTable.capacity} Orang</span>
+                <div className="flex items-center gap-3 mt-1.5">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span>Kapasitas: {selectedTable.capacity} Kursi</span>
+                  </span>
+                  <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border border-border">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickCapacityChange(-1)}
+                      disabled={selectedTable.capacity <= 1}
+                      className="w-5 h-5 rounded hover:bg-background text-foreground flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50"
+                      title="Kurangi Kursi"
+                    >
+                      -
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickCapacityChange(1)}
+                      disabled={selectedTable.capacity >= 20}
+                      className="w-5 h-5 rounded hover:bg-background text-foreground flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50"
+                      title="Tambah Kursi"
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5 ${
@@ -584,9 +704,12 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   T-{table.number}
                 </span>
 
-                {/* Capacity */}
+                {/* Capacity & Occupied visual */}
+                {renderChairs(table.capacity, table.occupiedSeats || 0, table.shape)}
+
+                {/* Capacity Label */}
                 <span className="text-[9px] opacity-80 mt-0.5 leading-none">
-                  👤 {table.capacity}
+                  👤 {table.occupiedSeats || 0}/{table.capacity}
                 </span>
 
                 {/* Drag Indicator Overlay */}

@@ -12,7 +12,7 @@ import {
   ArrowLeft, Phone, User, CreditCard, Banknote,
   ChevronDown, ChevronUp, ChevronRight, Trash2, Plus, Minus,
   ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle, MapPin,
-  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet, Check, Coffee, Utensils
+  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet, Check, Coffee, Utensils, Users
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const MapPicker = dynamic(() => import('@/components/checkout/MapPicker').then(m => m.MapPicker), { ssr: false });
@@ -94,6 +94,8 @@ export default function CheckoutPage() {
   const [orderType, setOrderType] = useState<OrderType>('PICKUP');
   const [selectedTable, setSelectedTable] = useState<string>('');
   const [dbTables, setDbTables] = useState<any[]>([]);
+  const [showFloorPlanModal, setShowFloorPlanModal] = useState<boolean>(false);
+  const [storefrontPeopleCount, setStorefrontPeopleCount] = useState<number>(1);
 
   useEffect(() => {
     fetch('/api/admin/tables')
@@ -1235,6 +1237,7 @@ export default function CheckoutPage() {
         notes: tempFormData.notes,
         orderType,
         tableNumber: orderType === 'DINE_IN' ? selectedTable : undefined,
+        peopleCount: orderType === 'DINE_IN' ? storefrontPeopleCount : undefined,
         hasTumbler,
         voucherCode: appliedVoucher?.code || undefined,
         pointsUsed: usePoints ? Math.min(pointsToUse, maxPointsAllowed) : 0,
@@ -1539,37 +1542,80 @@ export default function CheckoutPage() {
               <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
                 <Coffee className="w-4.5 h-4.5 text-[#B48A5E]" /> Informasi Meja Dine-In
               </h2>
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Nomor Meja</label>
-                {tableNumber ? (
-                  <div className="flex items-center justify-between p-4 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                    <span className="text-sm font-bold text-emerald-800">Meja Terkunci: Meja {tableNumber}</span>
-                    <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">Scan QR ✓</span>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. People count stepper */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Jumlah Orang / Kursi</label>
+                  <div className="flex items-center gap-3 bg-[#F9F8F6] border border-gray-200 p-2 rounded-2xl">
+                    <button
+                      type="button"
+                      onClick={() => setStorefrontPeopleCount(Math.max(1, storefrontPeopleCount - 1))}
+                      disabled={storefrontPeopleCount <= 1}
+                      className="w-8 h-8 rounded-xl bg-white hover:bg-gray-50 border border-gray-150 text-gray-700 flex items-center justify-center font-extrabold transition-all disabled:opacity-40 cursor-pointer"
+                    >
+                      <Minus className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-sm font-black text-gray-800 flex-1 text-center">{storefrontPeopleCount}</span>
+                    <button
+                      type="button"
+                      onClick={() => setStorefrontPeopleCount(Math.min(20, storefrontPeopleCount + 1))}
+                      disabled={storefrontPeopleCount >= 20}
+                      className="w-8 h-8 rounded-xl bg-white hover:bg-gray-50 border border-gray-150 text-gray-700 flex items-center justify-center font-extrabold transition-all disabled:opacity-40 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                ) : (
-                  <select
-                    value={selectedTable}
-                    onChange={(e) => setSelectedTable(e.target.value)}
-                    className="w-full px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner animate-pulse-once"
-                  >
-                    <option value="">Pilih Nomor Meja</option>
-                    {dbTables.map(t => (
-                      <option key={t.id} value={t.number} disabled={t.status === 'OCCUPIED'}>
-                        Meja {t.number} ({t.status === 'AVAILABLE' ? 'Tersedia' : t.status === 'OCCUPIED' ? 'Terisi' : t.status})
-                      </option>
-                    ))}
-                    {dbTables.length === 0 && (
-                      <>
-                        <option value="1">Meja 1</option>
-                        <option value="2">Meja 2</option>
-                        <option value="3">Meja 3</option>
-                        <option value="4">Meja 4</option>
-                        <option value="5">Meja 5</option>
-                      </>
-                    )}
-                  </select>
-                )}
+                </div>
+
+                {/* 2. Table Selection Dropdown */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Nomor Meja</label>
+                  {tableNumber ? (
+                    <div className="flex items-center justify-between p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
+                      <span className="text-sm font-bold text-emerald-800">Meja Terkunci: Meja {tableNumber}</span>
+                      <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full">Scan QR ✓</span>
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedTable}
+                      onChange={(e) => setSelectedTable(e.target.value)}
+                      className="w-full px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner animate-pulse-once"
+                    >
+                      <option value="">Pilih Nomor Meja</option>
+                      {dbTables.map(t => {
+                        const remaining = t.capacity - (t.occupiedSeats || 0);
+                        const isTooSmall = remaining < storefrontPeopleCount;
+                        return (
+                          <option key={t.id} value={t.number} disabled={isTooSmall}>
+                            Meja {t.number} ({remaining} sisa / {t.capacity} total kursi) {isTooSmall ? ' - Sisa Kursi Kurang' : ''}
+                          </option>
+                        );
+                      })}
+                      {dbTables.length === 0 && (
+                        <>
+                          <option value="1">Meja 1</option>
+                          <option value="2">Meja 2</option>
+                          <option value="3">Meja 3</option>
+                          <option value="4">Meja 4</option>
+                          <option value="5">Meja 5</option>
+                        </>
+                      )}
+                    </select>
+                  )}
+                </div>
               </div>
+
+              {!tableNumber && (
+                <button
+                  type="button"
+                  onClick={() => setShowFloorPlanModal(true)}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#F9F8F6] border border-gray-200 hover:bg-orange-50/10 hover:border-[#B48A5E] text-gray-700 hover:text-[#B48A5E] text-xs font-bold transition-all shadow-sm cursor-pointer"
+                >
+                  <MapPin className="w-4 h-4" />
+                  <span>Lihat Denah Meja (Layout & Kursi)</span>
+                </button>
+              )}
             </motion.section>
           )}
 
@@ -3886,6 +3932,225 @@ export default function CheckoutPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── Floor Plan Selection Modal ────────────────── */}
+      <AnimatePresence>
+        {showFloorPlanModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-2xl rounded-[2.5rem] bg-white border border-gray-100 shadow-2xl overflow-hidden flex flex-col"
+            >
+              {/* Modal Header */}
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50/30 to-orange-50/10">
+                <div className="flex items-center gap-2">
+                  <Coffee className="w-5 h-5 text-[#B48A5E]" />
+                  <div>
+                    <h3 className="font-serif font-bold text-lg text-gray-900">Pilih Meja Dine-In</h3>
+                    <p className="text-[11px] text-gray-400 font-medium">Tentukan meja dan jumlah orang untuk kunjungan Anda</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFloorPlanModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 max-h-[70vh]">
+                {/* 1. Seats Query Stepper */}
+                <div className="bg-[#FBF9F6] border border-gray-100 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-black uppercase tracking-wider text-[#B48A5E]">Jumlah Orang / Kursi</p>
+                    <p className="text-xs text-gray-400 font-medium">Berapa orang yang akan makan di meja ini?</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <button
+                      type="button"
+                      onClick={() => setStorefrontPeopleCount(Math.max(1, storefrontPeopleCount - 1))}
+                      disabled={storefrontPeopleCount <= 1}
+                      className="w-10 h-10 rounded-2xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 flex items-center justify-center font-extrabold transition-all disabled:opacity-40 cursor-pointer"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="text-base font-black text-gray-800 w-8 text-center">{storefrontPeopleCount}</span>
+                    <button
+                      type="button"
+                      onClick={() => setStorefrontPeopleCount(Math.min(20, storefrontPeopleCount + 1))}
+                      disabled={storefrontPeopleCount >= 20}
+                      className="w-10 h-10 rounded-2xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 flex items-center justify-center font-extrabold transition-all disabled:opacity-40 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div className="flex flex-wrap gap-4 text-xs font-bold justify-center text-gray-500 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 border border-slate-900" />
+                    <span>Kursi Kosong</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500 border border-slate-900" />
+                    <span>Kursi Terisi</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 border-2 border-dashed border-[#B48A5E] bg-white rounded-lg" />
+                    <span>Meja (Tersedia)</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 border-2 border-dashed border-red-200 bg-red-50 rounded-lg" />
+                    <span>Meja (Penuh / Tidak Muat)</span>
+                  </div>
+                </div>
+
+                {/* 2. Visual Blueprint floor plan */}
+                <div
+                  style={{
+                    backgroundImage: `radial-gradient(rgba(180, 138, 94, 0.08) 1px, transparent 0)`,
+                    backgroundSize: '20px 20px'
+                  }}
+                  className="relative w-full aspect-[4/3] rounded-[2rem] bg-[#FAFAFA] border border-gray-200 shadow-inner overflow-hidden select-none min-h-[340px]"
+                >
+                  <div className="absolute top-3 left-4 text-gray-400 text-[8px] font-mono tracking-widest uppercase pointer-events-none select-none">
+                    [DENAH LANJUTAN DINE-IN MATCHABOY]
+                  </div>
+
+                  {dbTables.map((table) => {
+                    const isRound = table.shape === 'ROUND';
+                    const remainingSeats = table.capacity - (table.occupiedSeats || 0);
+                    // Disable table if the requested seats exceed remaining capacity
+                    const isTooSmall = remainingSeats < storefrontPeopleCount;
+                    const isSelected = selectedTable === table.number;
+
+                    return (
+                      <button
+                        key={table.id}
+                        type="button"
+                        disabled={isTooSmall}
+                        onClick={() => {
+                          setSelectedTable(table.number);
+                          setShowFloorPlanModal(false);
+                        }}
+                        style={{
+                          left: `${table.x}%`,
+                          top: `${table.y}%`,
+                        }}
+                        className={`absolute select-none transition-all duration-300 ${
+                          isRound ? 'w-12 h-12 rounded-full' : 'w-20 h-12 rounded-xl'
+                        } flex flex-col items-center justify-center border-2 shadow-sm ${
+                          isSelected
+                            ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-50 text-amber-950 scale-105'
+                            : isTooSmall
+                            ? 'border-red-200 bg-red-50 text-red-500 opacity-60 cursor-not-allowed'
+                            : 'border-dashed border-[#B48A5E] bg-white hover:bg-orange-50/30 hover:border-[#9c744c] hover:scale-105 text-[#B48A5E] cursor-pointer'
+                        }`}
+                      >
+                        {/* Render visual chairs */}
+                        {renderStorefrontChairs(table.capacity, table.occupiedSeats || 0, table.shape)}
+
+                        <span className="font-serif font-black text-xs">
+                          {table.number}
+                        </span>
+                        <span className="text-[7.5px] opacity-80 mt-0.5 font-bold leading-none">
+                          {isTooSmall ? (remainingSeats <= 0 ? 'Penuh' : 'Kurang') : `${remainingSeats} Kursi`}
+                        </span>
+                      </button>
+                    );
+                  })}
+
+                  {dbTables.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center text-center text-gray-400 font-mono text-xs p-6">
+                      [Tidak ada data meja aktif untuk ditampilkan]
+                    </div>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+
+const renderStorefrontChairs = (capacity: number, occupiedSeats: number, shape: string) => {
+  const chairs = [];
+  const isRound = shape === 'ROUND';
+  
+  if (isRound) {
+    const radius = 30; // px dari pusat
+    for (let i = 0; i < capacity; i++) {
+      const angle = (i * 2 * Math.PI) / capacity - Math.PI / 2;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      const isOccupied = i < occupiedSeats;
+      chairs.push(
+        <div
+          key={`chair-${i}`}
+          style={{
+            position: 'absolute',
+            left: `calc(50% + ${x}px - 4px)`,
+            top: `calc(50% + ${y}px - 4px)`,
+          }}
+          className={`w-2 h-2 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
+            isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
+          }`}
+        />
+      );
+    }
+  } else {
+    const topCount = Math.ceil(capacity / 2);
+    const bottomCount = Math.floor(capacity / 2);
+    let chairIndex = 0;
+    
+    // Kursi atas
+    for (let i = 0; i < topCount; i++) {
+      const leftPercent = topCount === 1 ? 50 : 12 + (i * 76) / (topCount - 1);
+      const isOccupied = chairIndex < occupiedSeats;
+      chairIndex++;
+      chairs.push(
+        <div
+          key={`chair-top-${i}`}
+          style={{
+            position: 'absolute',
+            left: `${leftPercent}%`,
+            top: '-10px',
+            transform: 'translateX(-50%)',
+          }}
+          className={`w-2 h-2 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
+            isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
+          }`}
+        />
+      );
+    }
+    
+    // Kursi bawah
+    for (let i = 0; i < bottomCount; i++) {
+      const leftPercent = bottomCount === 1 ? 50 : 12 + (i * 76) / (bottomCount - 1);
+      const isOccupied = chairIndex < occupiedSeats;
+      chairIndex++;
+      chairs.push(
+        <div
+          key={`chair-bottom-${i}`}
+          style={{
+            position: 'absolute',
+            left: `${leftPercent}%`,
+            bottom: '-10px',
+            transform: 'translateX(-50%)',
+          }}
+          className={`w-2 h-2 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
+            isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
+          }`}
+        />
+      );
+    }
+  }
+  return chairs;
+};
