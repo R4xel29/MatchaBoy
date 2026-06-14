@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
@@ -24,7 +24,6 @@ import {
   MessageCircle,
   Coffee
 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 import { useToast } from '@/components/ui/Toast';
 
@@ -149,6 +148,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   const [tableFilter, setTableFilter] = useState('ALL');
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
+  const [orders, setOrders] = useState(initialOrders);
+  const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(initialPickupAlarmLeadTime);
+
   const uniqueTableNumbers = useMemo(() => {
     const numbers = new Set<string>();
     orders.forEach((o) => {
@@ -158,8 +160,6 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
     });
     return Array.from(numbers).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
   }, [orders]);
-  const [orders, setOrders] = useState(initialOrders);
-  const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(initialPickupAlarmLeadTime);
 
   // Cancellation Modal State
   const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
