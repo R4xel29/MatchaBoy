@@ -47,13 +47,17 @@ import {
   Star,
   ChefHat,
   UsersRound,
-  Music
+  Music,
+  TrendingUp,
+  Layers
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
+  { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
   { label: 'Laba Rugi', href: '/admin/reports/profit', icon: BarChart4 },
   { label: 'Penjualan', href: '/admin/reports', icon: BarChart3 },
 ];
@@ -80,6 +84,7 @@ const USER_ITEMS = [
 
 const SETTING_ITEMS = [
   { label: 'Pengaturan Toko', href: '/admin/store-settings', icon: Store },
+  { label: 'Layout Meja (Dine-in)', href: '/admin/tables', icon: Layers },
   { label: 'Metode Pembayaran', href: '/admin/payment-settings', icon: CreditCard },
   { label: 'Notifikasi', href: '/admin/notifications', icon: Bell },
   { label: 'Pusat Bantuan FAQ', href: '/admin/help-center', icon: HelpCircle },
