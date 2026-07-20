@@ -7,15 +7,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
   Package, 
-  ShoppingCart, 
   FolderOpen,
   Users,
   Shield,
   LogOut,
-  Leaf,
   Menu,
   X,
   ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen,
   ClipboardList,
   HelpCircle,
   Image as ImageIcon,
@@ -135,16 +136,45 @@ function NavItem({
   pathname, 
   onNavigate, 
   isSubItem = false,
-  pendingCount = 0
+  pendingCount = 0,
+  isCollapsed = false
 }: { 
   item: any; 
   pathname: string; 
   onNavigate?: () => void; 
   isSubItem?: boolean;
   pendingCount?: number;
+  isCollapsed?: boolean;
 }) {
   const isActive = pathname === item.href || 
     (item.href !== '/admin' && item.href !== '/admin/cashier' && pathname.startsWith(item.href));
+
+  if (isCollapsed && !isSubItem) {
+    return (
+      <Link
+        href={item.href}
+        onClick={onNavigate}
+        title={item.label}
+        className={`group relative flex items-center justify-center p-2.5 rounded-xl transition-all duration-200
+          ${isActive 
+            ? 'text-orange-600 bg-orange-50 font-semibold shadow-sm' 
+            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
+      >
+        <div className="relative flex items-center justify-center">
+          <item.icon className={`w-[20px] h-[20px] transition-transform duration-200 ${isActive ? 'text-orange-600 scale-105' : 'text-slate-500 group-hover:scale-110'}`} />
+          {item.hasBadge && pendingCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 z-20 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white">
+              {pendingCount > 9 ? '9+' : pendingCount}
+            </span>
+          )}
+        </div>
+        {/* Tooltip flyout on hover */}
+        <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50 shadow-xl">
+          {item.label}
+        </div>
+      </Link>
+    );
+  }
   
   return (
     <Link
@@ -159,7 +189,7 @@ function NavItem({
             ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-50/80'
             : 'text-slate-700 hover:text-slate-900 hover:bg-slate-50/80'
         }
-        ${isSubItem ? 'ml-6' : ''}`}
+        ${isSubItem ? (isCollapsed ? 'px-3 py-2 text-xs' : 'ml-6') : ''}`}
     >
       <div className="relative">
         <item.icon className={`w-[18px] h-[18px] transition-transform duration-200
@@ -194,6 +224,7 @@ function CollapsibleSection({
   pathname,
   onNavigate,
   pendingCount,
+  isCollapsed = false
 }: {
   title: string;
   icon: any;
@@ -201,6 +232,7 @@ function CollapsibleSection({
   pathname: string;
   onNavigate?: () => void;
   pendingCount: number;
+  isCollapsed?: boolean;
 }) {
   const hasActiveItem = items.some(item => {
     return pathname === item.href || (item.href !== '/admin' && item.href !== '/admin/cashier' && pathname.startsWith(item.href));
@@ -213,6 +245,42 @@ function CollapsibleSection({
       setIsOpen(true);
     }
   }, [hasActiveItem]);
+
+  if (isCollapsed) {
+    return (
+      <div className="relative group flex justify-center">
+        <button
+          className={`p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center relative
+            ${hasActiveItem ? 'bg-orange-50 text-orange-600 font-semibold shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
+        >
+          <Icon className={`w-[20px] h-[20px] ${hasActiveItem ? 'text-orange-600' : 'text-slate-500 group-hover:scale-110'}`} />
+          {hasActiveItem && (
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-500" />
+          )}
+        </button>
+
+        {/* Hover Flyout Dropdown Menu */}
+        <div className="absolute left-full top-0 ml-3 hidden group-hover:block w-52 bg-white rounded-2xl p-2 shadow-xl border border-slate-100 z-50 transition-all duration-200">
+          <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
+            {title}
+          </div>
+          <div className="space-y-0.5">
+            {items.map((item) => (
+              <NavItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                onNavigate={onNavigate}
+                isSubItem={true}
+                pendingCount={pendingCount}
+                isCollapsed={false}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-1">
@@ -247,6 +315,7 @@ function CollapsibleSection({
                 onNavigate={onNavigate}
                 isSubItem={true}
                 pendingCount={pendingCount}
+                isCollapsed={false}
               />
             ))}
           </motion.div>
@@ -256,7 +325,19 @@ function CollapsibleSection({
   );
 }
 
-function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: string; onNavigate?: () => void; pendingCount: number }) {
+function SidebarContent({ 
+  pathname, 
+  onNavigate, 
+  pendingCount,
+  isCollapsed = false,
+  onToggleCollapse
+}: { 
+  pathname: string; 
+  onNavigate?: () => void; 
+  pendingCount: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
   const router = useRouter();
   const { data: session } = useSession();
   const userRole = session?.user?.role || 'ADMIN';
@@ -271,10 +352,10 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Brand */}
-      <div className="px-5 pt-7 pb-6">
+      {/* Brand & Toggle Header */}
+      <div className={`pt-6 pb-5 flex items-center ${isCollapsed ? 'flex-col gap-3 px-2 justify-center' : 'px-5 justify-between'}`}>
         <Link href="/admin" className="flex items-center gap-3" onClick={onNavigate}>
-          <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center p-1.5 shadow-sm">
+          <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center p-1.5 shadow-sm flex-shrink-0">
             <Image 
               src="/icons/arus.png" 
               alt="Arus Logo" 
@@ -283,22 +364,39 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               className="object-contain"
             />
           </div>
-          <div>
-            <span className="font-heading font-extrabold text-[18px] tracking-tight text-orange-500 inline-block">
-              Arus
-            </span>
-            <span className="font-heading font-extrabold text-[18px] tracking-tight text-slate-800 inline-block">
-              Hub
-            </span>
-          </div>
+          {!isCollapsed && (
+            <div>
+              <span className="font-heading font-extrabold text-[18px] tracking-tight text-orange-500 inline-block">
+                Arus
+              </span>
+              <span className="font-heading font-extrabold text-[18px] tracking-tight text-slate-800 inline-block">
+                Hub
+              </span>
+            </div>
+          )}
         </Link>
+
+        {/* Desktop Toggle Button in Header */}
+        {onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            title={isCollapsed ? 'Perluas Sidebar' : 'Kecilkan Sidebar'}
+            className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen className="w-4 h-4 text-slate-600" />
+            ) : (
+              <PanelLeftClose className="w-4 h-4 text-slate-500" />
+            )}
+          </button>
+        )}
       </div>
 
       {/* Divider */}
-      <div className="mx-5 h-px bg-slate-100" />
+      <div className={`${isCollapsed ? 'mx-2' : 'mx-5'} h-px bg-slate-100`} />
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-5 space-y-2.5 overflow-y-auto custom-scrollbar">
+      <nav className={`flex-1 py-5 space-y-2.5 overflow-y-auto custom-scrollbar ${isCollapsed ? 'px-2' : 'px-3'}`}>
         {/* Standalone Dashboard Item */}
         <NavItem
           item={MAIN_ITEMS[0]}
@@ -306,6 +404,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
           onNavigate={onNavigate}
           isSubItem={false}
           pendingCount={pendingCount}
+          isCollapsed={isCollapsed}
         />
 
         {/* Laporan & Transaksi Group */}
@@ -316,6 +415,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
           pathname={pathname}
           onNavigate={onNavigate}
           pendingCount={pendingCount}
+          isCollapsed={isCollapsed}
         />
 
         {/* Kasir (POS) Group */}
@@ -326,6 +426,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
           pathname={pathname}
           onNavigate={onNavigate}
           pendingCount={pendingCount}
+          isCollapsed={isCollapsed}
         />
 
         {/* Admin-only sections */}
@@ -339,6 +440,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Keuangan Section */}
@@ -349,6 +451,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Loyalty & Referral Section */}
@@ -359,6 +462,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Delivery Section */}
@@ -369,6 +473,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Fitur Pelanggan Section */}
@@ -379,6 +484,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Engagement Section */}
@@ -389,6 +495,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Kolaborasi Section */}
@@ -399,6 +506,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Keamanan & Akun Section */}
@@ -409,6 +517,7 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
 
             {/* Pengaturan Section */}
@@ -419,51 +528,83 @@ function SidebarContent({ pathname, onNavigate, pendingCount }: { pathname: stri
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
             />
           </>
         )}
       </nav>
 
       {/* User Card + Logout */}
-      <div className="p-4 border-t border-slate-100 bg-slate-50/30">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-orange-500 text-white text-xs font-bold flex items-center justify-center shadow-sm">
-            {userName.charAt(0).toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-slate-800 truncate">{userName}</p>
-            <p className="text-[10px] text-slate-500 truncate">{userRole === 'CASHIER' ? 'Kasir' : 'Administrator'}</p>
-          </div>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100/70 border border-rose-100 transition-all duration-200"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          Sign Out
-        </button>
+      <div className={`border-t border-slate-100 bg-slate-50/30 ${isCollapsed ? 'p-2 flex flex-col items-center gap-2' : 'p-4'}`}>
+        {!isCollapsed ? (
+          <>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-orange-500 text-white text-xs font-bold flex items-center justify-center shadow-sm">
+                {userName.charAt(0).toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-800 truncate">{userName}</p>
+                <p className="text-[10px] text-slate-500 truncate">{userRole === 'CASHIER' ? 'Kasir' : 'Administrator'}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100/70 border border-rose-100 transition-all duration-200"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out
+            </button>
+          </>
+        ) : (
+          <>
+            <div 
+              title={`${userName} (${userRole === 'CASHIER' ? 'Kasir' : 'Administrator'})`}
+              className="w-8 h-8 rounded-lg bg-orange-500 text-white text-xs font-bold flex items-center justify-center shadow-sm"
+            >
+              {userName.charAt(0).toUpperCase()}
+            </div>
+            <button
+              onClick={handleLogout}
+              title="Sign Out"
+              className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-100 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Divider */}
       <div className="h-px bg-slate-100" />
 
-      {/* Close Sidebar Button */}
-      <div className="p-4">
+      {/* Bottom Toggle / Close Sidebar Button */}
+      <div className={isCollapsed ? 'p-2 flex justify-center' : 'p-4'}>
         <button
-          onClick={onNavigate || (() => {})}
-          className="w-full flex items-center justify-center gap-2.5 px-4 py-2 rounded-full border border-slate-200 text-[13px] font-medium text-slate-600 bg-white hover:bg-slate-50 transition-colors"
+          onClick={onToggleCollapse || onNavigate || (() => {})}
+          title={isCollapsed ? 'Perluas sidebar' : 'Kecilkan / tutup sidebar'}
+          className={`flex items-center justify-center gap-2 px-3 py-2 rounded-full border border-slate-200 text-[13px] font-medium text-slate-600 bg-white hover:bg-slate-50 transition-colors ${isCollapsed ? 'w-10 h-10 p-0' : 'w-full'}`}
         >
-          <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-8a2 2 0 00-2 2" />
-          </svg>
-          Close sidebar
+          {isCollapsed ? (
+            <ChevronRight className="w-4 h-4 text-slate-600" />
+          ) : (
+            <>
+              <ChevronLeft className="w-4 h-4 text-slate-500" />
+              <span>Kecilkan sidebar</span>
+            </>
+          )}
         </button>
       </div>
     </div>
   );
 }
 
-export function AdminSidebar() {
+export function AdminSidebar({
+  isCollapsed = false,
+  onToggleCollapse
+}: {
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -529,15 +670,29 @@ export function AdminSidebar() {
               >
                 <X className="w-5 h-5 text-muted-foreground" />
               </button>
-              <SidebarContent pathname={pathname} onNavigate={() => setMobileOpen(false)} pendingCount={pendingCount} />
+              <SidebarContent 
+                pathname={pathname} 
+                onNavigate={() => setMobileOpen(false)} 
+                pendingCount={pendingCount}
+                isCollapsed={false}
+              />
             </motion.aside>
           </>
         )}
       </AnimatePresence>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[260px] bg-white border-r border-slate-100 flex-col z-50 shadow-sm">
-        <SidebarContent pathname={pathname} pendingCount={pendingCount} />
+      <aside 
+        className={`hidden lg:flex fixed inset-y-0 left-0 bg-white border-r border-slate-100 flex-col z-50 shadow-sm transition-all duration-300 ease-in-out ${
+          isCollapsed ? 'w-[76px]' : 'w-[260px]'
+        }`}
+      >
+        <SidebarContent 
+          pathname={pathname} 
+          pendingCount={pendingCount} 
+          isCollapsed={isCollapsed}
+          onToggleCollapse={onToggleCollapse}
+        />
       </aside>
     </>
   );
