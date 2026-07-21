@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingBag,
@@ -12,6 +12,9 @@ import {
   Clock,
   ShieldCheck,
   Maximize,
+  AlertCircle,
+  Tag,
+  Flame,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { formatRupiah } from '@/lib/utils';
@@ -41,6 +44,18 @@ export type POSDisplayState = {
   timestamp: number;
 };
 
+type DisplayProduct = {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string | null;
+  badge: string | null;
+  isSoldOut: boolean;
+  categoryId: string;
+  categoryName: string;
+};
+
 export default function CustomerDisplayClient() {
   const [displayState, setDisplayState] = useState<POSDisplayState | null>(null);
   const [settings, setSettings] = useState<{
@@ -50,24 +65,32 @@ export default function CustomerDisplayClient() {
     storeName: string;
     storeAddress: string;
     banners: { id: string; image: string; headline: string; subheadline: string }[];
+    categories: { id: string; name: string; slug: string }[];
+    products: DisplayProduct[];
   }>({
     qrisImage: null,
     qrisLabel: 'QRIS',
     qrisNmid: '',
-    storeName: 'Matchaboy',
+    storeName: 'Arum Seduh',
     storeAddress: '',
     banners: [],
+    categories: [],
+    products: [],
   });
 
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
 
-  // Fetch store display settings (QRIS image & promo banners)
+  // Fetch store display settings & Arum Seduh menu catalog
   useEffect(() => {
     fetch('/api/cashier/display-settings')
       .then((res) => res.json())
       .then((data) => {
         if (!data.error) {
-          setSettings(data);
+          setSettings({
+            ...data,
+            storeName: data.storeName || 'Arum Seduh',
+          });
         }
       })
       .catch(() => {});
@@ -145,23 +168,33 @@ export default function CustomerDisplayClient() {
     }
   };
 
+  // Filtered products for display catalog
+  const filteredProducts = useMemo(() => {
+    if (selectedCategory === 'all') return settings.products;
+    return settings.products.filter((p) => p.categoryId === selectedCategory);
+  }, [settings.products, selectedCategory]);
+
   const cart = displayState?.cart || [];
   const totalPayable = displayState?.totalPayable || 0;
   const isQRIS = displayState?.paymentMethod === 'QRIS' && cart.length > 0;
   const isCompleted = displayState?.isCompleted === true;
-  const activeBanner = settings.banners[activeBannerIndex];
 
   return (
     <div className="fixed inset-0 bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden z-[99999]">
       {/* Header Bar */}
       <header className="h-16 px-8 bg-slate-900/90 border-b border-slate-800/80 backdrop-blur-md flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-600 via-amber-500 to-emerald-400 flex items-center justify-center font-black text-slate-950 shadow-lg text-lg">
-            M
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-600 via-amber-500 to-emerald-400 flex items-center justify-center font-black text-slate-950 shadow-lg text-xl tracking-tighter">
+            AS
           </div>
           <div>
-            <h1 className="font-bold text-lg text-slate-100 tracking-tight">{settings.storeName}</h1>
-            <p className="text-[11px] text-slate-400 font-medium">Customer Display System</p>
+            <h1 className="font-extrabold text-xl text-slate-100 tracking-tight flex items-center gap-2">
+              {settings.storeName || 'Arum Seduh'}
+              <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold uppercase tracking-wider">
+                Katalog Menu & POS Display
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-400 font-medium">Layar Monitor Pelanggan Realtime</p>
           </div>
         </div>
 
@@ -189,7 +222,7 @@ export default function CustomerDisplayClient() {
 
       {/* Main Dual Grid View */}
       <main className="flex-1 grid grid-cols-12 overflow-hidden relative">
-        {/* LEFT COLUMN: Media / Banner / QRIS Overlay (7 cols) */}
+        {/* LEFT COLUMN: Menu Catalog Grid & Prices (7 cols) */}
         <div className="col-span-7 p-6 border-r border-slate-800/60 flex flex-col justify-between relative bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-hidden">
           {/* Background Ambient Glow */}
           <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -211,7 +244,7 @@ export default function CustomerDisplayClient() {
                   <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
                     Pembayaran Berhasil
                   </span>
-                  <h2 className="text-3xl font-extrabold text-white">Terima Kasih atas Pesanan Anda!</h2>
+                  <h2 className="text-3xl font-extrabold text-white">Terima Kasih di Arum Seduh!</h2>
                   <p className="text-sm text-slate-400 max-w-md mx-auto">
                     Pesanan Anda #{displayState?.orderId?.slice(0, 8).toUpperCase()} sedang disiapkan oleh barista kami.
                   </p>
@@ -245,7 +278,7 @@ export default function CustomerDisplayClient() {
                     />
                   ) : (
                     <QRCodeSVG
-                      value={displayState?.orderId ? `QRIS-PAY-${displayState.orderId}-${totalPayable}` : `MATCHABOY-QRIS-${totalPayable}`}
+                      value={displayState?.orderId ? `QRIS-PAY-${displayState.orderId}-${totalPayable}` : `ARUMSEDUH-QRIS-${totalPayable}`}
                       size={240}
                       level="H"
                       includeMargin={true}
@@ -267,50 +300,128 @@ export default function CustomerDisplayClient() {
                 </div>
               </motion.div>
             ) : (
-              /* PROMO & HERO SHOWCASE */
-              <motion.div
-                key="hero-promo"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="h-full flex flex-col justify-between py-4"
-              >
-                {activeBanner ? (
-                  <div className="relative rounded-3xl overflow-hidden aspect-video bg-slate-900 border border-slate-800 shadow-2xl group my-auto">
-                    <img
-                      src={activeBanner.image}
-                      alt={activeBanner.headline}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent p-6 flex flex-col justify-end">
-                      <span className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 text-[10px] font-black uppercase tracking-wider w-max mb-2">
-                        Special Promo
-                      </span>
-                      <h2 className="text-2xl font-black text-white line-clamp-1">{activeBanner.headline}</h2>
-                      <p className="text-xs text-slate-300 line-clamp-2 mt-1">{activeBanner.subheadline}</p>
+              /* ARUM SEDUH MENU CATALOG DISPLAY */
+              <div className="h-full flex flex-col justify-between overflow-hidden space-y-4">
+                {/* Catalog Header & Category Tabs */}
+                <div className="space-y-3 shrink-0">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-lg font-black text-white flex items-center gap-2">
+                        <Sparkles className="w-5 h-5 text-amber-400" /> Katalog Menu Arum Seduh
+                      </h2>
+                      <p className="text-xs text-slate-400">Daftar minuman & makanan pilihan yang dapat Anda pesan</p>
                     </div>
                   </div>
-                ) : (
-                  <div className="my-auto text-center space-y-4">
-                    <div className="w-20 h-20 rounded-3xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
-                      <Sparkles className="w-10 h-10" />
-                    </div>
-                    <h2 className="text-2xl font-black text-white">Selamat Datang di Matchaboy</h2>
-                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                      Nikmati varian Matcha racikan authentic dengan kualitas terbaik & promo hemat harian.
-                    </p>
-                  </div>
-                )}
 
-                {/* Bottom Promo Ticker / Info */}
-                <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex items-center justify-between text-xs text-slate-400 mt-auto">
-                  <div className="flex items-center gap-2">
-                    <Leaf className="w-4 h-4 text-emerald-400" />
-                    <span>Bawa Tumbler Sendiri = Diskon Poin & Ekstra Bonus 🌿</span>
+                  {/* Category Filter Pills */}
+                  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                        selectedCategory === 'all'
+                          ? 'bg-amber-500 text-slate-950 shadow-md'
+                          : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Semua Menu ({settings.products.length})
+                    </button>
+                    {settings.categories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSelectedCategory(cat.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                          selectedCategory === cat.id
+                            ? 'bg-amber-500 text-slate-950 shadow-md'
+                            : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))}
                   </div>
-                  <span className="text-amber-400 font-bold">#MatchaboyExperience</span>
                 </div>
-              </motion.div>
+
+                {/* Product Catalog Grid */}
+                <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                  {filteredProducts.length === 0 ? (
+                    <div className="py-16 text-center text-slate-500">
+                      <Coffee className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm">Belum ada menu di kategori ini</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+                      {filteredProducts.map((product) => (
+                        <div
+                          key={product.id}
+                          className={`relative rounded-2xl border p-3 flex flex-col justify-between transition-all overflow-hidden ${
+                            product.isSoldOut
+                              ? 'bg-slate-900/40 border-slate-800/80 opacity-70'
+                              : 'bg-slate-900/90 border-slate-800 hover:border-amber-500/50 shadow-sm'
+                          }`}
+                        >
+                          {/* Image & Badges */}
+                          <div className="relative aspect-video rounded-xl bg-slate-950/60 overflow-hidden mb-2.5">
+                            {product.image ? (
+                              <img
+                                src={product.image}
+                                alt={product.name}
+                                className={`w-full h-full object-cover ${product.isSoldOut ? 'grayscale opacity-50' : ''}`}
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-slate-700">
+                                <Coffee className="w-8 h-8" />
+                              </div>
+                            )}
+
+                            {/* Sold Out Overlay Badge */}
+                            {product.isSoldOut ? (
+                              <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-[2px] flex items-center justify-center">
+                                <span className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-lg">
+                                  <AlertCircle className="w-3.5 h-3.5" /> Stok Habis
+                                </span>
+                              </div>
+                            ) : product.badge ? (
+                              <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
+                                <Flame className="w-3 h-3" /> {product.badge}
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {/* Product Info */}
+                          <div className="space-y-1">
+                            <span className="text-[9px] font-extrabold uppercase tracking-wider text-amber-500/80">
+                              {product.categoryName}
+                            </span>
+                            <h4 className="font-bold text-xs text-slate-100 line-clamp-1">{product.name}</h4>
+                            <p className="text-[10px] text-slate-400 line-clamp-1">{product.description}</p>
+                          </div>
+
+                          {/* Price & Availability Tag */}
+                          <div className="flex items-center justify-between pt-2.5 border-t border-slate-800/60 mt-2">
+                            <span className="text-xs font-black text-amber-400">{formatRupiah(product.price)}</span>
+                            {product.isSoldOut ? (
+                              <span className="text-[9px] font-bold text-rose-400">Habis</span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-emerald-400 flex items-center gap-0.5">
+                                <CheckCircle2 className="w-3 h-3" /> Tersedia
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Ticker */}
+                <div className="p-3 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Leaf className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Bawa Wadah/Tumbler Sendiri = Diskon Poin & Bonus 🌿</span>
+                  </div>
+                  <span className="text-amber-400 font-bold">#ArumSeduhAuthentic</span>
+                </div>
+              </div>
             )}
           </AnimatePresence>
         </div>
@@ -321,7 +432,7 @@ export default function CustomerDisplayClient() {
           <div className="flex items-center justify-between pb-4 border-b border-slate-800/80">
             <div className="flex items-center gap-2">
               <ShoppingBag className="w-4 h-4 text-amber-500" />
-              <h3 className="font-bold text-sm text-slate-200">Daftar Pesanan</h3>
+              <h3 className="font-bold text-sm text-slate-200">Daftar Pesanan Anda</h3>
             </div>
             {displayState?.orderType && (
               <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-amber-400 border border-amber-500/20 text-[10px] font-extrabold uppercase tracking-wider">
@@ -336,8 +447,8 @@ export default function CustomerDisplayClient() {
               <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 space-y-3 py-16">
                 <Coffee className="w-12 h-12 stroke-[1.5] text-slate-600 opacity-40 animate-pulse" />
                 <div>
-                  <p className="text-sm font-semibold text-slate-400">Kasir Sedang Memilih Produk...</p>
-                  <p className="text-xs text-slate-600 mt-1">Item yang dipilih akan muncul secara otomatis di sini</p>
+                  <p className="text-sm font-semibold text-slate-400">Pilih Menu dari Katalog di Sebelah Kiri</p>
+                  <p className="text-xs text-slate-600 mt-1">Item yang diinput kasir akan muncul secara real-time di sini</p>
                 </div>
               </div>
             ) : (
@@ -375,7 +486,7 @@ export default function CustomerDisplayClient() {
               </div>
             )}
 
-            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-500 text-slate-950 flex items-center justify-between shadow-xl">
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-slate-950 flex items-center justify-between shadow-xl">
               <div>
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-950/70">Total Bayar</p>
                 <p className="text-2xl font-black text-slate-950 tracking-tight">{formatRupiah(totalPayable)}</p>

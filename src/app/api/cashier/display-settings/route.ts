@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const [paymentSettings, storeSettings, banners] = await Promise.all([
+    const [paymentSettings, storeSettings, banners, products, categories] = await Promise.all([
       prisma.paymentSettings.findFirst({
         select: {
           qrisImage: true,
@@ -23,13 +23,51 @@ export async function GET() {
         orderBy: { order: 'asc' },
         take: 5,
       }),
+      prisma.product.findMany({
+        orderBy: { name: 'asc' },
+        include: {
+          category: { select: { id: true, name: true, slug: true } },
+          productIngredients: {
+            include: { ingredient: { select: { id: true, stock: true } } },
+          },
+        },
+      }),
+      prisma.category.findMany({
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, slug: true },
+      }),
     ]);
+
+    const formattedProducts = products.map((p) => {
+      const isBadgeSoldOut =
+        p.badge?.toLowerCase().includes('sold') ||
+        p.badge?.toLowerCase().includes('habis') ||
+        p.badge?.toLowerCase().includes('empty');
+
+      const isIngredientEmpty = p.productIngredients.some(
+        (pi) => pi.ingredient.stock < pi.quantity
+      );
+
+      const isSoldOut = isBadgeSoldOut || isIngredientEmpty;
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        price: p.price,
+        image: p.image,
+        badge: p.badge,
+        isSoldOut,
+        categoryId: p.categoryId,
+        categoryName: p.category.name,
+      };
+    });
 
     return NextResponse.json({
       qrisImage: paymentSettings?.qrisImage || null,
       qrisLabel: paymentSettings?.qrisLabel || 'QRIS',
       qrisNmid: paymentSettings?.qrisNmid || '',
-      storeName: storeSettings?.storeName || 'Matchaboy',
+      storeName: storeSettings?.storeName || 'Arum Seduh',
       storeAddress: storeSettings?.storeAddress || '',
       banners: banners.map((b) => ({
         id: b.id,
@@ -37,6 +75,8 @@ export async function GET() {
         headline: b.headline,
         subheadline: b.subheadline,
       })),
+      categories,
+      products: formattedProducts,
     });
   } catch (error) {
     console.error('Display settings API error:', error);
