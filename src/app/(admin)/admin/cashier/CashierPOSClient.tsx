@@ -162,6 +162,17 @@ export default function CashierPOSClient({ products, categories }: Props) {
         body: JSON.stringify({
           amount: totalPayable,
           invoiceNumber: invNum,
+          customerName: customerName || 'Pelanggan Arum Seduh',
+          customerPhone: customerPhone || phoneLookupResult?.phone || '-',
+          orderType,
+          tableNumber: selectedTable,
+          userId: phoneLookupResult?.id || null,
+          items: cart.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            basePrice: item.basePrice,
+            modsString: `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map((a) => a.name).join(', +') : ''}`,
+          })),
         }),
       })
         .then((res) => res.json())

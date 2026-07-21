@@ -175,8 +175,13 @@ export async function POST(req: NextRequest) {
 
         console.log(`[DOKU WEBHOOK] Wallet top-up transaction ${tx.id} completed successfully via webhook.`);
       } else {
-        const order = await prisma.order.findUnique({
-          where: { id: invoiceNumber },
+        const order = await prisma.order.findFirst({
+          where: {
+            OR: [
+              { id: invoiceNumber },
+              { paymentProofUrl: invoiceNumber },
+            ],
+          },
         });
 
         if (!order) {
@@ -184,13 +189,14 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Order not found' }, { status: 404 });
         }
 
-        if (order.status === 'PENDING_PAYMENT') {
+        if (order.status === 'PENDING_PAYMENT' || order.status === 'PENDING') {
           const isSpmbPending = order.source === 'SPMB' && order.customerPhone.startsWith('SPMB-PENDING');
           const cleanPhone = order.customerPhone.replace(/^SPMB-PENDING_/, '');
+          
           await prisma.order.update({
-            where: { id: invoiceNumber },
+            where: { id: order.id },
             data: {
-              status: 'PREPARING',
+              status: 'COMPLETED',
               paymentProofUrl: '/verified-webhook.svg',
               customerPhone: isSpmbPending ? (cleanPhone || 'SPMB-PAID') : order.customerPhone,
               notes: order.notes 
@@ -198,6 +204,14 @@ export async function POST(req: NextRequest) {
                 : '[DOKU Webhook] Pembayaran otomatis sukses via DOKU.',
             },
           });
+
+          // Award loyalty points automatically
+          try {
+            const { processOrderCompletion } = await import('@/lib/loyalty-utils');
+            await processOrderCompletion(order.id);
+          } catch (loyaltyErr) {
+            console.error('[DOKU WEBHOOK] Loyalty completion error:', loyaltyErr);
+          }
 
           // Send WhatsApp payment confirmation
           try {

@@ -7,9 +7,51 @@ export async function POST(req: Request) {
     const body = await req.json();
     const amount = Number(body.amount) || 0;
     const invoiceNumber = body.invoiceNumber || `POS-QRIS-${Date.now()}`;
+    const customerName = body.customerName || 'Pelanggan Arum Seduh';
+    const customerPhone = body.customerPhone || '-';
+    const orderType = body.orderType || 'PICKUP';
+    const tableNumber = body.tableNumber || undefined;
+    const items = body.items || [];
+    const userId = body.userId || null;
 
     if (amount <= 0) {
       return NextResponse.json({ error: 'Nominal pembayaran tidak valid' }, { status: 400 });
+    }
+
+    // Create a PENDING_PAYMENT order in Prisma DB so DOKU Webhook & Polling can find & update it
+    try {
+      await prisma.order.upsert({
+        where: { id: invoiceNumber },
+        create: {
+          id: invoiceNumber,
+          userId: userId,
+          customerName: customerName,
+          customerPhone: customerPhone,
+          orderType: orderType,
+          tableNumber: tableNumber,
+          address: orderType === 'DINE_IN' ? `Dine In - Meja ${tableNumber}` : 'POS QRIS Order',
+          paymentMethod: 'QRIS',
+          total: Math.round(amount),
+          status: 'PENDING_PAYMENT',
+          paymentProofUrl: invoiceNumber,
+          notes: '[POS QRIS Order]',
+          items: items.length > 0 ? {
+            create: items.map((i: any) => ({
+              productId: i.productId,
+              qty: i.quantity || i.qty || 1,
+              price: i.basePrice || i.price || 0,
+              modifiers: i.modsString || '',
+            })),
+          } : undefined,
+        },
+        update: {
+          total: Math.round(amount),
+          customerName: customerName,
+          status: 'PENDING_PAYMENT',
+        },
+      });
+    } catch (dbErr) {
+      console.error('[DOKU QRIS DB CREATION NOTICE]', dbErr);
     }
 
     const paymentSettings = await prisma.paymentSettings.findFirst();
