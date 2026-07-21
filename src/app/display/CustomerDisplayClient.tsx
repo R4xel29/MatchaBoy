@@ -385,35 +385,8 @@ export default function CustomerDisplayClient() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between gap-2 pt-2 text-[11px] text-emerald-400 font-semibold border-t border-slate-800">
-                  <span className="flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4" /> Deteksi Otomatis Pembayaran
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      fetch('/api/cashier/doku-qris-status', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          invoiceNumber: displayState?.orderId || 'POS-TEST',
-                          simulateSuccess: true,
-                        }),
-                      })
-                        .then((res) => res.json())
-                        .then((data) => {
-                          if (data.paid) {
-                            setDisplayState((prev) => (prev ? { ...prev, isCompleted: true } : null));
-                          }
-                        })
-                        .catch(() => {
-                          setDisplayState((prev) => (prev ? { ...prev, isCompleted: true } : null));
-                        });
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition-all shadow-sm"
-                  >
-                    ⚡ Simulasi Bayar Lunas (Testing)
-                  </button>
+                <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-emerald-400 font-semibold border-t border-slate-800">
+                  <ShieldCheck className="w-4 h-4" /> Deteksi Otomatis Pembayaran
                 </div>
               </motion.div>
             ) : (

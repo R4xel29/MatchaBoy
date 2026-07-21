@@ -216,29 +216,6 @@ export default function CashierPOSClient({ products, categories }: Props) {
     return () => clearInterval(pollTimer);
   }, [paymentMethod, currentInvoiceNumber, cart.length, showSuccess]);
 
-  // Simulation handler for Testing / Sandbox
-  const simulateQrisPaymentSuccess = () => {
-    if (!currentInvoiceNumber) {
-      handleSubmitOrder();
-      return;
-    }
-    fetch('/api/cashier/doku-qris-status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        invoiceNumber: currentInvoiceNumber,
-        simulateSuccess: true,
-      }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.paid) {
-          handleSubmitOrder();
-        }
-      })
-      .catch(() => handleSubmitOrder());
-  };
-
   // Persistent BroadcastChannel reference for second monitor display sync
   const displayChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -1007,15 +984,6 @@ export default function CashierPOSClient({ products, categories }: Props) {
                         Sistem otomatis mendeteksi pembayaran QRIS DOKU secara real-time... (Tidak perlu konfirmasi manual)
                       </span>
                     </div>
-                    {/* Quick Simulation Trigger for Sandbox/Testing */}
-                    <button
-                      type="button"
-                      onClick={simulateQrisPaymentSuccess}
-                      className="w-full py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      ⚡ Simulasi Bayar QRIS Lunas (Testing)
-                    </button>
                   </div>
                 )}
 

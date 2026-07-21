@@ -8,7 +8,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const invoiceNumber = body.invoiceNumber;
     const orderId = body.orderId;
-    const isSimulateSuccess = body.simulateSuccess === true;
 
     if (!invoiceNumber && !orderId) {
       return NextResponse.json({ error: 'Invoice number atau Order ID wajib diisi' }, { status: 400 });
@@ -35,12 +34,12 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Check DOKU MCP Status API or Simulation
+    // 2. Check DOKU MCP Status API
     const paymentSettings = await prisma.paymentSettings.findFirst();
 
-    let isPaid = isSimulateSuccess;
+    let isPaid = false;
 
-    if (!isPaid && paymentSettings?.dokuEnabled && paymentSettings.dokuClientId && paymentSettings.dokuSharedKey && invoiceNumber) {
+    if (paymentSettings?.dokuEnabled && paymentSettings.dokuClientId && paymentSettings.dokuSharedKey && invoiceNumber) {
       const dokuResult = await checkDokuMcpQrisPaymentStatus(
         {
           clientId: paymentSettings.dokuClientId,

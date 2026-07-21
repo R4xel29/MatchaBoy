@@ -378,7 +378,6 @@ export async function checkDokuMcpQrisPaymentStatus(
       arguments: {
         toolRequest: {
           originalPartnerReferenceNo: payload.invoiceNumber,
-          serviceCode: '47',
         },
       },
     },
