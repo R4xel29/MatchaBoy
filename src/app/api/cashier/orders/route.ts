@@ -218,7 +218,7 @@ export async function POST(req: Request) {
 
       const newOrder = await tx.order.create({
         data: {
-          userId: null, // POS orders don't need a user
+          userId: body.userId || null,
           cashierId: session.user.id,
           orderType,
           source: 'POS',
@@ -257,6 +257,17 @@ export async function POST(req: Request) {
       return newOrder
     })
 
+    // Automatically award points/rewards if customer account (userId) was linked to the POS order
+    let pointsResult: any = null
+    if (order.userId && order.status === 'COMPLETED') {
+      try {
+        const { processOrderCompletion } = await import('@/lib/loyalty-utils')
+        pointsResult = await processOrderCompletion(order.id)
+      } catch (e) {
+        console.error('[POS CHECKOUT] Auto award points error:', e)
+      }
+    }
+
     // Update shift stats if cashier has an active shift
     const activeShift = await prisma.cashierShift.findFirst({
       where: {
@@ -283,7 +294,14 @@ export async function POST(req: Request) {
       console.error('[POS CHECKOUT] Admin notification error:', e);
     }
 
-    return NextResponse.json({ success: true, orderId: order.id, total: secureTotal })
+    return NextResponse.json({
+      success: true,
+      orderId: order.id,
+      total: secureTotal,
+      pointsAwarded: !!pointsResult,
+      pointsEarned: pointsResult?.pointsToAdd || 0,
+      newPoints: pointsResult?.newPoints || null,
+    })
   } catch (error) {
     console.error('POS order error:', error)
     return NextResponse.json({ error: 'Gagal membuat pesanan' }, { status: 500 })

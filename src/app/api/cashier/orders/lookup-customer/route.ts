@@ -13,11 +13,13 @@ export async function GET(req: Request) {
     const user = await prisma.user.findFirst({
       where: {
         OR: [
+          { id: code },
           { referralCode: code },
           { referralCode: code.toUpperCase() },
+          { phone: code },
         ],
       },
-      select: { id: true, name: true, points: true, email: true, phone: true },
+      select: { id: true, name: true, points: true, email: true, phone: true, referralCode: true, arusLevel: true },
     })
 
     if (!user) {

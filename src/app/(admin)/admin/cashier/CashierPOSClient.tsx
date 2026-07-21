@@ -118,8 +118,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
       .catch(() => {});
   }, []);
 
-  // Phone lookup state
-  const [phoneLookupResult, setPhoneLookupResult] = useState<{ id: string; name: string; phone: string; points: number } | null>(null);
+  // Member lookup state (via QR scan, unique ID, or phone)
+  const [phoneLookupResult, setPhoneLookupResult] = useState<{ id: string; name: string; phone?: string; points: number; referralCode?: string; arusLevel?: string } | null>(null);
   const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
   const phoneDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -173,7 +173,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
     }, 500);
   };
 
-  // Handle pre-order QR scan result
+  // Handle pre-order QR scan result (Confirm Unique ID & Member)
   const handlePreScanResult = async (code: string) => {
     setShowPreScanQR(false);
     setPhoneLookupLoading(true);
@@ -182,10 +182,23 @@ export default function CashierPOSClient({ products, categories }: Props) {
       const data = await res.json();
       if (data.user) {
         setCustomerName(data.user.name);
-        setPhoneLookupResult({ id: data.user.id, name: data.user.name, phone: '', points: data.user.points });
+        setPhoneLookupResult({
+          id: data.user.id,
+          name: data.user.name,
+          phone: data.user.phone || '',
+          points: data.user.points,
+          referralCode: data.user.referralCode || data.user.id,
+          arusLevel: data.user.arusLevel || 'Member',
+        });
+        showToast(`ID Unik Terkonfirmasi: ${data.user.name}`, 'success');
+      } else {
+        showToast('ID Unik / Kode Pelanggan tidak ditemukan', 'error');
       }
-    } catch {}
-    finally { setPhoneLookupLoading(false); }
+    } catch {
+      showToast('Gagal memverifikasi ID Unik pelanggan', 'error');
+    } finally {
+      setPhoneLookupLoading(false);
+    }
   };
 
   // Cart calculations
@@ -305,9 +318,10 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
     try {
       const payload = {
+        userId: phoneLookupResult?.id || null,
         orderType,
         customerName,
-        customerPhone: customerPhone || '-',
+        customerPhone: customerPhone || phoneLookupResult?.phone || '-',
         address: orderType === 'DELIVERY' ? address : (orderType === 'DINE_IN' ? `Dine In - Meja ${selectedTable}` : ''),
         tableNumber: orderType === 'DINE_IN' ? selectedTable : undefined,
         peopleCount: orderType === 'DINE_IN' ? posPeopleCount : undefined,
@@ -334,22 +348,33 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
       setLastOrderId(data.orderId);
 
+      const wasPointsAwarded = data.pointsAwarded;
+      const earnedPoints = data.pointsEarned || 0;
+      const memberName = phoneLookupResult?.name || customerName;
+
       // Reset form
       setCart([]);
       setCustomerName('');
       setCustomerPhone('');
+      setPhoneLookupResult(null);
       setAddress('');
       setNotes('');
       setHasTumbler(false);
       setSelectedTable('');
       setPosPeopleCount(1);
 
-      // Show QR scan modal instead of success toast
-      setShowQRModal(true);
-      setQrInput('');
-      setQrCustomer(phoneLookupResult ? { id: phoneLookupResult.id, name: phoneLookupResult.name, points: phoneLookupResult.points } : null);
-      setQrError('');
-      setPointsAwarded(false);
+      if (wasPointsAwarded) {
+        showToast(`Pesanan berhasil! +${earnedPoints} Poin reward otomatis ditambahkan ke akun ${memberName}`, 'success');
+        setShowSuccess(true);
+        setTimeout(() => setShowSuccess(false), 4000);
+      } else {
+        // Show QR scan modal if points were not automatically awarded
+        setShowQRModal(true);
+        setQrInput('');
+        setQrCustomer(null);
+        setQrError('');
+        setPointsAwarded(false);
+      }
     } catch (error: any) {
       showToast(error.message, 'error');
     } finally {
@@ -474,61 +499,91 @@ export default function CashierPOSClient({ products, categories }: Props) {
           {/* Customer Info */}
           <div className="bg-white rounded-2xl border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">Info Pelanggan</p>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowTableManagerModal(true)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
-                >
-                  <Coffee className="w-3 h-3" /> Kelola Meja
-                </button>
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground/60">Detail Pelanggan</p>
+              <div className="flex items-center gap-2">
+                {orderType === 'DINE_IN' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowTableManagerModal(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
+                  >
+                    <Coffee className="w-3 h-3" /> Meja
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowPreScanQR(true)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white text-xs font-bold shadow-sm hover:shadow transition-all active:scale-[0.97]"
                 >
-                  <Camera className="w-3 h-3" /> Scan QR
+                  <QrCode className="w-3.5 h-3.5" /> Scan ID / QR Member
                 </button>
               </div>
             </div>
 
-            {/* Phone with auto-lookup */}
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-              <input
-                type="tel"
-                placeholder="No. HP pelanggan"
-                value={customerPhone}
-                onChange={(e) => handlePhoneChange(e.target.value)}
-                className={`w-full pl-10 pr-10 py-2.5 text-sm bg-muted/30 border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all ${
-                  phoneLookupResult ? 'border-green-400 bg-green-50/30' : 'border-border/40'
-                }`}
-              />
-              {phoneLookupLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-amber-600" />}
-              {phoneLookupResult && <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />}
+            {/* Input Primary: Nama Pelanggan */}
+            <div>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+                <input
+                  type="text"
+                  placeholder="Nama pelanggan *"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-medium"
+                />
+              </div>
             </div>
 
-            {/* Member found badge */}
-            {phoneLookupResult && (
-              <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-green-50 border border-green-200">
-                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                  <User className="w-4 h-4 text-green-600" />
+            {/* Confirmed Member Card (Unique ID scan confirmation) */}
+            {phoneLookupResult ? (
+              <div className="p-3 rounded-xl bg-emerald-50/90 border border-emerald-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-sm">
+                      <CheckCircle2 className="w-4.5 h-4.5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                        {phoneLookupResult.name}
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-emerald-200/80 text-emerald-900 uppercase tracking-wider">
+                          ID Terkonfirmasi
+                        </span>
+                      </p>
+                      <p className="text-[10px] text-emerald-700 font-medium">
+                        ID: #{phoneLookupResult.referralCode || phoneLookupResult.id.slice(0, 8)} · {phoneLookupResult.points} Poin ({phoneLookupResult.arusLevel || 'Member'})
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhoneLookupResult(null);
+                      setCustomerPhone('');
+                    }}
+                    className="p-1 text-emerald-600 hover:text-rose-600 transition-colors"
+                    title="Batalkan Member"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-green-800">{phoneLookupResult.name}</p>
-                  <p className="text-[10px] text-green-600">✓ Member · {phoneLookupResult.points} poin</p>
+                <div className="p-2 rounded-lg bg-white/70 border border-emerald-100 text-[10px] font-semibold text-emerald-800 flex items-center gap-1.5">
+                  <Gift className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  Poin reward otomatis ditambahkan ke aplikasi saat pesanan dibuat!
                 </div>
               </div>
+            ) : (
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/40" />
+                <input
+                  type="tel"
+                  placeholder="Cari no. HP member (opsional)..."
+                  value={customerPhone}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-muted/20 border border-border/30 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500/20 text-muted-foreground"
+                />
+                {phoneLookupLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-amber-600" />}
+              </div>
             )}
-
-            <input
-              type="text"
-              placeholder="Nama pelanggan *"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
-            />
 
             {orderType === 'DELIVERY' && (
               <textarea
@@ -996,7 +1051,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
         )}
       </AnimatePresence>
 
-      {/* Pre-order QR Scan Modal */}
+      {/* Pre-order QR Scan Modal (Unique ID confirmation) */}
       <AnimatePresence>
         {showPreScanQR && (
           <motion.div
@@ -1009,19 +1064,25 @@ export default function CashierPOSClient({ products, categories }: Props) {
               className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-border overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-border/30 flex items-center justify-between">
+              <div className="p-4 border-b border-border/30 bg-gradient-to-r from-amber-50 to-amber-100/40 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Camera className="w-5 h-5 text-amber-600" />
-                  <h3 className="font-heading font-bold text-base text-foreground">Scan QR Pelanggan</h3>
+                  <QrCode className="w-5 h-5 text-amber-600" />
+                  <div>
+                    <h3 className="font-heading font-bold text-base text-foreground">Scan ID Unik / QR Pelanggan</h3>
+                    <p className="text-[10px] text-muted-foreground">Konfirmasi akun & auto-tambah reward saat transaksi</p>
+                  </div>
                 </div>
-                <button onClick={() => setShowPreScanQR(false)} className="p-1.5 hover:bg-muted rounded-lg">
+                <button onClick={() => setShowPreScanQR(false)} className="p-1.5 hover:bg-muted rounded-lg text-muted-foreground">
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="p-4">
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Arahkan kamera ke QR Code aplikasi pelanggan atau masukkan ID Unik / Kode Referral secara manual.
+                </p>
                 <QRCameraScanner
                   onScan={handlePreScanResult}
-                  placeholder="Masukkan kode referral..."
+                  placeholder="Ketik ID Unik / Kode Referral / No HP..."
                 />
               </div>
             </motion.div>
