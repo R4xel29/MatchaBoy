@@ -6,33 +6,48 @@ export const revalidate = 0;
 export default async function AdminCashierPage() {
   const [products, categories] = await Promise.all([
     prisma.product.findMany({
-      where: {
-        OR: [
-          { badge: null },
-          {
-            AND: [
-              { badge: { not: 'sold-out' } },
-              { badge: { not: 'archived' } }
-            ]
-          }
-        ]
+      include: {
+        category: true,
+        productIngredients: {
+          include: { ingredient: { select: { id: true, stock: true } } },
+        },
       },
-      include: { category: true },
       orderBy: { name: 'asc' },
     }),
     prisma.category.findMany({ orderBy: { name: 'asc' } }),
   ]);
 
-  const mappedProducts = products.map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    price: p.price,
-    image: p.image,
-    categoryId: p.categoryId,
-    categoryName: p.category.name,
-    modifiers: p.modifiers ? JSON.parse(p.modifiers) : null,
-  }));
+  // Filter out archived, hidden, and disabled items
+  const activeProducts = products.filter((p) => {
+    const badgeLower = (p.badge || '').toLowerCase();
+    return !badgeLower.includes('archived') && !badgeLower.includes('hidden') && !badgeLower.includes('disabled');
+  });
+
+  const mappedProducts = activeProducts.map((p) => {
+    const isBadgeSoldOut =
+      p.badge?.toLowerCase().includes('sold') ||
+      p.badge?.toLowerCase().includes('habis') ||
+      p.badge?.toLowerCase().includes('empty');
+
+    const isIngredientEmpty = p.productIngredients.some(
+      (pi) => pi.ingredient.stock < pi.quantity
+    );
+
+    const isSoldOut = isBadgeSoldOut || isIngredientEmpty;
+
+    return {
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      image: p.image,
+      badge: p.badge,
+      isSoldOut,
+      categoryId: p.categoryId,
+      categoryName: p.category.name,
+      modifiers: p.modifiers ? JSON.parse(p.modifiers) : null,
+    };
+  });
 
   const mappedCategories = categories.map((c) => ({
     id: c.id,

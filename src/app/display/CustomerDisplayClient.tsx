@@ -30,6 +30,7 @@ export type POSDisplayState = {
     sugarLevel: string;
     addOns: { id: string; name: string; price: number }[];
     totalPrice: number;
+    image?: string | null;
   }[];
   subtotal: number;
   tumblerDiscount: number;
@@ -41,6 +42,8 @@ export type POSDisplayState = {
   tableNumber?: string;
   isCompleted?: boolean;
   orderId?: string;
+  dokuQrContent?: string | null;
+  dokuQrImageUrl?: string | null;
   timestamp: number;
 };
 
@@ -80,20 +83,52 @@ export default function CustomerDisplayClient() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
+  const [resetCountdown, setResetCountdown] = useState<number | null>(null);
 
-  // Fetch store display settings & Arum Seduh menu catalog
+  // Auto-reset display back to default menu catalog 6 seconds after order completion
   useEffect(() => {
-    fetch('/api/cashier/display-settings')
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data.error) {
-          setSettings({
-            ...data,
-            storeName: data.storeName || 'Arum Seduh',
-          });
-        }
-      })
-      .catch(() => {});
+    if (displayState?.isCompleted) {
+      setResetCountdown(6);
+
+      const interval = setInterval(() => {
+        setResetCountdown((prev) => {
+          if (prev === null || prev <= 1) {
+            clearInterval(interval);
+            setDisplayState(null);
+            try {
+              localStorage.removeItem('pos_customer_display_state');
+            } catch {}
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
+      return () => clearInterval(interval);
+    } else {
+      setResetCountdown(null);
+    }
+  }, [displayState?.isCompleted, displayState?.orderId]);
+
+  // Fetch store display settings & Arum Seduh menu catalog (Auto refresh every 5 mins for live stock updates)
+  useEffect(() => {
+    const fetchCatalog = () => {
+      fetch('/api/cashier/display-settings')
+        .then((res) => res.json())
+        .then((data) => {
+          if (!data.error) {
+            setSettings({
+              ...data,
+              storeName: data.storeName || 'Arum Seduh',
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
+    fetchCatalog();
+    const catalogTimer = setInterval(fetchCatalog, 300000); // 5 minutes auto refresh
+    return () => clearInterval(catalogTimer);
   }, []);
 
   // Listen to BroadcastChannel & LocalStorage events from POS Kasir
@@ -176,8 +211,8 @@ export default function CustomerDisplayClient() {
 
   const cart = displayState?.cart || [];
   const totalPayable = displayState?.totalPayable || 0;
-  const isQRIS = displayState?.paymentMethod === 'QRIS' && cart.length > 0;
   const isCompleted = displayState?.isCompleted === true;
+  const isQRIS = !isCompleted && displayState?.paymentMethod === 'QRIS' && (cart.length > 0 || totalPayable > 0);
 
   return (
     <div className="fixed inset-0 bg-slate-950 text-slate-100 flex flex-col font-sans select-none overflow-hidden z-[99999]">
@@ -232,23 +267,65 @@ export default function CustomerDisplayClient() {
             {isCompleted ? (
               <motion.div
                 key="completed"
-                initial={{ opacity: 0, scale: 0.95 }}
+                initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0 }}
-                className="my-auto text-center space-y-6 px-8 py-12"
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="my-auto bg-slate-900/95 border border-emerald-500/40 rounded-3xl p-8 shadow-2xl backdrop-blur-xl max-w-lg mx-auto w-full text-center space-y-6 relative overflow-hidden"
               >
-                <div className="w-24 h-24 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-2xl shadow-emerald-500/20">
-                  <CheckCircle2 className="w-14 h-14" />
+                <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500" />
+                
+                {/* Animated Checkmark Circle */}
+                <div className="relative mx-auto w-28 h-28 flex items-center justify-center">
+                  <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping opacity-75" />
+                  <motion.div
+                    initial={{ scale: 0, rotate: -45 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 12 }}
+                    className="w-24 h-24 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 text-slate-950 flex items-center justify-center shadow-2xl shadow-emerald-500/40 relative z-10"
+                  >
+                    <CheckCircle2 className="w-14 h-14 stroke-[2.5]" />
+                  </motion.div>
                 </div>
+
                 <div className="space-y-2">
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-                    Pembayaran Berhasil
-                  </span>
-                  <h2 className="text-3xl font-extrabold text-white">Terima Kasih di Arum Seduh!</h2>
-                  <p className="text-sm text-slate-400 max-w-md mx-auto">
-                    Pesanan Anda #{displayState?.orderId?.slice(0, 8).toUpperCase()} sedang disiapkan oleh barista kami.
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-black uppercase tracking-wider">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400" /> Pembayaran Berhasil & Terverifikasi
+                  </div>
+                  <h2 className="text-3xl font-black text-white">Terima Kasih di Arum Seduh!</h2>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    Pesanan Anda sedang disiapkan oleh barista kami. Silakan menunggu pemanggilan nama.
                   </p>
                 </div>
+
+                {/* Transaction Receipt Card */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-left space-y-2 text-xs">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-800/80">
+                    <span className="text-slate-400">Nama Pelanggan</span>
+                    <span className="font-bold text-amber-300">{displayState?.customerName || 'Pelanggan'}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-800/80">
+                    <span className="text-slate-400">ID Pesanan</span>
+                    <span className="font-mono text-slate-300">#{displayState?.orderId?.slice(0, 8).toUpperCase() || 'LUNAS'}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-800/80">
+                    <span className="text-slate-400">Metode Pembayaran</span>
+                    <span className="font-bold text-emerald-400">
+                      {displayState?.paymentMethod === 'QRIS' ? 'QRIS DOKU (LUNAS)' : 'TUNAI / CASH (LUNAS)'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center pt-1 text-sm font-black">
+                    <span className="text-slate-200">Total Dibayar</span>
+                    <span className="text-emerald-400">{formatRupiah(totalPayable)}</span>
+                  </div>
+                </div>
+
+                {/* Auto-Reset Countdown Badge */}
+                {resetCountdown !== null && (
+                  <div className="text-[11px] text-slate-500 font-semibold flex items-center justify-center gap-1.5 pt-1">
+                    <Clock className="w-3.5 h-3.5 text-amber-500 animate-spin" />
+                    <span>Kembali ke katalog menu dalam <strong className="text-amber-400 font-bold">{resetCountdown}s</strong>...</span>
+                  </div>
+                )}
               </motion.div>
             ) : isQRIS ? (
               /* QRIS PAYMENT POPUP OVERLAY */
@@ -270,7 +347,20 @@ export default function CustomerDisplayClient() {
 
                 {/* QR Code Frame */}
                 <div className="p-4 bg-white rounded-2xl shadow-2xl inline-block border-4 border-amber-400/80 mx-auto relative group">
-                  {settings.qrisImage ? (
+                  {displayState?.dokuQrImageUrl ? (
+                    <img
+                      src={displayState.dokuQrImageUrl}
+                      alt="DOKU Dynamic QRIS"
+                      className="w-64 h-64 object-contain rounded-lg"
+                    />
+                  ) : displayState?.dokuQrContent ? (
+                    <QRCodeSVG
+                      value={displayState.dokuQrContent}
+                      size={240}
+                      level="H"
+                      includeMargin={true}
+                    />
+                  ) : settings.qrisImage ? (
                     <img
                       src={settings.qrisImage}
                       alt="QRIS Code"
@@ -295,8 +385,35 @@ export default function CustomerDisplayClient() {
                   )}
                 </div>
 
-                <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-emerald-400 font-semibold border-t border-slate-800">
-                  <ShieldCheck className="w-4 h-4" /> Pembayaran Terverifikasi Aman
+                <div className="flex items-center justify-between gap-2 pt-2 text-[11px] text-emerald-400 font-semibold border-t border-slate-800">
+                  <span className="flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4" /> Deteksi Otomatis Pembayaran
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      fetch('/api/cashier/doku-qris-status', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          invoiceNumber: displayState?.orderId || 'POS-TEST',
+                          simulateSuccess: true,
+                        }),
+                      })
+                        .then((res) => res.json())
+                        .then((data) => {
+                          if (data.paid) {
+                            setDisplayState((prev) => (prev ? { ...prev, isCompleted: true } : null));
+                          }
+                        })
+                        .catch(() => {
+                          setDisplayState((prev) => (prev ? { ...prev, isCompleted: true } : null));
+                        });
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/40 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition-all shadow-sm"
+                  >
+                    ⚡ Simulasi Bayar Lunas (Testing)
+                  </button>
                 </div>
               </motion.div>
             ) : (
@@ -459,6 +576,15 @@ export default function CustomerDisplayClient() {
                   animate={{ opacity: 1, x: 0 }}
                   className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800/80 flex items-center justify-between gap-3 shadow-sm hover:border-slate-700 transition-all"
                 >
+                  {/* Product Image Thumbnail */}
+                  <div className="w-12 h-12 rounded-xl bg-slate-950 overflow-hidden shrink-0 border border-slate-800 relative flex items-center justify-center">
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Coffee className="w-6 h-6 text-slate-600" />
+                    )}
+                  </div>
+
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm text-slate-100 truncate">{item.name}</p>
                     <p className="text-[11px] text-slate-400 mt-0.5">

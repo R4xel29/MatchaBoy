@@ -41,7 +41,12 @@ export async function GET() {
       }).catch(() => {});
     }
 
-    const formattedProducts = products.map((p) => {
+    const activeProducts = products.filter((p) => {
+      const badgeLower = (p.badge || '').toLowerCase();
+      return !badgeLower.includes('archived') && !badgeLower.includes('hidden') && !badgeLower.includes('disabled');
+    });
+
+    const formattedProducts = activeProducts.map((p) => {
       const isBadgeSoldOut =
         p.badge?.toLowerCase().includes('sold') ||
         p.badge?.toLowerCase().includes('habis') ||

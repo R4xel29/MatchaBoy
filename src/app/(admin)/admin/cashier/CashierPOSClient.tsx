@@ -34,6 +34,8 @@ type POSProduct = {
   description: string;
   price: number;
   image: string | null;
+  badge?: string | null;
+  isSoldOut?: boolean;
   categoryId: string;
   categoryName: string;
   modifiers: {
@@ -53,6 +55,7 @@ type CartItemPOS = {
   sugarLevel: string;
   addOns: { id: string; name: string; price: number }[];
   totalPrice: number;
+  image?: string | null;
 };
 
 type OrderType = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
@@ -142,6 +145,88 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   const totalPayable = subtotal - tumblerDiscount;
 
+  const [dokuQrContent, setDokuQrContent] = useState<string | null>(null);
+  const [dokuQrImageUrl, setDokuQrImageUrl] = useState<string | null>(null);
+  const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState<string | null>(null);
+
+  // Request DOKU QRIS dynamic code when paymentMethod is QRIS
+  useEffect(() => {
+    if (paymentMethod === 'QRIS' && cart.length > 0 && totalPayable > 0) {
+      const invNum = `POS-${Date.now().toString().slice(-6)}`;
+      setCurrentInvoiceNumber(invNum);
+
+      fetch('/api/cashier/doku-qris', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: totalPayable,
+          invoiceNumber: invNum,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.qrContent || data.qrImageUrl) {
+            setDokuQrContent(data.qrContent || null);
+            setDokuQrImageUrl(data.qrImageUrl || null);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setDokuQrContent(null);
+      setDokuQrImageUrl(null);
+      setCurrentInvoiceNumber(null);
+    }
+  }, [paymentMethod, totalPayable, cart.length]);
+
+  // Automatic Polling (every 2 seconds) for QRIS Payment Status
+  useEffect(() => {
+    if (paymentMethod !== 'QRIS' || !currentInvoiceNumber || cart.length === 0 || showSuccess) {
+      return;
+    }
+
+    const pollTimer = setInterval(() => {
+      fetch('/api/cashier/doku-qris-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoiceNumber: currentInvoiceNumber,
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.paid === true) {
+            handleSubmitOrder();
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+
+    return () => clearInterval(pollTimer);
+  }, [paymentMethod, currentInvoiceNumber, cart.length, showSuccess]);
+
+  // Simulation handler for Testing / Sandbox
+  const simulateQrisPaymentSuccess = () => {
+    if (!currentInvoiceNumber) {
+      handleSubmitOrder();
+      return;
+    }
+    fetch('/api/cashier/doku-qris-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoiceNumber: currentInvoiceNumber,
+        simulateSuccess: true,
+      }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.paid) {
+          handleSubmitOrder();
+        }
+      })
+      .catch(() => handleSubmitOrder());
+  };
+
   // Persistent BroadcastChannel reference for second monitor display sync
   const displayChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -169,6 +254,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
         tableNumber: selectedTable,
         isCompleted: showSuccess,
         orderId: lastOrderId,
+        dokuQrContent,
+        dokuQrImageUrl,
         timestamp: Date.now(),
       };
 
@@ -177,7 +264,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       }
       localStorage.setItem('pos_customer_display_state', JSON.stringify(statePayload));
     } catch {}
-  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId]);
+  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl]);
 
   // Pre-order QR scan state
   const [showPreScanQR, setShowPreScanQR] = useState(false);
@@ -252,6 +339,11 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   // Add to cart
   const handleProductClick = (product: POSProduct) => {
+    if (product.isSoldOut) {
+      showToast(`Stok menu "${product.name}" sedang habis!`, 'error');
+      return;
+    }
+
     if (!customerName.trim()) {
       showToast('Langkah 1: Harap isi Nama Pelanggan atau Scan Member terlebih dahulu!', 'error');
       const inputEl = document.getElementById('customer-name-input');
@@ -303,6 +395,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
           sugarLevel,
           addOns,
           totalPrice: itemPrice * qty,
+          image: product.image,
         },
       ];
     });
@@ -392,34 +485,59 @@ export default function CashierPOSClient({ products, categories }: Props) {
       if (!res.ok) throw new Error(data.error || 'Gagal membuat pesanan');
 
       setLastOrderId(data.orderId);
+      setShowSuccess(true);
 
       const wasPointsAwarded = data.pointsAwarded;
       const earnedPoints = data.pointsEarned || 0;
       const memberName = phoneLookupResult?.name || customerName;
 
-      // Reset form
-      setCart([]);
-      setCustomerName('');
-      setCustomerPhone('');
-      setPhoneLookupResult(null);
-      setAddress('');
-      setNotes('');
-      setHasTumbler(false);
-      setSelectedTable('');
-      setPosPeopleCount(1);
+      // Broadcast completed state payload to second monitor display FIRST before clearing cart
+      const completedPayload = {
+        cart,
+        subtotal,
+        tumblerDiscount,
+        totalPayable,
+        customerName: memberName || customerName,
+        orderType,
+        paymentMethod,
+        hasTumbler,
+        tableNumber: selectedTable,
+        isCompleted: true,
+        orderId: data.orderId,
+        dokuQrContent,
+        dokuQrImageUrl,
+        timestamp: Date.now(),
+      };
+
+      if (displayChannelRef.current) {
+        try {
+          displayChannelRef.current.postMessage(completedPayload);
+        } catch {}
+      }
+      try {
+        localStorage.setItem('pos_customer_display_state', JSON.stringify(completedPayload));
+      } catch {}
 
       if (wasPointsAwarded) {
         showToast(`Pesanan berhasil! +${earnedPoints} Poin reward otomatis ditambahkan ke akun ${memberName}`, 'success');
-        setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 4000);
-      } else {
-        // Show QR scan modal if points were not automatically awarded
-        setShowQRModal(true);
-        setQrInput('');
-        setQrCustomer(null);
-        setQrError('');
-        setPointsAwarded(false);
       }
+
+      // Reset form after short delay so second monitor retains completed state smoothly
+      setTimeout(() => {
+        setCart([]);
+        setCustomerName('');
+        setCustomerPhone('');
+        setPhoneLookupResult(null);
+        setAddress('');
+        setNotes('');
+        setHasTumbler(false);
+        setSelectedTable('');
+        setPosPeopleCount(1);
+      }, 600);
+
+      setTimeout(() => {
+        setShowSuccess(false);
+      }, 4000);
     } catch (error: any) {
       showToast(error.message, 'error');
     } finally {
@@ -516,21 +634,49 @@ export default function CashierPOSClient({ products, categories }: Props) {
               <button
                 key={product.id}
                 onClick={() => handleProductClick(product)}
-                className="group bg-white rounded-2xl border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:shadow-md hover:border-amber-300 transition-all duration-200 overflow-hidden text-left"
+                className={`group bg-white rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all duration-200 overflow-hidden text-left relative ${
+                  product.isSoldOut
+                    ? 'opacity-60 border-slate-200 cursor-not-allowed bg-slate-50'
+                    : 'hover:shadow-md hover:border-amber-300 border-border/40'
+                }`}
               >
-                {product.image && (
-                  <div className="aspect-square bg-muted/30 overflow-hidden">
+                <div className="relative aspect-square bg-muted/30 overflow-hidden">
+                  {product.image ? (
                     <img
                       src={product.image}
                       alt={product.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className={`w-full h-full object-cover transition-transform duration-300 ${
+                        product.isSoldOut ? 'grayscale opacity-60' : 'group-hover:scale-105'
+                      }`}
                     />
-                  </div>
-                )}
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
+                      <Coffee className="w-8 h-8" />
+                    </div>
+                  )}
+
+                  {product.isSoldOut ? (
+                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center">
+                      <span className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-extrabold text-[10px] uppercase tracking-wider shadow-md">
+                        Stok Habis
+                      </span>
+                    </div>
+                  ) : product.badge ? (
+                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider shadow-sm">
+                      {product.badge}
+                    </span>
+                  ) : null}
+                </div>
+
                 <div className="p-3">
                   <p className="text-[13px] font-semibold text-foreground line-clamp-1">{product.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{product.categoryName}</p>
-                  <p className="text-sm font-bold text-amber-700 mt-1">{formatRupiah(product.price)}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <p className="text-sm font-bold text-amber-700">{formatRupiah(product.price)}</p>
+                    {product.isSoldOut && (
+                      <span className="text-[10px] font-bold text-rose-600">Habis</span>
+                    )}
+                  </div>
                 </div>
               </button>
             ))}
@@ -818,21 +964,48 @@ export default function CashierPOSClient({ products, categories }: Props) {
             {cart.length > 0 && (
               <div className="border-t border-border/30 p-4 space-y-3">
                 {/* Payment method */}
-                <div className="flex gap-2">
-                  {['CASH', 'QRIS'].map((method) => (
-                    <button
-                      key={method}
-                      onClick={() => setPaymentMethod(method)}
-                      className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-all ${
-                        paymentMethod === method
-                          ? 'bg-amber-600 text-white'
-                          : 'bg-muted/50 text-muted-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {method}
-                    </button>
-                  ))}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1.5 pl-1">
+                    Metode Pembayaran
+                  </label>
+                  <div className="flex gap-2">
+                    {['CASH', 'QRIS'].map((method) => (
+                      <button
+                        key={method}
+                        type="button"
+                        onClick={() => setPaymentMethod(method as 'CASH' | 'QRIS')}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                          paymentMethod === method
+                            ? 'bg-amber-600 text-white shadow-md scale-[1.02]'
+                            : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {method === 'QRIS' ? '📱 QRIS DOKU' : '💵 TUNAI (CASH)'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* QRIS Active Notice & Automatic Payment Polling */}
+                {paymentMethod === 'QRIS' && (
+                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                    <div className="flex items-center gap-2 text-xs text-emerald-950 font-medium">
+                      <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
+                      <span>
+                        Sistem otomatis mendeteksi pembayaran QRIS DOKU secara real-time... (Tidak perlu konfirmasi manual)
+                      </span>
+                    </div>
+                    {/* Quick Simulation Trigger for Sandbox/Testing */}
+                    <button
+                      type="button"
+                      onClick={simulateQrisPaymentSuccess}
+                      className="w-full py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-sm transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      ⚡ Simulasi Bayar QRIS Lunas (Testing)
+                    </button>
+                  </div>
+                )}
 
                 {hasTumbler && tumblerDiscount > 0 && (
                   <div className="flex justify-between items-center text-xs text-emerald-600 font-semibold px-1">
@@ -842,26 +1015,36 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 )}
 
                 {/* Total */}
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-semibold text-foreground">Total</span>
-                  <span className="text-lg font-bold text-amber-700">{formatRupiah(totalPayable)}</span>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-sm font-semibold text-foreground">Total Pembayaran</span>
+                  <span className="text-xl font-black text-amber-700">{formatRupiah(totalPayable)}</span>
                 </div>
 
                 {/* Submit */}
                 <button
+                  type="button"
                   onClick={handleSubmitOrder}
                   disabled={isSubmitting || !customerName || cart.length === 0}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-2"
+                  className={`w-full py-3.5 rounded-xl text-white font-bold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-2 ${
+                    paymentMethod === 'QRIS'
+                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
+                      : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400'
+                  }`}
                 >
                   {isSubmitting ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Memproses...
+                      Memproses Transaksi...
+                    </>
+                  ) : paymentMethod === 'QRIS' ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      ✓ Konfirmasi QRIS Lunas ({formatRupiah(totalPayable)})
                     </>
                   ) : (
                     <>
                       <Check className="w-4 h-4" />
-                      Buat Pesanan
+                      💰 Selesaikan & Bayar Tunai ({formatRupiah(totalPayable)})
                     </>
                   )}
                 </button>

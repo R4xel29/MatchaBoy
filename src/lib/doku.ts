@@ -351,6 +351,71 @@ export async function createDokuMcpQrisPayment(
   }
 }
 
+/**
+ * Calls the Doku MCP Server to check QRIS payment status.
+ */
+export async function checkDokuMcpQrisPaymentStatus(
+  creds: DokuCredentials,
+  payload: {
+    invoiceNumber: string;
+  }
+): Promise<{ paid: boolean; status?: string; error?: string }> {
+  const { clientId, sharedKey, isSandbox } = creds;
+  
+  const defaultMcpUrl = isSandbox 
+    ? 'https://api-sandbox.doku.com/doku-mcp-server/mcp'
+    : 'https://mcp.doku.com/mcp';
+  
+  const mcpUrl = process.env.DOKU_MCP_URL || defaultMcpUrl;
+  const authHeader = 'Basic ' + Buffer.from(`${sharedKey}:`).toString('base64');
+
+  const requestBody = {
+    jsonrpc: '2.0',
+    id: Date.now(),
+    method: 'tools/call',
+    params: {
+      name: 'check_qris_payment_status',
+      arguments: {
+        toolRequest: {
+          originalPartnerReferenceNo: payload.invoiceNumber,
+          serviceCode: '47',
+        },
+      },
+    },
+  };
+
+  try {
+    const response = await fetch(mcpUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-Id': clientId,
+        'Authorization': authHeader,
+        'Accept': 'application/json, text/event-stream',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      return { paid: false, error: `DOKU MCP server returned status ${response.status}` };
+    }
+
+    const data = await response.json();
+    const toolResultContent = data.result?.content?.[0]?.text;
+    if (toolResultContent) {
+      const parsedResult = JSON.parse(toolResultContent);
+      const transactionStatus = parsedResult.latestTransactionStatus || parsedResult.transactionStatus || parsedResult.status;
+      if (transactionStatus === '00' || transactionStatus === 'SUCCESS' || parsedResult.paid === true) {
+        return { paid: true, status: 'SUCCESS' };
+      }
+    }
+
+    return { paid: false };
+  } catch (error: any) {
+    return { paid: false, error: error.message };
+  }
+}
+
 
 
 
