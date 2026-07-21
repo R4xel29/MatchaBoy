@@ -396,7 +396,7 @@ function SidebarContent({
       <div className={`${isCollapsed ? 'mx-2' : 'mx-5'} h-px bg-slate-100`} />
 
       {/* Navigation */}
-      <nav className={`flex-1 py-5 space-y-2.5 overflow-y-auto custom-scrollbar ${isCollapsed ? 'px-2' : 'px-3'}`}>
+      <nav className={`flex-1 py-5 space-y-2.5 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'}`}>
         {/* Standalone Dashboard Item */}
         <NavItem
           item={MAIN_ITEMS[0]}
