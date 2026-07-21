@@ -31,6 +31,7 @@ export async function POST(req: Request) {
           tableNumber: tableNumber,
           address: orderType === 'DINE_IN' ? `Dine In - Meja ${tableNumber}` : 'POS QRIS Order',
           paymentMethod: 'QRIS',
+          subtotal: Math.round(amount),
           total: Math.round(amount),
           status: 'PENDING_PAYMENT',
           paymentProofUrl: invoiceNumber,
