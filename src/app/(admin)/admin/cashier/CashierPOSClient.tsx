@@ -23,6 +23,7 @@ import {
   Leaf,
   Coffee,
   Monitor,
+  Sparkles,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
