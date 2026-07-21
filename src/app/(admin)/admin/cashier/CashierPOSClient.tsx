@@ -392,12 +392,6 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Kasir (POS)</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Buat pesanan baru untuk pelanggan</p>
-      </div>
-
       {/* Main 2-Column Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* LEFT: Product Grid */}
