@@ -131,6 +131,17 @@ export default function CashierPOSClient({ products, categories }: Props) {
     }
   }, [phoneLookupResult]);
 
+  // Cart calculations
+  const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const tumblerDiscount = useMemo(() => {
+    if (!hasTumbler || !loyaltySettings) return 0;
+    return Math.round((subtotal * loyaltySettings.tumblerDiscountPct) / 100);
+  }, [hasTumbler, loyaltySettings, subtotal]);
+
+  const totalPayable = subtotal - tumblerDiscount;
+
   // Persistent BroadcastChannel reference for second monitor display sync
   const displayChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -238,17 +249,6 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setPhoneLookupLoading(false);
     }
   };
-
-  // Cart calculations
-  const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
-  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const tumblerDiscount = useMemo(() => {
-    if (!hasTumbler || !loyaltySettings) return 0;
-    return Math.round((subtotal * loyaltySettings.tumblerDiscountPct) / 100);
-  }, [hasTumbler, loyaltySettings, subtotal]);
-
-  const totalPayable = subtotal - tumblerDiscount;
 
   // Add to cart
   const handleProductClick = (product: POSProduct) => {

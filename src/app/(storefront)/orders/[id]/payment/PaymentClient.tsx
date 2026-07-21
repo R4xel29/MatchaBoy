@@ -914,7 +914,7 @@ export default function PaymentClient({
               {/* Merchant & Order Details */}
               <div className="space-y-1 select-none">
                 <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider">Nama Merchant</p>
-                <h3 className="text-base font-serif font-black text-gray-900 leading-tight">MATCHABOY HQ</h3>
+                <h3 className="text-base font-serif font-black text-gray-900 leading-tight">Arum Seduh</h3>
                 <p className="text-[10px] text-gray-400 font-mono mt-1">
                   Invoice ID: <span className="font-bold">{order.id.slice(0, 12).toUpperCase()}</span>
                 </p>
