@@ -14,6 +14,12 @@ export function standardizeJid(phone: string): string {
 }
 
 export async function sendWhatsAppMessage(phone: string, text: string, imageUrl?: string) {
+  const cleanDigits = phone.replace(/[^0-9]/g, '');
+  if (!phone || phone.trim() === '' || (!phone.endsWith('@g.us') && cleanDigits.length < 7)) {
+    console.log(`[WHATSAPP_SERVICE] Nomor telepon "${phone}" tidak valid atau terlalu pendek. Skip kirim WA.`);
+    return;
+  }
+
   const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
   const apiKey = process.env.WA_BOT_API_KEY || "";
   
