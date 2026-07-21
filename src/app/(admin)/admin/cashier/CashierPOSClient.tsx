@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   Leaf,
   Coffee,
+  Monitor,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
@@ -123,12 +124,38 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [phoneLookupLoading, setPhoneLookupLoading] = useState(false);
   const phoneDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Reset tumbler option if order type becomes DELIVERY or if member is removed
+  // Reset tumbler option if member is removed
   useEffect(() => {
-    if (orderType === 'DELIVERY' || !phoneLookupResult) {
+    if (!phoneLookupResult) {
       setHasTumbler(false);
     }
-  }, [orderType, phoneLookupResult]);
+  }, [phoneLookupResult]);
+
+  // Real-time synchronization with Customer Facing Display (Second Monitor)
+  useEffect(() => {
+    try {
+      const statePayload = {
+        cart,
+        subtotal,
+        tumblerDiscount,
+        totalPayable,
+        customerName,
+        orderType,
+        paymentMethod,
+        hasTumbler,
+        tableNumber: selectedTable,
+        isCompleted: showSuccess,
+        orderId: lastOrderId,
+        timestamp: Date.now(),
+      };
+
+      const channel = new BroadcastChannel('pos_customer_display');
+      channel.postMessage(statePayload);
+      channel.close();
+
+      localStorage.setItem('pos_customer_display_state', JSON.stringify(statePayload));
+    } catch {}
+  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId]);
 
   // Pre-order QR scan state
   const [showPreScanQR, setShowPreScanQR] = useState(false);
@@ -392,6 +419,24 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   return (
     <div className="space-y-6">
+      {/* Header with Dual Display Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-border/40 shadow-sm">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Kasir (POS)</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Sistem kasir real-time dengan sinkronisasi Layar Monitor 2</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            window.open('/admin/cashier/display', 'CustomerDisplayWindow', 'width=1280,height=800');
+          }}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-slate-100 border border-slate-700 text-xs font-bold shadow-md hover:bg-slate-800 transition-all active:scale-[0.97]"
+        >
+          <Monitor className="w-4 h-4 text-amber-400" />
+          Layar Monitor 2 🖥️
+        </button>
+      </div>
+
       {/* Main 2-Column Layout */}
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* LEFT: Product Grid */}
@@ -468,10 +513,9 @@ export default function CashierPOSClient({ products, categories }: Props) {
         <div className="xl:col-span-2 space-y-4">
           {/* Order Type Tabs */}
           <div className="bg-white rounded-2xl border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] p-1.5">
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {([
                 { type: 'PICKUP' as OrderType, label: 'Pickup', icon: ShoppingBag },
-                { type: 'DELIVERY' as OrderType, label: 'Delivery', icon: Truck },
                 { type: 'DINE_IN' as OrderType, label: 'Dine In', icon: Coffee },
               ]).map(({ type, label, icon: Icon }) => (
                 <button
@@ -730,7 +774,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
               <div className="border-t border-border/30 p-4 space-y-3">
                 {/* Payment method */}
                 <div className="flex gap-2">
-                  {['CASH', 'QRIS', 'TRANSFER'].map((method) => (
+                  {['CASH', 'QRIS'].map((method) => (
                     <button
                       key={method}
                       onClick={() => setPaymentMethod(method)}
