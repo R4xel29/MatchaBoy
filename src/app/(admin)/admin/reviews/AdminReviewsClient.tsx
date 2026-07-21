@@ -67,9 +67,15 @@ interface Stats {
   featuredCount: number;
 }
 
+import { UrlPagination } from '@/components/ui/UrlPagination';
+
 interface AdminReviewsClientProps {
   initialReviews: Review[];
   initialStats: Stats;
+  currentPage?: number;
+  totalPages?: number;
+  totalReviews?: number;
+  pageSize?: number;
 }
 
 function StarRating({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md' }) {
@@ -91,7 +97,14 @@ function StarRating({ rating, size = 'sm' }: { rating: number; size?: 'sm' | 'md
   );
 }
 
-export default function AdminReviewsClient({ initialReviews, initialStats }: AdminReviewsClientProps) {
+export default function AdminReviewsClient({ 
+  initialReviews, 
+  initialStats,
+  currentPage = 1,
+  totalPages = 1,
+  totalReviews = 0,
+  pageSize = 10
+}: AdminReviewsClientProps) {
   const [reviews, setReviews] = useState<Review[]>(initialReviews);
   const [stats, setStats] = useState<Stats>(initialStats);
   const [searchTerm, setSearchTerm] = useState('');
@@ -686,6 +699,16 @@ export default function AdminReviewsClient({ initialReviews, initialStats }: Adm
           <p className="text-xs text-muted-foreground">Belum ada ulasan yang cocok dengan filter.</p>
         </div>
       )}
+
+      {/* Pagination Controls */}
+      <div className="pt-4 border-t border-border/40">
+        <UrlPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalReviews}
+          pageSize={pageSize}
+        />
+      </div>
     </div>
   );
 }

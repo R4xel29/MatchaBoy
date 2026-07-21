@@ -5,16 +5,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ClipboardList, 
   Search, 
-  Filter, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
   RefreshCw, 
   Eye, 
   MessageSquare,
-  ChevronDown
+  ChevronDown,
+  XCircle
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { Pagination } from '@/components/ui/Pagination';
 
 export default function AdminTicketsPage() {
   const { showToast } = useToast();
@@ -22,7 +20,12 @@ export default function AdminTicketsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
-  // Filters
+  // Pagination & Filters
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 12;
+
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,19 +36,25 @@ export default function AdminTicketsPage() {
   const [ticketStatus, setTicketStatus] = useState('');
   const [updating, setUpdating] = useState(false);
 
-  const fetchTickets = async (isRefresh = false) => {
+  const fetchTickets = async (isRefresh = false, page = currentPage) => {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     
     try {
       const url = new URL('/api/admin/tickets', window.location.origin);
+      url.searchParams.set('page', page.toString());
+      url.searchParams.set('limit', pageSize.toString());
       if (statusFilter) url.searchParams.set('status', statusFilter);
       if (typeFilter) url.searchParams.set('type', typeFilter);
+      if (searchQuery) url.searchParams.set('search', searchQuery);
       
       const res = await fetch(url.toString());
       if (res.ok) {
         const data = await res.json();
         setTickets(data.tickets || []);
+        setTotalPages(data.totalPages || 1);
+        setTotalItems(data.total || 0);
+        setCurrentPage(data.page || page);
       } else {
         showToast('Gagal memuat tiket laporan', 'error');
       }
@@ -59,8 +68,13 @@ export default function AdminTicketsPage() {
   };
 
   useEffect(() => {
-    fetchTickets();
-  }, [statusFilter, typeFilter]);
+    fetchTickets(false, 1);
+  }, [statusFilter, typeFilter, searchQuery]);
+
+  const handlePageChange = (newPage: number) => {
+    setCurrentPage(newPage);
+    fetchTickets(false, newPage);
+  };
 
   const handleOpenDetails = (ticket: any) => {
     setSelectedTicket(ticket);
@@ -85,7 +99,7 @@ export default function AdminTicketsPage() {
       if (res.ok) {
         showToast('Tiket berhasil diperbarui', 'success');
         setSelectedTicket(null);
-        fetchTickets();
+        fetchTickets(false, currentPage);
       } else {
         showToast('Gagal memperbarui tiket', 'error');
       }
@@ -96,18 +110,6 @@ export default function AdminTicketsPage() {
       setUpdating(false);
     }
   };
-
-  // Client side search filter
-  const filteredTickets = tickets.filter(ticket => {
-    const query = searchQuery.toLowerCase();
-    return (
-      ticket.title.toLowerCase().includes(query) ||
-      ticket.description.toLowerCase().includes(query) ||
-      ticket.name.toLowerCase().includes(query) ||
-      (ticket.email && ticket.email.toLowerCase().includes(query)) ||
-      (ticket.phone && ticket.phone.includes(query))
-    );
-  });
 
   return (
     <div className="p-4 lg:p-8 space-y-6 max-w-6xl">
@@ -121,7 +123,7 @@ export default function AdminTicketsPage() {
           </p>
         </div>
         <button
-          onClick={() => fetchTickets(true)}
+          onClick={() => fetchTickets(true, currentPage)}
           disabled={refreshing}
           className="flex items-center gap-2 px-4 py-2 border border-border rounded-xl text-xs font-bold bg-card hover:bg-muted transition-all active:scale-95 disabled:opacity-50 shrink-0 self-start sm:self-auto cursor-pointer"
         >
@@ -183,68 +185,81 @@ export default function AdminTicketsPage() {
           <RefreshCw className="w-8 h-8 animate-spin text-brand-600 mb-2" />
           <p className="text-xs text-muted-foreground font-bold">Memuat laporan...</p>
         </div>
-      ) : filteredTickets.length === 0 ? (
+      ) : tickets.length === 0 ? (
         <div className="bg-card border border-border rounded-2xl py-16 text-center">
           <MessageSquare className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
           <h3 className="text-sm font-bold text-foreground mb-1">Tidak Ada Tiket Laporan</h3>
           <p className="text-xs text-muted-foreground">Tidak ditemukan laporan masalah yang sesuai dengan filter.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTickets.map((ticket) => (
-            <motion.div
-              key={ticket.id}
-              layoutId={`ticket-card-${ticket.id}`}
-              className="bg-card border border-border hover:border-brand-500/50 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all flex flex-col justify-between"
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider ${
-                    ticket.type === 'BUG' ? 'bg-red-50 text-red-500 border border-red-100' :
-                    ticket.type === 'ISSUE' ? 'bg-orange-50 text-orange-500 border border-orange-100' :
-                    ticket.type === 'QUESTION' ? 'bg-blue-50 text-blue-500 border border-blue-100' :
-                    'bg-purple-50 text-purple-500 border border-purple-100'
-                  }`}>
-                    {ticket.type}
-                  </span>
-                  
-                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider ${
-                    ticket.status === 'OPEN' ? 'bg-brand-50 text-brand-600 border border-brand-100' :
-                    ticket.status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
-                    ticket.status === 'RESOLVED' ? 'bg-green-50 text-green-600 border border-green-100' :
-                    'bg-gray-50 text-gray-500 border border-gray-100'
-                  }`}>
-                    {ticket.status}
-                  </span>
-                </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {tickets.map((ticket) => (
+              <motion.div
+                key={ticket.id}
+                layoutId={`ticket-card-${ticket.id}`}
+                className="bg-card border border-border hover:border-brand-500/50 rounded-2xl p-5 shadow-sm space-y-4 hover:shadow-md transition-all flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider ${
+                      ticket.type === 'BUG' ? 'bg-red-50 text-red-500 border border-red-100' :
+                      ticket.type === 'ISSUE' ? 'bg-orange-50 text-orange-500 border border-orange-100' :
+                      ticket.type === 'QUESTION' ? 'bg-blue-50 text-blue-500 border border-blue-100' :
+                      'bg-purple-50 text-purple-500 border border-purple-100'
+                    }`}>
+                      {ticket.type}
+                    </span>
+                    
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black tracking-wider ${
+                      ticket.status === 'OPEN' ? 'bg-brand-50 text-brand-600 border border-brand-100' :
+                      ticket.status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                      ticket.status === 'RESOLVED' ? 'bg-green-50 text-green-600 border border-green-100' :
+                      'bg-gray-50 text-gray-500 border border-gray-100'
+                    }`}>
+                      {ticket.status}
+                    </span>
+                  </div>
 
-                <div>
-                  <h3 className="font-serif font-black text-sm text-foreground line-clamp-1 leading-snug">
-                    {ticket.title}
-                  </h3>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    Oleh: <span className="font-bold">{ticket.name}</span> • {new Date(ticket.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  <div>
+                    <h3 className="font-serif font-black text-sm text-foreground line-clamp-1 leading-snug">
+                      {ticket.title}
+                    </h3>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Oleh: <span className="font-bold">{ticket.name}</span> • {new Date(ticket.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                    {ticket.description}
                   </p>
                 </div>
 
-                <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                  {ticket.description}
-                </p>
-              </div>
-
-              <div className="pt-4 border-t border-border/50 flex items-center justify-between gap-2 mt-4">
-                <div className="text-[9px] text-muted-foreground font-semibold">
-                  {ticket.user ? 'MEMBER' : 'GUEST'}
+                <div className="pt-4 border-t border-border/50 flex items-center justify-between gap-2 mt-4">
+                  <div className="text-[9px] text-muted-foreground font-semibold">
+                    {ticket.user ? 'MEMBER' : 'GUEST'}
+                  </div>
+                  <button
+                    onClick={() => handleOpenDetails(ticket)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 text-[11px] font-bold transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Detail & Kelola
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleOpenDetails(ticket)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-brand-50 hover:bg-brand-100 text-brand-700 text-[11px] font-bold transition-all active:scale-95 cursor-pointer"
-                >
-                  <Eye className="w-3.5 h-3.5" /> Detail & Kelola
-                </button>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            ))}
+          </div>
+
+          {/* Pagination Controls */}
+          <div className="pt-2">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={handlePageChange}
+            />
+          </div>
         </div>
       )}
 
@@ -287,7 +302,7 @@ export default function AdminTicketsPage() {
                 <div>
                   <span className="block text-[9px] font-bold text-muted-foreground uppercase">Status Akun</span>
                   <span className="font-bold text-foreground">
-                    {selectedTicket.user ? `Member (ID: ${selectedTicket.userId.substring(0,8)}...)` : 'Guest'}
+                    {selectedTicket.user ? `Member (ID: ${selectedTicket.userId?.substring(0,8)}...)` : 'Guest'}
                   </span>
                 </div>
                 <div>

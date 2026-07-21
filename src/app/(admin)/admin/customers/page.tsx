@@ -3,21 +3,48 @@ import { Users } from 'lucide-react';
 import Link from 'next/link';
 import RoleSelect from '../users/role-select';
 import ImpersonateButton from '../users/impersonate-button';
+import { UrlPagination } from '@/components/ui/UrlPagination';
 
 export const revalidate = 0;
 
-export default async function AdminCustomersPage() {
-  const customers = await prisma.user.findMany({
-    where: { role: 'CUSTOMER' },
-    orderBy: { createdAt: 'desc' },
-    include: { _count: { select: { orders: true } } },
-  });
+interface PageProps {
+  searchParams: Promise<{ page?: string; search?: string }>;
+}
+
+export default async function AdminCustomersPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const page = Math.max(1, Number(params?.page) || 1);
+  const pageSize = 15;
+  const searchQuery = params?.search?.trim() || '';
+
+  const whereCondition: any = { role: 'CUSTOMER' };
+
+  if (searchQuery) {
+    whereCondition.OR = [
+      { name: { contains: searchQuery, mode: 'insensitive' } },
+      { email: { contains: searchQuery, mode: 'insensitive' } },
+      { phone: { contains: searchQuery, mode: 'insensitive' } },
+    ];
+  }
+
+  const [totalCustomers, customers] = await Promise.all([
+    prisma.user.count({ where: whereCondition }),
+    prisma.user.findMany({
+      where: whereCondition,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { _count: { select: { orders: true } } },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalCustomers / pageSize) || 1;
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Pengelolaan Pengguna</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{customers.length} pengguna terdaftar</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{totalCustomers} pengguna terdaftar</p>
       </div>
 
       {/* Desktop Table */}
@@ -89,6 +116,16 @@ export default async function AdminCustomersPage() {
             )}
           </tbody>
         </table>
+
+        {/* Pagination Footer */}
+        <div className="p-4 border-t border-border/30 bg-gray-50/50">
+          <UrlPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={totalCustomers}
+            pageSize={pageSize}
+          />
+        </div>
       </div>
 
       {/* Mobile Cards */}
@@ -131,6 +168,15 @@ export default async function AdminCustomersPage() {
             </div>
           ))
         )}
+
+        <div className="pt-2">
+          <UrlPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={totalCustomers}
+            pageSize={pageSize}
+          />
+        </div>
       </div>
     </div>
   );

@@ -17,9 +17,23 @@ interface OrderData {
   pickupTime?: string | null;
   source?: string | null;
 }
-interface Props { initialOrders: OrderData[]; }
+import { UrlPagination } from '@/components/ui/UrlPagination';
 
-export default function AdminOrdersClient({ initialOrders }: Props) {
+interface Props { 
+  initialOrders: OrderData[]; 
+  currentPage?: number;
+  totalPages?: number;
+  totalOrders?: number;
+  pageSize?: number;
+}
+
+export default function AdminOrdersClient({ 
+  initialOrders,
+  currentPage = 1,
+  totalPages = 1,
+  totalOrders = 0,
+  pageSize = 15
+}: Props) {
   const router = useRouter();
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
@@ -318,6 +332,16 @@ export default function AdminOrdersClient({ initialOrders }: Props) {
             </div>
           ))
         )}
+      </div>
+
+      {/* Pagination */}
+      <div className="pt-2">
+        <UrlPagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={totalOrders}
+          pageSize={pageSize}
+        />
       </div>
 
       <CourierSelectModal

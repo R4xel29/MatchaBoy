@@ -18,8 +18,14 @@ interface Expense {
   notes: string | null;
 }
 
+import { UrlPagination } from '@/components/ui/UrlPagination';
+
 interface Props {
   initialExpenses: Expense[];
+  currentPage?: number;
+  totalPages?: number;
+  totalExpenses?: number;
+  pageSize?: number;
 }
 
 const CATEGORIES = [
@@ -31,7 +37,13 @@ const CATEGORIES = [
   { value: 'OTHER', label: 'Other' }
 ];
 
-export default function ExpensesClient({ initialExpenses }: Props) {
+export default function ExpensesClient({ 
+  initialExpenses,
+  currentPage = 1,
+  totalPages = 1,
+  totalExpenses = 0,
+  pageSize = 15
+}: Props) {
   const router = useRouter();
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
@@ -191,6 +203,16 @@ export default function ExpensesClient({ initialExpenses }: Props) {
             <p className="text-sm">No expenses recorded</p>
           </div>
         )}
+
+        {/* Pagination */}
+        <div className="p-4 border-t border-border/30 bg-gray-50/50">
+          <UrlPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalExpenses}
+            pageSize={pageSize}
+          />
+        </div>
       </div>
 
       {/* Total Summary */}

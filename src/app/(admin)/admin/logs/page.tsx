@@ -1,21 +1,36 @@
 import { prisma } from '@/lib/prisma';
 import { Activity } from 'lucide-react';
+import { UrlPagination } from '@/components/ui/UrlPagination';
 
 export const revalidate = 0;
 
-export default async function AdminLogsPage() {
-  const logs = await prisma.activityLog.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: {
-      user: {
-        select: {
-          name: true,
-          email: true,
-        }
-      }
-    },
-    take: 100 // Limit to latest 100 logs
-  });
+interface PageProps {
+  searchParams: Promise<{ page?: string }>;
+}
+
+export default async function AdminLogsPage({ searchParams }: PageProps) {
+  const params = await searchParams;
+  const page = Math.max(1, Number(params?.page) || 1);
+  const pageSize = 20;
+
+  const [totalLogs, logs] = await Promise.all([
+    prisma.activityLog.count(),
+    prisma.activityLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalLogs / pageSize) || 1;
 
   return (
     <div className="space-y-5">
@@ -84,6 +99,16 @@ export default async function AdminLogsPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="p-4 border-t border-border/30 bg-gray-50/50">
+          <UrlPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={totalLogs}
+            pageSize={pageSize}
+          />
         </div>
       </div>
     </div>

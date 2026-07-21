@@ -4,20 +4,51 @@ import { cleanupUnconfirmedSpmbOrders } from '@/lib/order-utils';
 
 export const revalidate = 0;
 
-export default async function AdminOrdersPage() {
+interface PageProps {
+  searchParams: Promise<{ page?: string; search?: string; status?: string }>;
+}
+
+export default async function AdminOrdersPage({ searchParams }: PageProps) {
   // Clean up old unconfirmed SPMB orders
   await cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err));
 
-  const orders = await prisma.order.findMany({
-    where: {
-      NOT: {
-        source: 'SPMB',
-        customerPhone: { startsWith: 'SPMB-PENDING' },
-      }
+  const params = await searchParams;
+  const page = Math.max(1, Number(params?.page) || 1);
+  const pageSize = 15;
+  const searchQuery = params?.search?.trim() || '';
+  const statusFilter = params?.status || '';
+
+  const where: any = {
+    NOT: {
+      source: 'SPMB',
+      customerPhone: { startsWith: 'SPMB-PENDING' },
     },
-    orderBy: { createdAt: 'desc' },
-    include: { items: { include: { product: true } } },
-  });
+  };
+
+  if (statusFilter) {
+    where.status = statusFilter;
+  }
+
+  if (searchQuery) {
+    where.OR = [
+      { id: { contains: searchQuery, mode: 'insensitive' } },
+      { customerName: { contains: searchQuery, mode: 'insensitive' } },
+      { customerPhone: { contains: searchQuery, mode: 'insensitive' } },
+    ];
+  }
+
+  const [totalOrders, orders] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      include: { items: { include: { product: true } } },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(totalOrders / pageSize) || 1;
 
   const mappedOrders = orders.map((o) => ({
     id: o.id,
@@ -51,7 +82,13 @@ export default async function AdminOrdersPage() {
         <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Orders</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Track and manage customer orders</p>
       </div>
-      <AdminOrdersClient initialOrders={mappedOrders} />
+      <AdminOrdersClient 
+        initialOrders={mappedOrders} 
+        currentPage={page}
+        totalPages={totalPages}
+        totalOrders={totalOrders}
+        pageSize={pageSize}
+      />
     </div>
   );
 }

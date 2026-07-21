@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
-// GET: Fetch all tickets with optional filtering
+// GET: Fetch all tickets with optional filtering and pagination
 export async function GET(req: Request) {
   try {
     const session = await auth()
@@ -22,27 +22,46 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const status = searchParams.get('status')
     const type = searchParams.get('type')
+    const search = searchParams.get('search')?.trim()
+    const page = Math.max(1, Number(searchParams.get('page')) || 1)
+    const limit = Math.max(1, Number(searchParams.get('limit')) || 12)
 
     const where: any = {}
     if (status) where.status = status
     if (type) where.type = type
+    if (search) {
+      where.OR = [
+        { title: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { name: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
+      ]
+    }
 
-    const tickets = await prisma.supportTicket.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            phone: true,
+    const [total, tickets] = await Promise.all([
+      prisma.supportTicket.count({ where }),
+      prisma.supportTicket.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              phone: true,
+            },
           },
         },
-      },
-    })
+      }),
+    ])
 
-    return NextResponse.json({ tickets })
+    const totalPages = Math.ceil(total / limit) || 1
+
+    return NextResponse.json({ tickets, total, page, totalPages })
   } catch (error) {
     console.error('Fetch admin tickets error:', error)
     return NextResponse.json({ error: 'Failed to fetch tickets' }, { status: 500 })
