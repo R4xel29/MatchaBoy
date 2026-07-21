@@ -131,6 +131,18 @@ export default function CashierPOSClient({ products, categories }: Props) {
     }
   }, [phoneLookupResult]);
 
+  // Persistent BroadcastChannel reference for second monitor display sync
+  const displayChannelRef = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      displayChannelRef.current = new BroadcastChannel('pos_customer_display');
+    }
+    return () => {
+      displayChannelRef.current?.close();
+    };
+  }, []);
+
   // Real-time synchronization with Customer Facing Display (Second Monitor)
   useEffect(() => {
     try {
@@ -149,10 +161,9 @@ export default function CashierPOSClient({ products, categories }: Props) {
         timestamp: Date.now(),
       };
 
-      const channel = new BroadcastChannel('pos_customer_display');
-      channel.postMessage(statePayload);
-      channel.close();
-
+      if (displayChannelRef.current) {
+        displayChannelRef.current.postMessage(statePayload);
+      }
       localStorage.setItem('pos_customer_display_state', JSON.stringify(statePayload));
     } catch {}
   }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId]);
@@ -241,6 +252,13 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   // Add to cart
   const handleProductClick = (product: POSProduct) => {
+    if (!customerName.trim()) {
+      showToast('Langkah 1: Harap isi Nama Pelanggan atau Scan Member terlebih dahulu!', 'error');
+      const inputEl = document.getElementById('customer-name-input');
+      if (inputEl) inputEl.focus();
+      return;
+    }
+
     if (product.modifiers && (product.modifiers.iceLevel || product.modifiers.sugarLevel || product.modifiers.addOns)) {
       setModifierProduct(product);
       setModIce(product.modifiers.iceLevel?.[0] || 'Normal Ice');
@@ -428,7 +446,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
         <button
           type="button"
           onClick={() => {
-            window.open('/admin/cashier/display', 'CustomerDisplayWindow', 'width=1280,height=800');
+            window.open('/display', 'CustomerDisplayWindow', 'width=1280,height=800');
           }}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-slate-100 border border-slate-700 text-xs font-bold shadow-md hover:bg-slate-800 transition-all active:scale-[0.97]"
         >
@@ -441,6 +459,16 @@ export default function CashierPOSClient({ products, categories }: Props) {
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
         {/* LEFT: Product Grid */}
         <div className="xl:col-span-3 space-y-4">
+          {/* Step 1 Requirement Banner */}
+          {!customerName.trim() && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-900 shadow-sm animate-pulse">
+              <span className="font-semibold flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-amber-600 text-white font-black flex items-center justify-center text-[11px] shrink-0">1</span>
+                Isi <strong>Nama Pelanggan</strong> atau <strong>Scan Member</strong> di kolom kanan terlebih dahulu sebelum memilih produk.
+              </span>
+            </div>
+          )}
+
           {/* Search + Category Filter */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -560,14 +588,31 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
             {/* Input Primary: Nama Pelanggan */}
             <div>
+              <div className="flex items-center justify-between mb-1.5 pl-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                  Nama Pelanggan <span className="text-red-500">*</span>
+                </label>
+                {!customerName.trim() ? (
+                  <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300 animate-pulse">
+                    Langkah 1: Isi Nama / Scan Member
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300">
+                    ✓ Pelanggan Aktif
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
                 <input
+                  id="customer-name-input"
                   type="text"
-                  placeholder="Nama pelanggan *"
+                  placeholder="Isi nama pelanggan..."
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-medium"
+                  className={`w-full pl-10 pr-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-medium ${
+                    !customerName.trim() ? 'bg-amber-50/50 border-amber-300/80' : 'bg-muted/30 border-border/40'
+                  }`}
                 />
               </div>
             </div>

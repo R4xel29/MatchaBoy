@@ -1,10 +1,5 @@
-import CustomerDisplayClient from './CustomerDisplayClient';
+import { redirect } from 'next/navigation';
 
-export const metadata = {
-  title: 'Customer Display - POS Kasir Matchaboy',
-  description: 'Layar Display Pelanggan Realtime POS Kasir Matchaboy',
-};
-
-export default function CustomerDisplayPage() {
-  return <CustomerDisplayClient />;
+export default function AdminDisplayRedirectPage() {
+  redirect('/display');
 }
