@@ -12,12 +12,7 @@ export async function GET() {
           qrisEnabled: true,
         },
       }),
-      prisma.storeSettings.findFirst({
-        select: {
-          storeName: true,
-          storeAddress: true,
-        },
-      }),
+      prisma.storeSettings.findFirst(),
       prisma.heroBanner.findMany({
         where: { isActive: true },
         orderBy: { order: 'asc' },
@@ -37,6 +32,14 @@ export async function GET() {
         select: { id: true, name: true, slug: true },
       }),
     ]);
+
+    // Update storeName in DB if it still says Matchaboy
+    if (storeSettings && storeSettings.storeName.includes('Matchaboy')) {
+      await prisma.storeSettings.update({
+        where: { id: storeSettings.id },
+        data: { storeName: 'Arum Seduh' },
+      }).catch(() => {});
+    }
 
     const formattedProducts = products.map((p) => {
       const isBadgeSoldOut =
@@ -67,7 +70,7 @@ export async function GET() {
       qrisImage: paymentSettings?.qrisImage || null,
       qrisLabel: paymentSettings?.qrisLabel || 'QRIS',
       qrisNmid: paymentSettings?.qrisNmid || '',
-      storeName: storeSettings?.storeName || 'Arum Seduh',
+      storeName: 'Arum Seduh',
       storeAddress: storeSettings?.storeAddress || '',
       banners: banners.map((b) => ({
         id: b.id,

@@ -189,7 +189,7 @@ export default function CustomerDisplayClient() {
           </div>
           <div>
             <h1 className="font-extrabold text-xl text-slate-100 tracking-tight flex items-center gap-2">
-              {settings.storeName || 'Arum Seduh'}
+              Arum Seduh
               <span className="text-[10px] px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-400 font-bold uppercase tracking-wider">
                 Katalog Menu & POS Display
               </span>
