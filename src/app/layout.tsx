@@ -30,12 +30,12 @@ export async function generateMetadata(): Promise<Metadata> {
   try {
     const settings = await prisma.loyaltySettings.findFirst({
       select: { referralShareImage: true },
-    });
+    }).catch(() => null);
     if (settings?.referralShareImage) {
       shareImage = settings.referralShareImage;
     }
   } catch (e) {
-    console.error("Error fetching loyalty settings for OG image:", e);
+    // Graceful fallback when database connection is offline or timing out
   }
 
   let appUrl = process.env.NEXT_PUBLIC_APP_URL;
