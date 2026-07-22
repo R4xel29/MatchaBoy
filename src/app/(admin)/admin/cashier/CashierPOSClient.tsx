@@ -48,6 +48,7 @@ type POSProduct = {
     defaultIce?: string;
     showMatcha?: boolean;
     defaultMatcha?: number;
+    sizes?: { name: string; price: number }[];
   } | null;
 };
 
@@ -59,6 +60,9 @@ type CartItemPOS = {
   quantity: number;
   iceLevel: string;
   sugarLevel: string;
+  matchaLevel?: number;
+  size?: string;
+  sizePrice?: number;
   addOns: { id: string; name: string; price: number }[];
   totalPrice: number;
   image?: string | null;
@@ -255,8 +259,11 @@ export default function CashierPOSClient({ products, categories }: Props) {
   // Modifier modal state
   const [modifierProduct, setModifierProduct] = useState<POSProduct | null>(null);
   const [modIce, setModIce] = useState('Normal Ice');
-  const [modSugar, setModSugar] = useState('Normal Sugar');
+  const [modSugar, setModSugar] = useState('Biasa');
   const [modMatcha, setModMatcha] = useState(5);
+  const [modSize, setModSize] = useState('Normal');
+  const [modSizePrice, setModSizePrice] = useState(0);
+  const [activeStep, setActiveStep] = useState<'MATCHA' | 'SWEETNESS' | 'ICE' | 'SIZE'>('SWEETNESS');
   const [modAddOns, setModAddOns] = useState<{ id: string; name: string; price: number }[]>([]);
   const [modQty, setModQty] = useState(1);
 
@@ -292,13 +299,17 @@ export default function CashierPOSClient({ products, categories }: Props) {
         activeModifier: modifierProduct ? {
           productName: modifierProduct.name,
           productImage: modifierProduct.image,
-          price: modifierProduct.price,
+          price: modifierProduct.price + modSizePrice,
           iceLevel: modIce,
           sugarLevel: modSugar,
           matchaLevel: modMatcha,
+          size: modSize,
+          sizePrice: modSizePrice,
+          sizes: modifierProduct.modifiers?.sizes || [],
           showSweetness: modifierProduct.modifiers?.showSweetness !== false,
           showMatcha: modifierProduct.modifiers?.showMatcha === true,
           defaultMatcha: modifierProduct.modifiers?.defaultMatcha ?? 5,
+          activeStep,
         } : null,
         timestamp: Date.now(),
       };
@@ -308,7 +319,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       }
       localStorage.setItem('pos_customer_display_state', JSON.stringify(statePayload));
     } catch {}
-  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha]);
+  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, activeStep]);
 
   // Pre-order QR scan state
   const [showPreScanQR, setShowPreScanQR] = useState(false);
@@ -391,6 +402,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
     const mods = product.modifiers;
     const hasModifiers = mods && (
       mods.showSweetness !== false ||
+      mods.showMatcha === true ||
+      (mods.sizes && mods.sizes.length > 0) ||
       mods.iceLevel?.length ||
       mods.sugarLevel?.length ||
       (mods.addOns && mods.addOns.length > 0)
@@ -401,10 +414,24 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setModIce(mods?.defaultIce || mods?.iceLevel?.[0] || 'Normal Ice');
       setModSugar(mods?.defaultSugar || mods?.sugarLevel?.[0] || 'Biasa');
       setModMatcha(mods?.defaultMatcha ?? 5);
+      const firstSize = mods?.sizes?.[0];
+      setModSize(firstSize?.name || 'Normal');
+      setModSizePrice(firstSize?.price || 0);
+
+      if (mods?.showMatcha) {
+        setActiveStep('MATCHA');
+      } else if (mods?.showSweetness !== false) {
+        setActiveStep('SWEETNESS');
+      } else if (mods?.sizes && mods.sizes.length > 0) {
+        setActiveStep('SIZE');
+      } else {
+        setActiveStep('ICE');
+      }
+
       setModAddOns([]);
       setModQty(1);
     } else {
-      addToCart(product, 'Normal Ice', 'Biasa', [], 1);
+      addToCart(product, 'Normal Ice', 'Biasa', 5, 'Normal', 0, [], 1);
     }
   };
 
@@ -412,13 +439,16 @@ export default function CashierPOSClient({ products, categories }: Props) {
     product: POSProduct,
     iceLevel: string,
     sugarLevel: string,
+    matchaLevel: number,
+    size: string,
+    sizePrice: number,
     addOns: { id: string; name: string; price: number }[],
     qty: number
   ) => {
     const addOnIds = addOns.map((a) => a.id).sort().join(',');
-    const cartId = `${product.id}__${iceLevel}__${sugarLevel}__${addOnIds}`;
+    const cartId = `${product.id}__${iceLevel}__${sugarLevel}__${matchaLevel}__${size}__${addOnIds}`;
     const addOnTotal = addOns.reduce((sum, a) => sum + a.price, 0);
-    const itemPrice = product.price + addOnTotal;
+    const itemPrice = product.price + sizePrice + addOnTotal;
 
     setCart((prev) => {
       const existing = prev.find((i) => i.id === cartId);
@@ -439,12 +469,21 @@ export default function CashierPOSClient({ products, categories }: Props) {
           quantity: qty,
           iceLevel,
           sugarLevel,
+          matchaLevel,
+          size,
+          sizePrice,
           addOns,
           totalPrice: itemPrice * qty,
           image: product.image,
         },
       ];
     });
+  };
+
+  const handleModifierConfirm = () => {
+    if (!modifierProduct) return;
+    addToCart(modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modAddOns, modQty);
+    setModifierProduct(null);
   };
 
   const updateCartQty = (id: string, newQty: number) => {
@@ -463,12 +502,6 @@ export default function CashierPOSClient({ products, categories }: Props) {
         )
       );
     }
-  };
-
-  const handleModifierConfirm = () => {
-    if (!modifierProduct) return;
-    addToCart(modifierProduct, modIce, modSugar, modAddOns, modQty);
-    setModifierProduct(null);
   };
 
   const handleUpdateTableSeats = async (id: string, newOccupied: number) => {
@@ -1139,20 +1172,116 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 </div>
               </div>
 
-              <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
+                {/* Step Focus Bar (Display Sync Control) */}
+                <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-100 border border-slate-200 overflow-x-auto">
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1.5 shrink-0">Focus Display:</span>
+                  {modifierProduct.modifiers?.showMatcha && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('MATCHA')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                        activeStep === 'MATCHA' ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      🍵 Matcha
+                    </button>
+                  )}
+                  {modifierProduct.modifiers?.showSweetness !== false && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('SWEETNESS')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                        activeStep === 'SWEETNESS' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      🍯 Manis
+                    </button>
+                  )}
+                  {modifierProduct.modifiers?.showSweetness !== false && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('ICE')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                        activeStep === 'ICE' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      🧊 Es Batu
+                    </button>
+                  )}
+                  {modifierProduct.modifiers?.sizes && modifierProduct.modifiers.sizes.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveStep('SIZE')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                        activeStep === 'SIZE' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      🥤 Ukuran Gelas
+                    </button>
+                  )}
+                </div>
+
+                {/* Size Options */}
+                {modifierProduct.modifiers?.sizes && modifierProduct.modifiers.sizes.length > 0 && (
+                  <div
+                    onClick={() => setActiveStep('SIZE')}
+                    className={`p-3 rounded-2xl border transition-all ${
+                      activeStep === 'SIZE' ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-border/40'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center justify-between">
+                      <span>🥤 Ukuran Gelas</span>
+                      <span className="text-[10px] text-indigo-600 font-semibold">{modSize} {modSizePrice > 0 ? `(+${formatRupiah(modSizePrice)})` : ''}</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {modifierProduct.modifiers.sizes.map((sz) => (
+                        <button
+                          key={sz.name}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModSize(sz.name);
+                            setModSizePrice(sz.price);
+                            setActiveStep('SIZE');
+                          }}
+                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                            modSize === sz.name
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'bg-white border border-border/60 text-foreground hover:border-indigo-300'
+                          }`}
+                        >
+                          <span>{sz.name}</span>
+                          <span className="text-[10px] opacity-80">{sz.price > 0 ? `(+${formatRupiah(sz.price)})` : 'Gratis'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Ice Level */}
                 {modifierProduct.modifiers?.showSweetness !== false && (
-                  <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">❄️ Ice Level</p>
+                  <div
+                    onClick={() => setActiveStep('ICE')}
+                    className={`p-3 rounded-2xl border transition-all ${
+                      activeStep === 'ICE' ? 'border-cyan-500 bg-cyan-50/50 shadow-sm' : 'border-border/40'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-cyan-900 uppercase tracking-wider mb-2">🧊 Ice Level (Level Es)</p>
                     <div className="flex flex-wrap gap-2">
                       {['Normal Ice', 'Less Ice', 'No Ice'].map((level) => (
                         <button
                           key={level}
-                          onClick={() => setModIce(level)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModIce(level);
+                            setActiveStep('ICE');
+                          }}
                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             modIce === level
-                              ? 'bg-amber-600 text-white'
-                              : 'bg-muted/50 text-foreground hover:bg-muted'
+                              ? 'bg-cyan-600 text-white shadow-sm'
+                              : 'bg-white border border-border/60 text-foreground hover:bg-muted'
                           }`}
                         >
                           {level}
@@ -1164,17 +1293,27 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
                 {/* Sugar Level */}
                 {modifierProduct.modifiers?.showSweetness !== false && (
-                  <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">🍯 Kemanisan (Sugar Level)</p>
+                  <div
+                    onClick={() => setActiveStep('SWEETNESS')}
+                    className={`p-3 rounded-2xl border transition-all ${
+                      activeStep === 'SWEETNESS' ? 'border-amber-500 bg-amber-50/50 shadow-sm' : 'border-border/40'
+                    }`}
+                  >
+                    <p className="text-xs font-bold text-amber-900 uppercase tracking-wider mb-2">🍯 Kemanisan (Sugar Level)</p>
                     <div className="flex flex-wrap gap-2">
                       {['Less', 'Biasa', 'Lumayan', 'Manis Sekali'].map((level) => (
                         <button
                           key={level}
-                          onClick={() => setModSugar(level)}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModSugar(level);
+                            setActiveStep('SWEETNESS');
+                          }}
                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             modSugar === level || (level === 'Biasa' && modSugar === 'Normal Sugar') || (level === 'Less' && modSugar === 'Less Sugar')
-                              ? 'bg-amber-600 text-white'
-                              : 'bg-muted/50 text-foreground hover:bg-muted'
+                              ? 'bg-amber-600 text-white shadow-sm'
+                              : 'bg-white border border-border/60 text-foreground hover:bg-muted'
                           }`}
                         >
                           {level}
@@ -1186,12 +1325,17 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
                 {/* Matcha Intensity */}
                 {modifierProduct.modifiers?.showMatcha === true && (
-                  <div className="space-y-2 pt-2 border-t border-border/30">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <div
+                    onClick={() => setActiveStep('MATCHA')}
+                    className={`p-3 rounded-2xl border transition-all ${
+                      activeStep === 'MATCHA' ? 'border-emerald-500 bg-emerald-50/50 shadow-sm' : 'border-border/40'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
                         🍵 Kepekatan Matcha
                       </p>
-                      <span className="text-xs font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <span className="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200">
                         Level {modMatcha}
                       </span>
                     </div>
@@ -1200,10 +1344,13 @@ export default function CashierPOSClient({ products, categories }: Props) {
                       min="1"
                       max="10"
                       value={modMatcha}
-                      onChange={(e) => setModMatcha(parseInt(e.target.value))}
+                      onChange={(e) => {
+                        setModMatcha(parseInt(e.target.value));
+                        setActiveStep('MATCHA');
+                      }}
                       className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-emerald-100 via-emerald-400 to-emerald-900"
                     />
-                    <div className="flex justify-between text-[9px] text-muted-foreground font-semibold px-0.5 select-none">
+                    <div className="flex justify-between text-[9px] text-muted-foreground font-semibold px-0.5 select-none pt-1">
                       <span>Subtle (1)</span>
                       <span>Standard (5)</span>
                       <span>Extra Strong (10)</span>
@@ -1265,7 +1412,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-sm hover:shadow-md transition-all active:scale-[0.98]"
                 >
                   Tambah ke Pesanan — {formatRupiah(
-                    (modifierProduct.price + modAddOns.reduce((s, a) => s + a.price, 0)) * modQty
+                    (modifierProduct.price + modSizePrice + modAddOns.reduce((s, a) => s + a.price, 0)) * modQty
                   )}
                 </button>
               </div>

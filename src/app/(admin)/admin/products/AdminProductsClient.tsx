@@ -44,6 +44,7 @@ interface ModifiersData {
   showSweetness?: boolean;
   defaultSugar?: string;
   defaultIce?: string;
+  sizes?: { name: string; price: number }[];
 }
 
 const ALL_ICE_LEVELS = ['Normal Ice', 'Less Ice', 'No Ice'];
@@ -208,6 +209,22 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [showSweetness, setShowSweetness] = useState<boolean>(true);
   const [defaultSugar, setDefaultSugar] = useState<string>('Biasa');
   const [defaultIce, setDefaultIce] = useState<string>('Normal Ice');
+
+  // Product Sizes state (e.g. Regular, Large (+5k))
+  const [modSizes, setModSizes] = useState<{ name: string; price: number }[]>([]);
+  const [newSizeName, setNewSizeName] = useState('');
+  const [newSizePrice, setNewSizePrice] = useState('');
+
+  const addSizeOption = () => {
+    if (!newSizeName.trim()) return;
+    setModSizes(prev => [...prev, { name: newSizeName.trim(), price: Number(newSizePrice) || 0 }]);
+    setNewSizeName('');
+    setNewSizePrice('');
+  };
+
+  const removeSizeOption = (idx: number) => {
+    setModSizes(prev => prev.filter((_, i) => i !== idx));
+  };
 
   // Bundle / Combo state
   const [isBundle, setIsBundle] = useState<boolean>(false);
@@ -409,6 +426,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setModIce(mods.iceLevel || []);
       setModSugar(mods.sugarLevel || []);
       setModAddOns(mods.addOns || []);
+      setModSizes(mods.sizes || []);
       setIsBundle(mods.isBundle || false);
       setBundleGroups(mods.bundleGroups || []);
       setFreeShipping(mods.freeShipping || false);
@@ -434,6 +452,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setModIce([]);
       setModSugar([]);
       setModAddOns([]);
+      setModSizes([]);
       setIsBundle(activeTab === 'combos');
       setBundleGroups([]);
       setFreeShipping(false);
@@ -678,6 +697,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
         modifiers.sugarLevel = ['Less', 'Biasa', 'Lumayan', 'Manis Sekali'];
       }
       if (modAddOns.length > 0) modifiers.addOns = modAddOns;
+      if (modSizes.length > 0) modifiers.sizes = modSizes;
       modifiers.showMatcha = showMatcha;
       modifiers.defaultMatcha = defaultMatcha;
       modifiers.showSweetness = showSweetness;
@@ -1397,6 +1417,39 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                     <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers
                   </h4>
                   <p className="text-[10px] text-muted-foreground mb-3">Kelola add-on tambahan dan kustomisasi produk di bawah ini</p>
+
+                  {/* Sizes (Ukuran Gelas & Harga Tambahan) */}
+                  <div className="mb-4">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🥤 Ukuran Gelas & Harga Tambahan</label>
+                    {modSizes.length > 0 && (
+                      <div className="space-y-1.5 mb-2">
+                        {modSizes.map((sz, idx) => (
+                          <div key={idx} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
+                            <span className="text-xs font-medium text-foreground">{sz.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-brand-600 font-medium">{sz.price > 0 ? `+${formatRupiah(sz.price)}` : 'Standard / Free'}</span>
+                              <button type="button" onClick={() => removeSizeOption(idx)}
+                                className="p-0.5 hover:bg-rose-50 rounded text-muted-foreground hover:text-rose-500 transition-colors">
+                                <CircleMinus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <input value={newSizeName} onChange={e => setNewSizeName(e.target.value)} placeholder="Nama Ukuran (misal: Large)"
+                        onKeyDown={e => e.key === 'Enter' && addSizeOption()}
+                        className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
+                      <input type="number" value={newSizePrice} onChange={e => setNewSizePrice(e.target.value)} placeholder="+Harga (misal: 5000)"
+                        onKeyDown={e => e.key === 'Enter' && addSizeOption()}
+                        className="w-32 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
+                      <button type="button" onClick={addSizeOption}
+                        className="p-2 rounded-lg bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors">
+                        <CirclePlus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Add-Ons */}
                   <div>

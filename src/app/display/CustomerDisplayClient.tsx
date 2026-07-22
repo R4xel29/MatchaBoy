@@ -52,9 +52,13 @@ export type POSDisplayState = {
     iceLevel: string;
     sugarLevel: string;
     matchaLevel: number;
+    size?: string;
+    sizePrice?: number;
+    sizes?: { name: string; price: number }[];
     showSweetness: boolean;
     showMatcha: boolean;
     defaultMatcha: number;
+    activeStep?: 'MATCHA' | 'SWEETNESS' | 'ICE' | 'SIZE';
   } | null;
   timestamp: number;
 };
@@ -644,7 +648,7 @@ export default function CustomerDisplayClient() {
           </div>
         </div>
       </main>
-      {/* Real-time Customization Pop-up Overlay (Matcha & Sweetness Visualizers) */}
+      {/* Real-time Customization Pop-up Overlay (Sequential Step-by-Step Pop-up Cards) */}
       <AnimatePresence>
         {displayState?.activeModifier && (
           <motion.div
@@ -652,59 +656,139 @@ export default function CustomerDisplayClient() {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-6 pointer-events-none select-none"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-6 pointer-events-none select-none"
           >
-            <div className="w-full max-w-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-center">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-                <div className="flex items-center gap-3 text-left">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-xl font-bold">
-                    ☕
+            {(() => {
+              const activeMod = displayState.activeModifier;
+              const steps: { key: 'MATCHA' | 'SWEETNESS' | 'ICE' | 'SIZE'; label: string; icon: string }[] = [];
+              if (activeMod.showMatcha) {
+                steps.push({ key: 'MATCHA', label: 'Kepekatan Matcha', icon: '🍵' });
+              }
+              if (activeMod.showSweetness) {
+                steps.push({ key: 'SWEETNESS', label: 'Tingkat Kemanisan', icon: '🍯' });
+                steps.push({ key: 'ICE', label: 'Level Es Batu', icon: '🧊' });
+              }
+              if (activeMod.sizes && activeMod.sizes.length > 0) {
+                steps.push({ key: 'SIZE', label: 'Ukuran Gelas', icon: '🥤' });
+              }
+
+              const currentKey = activeMod.activeStep || steps[0]?.key || 'SWEETNESS';
+              const currentStepIdx = Math.max(0, steps.findIndex((s) => s.key === currentKey));
+              const currentStepObj = steps[currentStepIdx] || steps[0];
+
+              return (
+                <div className="w-full max-w-xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-5 text-center">
+                  {/* Top Bar: Product Name & Step Counter */}
+                  <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-3 text-left">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-xl font-bold">
+                        ☕
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-black text-slate-100">{activeMod.productName}</h2>
+                        <p className="text-xs font-semibold text-amber-400">{formatRupiah(activeMod.price)}</p>
+                      </div>
+                    </div>
+                    {steps.length > 0 && (
+                      <div className="px-3.5 py-1.5 rounded-full bg-slate-800 text-amber-400 text-xs font-bold border border-slate-700">
+                        Langkah {currentStepIdx + 1} dari {steps.length}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <h2 className="text-lg font-black text-slate-100">{displayState.activeModifier.productName}</h2>
-                    <p className="text-xs font-semibold text-amber-400">{formatRupiah(displayState.activeModifier.price)}</p>
-                  </div>
+
+                  {/* Step Tracker Pills Bar */}
+                  {steps.length > 1 && (
+                    <div className="flex items-center justify-center gap-2 overflow-x-auto py-1">
+                      {steps.map((st, idx) => {
+                        const isActive = st.key === currentKey;
+                        return (
+                          <div
+                            key={st.key}
+                            className={`px-3 py-1 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
+                              isActive
+                                ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md scale-105'
+                                : 'bg-slate-800/80 text-slate-400 border border-slate-700/60'
+                            }`}
+                          >
+                            <span>{st.icon}</span>
+                            <span>{st.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Focused Active Step Card View */}
+                  <AnimatePresence mode="wait">
+                    <motion.div
+                      key={currentKey}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className="bg-slate-950/60 border border-slate-800 p-6 rounded-3xl flex flex-col items-center justify-center space-y-4 min-h-[220px]"
+                    >
+                      {currentKey === 'MATCHA' && (
+                        <>
+                          <div className="w-24 h-24 flex items-center justify-center">
+                            <MatchaCupVisualizer level={activeMod.matchaLevel} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Kepekatan Matcha Pilihan Anda</p>
+                            <p className="text-3xl font-black text-emerald-200 mt-1">Level {activeMod.matchaLevel}</p>
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              {activeMod.matchaLevel <= 3 ? 'Lembut & Rich' : activeMod.matchaLevel <= 7 ? 'Seimbang & Umami' : 'Extra Strong & Bold'}
+                            </p>
+                          </div>
+                        </>
+                      )}
+
+                      {currentKey === 'SWEETNESS' && (
+                        <>
+                          <div className="w-24 h-24 flex items-center justify-center">
+                            <SweetnessCupVisualizer level={SWEETNESS_MAP[activeMod.sugarLevel] ?? 1} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-amber-400 uppercase tracking-wider">Tingkat Kemanisan</p>
+                            <p className="text-3xl font-black text-amber-200 mt-1">{activeMod.sugarLevel}</p>
+                            <p className="text-[11px] text-slate-400 mt-1">Disajikan sesuai takaran gula khas Arum Seduh 🍯</p>
+                          </div>
+                        </>
+                      )}
+
+                      {currentKey === 'ICE' && (
+                        <>
+                          <div className="w-24 h-24 flex items-center justify-center">
+                            <IceCupVisualizer level={activeMod.iceLevel} />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Level Es Batu</p>
+                            <p className="text-3xl font-black text-cyan-200 mt-1">{activeMod.iceLevel}</p>
+                            <p className="text-[11px] text-slate-400 mt-1">Suhu kesegaran minuman pilihan Anda 🧊</p>
+                          </div>
+                        </>
+                      )}
+
+                      {currentKey === 'SIZE' && (
+                        <>
+                          <GlassSizeVisualizer currentSize={activeMod.size} sizes={activeMod.sizes} price={activeMod.sizePrice} />
+                          <div>
+                            <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider">Ukuran Gelas Pilihan Anda</p>
+                            <p className="text-2xl font-black text-indigo-200 mt-1">
+                              {activeMod.size} {activeMod.sizePrice && activeMod.sizePrice > 0 ? `(+${formatRupiah(activeMod.sizePrice)})` : ''}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  </AnimatePresence>
+
+                  <p className="text-xs text-slate-400 font-medium pt-1">
+                    Pilihan Anda diperbarui secara real-time dari meja kasir ✨
+                  </p>
                 </div>
-                <div className="px-3 py-1 rounded-full bg-slate-800 text-amber-400 text-xs font-bold border border-slate-700">
-                  Kustomisasi Pilihan Anda
-                </div>
-              </div>
-
-              {/* Visualizers Grid */}
-              <div className={`grid gap-4 ${displayState.activeModifier.showMatcha && displayState.activeModifier.showSweetness ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                
-                {/* 1. Matcha Visualizer (If Matcha beverage) */}
-                {displayState.activeModifier.showMatcha && (
-                  <div className="bg-emerald-950/30 border border-emerald-500/20 p-5 rounded-3xl flex flex-col items-center justify-center space-y-3 relative overflow-hidden">
-                    <div className="w-20 h-20 flex items-center justify-center">
-                      <MatchaCupVisualizer level={displayState.activeModifier.matchaLevel} />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Kepekatan Matcha</h3>
-                      <p className="text-2xl font-black text-emerald-200 mt-1">Level {displayState.activeModifier.matchaLevel}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* 2. Sweetness & Ice Visualizer */}
-                {displayState.activeModifier.showSweetness && (
-                  <div className="bg-amber-950/30 border border-amber-500/20 p-5 rounded-3xl flex flex-col items-center justify-center space-y-3 relative overflow-hidden">
-                    <div className="w-20 h-20 flex items-center justify-center">
-                      <SweetnessCupVisualizer level={SWEETNESS_MAP[displayState.activeModifier.sugarLevel] ?? 1} />
-                    </div>
-                    <div>
-                      <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Tingkat Kemanisan</h3>
-                      <p className="text-2xl font-black text-amber-200 mt-1">{displayState.activeModifier.sugarLevel}</p>
-                      <p className="text-[11px] font-semibold text-slate-400 mt-1">❄️ {displayState.activeModifier.iceLevel}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <p className="text-xs text-slate-400 font-medium">
-                Pilihan Anda diperbarui secara real-time dari meja kasir ✨
-              </p>
-            </div>
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>
@@ -721,6 +805,87 @@ const SWEETNESS_MAP: { [key: string]: number } = {
   'Lumayan': 2,
   'Manis Sekali': 3,
 };
+
+function IceCupVisualizer({ level }: { level: string }) {
+  const isNoIce = level === 'No Ice';
+  const isLessIce = level === 'Less Ice';
+  const cubeCount = isNoIce ? 0 : isLessIce ? 1 : 3;
+
+  return (
+    <div className="relative w-28 h-28 flex items-center justify-center select-none pointer-events-none">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes ice-float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-6px) rotate(4deg); }
+        }
+        @keyframes frost-pulse {
+          0%, 100% { opacity: 0.3; transform: scale(0.98); }
+          50% { opacity: 0.7; transform: scale(1.02); }
+        }
+      `}} />
+      <div
+        className="absolute inset-0 rounded-full bg-cyan-400/20 blur-xl"
+        style={{ animation: 'frost-pulse 2.5s ease-in-out infinite' }}
+      />
+      <div className="relative w-20 h-24 rounded-b-3xl rounded-t-lg border-2 border-cyan-300/40 bg-gradient-to-b from-cyan-500/10 via-cyan-400/20 to-cyan-600/30 backdrop-blur-md overflow-hidden flex flex-col justify-end p-2 shadow-inner">
+        <div className="w-full h-[75%] rounded-b-2xl bg-gradient-to-t from-cyan-400/40 via-cyan-300/20 to-transparent relative flex items-center justify-center">
+          {cubeCount > 0 ? (
+            <div className="flex flex-wrap items-center justify-center gap-1">
+              {Array.from({ length: cubeCount }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-5 h-5 rounded-md bg-white/70 border border-cyan-200 shadow-md backdrop-blur-sm"
+                  style={{
+                    animation: `ice-float ${2 + i * 0.4}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.2}s`,
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-[10px] font-bold text-cyan-200/80 bg-cyan-950/40 px-2 py-0.5 rounded-full border border-cyan-400/30">
+              Tanpa Es
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GlassSizeVisualizer({ currentSize, sizes, price }: { currentSize?: string; sizes?: { name: string; price: number }[]; price?: number }) {
+  const sizeList = sizes && sizes.length > 0 ? sizes : [
+    { name: 'Regular', price: 0 },
+    { name: 'Large', price: 5000 },
+  ];
+
+  return (
+    <div className="flex items-end justify-center gap-6 w-full py-2">
+      {sizeList.map((sz, idx) => {
+        const isSelected = (currentSize || sizeList[0]?.name) === sz.name;
+        const hClass = idx === 0 ? 'h-16 w-12' : idx === 1 ? 'h-20 w-14' : 'h-24 w-16';
+        return (
+          <motion.div
+            key={sz.name}
+            animate={{ scale: isSelected ? 1.1 : 0.9, opacity: isSelected ? 1 : 0.4 }}
+            transition={{ type: 'spring', damping: 20 }}
+            className="flex flex-col items-center gap-2"
+          >
+            <div className={`relative rounded-b-2xl rounded-t-md border-2 transition-all flex items-center justify-center ${
+              isSelected ? 'border-indigo-400 bg-gradient-to-b from-indigo-500/20 to-indigo-700/40 shadow-lg shadow-indigo-500/20' : 'border-slate-700 bg-slate-800/40'
+            } ${hClass}`}>
+              <span className="text-xl">🥤</span>
+            </div>
+            <div className="text-center">
+              <p className={`text-xs font-black ${isSelected ? 'text-indigo-300' : 'text-slate-500'}`}>{sz.name}</p>
+              <p className="text-[10px] font-semibold text-slate-400">{sz.price > 0 ? `+${formatRupiah(sz.price)}` : 'Standard'}</p>
+            </div>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
 
 function MatchaCupVisualizer({ level }: { level: number }) {
   const h = 95 + (level - 1) * (45 / 9);
