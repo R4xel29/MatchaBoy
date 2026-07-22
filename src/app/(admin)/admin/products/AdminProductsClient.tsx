@@ -673,8 +673,10 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       modifiers.discountValue = Number(discountValue || 0);
       modifiers.originalPrice = getRegularTotalPrice();
     } else {
-      if (modIce.length > 0) modifiers.iceLevel = modIce;
-      if (modSugar.length > 0) modifiers.sugarLevel = modSugar;
+      if (showSweetness) {
+        modifiers.iceLevel = ['Normal Ice', 'Less Ice', 'No Ice'];
+        modifiers.sugarLevel = ['Less', 'Biasa', 'Lumayan', 'Manis Sekali'];
+      }
       if (modAddOns.length > 0) modifiers.addOns = modAddOns;
       modifiers.showMatcha = showMatcha;
       modifiers.defaultMatcha = defaultMatcha;
@@ -1394,39 +1396,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
                     <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers
                   </h4>
-                  <p className="text-[10px] text-muted-foreground mb-3">Select which customization options are available for this product</p>
-
-                  {/* Ice Level */}
-                  <div className="mb-3">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">❄️ Ice Level</label>
-                    <div className="flex flex-wrap gap-2">
-                      {ALL_ICE_LEVELS.map(level => (
-                        <button key={level} type="button" onClick={() => toggleIce(level)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
-                            ${modIce.includes(level)
-                              ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                              : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Sugar Level */}
-                  <div className="mb-3">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🍬 Sugar Level</label>
-                    <div className="flex flex-wrap gap-2">
-                      {ALL_SUGAR_LEVELS.map(level => (
-                        <button key={level} type="button" onClick={() => toggleSugar(level)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border
-                            ${modSugar.includes(level)
-                              ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-                              : 'bg-muted/30 text-muted-foreground border-border/40 hover:border-brand-400'}`}>
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <p className="text-[10px] text-muted-foreground mb-3">Kelola add-on tambahan dan kustomisasi produk di bawah ini</p>
 
                   {/* Add-Ons */}
                   <div>

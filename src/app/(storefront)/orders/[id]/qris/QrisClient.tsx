@@ -15,16 +15,6 @@ export default function QrisClient({ order }: { order: any }) {
   const [percentLeft, setPercentLeft] = useState(100)
   const [isExpired, setIsExpired] = useState(false)
 
-  // Upload states
-  const [preview, setPreview] = useState<string | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploaded, setUploaded] = useState(false)
-  const [paymentProofUrl, setPaymentProofUrl] = useState<string | null>(null)
-  const [submittingProof, setSubmittingProof] = useState(false)
-  const [showSuccessModal, setShowSuccessModal] = useState(false)
-
-  const fileRef = useRef<HTMLInputElement>(null)
-
   // Countdown timer logic
   useEffect(() => {
     const expiry = new Date(order.paymentExpiredAt).getTime()
@@ -59,69 +49,6 @@ export default function QrisClient({ order }: { order: any }) {
     const timer = setInterval(updateTimer, 1000)
     return () => clearInterval(timer)
   }, [order.paymentExpiredAt, order.createdAt, order.id, router])
-
-  // Handle file upload
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (ev) => setPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
-
-    setUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('type', 'payment-proof');
-
-      const res = await fetch('/api/admin/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setPaymentProofUrl(data.url);
-        setUploaded(true);
-      } else {
-        throw new Error('Gagal unggah');
-      }
-    } catch {
-      showToast('Gagal mengunggah bukti pembayaran. Silakan coba lagi.', 'error');
-      setPreview(null);
-      setUploaded(false);
-      setPaymentProofUrl(null);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  // Submit proof of payment to order DB
-  const handleSubmitProof = async () => {
-    if (!paymentProofUrl) return;
-    setSubmittingProof(true);
-    try {
-      const res = await fetch(`/api/orders/${order.id}/payment-proof`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentProofUrl }),
-      });
-
-      if (res.ok) {
-        setShowSuccessModal(true);
-        setTimeout(() => {
-          router.push(`/orders/${order.id}`);
-        }, 3000);
-      } else {
-        showToast('Gagal memverifikasi bukti pembayaran. Silakan coba lagi.', 'error');
-      }
-    } catch {
-      showToast('Terjadi kesalahan jaringan.', 'error');
-    } finally {
-      setSubmittingProof(false);
-    }
-  };
 
   const handleDownloadQr = () => {
     try {
@@ -297,39 +224,6 @@ export default function QrisClient({ order }: { order: any }) {
           </div>
         </div>
       </div>
-
-      {/* Success Modal Overlay */}
-      <AnimatePresence>
-        {showSuccessModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-7 border border-gray-100 text-center select-none space-y-5"
-            >
-              <div className="w-16 h-16 bg-green-50 border border-green-200 text-green-500 rounded-full flex items-center justify-center mx-auto shadow-inner animate-bounce">
-                <Check className="w-8 h-8" strokeWidth={3} />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Pembayaran Sukses Dikirim!</h3>
-                <p className="text-xs text-gray-500 leading-relaxed font-semibold">
-                  Sistem kami telah menerima bukti bayar QRIS Anda. Kami akan segera mengonfirmasi pesanan Anda! 🍵
-                </p>
-              </div>
-              <div className="h-1.5 w-full bg-gray-50 rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-green-500 rounded-full"
-                  initial={{ width: 0 }}
-                  animate={{ width: '100%' }}
-                  transition={{ duration: 3, ease: 'linear' }}
-                />
-              </div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Sedang mengarahkan ke halaman pelacakan...</p>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   )
 }

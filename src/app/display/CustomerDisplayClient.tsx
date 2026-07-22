@@ -15,6 +15,7 @@ import {
   AlertCircle,
   Tag,
   Flame,
+  Loader2,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { formatRupiah } from '@/lib/utils';
@@ -44,6 +45,17 @@ export type POSDisplayState = {
   orderId?: string;
   dokuQrContent?: string | null;
   dokuQrImageUrl?: string | null;
+  activeModifier?: {
+    productName: string;
+    productImage?: string | null;
+    price: number;
+    iceLevel: string;
+    sugarLevel: string;
+    matchaLevel: number;
+    showSweetness: boolean;
+    showMatcha: boolean;
+    defaultMatcha: number;
+  } | null;
   timestamp: number;
 };
 
@@ -346,7 +358,7 @@ export default function CustomerDisplayClient() {
                 </div>
 
                 {/* QR Code Frame */}
-                <div className="p-4 bg-white rounded-2xl shadow-2xl inline-block border-4 border-amber-400/80 mx-auto relative group">
+                <div className="p-4 bg-white rounded-2xl shadow-2xl inline-block border-4 border-amber-400/80 mx-auto relative group min-w-[280px] min-h-[280px]">
                   {displayState?.dokuQrImageUrl ? (
                     <img
                       src={displayState.dokuQrImageUrl}
@@ -360,19 +372,11 @@ export default function CustomerDisplayClient() {
                       level="H"
                       includeMargin={true}
                     />
-                  ) : settings.qrisImage ? (
-                    <img
-                      src={settings.qrisImage}
-                      alt="QRIS Code"
-                      className="w-64 h-64 object-contain rounded-lg"
-                    />
                   ) : (
-                    <QRCodeSVG
-                      value={displayState?.orderId ? `QRIS-PAY-${displayState.orderId}-${totalPayable}` : `ARUMSEDUH-QRIS-${totalPayable}`}
-                      size={240}
-                      level="H"
-                      includeMargin={true}
-                    />
+                    <div className="w-64 h-64 flex flex-col items-center justify-center text-slate-900 gap-3">
+                      <Loader2 className="w-10 h-10 animate-spin text-amber-500" />
+                      <p className="text-xs font-bold text-slate-500 animate-pulse">Membuat QRIS Dinamis...</p>
+                    </div>
                   )}
                 </div>
 
@@ -597,6 +601,238 @@ export default function CustomerDisplayClient() {
           </div>
         </div>
       </main>
+      {/* Real-time Customization Pop-up Overlay (Matcha & Sweetness Visualizers) */}
+      <AnimatePresence>
+        {displayState?.activeModifier && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-6 pointer-events-none select-none"
+          >
+            <div className="w-full max-w-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-center">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+                <div className="flex items-center gap-3 text-left">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0 text-xl font-bold">
+                    ☕
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-100">{displayState.activeModifier.productName}</h2>
+                    <p className="text-xs font-semibold text-amber-400">{formatRupiah(displayState.activeModifier.price)}</p>
+                  </div>
+                </div>
+                <div className="px-3 py-1 rounded-full bg-slate-800 text-amber-400 text-xs font-bold border border-slate-700">
+                  Kustomisasi Pilihan Anda
+                </div>
+              </div>
+
+              {/* Visualizers Grid */}
+              <div className={`grid gap-4 ${displayState.activeModifier.showMatcha && displayState.activeModifier.showSweetness ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                
+                {/* 1. Matcha Visualizer (If Matcha beverage) */}
+                {displayState.activeModifier.showMatcha && (
+                  <div className="bg-emerald-950/30 border border-emerald-500/20 p-5 rounded-3xl flex flex-col items-center justify-center space-y-3 relative overflow-hidden">
+                    <div className="w-20 h-20 flex items-center justify-center">
+                      <MatchaCupVisualizer level={displayState.activeModifier.matchaLevel} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Kepekatan Matcha</h3>
+                      <p className="text-2xl font-black text-emerald-200 mt-1">Level {displayState.activeModifier.matchaLevel}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. Sweetness & Ice Visualizer */}
+                {displayState.activeModifier.showSweetness && (
+                  <div className="bg-amber-950/30 border border-amber-500/20 p-5 rounded-3xl flex flex-col items-center justify-center space-y-3 relative overflow-hidden">
+                    <div className="w-20 h-20 flex items-center justify-center">
+                      <SweetnessCupVisualizer level={SWEETNESS_MAP[displayState.activeModifier.sugarLevel] ?? 1} />
+                    </div>
+                    <div>
+                      <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Tingkat Kemanisan</h3>
+                      <p className="text-2xl font-black text-amber-200 mt-1">{displayState.activeModifier.sugarLevel}</p>
+                      <p className="text-[11px] font-semibold text-slate-400 mt-1">❄️ {displayState.activeModifier.iceLevel}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <p className="text-xs text-slate-400 font-medium">
+                Pilihan Anda diperbarui secara real-time dari meja kasir ✨
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+const SWEETNESS_MAP: { [key: string]: number } = {
+  'Less': 0,
+  'Less Sugar': 0,
+  'Biasa': 1,
+  'Normal Sugar': 1,
+  'Normal': 1,
+  'Lumayan': 2,
+  'Manis Sekali': 3,
+};
+
+function MatchaCupVisualizer({ level }: { level: number }) {
+  const h = 95 + (level - 1) * (45 / 9);
+  const s = 45 + (level - 1) * (20 / 9);
+  const l = 85 - (level - 1) * (73 / 9);
+  const liquidColor = `hsl(${h}, ${s}%, ${l}%)`;
+  const steamCount = Math.min(6, Math.floor(level / 1.5) + 1);
+  const bubbleCount = Math.min(10, level);
+
+  return (
+    <div className="relative w-24 h-24 flex items-center justify-center select-none pointer-events-none">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes steam-rise {
+          0% { transform: translateY(5px) scale(0.8); opacity: 0; }
+          50% { opacity: 0.55; }
+          100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+        @keyframes bubble-float {
+          0% { transform: translateY(0) scale(0.6); opacity: 0.2; }
+          80% { opacity: 0.7; }
+          100% { transform: translateY(-25px) scale(1); opacity: 0; }
+        }
+        @keyframes cup-shake {
+          0%, 100% { transform: rotate(0deg); }
+          50% { transform: rotate(${Math.min(3, level / 3)}deg); }
+        }
+      `}} />
+      <div className="absolute top-2 w-full flex justify-center gap-1.5 z-10 pointer-events-none">
+        {Array.from({ length: steamCount }).map((_, i) => (
+          <div
+            key={i}
+            className="w-1.5 h-6 rounded-full bg-white/20 blur-[1.5px]"
+            style={{
+              animation: `steam-rise ${1.5 + Math.random() * 1}s ease-in-out infinite`,
+              animationDelay: `${i * 0.3}s`,
+            }}
+          />
+        ))}
+      </div>
+      <svg
+        width="80"
+        height="80"
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{
+          animation: level > 7 ? 'cup-shake 0.3s ease-in-out infinite' : 'none',
+        }}
+        className="relative z-20 drop-shadow-[0_4px_12px_rgba(46,90,68,0.12)]"
+      >
+        <path d="M72 40 C84 40, 84 64, 72 64" stroke="#D4A574" strokeWidth="6" strokeLinecap="round" />
+        <path d="M20 28 L28 76 C29 82, 35 86, 42 86 H58 C65 86, 71 82, 72 76 L80 28 Z" fill="rgba(255, 255, 255, 0.45)" stroke="#E5E2DD" strokeWidth="3.5" />
+        <path d="M23 48 L28 76 C29 80, 34 83, 40 83 H60 C66 83, 71 80, 72 76 L77 48 Z" fill={liquidColor} className="transition-colors duration-500 ease-out" />
+        <ellipse cx="50" cy="48" rx="27" ry="5.5" fill={liquidColor} className="transition-colors duration-500 ease-out" />
+        <path d="M26 34 L32 70" stroke="rgba(255, 255, 255, 0.7)" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+      <div className="absolute bottom-6 w-12 h-8 z-30 pointer-events-none">
+        {Array.from({ length: bubbleCount }).map((_, i) => {
+          const left = 20 + Math.random() * 60;
+          const delay = Math.random() * 2;
+          const duration = 1 + Math.random() * 1.5;
+          return (
+            <div
+              key={i}
+              className="absolute w-2 h-2 rounded-full border border-white/20"
+              style={{
+                left: `${left}%`,
+                bottom: '0px',
+                backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.45)`,
+                animation: `bubble-float ${duration}s ease-in infinite`,
+                animationDelay: `${delay}s`,
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SweetnessCupVisualizer({ level }: { level: number }) {
+  const h = 45;
+  const s = 60 + level * 10;
+  const l = 95 - level * 13;
+  const liquidColor = `hsl(${h}, ${s}%, ${l}%)`;
+  const steamCount = Math.min(6, level + 1);
+  const bubbleCount = Math.min(10, (level + 1) * 2.5);
+
+  return (
+    <div className="relative w-24 h-24 flex items-center justify-center select-none pointer-events-none">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes sugar-steam-rise {
+          0% { transform: translateY(5px) scale(0.8); opacity: 0; }
+          50% { opacity: 0.55; }
+          100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+        @keyframes sugar-bubble-float {
+          0% { transform: translateY(0) scale(0.6); opacity: 0.2; }
+          80% { opacity: 0.7; }
+          100% { transform: translateY(-25px) scale(1); opacity: 0; }
+        }
+        @keyframes sugar-cup-shake {
+          0%, 100% { transform: rotate(0deg); }
+          50% { transform: rotate(${Math.min(3, level * 1)}deg); }
+        }
+      `}} />
+      <div className="absolute top-2 w-full flex justify-center gap-1.5 z-10 pointer-events-none">
+        {Array.from({ length: steamCount }).map((_, i) => (
+          <div
+            key={i}
+            className="w-1.5 h-6 rounded-full bg-white/20 blur-[1.5px]"
+            style={{
+              animation: `sugar-steam-rise ${1.5 + Math.random() * 1}s ease-in-out infinite`,
+              animationDelay: `${i * 0.3}s`,
+            }}
+          />
+        ))}
+      </div>
+      <svg
+        width="80"
+        height="80"
+        viewBox="0 0 100 100"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{
+          animation: level > 2 ? 'sugar-cup-shake 0.3s ease-in-out infinite' : 'none',
+        }}
+        className="relative z-20 drop-shadow-[0_4px_12px_rgba(212,165,116,0.12)]"
+      >
+        <path d="M72 40 C84 40, 84 64, 72 64" stroke="#F1C40F" strokeWidth="6" strokeLinecap="round" />
+        <path d="M20 28 L28 76 C29 82, 35 86, 42 86 H58 C65 86, 71 82, 72 76 L80 28 Z" fill="rgba(255, 255, 255, 0.45)" stroke="#E5E2DD" strokeWidth="3.5" />
+        <path d="M23 48 L28 76 C29 80, 34 83, 40 83 H60 C66 83, 71 80, 72 76 L77 48 Z" fill={liquidColor} className="transition-colors duration-500 ease-out" />
+        <ellipse cx="50" cy="48" rx="27" ry="5.5" fill={liquidColor} className="transition-colors duration-500 ease-out" />
+        <path d="M26 34 L32 70" stroke="rgba(255, 255, 255, 0.7)" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+      <div className="absolute bottom-6 w-12 h-8 z-30 pointer-events-none">
+        {Array.from({ length: bubbleCount }).map((_, i) => {
+          const left = 20 + Math.random() * 60;
+          const delay = Math.random() * 2;
+          const duration = 1 + Math.random() * 1.5;
+          return (
+            <div
+              key={i}
+              className="absolute w-2 h-2 rounded-full border border-white/20"
+              style={{
+                left: `${left}%`,
+                bottom: '0px',
+                backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.45)`,
+                animation: `sugar-bubble-float ${duration}s ease-in infinite`,
+                animationDelay: `${delay}s`,
+              }}
+            />
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -723,81 +723,20 @@ export default function PaymentClient({
           </motion.div>
         )}
 
-        {/* Drag-and-drop uploader box */}
-        {!isExpired && order.paymentMethod !== 'QRIS' && (
+        {/* Info Verifikasi Otomatis */}
+        {!isExpired && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-5 space-y-4"
+            className="bg-emerald-50 border border-emerald-100 rounded-3xl p-5 text-center shadow-sm select-none"
           >
-            <h3 className="text-xs font-black uppercase tracking-wider text-gray-400 pl-1">
-              Upload Bukti Transfer
-            </h3>
-            
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              onChange={handleFileSelect}
-              className="hidden"
-            />
-
-            {!preview ? (
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="w-full py-8 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center gap-2
-                  hover:border-[#B48A5E]/30 hover:bg-[#B48A5E]/5 transition-all active:scale-[0.98] select-none"
-              >
-                <Upload className="w-7 h-7 text-gray-300" />
-                <p className="text-xs font-bold text-gray-700">Sentuh untuk upload struk bukti bayar</p>
-                <p className="text-[9.5px] text-gray-400 font-medium">Format JPG, PNG, atau Tangkapan Layar (Screenshot)</p>
-              </button>
-            ) : (
-              <div className="relative rounded-2xl overflow-hidden border border-gray-150 shadow-inner">
-                <img src={preview} alt="Struk Pembayaran" className="w-full h-44 object-cover" />
-                
-                {uploading && (
-                  <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center">
-                    <Loader2 className="w-8 h-8 text-white animate-spin" />
-                  </div>
-                )}
-                
-                {uploaded && (
-                  <div className="absolute top-3.5 right-3.5 bg-green-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md">
-                    <CheckCircle className="w-3.5 h-3.5" /> Uploaded
-                  </div>
-                )}
-                
-                <button
-                  type="button"
-                  disabled={uploading}
-                  onClick={() => { setPreview(null); setUploaded(false); setPaymentProofUrl(null); }}
-                  className="absolute top-3 left-3 w-8 h-8 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center border border-gray-100 text-gray-500 hover:text-gray-700 shadow-sm"
-                >
-                  <X className="w-4.5 h-4.5" />
-                </button>
-              </div>
-            )}
-
-            <button
-              type="button"
-              disabled={!uploaded || submittingProof || uploading}
-              onClick={handleSubmitProof}
-              className={`w-full py-4 rounded-2xl font-bold text-sm tracking-wide shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.98]
-                ${uploaded && !submittingProof
-                  ? 'bg-[#B48A5E] hover:bg-[#946F48] text-white shadow-[#B48A5E]/15'
-                  : 'bg-gray-150 text-gray-400 border border-gray-200/50 cursor-not-allowed'}`}
-            >
-              {submittingProof ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Mengirim konfirmasi...</span>
-                </>
-              ) : (
-                'Saya Sudah Transfer & Bayar'
-              )}
-            </button>
+            <p className="text-xs text-emerald-800 font-extrabold flex items-center justify-center gap-1.5">
+              <CheckCircle className="w-4.5 h-4.5 text-emerald-500" />
+              Verifikasi Otomatis
+            </p>
+            <p className="text-[10.5px] text-emerald-650 mt-1 leading-relaxed font-semibold">
+              Pembayaran QRIS dan sistem transaksi Arum Seduh terverifikasi secara otomatis oleh sistem DOKU. Anda tidak perlu mengunggah bukti pembayaran manual.
+            </p>
           </motion.div>
         )}
 

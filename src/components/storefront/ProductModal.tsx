@@ -228,7 +228,7 @@ export function ProductModal({
         }
       } else {
         setIceLevel((product?.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
-        setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Normal Sugar');
+        setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Biasa');
         setSelectedAddOns([]);
         setSize('Normal');
         setSizePrice(0);
@@ -265,7 +265,7 @@ export function ProductModal({
   const resetState = () => {
     if (!initialData) {
       setIceLevel((product?.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
-      setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Normal Sugar');
+      setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Biasa');
       setSelectedAddOns([]);
       setSize('Normal');
       setSizePrice(0);
@@ -406,7 +406,7 @@ export function ProductModal({
     resetState();
   };
 
-  const hasIceOption = product?.modifiers?.iceLevel && product.modifiers.iceLevel.length > 0;
+  const hasIceOption = product?.modifiers?.showSweetness !== false || !!(product?.modifiers?.iceLevel && product.modifiers.iceLevel.length > 0);
   const hasAddOns = product?.modifiers?.addOns && product.modifiers.addOns.length > 0;
   const hasSizeOption = product?.modifiers?.sizes && product.modifiers.sizes.length > 0;
   const isBundleProduct = product?.modifiers?.isBundle === true;

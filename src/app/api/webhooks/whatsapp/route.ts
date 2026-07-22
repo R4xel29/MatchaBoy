@@ -334,26 +334,11 @@ export async function POST(req: Request) {
       reply += `🚦 *Status Pesanan:* ${statusFriendly}\n\n`;
       reply += `📅 *Konfirmasi Terakhir:* ${confirmTimeStr}\n`;
       reply += `⏰ *Waktu Pengambilan:* ${waktuPengambilan}\n`;
-
-      let hasQrisProof = order.paymentMethod === 'QRIS' && order.paymentProofUrl;
-      let absolutePaymentProofUrl = order.paymentProofUrl;
-      if (hasQrisProof && absolutePaymentProofUrl) {
-        if (!absolutePaymentProofUrl.startsWith('http')) {
-          const slash = absolutePaymentProofUrl.startsWith('/') ? '' : '/';
-          absolutePaymentProofUrl = `${appUrl}${slash}${absolutePaymentProofUrl}`;
-        }
-      }
-      
-      if (order.paymentMethod === 'QRIS') {
-        reply += `🖼️ *Bukti Pembayaran:* ${order.paymentProofUrl ? 'Terlampir' : 'Belum diunggah ❌'}\n`;
-      }
-      
       reply += `━━━━━━━━━━━━━━━━━━━`;
 
       return NextResponse.json({
         success: true,
-        replyMessage: reply,
-        image: hasQrisProof ? absolutePaymentProofUrl : undefined
+        replyMessage: reply
       });
     }
 

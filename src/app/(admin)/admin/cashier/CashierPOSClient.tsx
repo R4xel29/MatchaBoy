@@ -43,6 +43,11 @@ type POSProduct = {
     iceLevel?: string[];
     sugarLevel?: string[];
     addOns?: { id: string; name: string; price: number }[];
+    showSweetness?: boolean;
+    defaultSugar?: string;
+    defaultIce?: string;
+    showMatcha?: boolean;
+    defaultMatcha?: number;
   } | null;
 };
 
@@ -146,13 +151,14 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   const totalPayable = subtotal - tumblerDiscount;
 
+  const [isQrisConfirmed, setIsQrisConfirmed] = useState(false);
   const [dokuQrContent, setDokuQrContent] = useState<string | null>(null);
   const [dokuQrImageUrl, setDokuQrImageUrl] = useState<string | null>(null);
   const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState<string | null>(null);
 
-  // Request DOKU QRIS dynamic code when paymentMethod is QRIS
+  // Request DOKU QRIS dynamic code only when paymentMethod is QRIS AND cashier clicked confirm/continue
   useEffect(() => {
-    if (paymentMethod === 'QRIS' && cart.length > 0 && totalPayable > 0) {
+    if (paymentMethod === 'QRIS' && isQrisConfirmed && cart.length > 0 && totalPayable > 0) {
       const invNum = `POS-${Date.now().toString().slice(-6)}`;
       setCurrentInvoiceNumber(invNum);
 
@@ -183,12 +189,13 @@ export default function CashierPOSClient({ products, categories }: Props) {
           }
         })
         .catch(() => {});
-    } else {
+    } else if (paymentMethod !== 'QRIS') {
+      setIsQrisConfirmed(false);
       setDokuQrContent(null);
       setDokuQrImageUrl(null);
       setCurrentInvoiceNumber(null);
     }
-  }, [paymentMethod, totalPayable, cart.length]);
+  }, [paymentMethod, isQrisConfirmed, totalPayable, cart.length]);
 
   // Automatic Polling (every 2 seconds) for QRIS Payment Status
   useEffect(() => {
@@ -245,6 +252,14 @@ export default function CashierPOSClient({ products, categories }: Props) {
     return () => clearInterval(pollTimer);
   }, [paymentMethod, currentInvoiceNumber, cart.length, showSuccess, isSubmitting]);
 
+  // Modifier modal state
+  const [modifierProduct, setModifierProduct] = useState<POSProduct | null>(null);
+  const [modIce, setModIce] = useState('Normal Ice');
+  const [modSugar, setModSugar] = useState('Normal Sugar');
+  const [modMatcha, setModMatcha] = useState(5);
+  const [modAddOns, setModAddOns] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [modQty, setModQty] = useState(1);
+
   // Persistent BroadcastChannel reference for second monitor display sync
   const displayChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -274,6 +289,17 @@ export default function CashierPOSClient({ products, categories }: Props) {
         orderId: lastOrderId,
         dokuQrContent,
         dokuQrImageUrl,
+        activeModifier: modifierProduct ? {
+          productName: modifierProduct.name,
+          productImage: modifierProduct.image,
+          price: modifierProduct.price,
+          iceLevel: modIce,
+          sugarLevel: modSugar,
+          matchaLevel: modMatcha,
+          showSweetness: modifierProduct.modifiers?.showSweetness !== false,
+          showMatcha: modifierProduct.modifiers?.showMatcha === true,
+          defaultMatcha: modifierProduct.modifiers?.defaultMatcha ?? 5,
+        } : null,
         timestamp: Date.now(),
       };
 
@@ -282,17 +308,10 @@ export default function CashierPOSClient({ products, categories }: Props) {
       }
       localStorage.setItem('pos_customer_display_state', JSON.stringify(statePayload));
     } catch {}
-  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl]);
+  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha]);
 
   // Pre-order QR scan state
   const [showPreScanQR, setShowPreScanQR] = useState(false);
-
-  // Modifier modal state
-  const [modifierProduct, setModifierProduct] = useState<POSProduct | null>(null);
-  const [modIce, setModIce] = useState('Normal Ice');
-  const [modSugar, setModSugar] = useState('Normal Sugar');
-  const [modAddOns, setModAddOns] = useState<{ id: string; name: string; price: number }[]>([]);
-  const [modQty, setModQty] = useState(1);
 
   // Filtered products
   const filteredProducts = useMemo(() => {
@@ -369,14 +388,23 @@ export default function CashierPOSClient({ products, categories }: Props) {
       return;
     }
 
-    if (product.modifiers && (product.modifiers.iceLevel || product.modifiers.sugarLevel || product.modifiers.addOns)) {
+    const mods = product.modifiers;
+    const hasModifiers = mods && (
+      mods.showSweetness !== false ||
+      mods.iceLevel?.length ||
+      mods.sugarLevel?.length ||
+      (mods.addOns && mods.addOns.length > 0)
+    );
+
+    if (hasModifiers) {
       setModifierProduct(product);
-      setModIce(product.modifiers.iceLevel?.[0] || 'Normal Ice');
-      setModSugar(product.modifiers.sugarLevel?.[0] || 'Normal Sugar');
+      setModIce(mods?.defaultIce || mods?.iceLevel?.[0] || 'Normal Ice');
+      setModSugar(mods?.defaultSugar || mods?.sugarLevel?.[0] || 'Biasa');
+      setModMatcha(mods?.defaultMatcha ?? 5);
       setModAddOns([]);
       setModQty(1);
     } else {
-      addToCart(product, 'Normal Ice', 'Normal Sugar', [], 1);
+      addToCart(product, 'Normal Ice', 'Biasa', [], 1);
     }
   };
 
@@ -1007,13 +1035,29 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   </div>
                 </div>
 
-                {/* QRIS Active Notice & Automatic Payment Polling */}
-                {paymentMethod === 'QRIS' && (
-                  <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
+                {/* QRIS Active Notice & Proceed Button */}
+                {paymentMethod === 'QRIS' && !isQrisConfirmed && (
+                  <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-center space-y-3">
+                    <p className="text-xs font-semibold text-amber-900 leading-relaxed">
+                      Tekan tombol di bawah untuk men-generate kode QRIS DOKU dan menayangkannya pada Layar Pelanggan.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsQrisConfirmed(true)}
+                      disabled={cart.length === 0 || !customerName.trim()}
+                      className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs shadow-md transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      🚀 Lanjutkan ke QRIS (Generasikan QR Code)
+                    </button>
+                  </div>
+                )}
+
+                {paymentMethod === 'QRIS' && isQrisConfirmed && (
+                  <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
                     <div className="flex items-center gap-2 text-xs text-emerald-950 font-medium">
                       <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
                       <span>
-                        Sistem otomatis mendeteksi pembayaran QRIS DOKU secara real-time... (Tidak perlu konfirmasi manual)
+                        Kode QRIS aktif! Sistem otomatis mendeteksi pembayaran secara real-time...
                       </span>
                     </div>
                   </div>
@@ -1097,11 +1141,11 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
               <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
                 {/* Ice Level */}
-                {modifierProduct.modifiers?.iceLevel && (
+                {modifierProduct.modifiers?.showSweetness !== false && (
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Ice Level</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">❄️ Ice Level</p>
                     <div className="flex flex-wrap gap-2">
-                      {modifierProduct.modifiers.iceLevel.map((level) => (
+                      {['Normal Ice', 'Less Ice', 'No Ice'].map((level) => (
                         <button
                           key={level}
                           onClick={() => setModIce(level)}
@@ -1119,16 +1163,16 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 )}
 
                 {/* Sugar Level */}
-                {modifierProduct.modifiers?.sugarLevel && (
+                {modifierProduct.modifiers?.showSweetness !== false && (
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Sugar Level</p>
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">🍯 Kemanisan (Sugar Level)</p>
                     <div className="flex flex-wrap gap-2">
-                      {modifierProduct.modifiers.sugarLevel.map((level) => (
+                      {['Less', 'Biasa', 'Lumayan', 'Manis Sekali'].map((level) => (
                         <button
                           key={level}
                           onClick={() => setModSugar(level)}
                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                            modSugar === level
+                            modSugar === level || (level === 'Biasa' && modSugar === 'Normal Sugar') || (level === 'Less' && modSugar === 'Less Sugar')
                               ? 'bg-amber-600 text-white'
                               : 'bg-muted/50 text-foreground hover:bg-muted'
                           }`}
@@ -1136,6 +1180,33 @@ export default function CashierPOSClient({ products, categories }: Props) {
                           {level}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Matcha Intensity */}
+                {modifierProduct.modifiers?.showMatcha === true && (
+                  <div className="space-y-2 pt-2 border-t border-border/30">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
+                        🍵 Kepekatan Matcha
+                      </p>
+                      <span className="text-xs font-black text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        Level {modMatcha}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10"
+                      value={modMatcha}
+                      onChange={(e) => setModMatcha(parseInt(e.target.value))}
+                      className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-emerald-100 via-emerald-400 to-emerald-900"
+                    />
+                    <div className="flex justify-between text-[9px] text-muted-foreground font-semibold px-0.5 select-none">
+                      <span>Subtle (1)</span>
+                      <span>Standard (5)</span>
+                      <span>Extra Strong (10)</span>
                     </div>
                   </div>
                 )}
