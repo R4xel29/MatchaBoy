@@ -243,6 +243,12 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
               <span className="text-muted-foreground">Delivery</span>
               <span>{formatRupiah(order.deliveryFee)}</span>
             </div>
+            {order.subtotal + order.deliveryFee - order.total > 0 && (
+              <div className="flex justify-between text-[12px] text-rose-600 font-semibold bg-rose-50/50 px-2 py-1 rounded-lg">
+                <span>Potongan Diskon {order.hasTumbler ? '(Bawa Tumbler 🌿)' : order.voucherCode ? `(${order.voucherCode})` : ''}</span>
+                <span>-{formatRupiah(order.subtotal + order.deliveryFee - order.total)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm font-bold pt-1.5 border-t border-border/30">
               <span>Total</span>
               <span className="text-brand-700">{formatRupiah(order.total)}</span>

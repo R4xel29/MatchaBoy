@@ -16,6 +16,10 @@ interface OrderData {
   notes?: string | null;
   pickupTime?: string | null;
   source?: string | null;
+  subtotal?: number;
+  deliveryFee?: number;
+  voucherCode?: string | null;
+  hasTumbler?: boolean;
 }
 import { UrlPagination } from '@/components/ui/UrlPagination';
 
@@ -281,8 +285,15 @@ export default function AdminOrdersClient({
                           </span>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5">Total</p>
+                      <div className="text-right flex flex-col items-end">
+                        {order.subtotal !== undefined && order.subtotal + (order.deliveryFee ?? 0) - order.total > 0 && (
+                          <div className="text-[10px] text-muted-foreground font-semibold flex flex-wrap gap-1 justify-end items-center max-w-[250px] leading-tight mb-0.5">
+                            <span>Subtotal: {formatRupiah(order.subtotal)}</span>
+                            {order.deliveryFee ? <span>+ Ongkir: {formatRupiah(order.deliveryFee)}</span> : null}
+                            <span className="text-rose-600 bg-rose-50 px-1 py-0.5 rounded text-[9.5px]">Potongan: -{formatRupiah(order.subtotal + (order.deliveryFee ?? 0) - order.total)}</span>
+                          </div>
+                        )}
+                        <p className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider mb-0.5 mt-0.5">Total</p>
                         <p className="text-sm font-bold text-foreground">{formatRupiah(order.total)}</p>
                       </div>
                     </div>

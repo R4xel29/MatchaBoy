@@ -91,6 +91,66 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
+
+    // QRIS Confirmation: Update the pre-existing QRIS order rather than creating a duplicate
+    if (body.isQrisConfirm && body.invoiceNumber) {
+      const existingOrder = await prisma.order.findUnique({
+        where: { id: body.invoiceNumber }
+      });
+      
+      if (!existingOrder) {
+        return NextResponse.json({ error: 'Pesanan QRIS tidak ditemukan' }, { status: 404 });
+      }
+      
+      // Update cashierId
+      await prisma.order.update({
+        where: { id: existingOrder.id },
+        data: {
+          cashierId: session.user.id
+        }
+      });
+      
+      // Update table seats if DINE_IN
+      if (existingOrder.orderType === 'DINE_IN' && existingOrder.tableNumber) {
+        const tbl = await prisma.diningTable.findUnique({
+          where: { number: existingOrder.tableNumber }
+        });
+        if (tbl) {
+          const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1;
+          const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats);
+          await prisma.diningTable.update({
+            where: { number: existingOrder.tableNumber },
+            data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
+          });
+        }
+      }
+      
+      // Update shift stats
+      const activeShift = await prisma.cashierShift.findFirst({
+        where: {
+          cashierId: session.user.id,
+          closedAt: null
+        }
+      });
+      if (activeShift) {
+        await prisma.cashierShift.update({
+          where: { id: activeShift.id },
+          data: {
+            totalOrders: { increment: 1 },
+            totalRevenue: { increment: existingOrder.total }
+          }
+        });
+      }
+      
+      return NextResponse.json({
+        success: true,
+        orderId: existingOrder.id,
+        total: existingOrder.total,
+        pointsAwarded: false, // Already processed by webhook
+        pointsEarned: 0,
+        newPoints: null,
+      });
+    }
     
     // Validation
     if (!body.items || body.items.length === 0) {

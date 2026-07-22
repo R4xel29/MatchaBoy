@@ -192,11 +192,13 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   // Automatic Polling (every 2 seconds) for QRIS Payment Status
   useEffect(() => {
-    if (paymentMethod !== 'QRIS' || !currentInvoiceNumber || cart.length === 0 || showSuccess) {
+    if (paymentMethod !== 'QRIS' || !currentInvoiceNumber || cart.length === 0 || showSuccess || isSubmitting) {
       return;
     }
 
     const pollTimer = setInterval(() => {
+      if (isSubmitting) return;
+
       fetch('/api/cashier/doku-qris-status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,7 +208,34 @@ export default function CashierPOSClient({ products, categories }: Props) {
       })
         .then((res) => res.json())
         .then((data) => {
-          if (data.paid === true) {
+          if (data.paid === true && !isSubmitting) {
+            // Instantly update second monitor display with completed state for maximum responsiveness
+            const instantCompletedPayload = {
+              cart,
+              subtotal,
+              tumblerDiscount,
+              totalPayable,
+              customerName: customerName || 'Pelanggan Arum Seduh',
+              orderType,
+              paymentMethod,
+              hasTumbler,
+              tableNumber: selectedTable,
+              isCompleted: true,
+              orderId: currentInvoiceNumber,
+              dokuQrContent,
+              dokuQrImageUrl,
+              timestamp: Date.now(),
+            };
+
+            if (displayChannelRef.current) {
+              try {
+                displayChannelRef.current.postMessage(instantCompletedPayload);
+              } catch {}
+            }
+            try {
+              localStorage.setItem('pos_customer_display_state', JSON.stringify(instantCompletedPayload));
+            } catch {}
+
             handleSubmitOrder();
           }
         })
@@ -214,7 +243,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
     }, 2000);
 
     return () => clearInterval(pollTimer);
-  }, [paymentMethod, currentInvoiceNumber, cart.length, showSuccess]);
+  }, [paymentMethod, currentInvoiceNumber, cart.length, showSuccess, isSubmitting]);
 
   // Persistent BroadcastChannel reference for second monitor display sync
   const displayChannelRef = useRef<BroadcastChannel | null>(null);
@@ -434,6 +463,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   // Submit order
   const handleSubmitOrder = async () => {
+    if (isSubmitting) return;
     if (cart.length === 0 || !customerName) return;
     
     if (orderType === 'DINE_IN' && !selectedTable) {
@@ -455,6 +485,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
         notes,
         paymentMethod,
         hasTumbler,
+        isQrisConfirm: paymentMethod === 'QRIS',
+        invoiceNumber: paymentMethod === 'QRIS' ? currentInvoiceNumber : undefined,
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
