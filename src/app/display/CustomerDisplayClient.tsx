@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ShoppingBag,
@@ -96,6 +96,46 @@ export default function CustomerDisplayClient() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
   const [resetCountdown, setResetCountdown] = useState<number | null>(null);
+
+  const catalogScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll catalog menu for overflow items when scrollbar is hidden
+  useEffect(() => {
+    const container = catalogScrollRef.current;
+    if (!container) return;
+
+    let scrollDirection = 1;
+    let isPaused = false;
+    let pauseTimeout: NodeJS.Timeout | null = null;
+
+    const scrollInterval = setInterval(() => {
+      if (isPaused || !container) return;
+
+      const maxScroll = container.scrollHeight - container.clientHeight;
+      if (maxScroll <= 5) return;
+
+      if (scrollDirection === 1 && container.scrollTop >= maxScroll - 2) {
+        isPaused = true;
+        pauseTimeout = setTimeout(() => {
+          scrollDirection = -1;
+          isPaused = false;
+        }, 3000);
+      } else if (scrollDirection === -1 && container.scrollTop <= 2) {
+        isPaused = true;
+        pauseTimeout = setTimeout(() => {
+          scrollDirection = 1;
+          isPaused = false;
+        }, 3000);
+      } else {
+        container.scrollTop += scrollDirection * 0.8;
+      }
+    }, 35);
+
+    return () => {
+      clearInterval(scrollInterval);
+      if (pauseTimeout) clearTimeout(pauseTimeout);
+    };
+  }, [selectedCategory, settings.products.length]);
 
   // Auto-reset display back to default menu catalog 6 seconds after order completion
   useEffect(() => {
@@ -436,7 +476,10 @@ export default function CustomerDisplayClient() {
                 </div>
 
                 {/* Product Catalog Grid */}
-                <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800">
+                <div
+                  ref={catalogScrollRef}
+                  className="flex-1 overflow-y-auto pr-1 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                >
                   {filteredProducts.length === 0 ? (
                     <div className="py-16 text-center text-slate-500">
                       <Coffee className="w-10 h-10 mx-auto mb-2 opacity-30" />
@@ -536,7 +579,7 @@ export default function CustomerDisplayClient() {
           </div>
 
           {/* Cart Itemized List */}
-          <div className="flex-1 overflow-y-auto py-4 space-y-3 scrollbar-thin scrollbar-thumb-slate-800">
+          <div className="flex-1 overflow-y-auto py-4 space-y-3 scrollbar-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {cart.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center text-slate-500 space-y-3 py-16">
                 <Coffee className="w-12 h-12 stroke-[1.5] text-slate-600 opacity-40 animate-pulse" />
