@@ -29,6 +29,21 @@ import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
 import { useToast } from '@/components/ui/Toast';
 
+const DEFAULT_DRINK_SIZES = [
+  { name: 'Regular', price: 0 },
+  { name: 'Large', price: 2000 },
+];
+
+function getEffectiveSizes(productMods: POSProduct['modifiers']) {
+  if (productMods?.sizes && productMods.sizes.length > 0) {
+    return productMods.sizes;
+  }
+  if (productMods?.showSweetness !== false) {
+    return DEFAULT_DRINK_SIZES;
+  }
+  return [];
+}
+
 type POSProduct = {
   id: string;
   name: string;
@@ -159,12 +174,14 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [dokuQrContent, setDokuQrContent] = useState<string | null>(null);
   const [dokuQrImageUrl, setDokuQrImageUrl] = useState<string | null>(null);
   const [currentInvoiceNumber, setCurrentInvoiceNumber] = useState<string | null>(null);
+  const pendingQrisInvoiceRef = useRef<string | null>(null);
 
   // Request DOKU QRIS dynamic code only when paymentMethod is QRIS AND cashier clicked confirm/continue
   useEffect(() => {
     if (paymentMethod === 'QRIS' && isQrisConfirmed && cart.length > 0 && totalPayable > 0) {
       const invNum = `POS-${Date.now().toString().slice(-6)}`;
       setCurrentInvoiceNumber(invNum);
+      pendingQrisInvoiceRef.current = invNum;
 
       fetch('/api/cashier/doku-qris', {
         method: 'POST',
@@ -305,7 +322,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
           matchaLevel: modMatcha,
           size: modSize,
           sizePrice: modSizePrice,
-          sizes: modifierProduct.modifiers?.sizes || [],
+          sizes: getEffectiveSizes(modifierProduct.modifiers),
           showSweetness: modifierProduct.modifiers?.showSweetness !== false,
           showMatcha: modifierProduct.modifiers?.showMatcha === true,
           defaultMatcha: modifierProduct.modifiers?.defaultMatcha ?? 5,
@@ -400,10 +417,11 @@ export default function CashierPOSClient({ products, categories }: Props) {
     }
 
     const mods = product.modifiers;
+    const effectiveSizes = getEffectiveSizes(mods);
     const hasModifiers = mods && (
       mods.showSweetness !== false ||
       mods.showMatcha === true ||
-      (mods.sizes && mods.sizes.length > 0) ||
+      effectiveSizes.length > 0 ||
       mods.iceLevel?.length ||
       mods.sugarLevel?.length ||
       (mods.addOns && mods.addOns.length > 0)
@@ -414,15 +432,15 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setModIce(mods?.defaultIce || mods?.iceLevel?.[0] || 'Normal Ice');
       setModSugar(mods?.defaultSugar || mods?.sugarLevel?.[0] || 'Biasa');
       setModMatcha(mods?.defaultMatcha ?? 5);
-      const firstSize = mods?.sizes?.[0];
-      setModSize(firstSize?.name || 'Normal');
+      const firstSize = effectiveSizes[0];
+      setModSize(firstSize?.name || 'Regular');
       setModSizePrice(firstSize?.price || 0);
 
       if (mods?.showMatcha) {
         setActiveStep('MATCHA');
       } else if (mods?.showSweetness !== false) {
         setActiveStep('SWEETNESS');
-      } else if (mods?.sizes && mods.sizes.length > 0) {
+      } else if (effectiveSizes.length > 0) {
         setActiveStep('SIZE');
       } else {
         setActiveStep('ICE');
@@ -431,7 +449,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setModAddOns([]);
       setModQty(1);
     } else {
-      addToCart(product, 'Normal Ice', 'Biasa', 5, 'Normal', 0, [], 1);
+      addToCart(product, 'Normal Ice', 'Biasa', 5, 'Regular', 0, [], 1);
     }
   };
 
@@ -547,7 +565,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
         paymentMethod,
         hasTumbler,
         isQrisConfirm: paymentMethod === 'QRIS',
-        invoiceNumber: paymentMethod === 'QRIS' ? currentInvoiceNumber : undefined,
+        invoiceNumber: currentInvoiceNumber || pendingQrisInvoiceRef.current || undefined,
         items: cart.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,
@@ -606,6 +624,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
       // Reset form after short delay so second monitor retains completed state smoothly
       setTimeout(() => {
+        pendingQrisInvoiceRef.current = null;
         setCart([]);
         setCustomerName('');
         setCustomerPhone('');
@@ -1087,12 +1106,22 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
                 {paymentMethod === 'QRIS' && isQrisConfirmed && (
                   <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-emerald-950 font-medium">
-                      <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
-                      <span>
-                        Kode QRIS aktif! Sistem otomatis mendeteksi pembayaran secara real-time...
-                      </span>
+                    <div className="flex items-center justify-between gap-2 text-xs text-emerald-950 font-medium">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 text-emerald-600 animate-spin shrink-0" />
+                        <span>Kode QRIS aktif! Menunggu pembayaran...</span>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentMethod('CASH');
+                        setIsQrisConfirmed(false);
+                      }}
+                      className="w-full py-2 px-3 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 border border-amber-300 shadow-sm"
+                    >
+                      💵 Pelanggan Ganti ke Tunai (Batalkan QRIS)
+                    </button>
                   </div>
                 )}
 
@@ -1173,91 +1202,98 @@ export default function CashierPOSClient({ products, categories }: Props) {
               </div>
 
               <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
-                {/* Step Focus Bar (Display Sync Control) */}
-                <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-100 border border-slate-200 overflow-x-auto">
-                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1.5 shrink-0">Focus Display:</span>
-                  {modifierProduct.modifiers?.showMatcha && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep('MATCHA')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                        activeStep === 'MATCHA' ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      🍵 Matcha
-                    </button>
-                  )}
-                  {modifierProduct.modifiers?.showSweetness !== false && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep('SWEETNESS')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                        activeStep === 'SWEETNESS' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      🍯 Manis
-                    </button>
-                  )}
-                  {modifierProduct.modifiers?.showSweetness !== false && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep('ICE')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                        activeStep === 'ICE' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      🧊 Es Batu
-                    </button>
-                  )}
-                  {modifierProduct.modifiers?.sizes && modifierProduct.modifiers.sizes.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setActiveStep('SIZE')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                        activeStep === 'SIZE' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
-                      }`}
-                    >
-                      🥤 Ukuran Gelas
-                    </button>
-                  )}
-                </div>
+                {(() => {
+                  const effectiveSizes = getEffectiveSizes(modifierProduct.modifiers);
+                  return (
+                    <>
+                      {/* Step Focus Bar (Display Sync Control) */}
+                      <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-100 border border-slate-200 overflow-x-auto">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1.5 shrink-0">Focus Display:</span>
+                        {modifierProduct.modifiers?.showMatcha && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveStep('MATCHA')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                              activeStep === 'MATCHA' ? 'bg-emerald-700 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            🍵 Matcha
+                          </button>
+                        )}
+                        {modifierProduct.modifiers?.showSweetness !== false && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveStep('SWEETNESS')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                              activeStep === 'SWEETNESS' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            🍯 Manis
+                          </button>
+                        )}
+                        {modifierProduct.modifiers?.showSweetness !== false && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveStep('ICE')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                              activeStep === 'ICE' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            🧊 Es Batu
+                          </button>
+                        )}
+                        {effectiveSizes.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveStep('SIZE')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                              activeStep === 'SIZE' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            🥤 Ukuran Gelas
+                          </button>
+                        )}
+                      </div>
 
-                {/* Size Options */}
-                {modifierProduct.modifiers?.sizes && modifierProduct.modifiers.sizes.length > 0 && (
-                  <div
-                    onClick={() => setActiveStep('SIZE')}
-                    className={`p-3 rounded-2xl border transition-all ${
-                      activeStep === 'SIZE' ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-border/40'
-                    }`}
-                  >
-                    <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center justify-between">
-                      <span>🥤 Ukuran Gelas</span>
-                      <span className="text-[10px] text-indigo-600 font-semibold">{modSize} {modSizePrice > 0 ? `(+${formatRupiah(modSizePrice)})` : ''}</span>
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {modifierProduct.modifiers.sizes.map((sz) => (
-                        <button
-                          key={sz.name}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModSize(sz.name);
-                            setModSizePrice(sz.price);
-                            setActiveStep('SIZE');
-                          }}
-                          className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                            modSize === sz.name
-                              ? 'bg-indigo-600 text-white shadow-sm'
-                              : 'bg-white border border-border/60 text-foreground hover:border-indigo-300'
+                      {/* Size Options */}
+                      {effectiveSizes.length > 0 && (
+                        <div
+                          onClick={() => setActiveStep('SIZE')}
+                          className={`p-3 rounded-2xl border transition-all ${
+                            activeStep === 'SIZE' ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-border/40'
                           }`}
                         >
-                          <span>{sz.name}</span>
-                          <span className="text-[10px] opacity-80">{sz.price > 0 ? `(+${formatRupiah(sz.price)})` : 'Gratis'}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                          <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>🥤 Ukuran Gelas</span>
+                            <span className="text-[10px] text-indigo-600 font-semibold">{modSize} {modSizePrice > 0 ? `(+${formatRupiah(modSizePrice)})` : ''}</span>
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {effectiveSizes.map((sz) => (
+                              <button
+                                key={sz.name}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setModSize(sz.name);
+                                  setModSizePrice(sz.price);
+                                  setActiveStep('SIZE');
+                                }}
+                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                  modSize === sz.name
+                                    ? 'bg-indigo-600 text-white shadow-sm'
+                                    : 'bg-white border border-border/60 text-foreground hover:border-indigo-300'
+                                }`}
+                              >
+                                <span>{sz.name}</span>
+                                <span className="text-[10px] opacity-80">{sz.price > 0 ? `(+${formatRupiah(sz.price)})` : 'Gratis'}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
                 {/* Ice Level */}
                 {modifierProduct.modifiers?.showSweetness !== false && (

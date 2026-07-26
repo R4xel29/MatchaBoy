@@ -1160,7 +1160,10 @@ function MatchaCupVisualizer({ level }: { level: number }) {
             key={i}
             className="w-1.5 h-6 rounded-full bg-white/20 blur-[1.5px]"
             style={{
-              animation: `steam-rise ${1.5 + Math.random() * 1}s ease-in-out infinite`,
+              animationName: 'steam-rise',
+              animationDuration: `${1.5 + (i % 3) * 0.3}s`,
+              animationTimingFunction: 'ease-in-out',
+              animationIterationCount: 'infinite',
               animationDelay: `${i * 0.3}s`,
             }}
           />
@@ -1175,7 +1178,10 @@ function MatchaCupVisualizer({ level }: { level: number }) {
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{
-          animation: level > 7 ? 'cup-shake 0.3s ease-in-out infinite' : 'none',
+          animationName: level > 7 ? 'cup-shake' : 'none',
+          animationDuration: '0.3s',
+          animationTimingFunction: 'ease-in-out',
+          animationIterationCount: 'infinite',
         }}
         className="relative z-20 drop-shadow-[0_4px_12px_rgba(46,90,68,0.12)]"
       >
@@ -1224,9 +1230,9 @@ function MatchaCupVisualizer({ level }: { level: number }) {
       {/* Floating Bubbles */}
       <div className="absolute bottom-6 w-12 h-8 z-30 pointer-events-none">
         {Array.from({ length: bubbleCount }).map((_, i) => {
-          const left = 20 + Math.random() * 60;
-          const delay = Math.random() * 2;
-          const duration = 1 + Math.random() * 1.5;
+          const left = 20 + ((i * 17) % 60);
+          const delay = (i * 0.3) % 2;
+          const duration = 1 + ((i * 0.2) % 1.5);
           return (
             <div
               key={i}
@@ -1235,7 +1241,10 @@ function MatchaCupVisualizer({ level }: { level: number }) {
                 left: `${left}%`,
                 bottom: '0px',
                 backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.45)`,
-                animation: `bubble-float ${duration}s ease-in infinite`,
+                animationName: 'bubble-float',
+                animationDuration: `${duration}s`,
+                animationTimingFunction: 'ease-in',
+                animationIterationCount: 'infinite',
                 animationDelay: `${delay}s`,
               }}
             />
@@ -1283,7 +1292,10 @@ function SweetnessCupVisualizer({ level }: { level: number }) {
             key={i}
             className="w-1.5 h-6 rounded-full bg-white/20 blur-[1.5px]"
             style={{
-              animation: `sugar-steam-rise ${1.5 + Math.random() * 1}s ease-in-out infinite`,
+              animationName: 'sugar-steam-rise',
+              animationDuration: `${1.5 + (i % 3) * 0.3}s`,
+              animationTimingFunction: 'ease-in-out',
+              animationIterationCount: 'infinite',
               animationDelay: `${i * 0.3}s`,
             }}
           />
@@ -1298,7 +1310,10 @@ function SweetnessCupVisualizer({ level }: { level: number }) {
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{
-          animation: level > 2 ? 'sugar-cup-shake 0.3s ease-in-out infinite' : 'none',
+          animationName: level > 2 ? 'sugar-cup-shake' : 'none',
+          animationDuration: '0.3s',
+          animationTimingFunction: 'ease-in-out',
+          animationIterationCount: 'infinite',
         }}
         className="relative z-20 drop-shadow-[0_4px_12px_rgba(212,165,116,0.12)]"
       >
@@ -1347,9 +1362,9 @@ function SweetnessCupVisualizer({ level }: { level: number }) {
       {/* Floating Bubbles */}
       <div className="absolute bottom-6 w-12 h-8 z-30 pointer-events-none">
         {Array.from({ length: bubbleCount }).map((_, i) => {
-          const left = 20 + Math.random() * 60;
-          const delay = Math.random() * 2;
-          const duration = 1 + Math.random() * 1.5;
+          const left = 20 + ((i * 17) % 60);
+          const delay = (i * 0.3) % 2;
+          const duration = 1 + ((i * 0.2) % 1.5);
           return (
             <div
               key={i}
@@ -1358,7 +1373,10 @@ function SweetnessCupVisualizer({ level }: { level: number }) {
                 left: `${left}%`,
                 bottom: '0px',
                 backgroundColor: `hsla(${h}, ${s}%, ${l}%, 0.45)`,
-                animation: `sugar-bubble-float ${duration}s ease-in infinite`,
+                animationName: 'sugar-bubble-float',
+                animationDuration: `${duration}s`,
+                animationTimingFunction: 'ease-in',
+                animationIterationCount: 'infinite',
                 animationDelay: `${delay}s`,
               }}
             />

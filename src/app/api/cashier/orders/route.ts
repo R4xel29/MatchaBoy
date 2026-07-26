@@ -273,49 +273,106 @@ export async function POST(req: Request) {
     const prefix = orderType === 'DELIVERY' ? 'DLV' : (orderType === 'DINE_IN' ? 'DIN' : 'POS')
     const queueNumber = `${prefix}-${await getNextQueueSequence(prefix)}`
 
-    // Create the order with sequential queue number in a transaction
-    const order = await prisma.$transaction(async (tx) => {
+    const existingPendingOrder = body.invoiceNumber
+      ? await prisma.order.findUnique({
+          where: { id: body.invoiceNumber }
+        })
+      : null;
 
-      const newOrder = await tx.order.create({
-        data: {
-          userId: body.userId || null,
-          cashierId: session.user.id,
-          orderType,
-          source: 'POS',
-          customerName: body.customerName,
-          customerPhone: body.customerPhone || '-',
-          address: body.address || '',
-          tableNumber: body.tableNumber || null,
-          notes: body.notes || null,
-          subtotal: secureSubtotal,
-          deliveryFee,
-          total: secureTotal,
-          paymentMethod: body.paymentMethod || 'CASH',
-          status: initialStatus,
-          hasTumbler,
-          queueNumber,
-          items: {
-            create: orderItemsToCreate
+    let order: any;
+
+    if (existingPendingOrder && existingPendingOrder.status === 'PENDING_PAYMENT') {
+      // Convert existing PENDING_PAYMENT QRIS order to CASH / COMPLETED order
+      order = await prisma.$transaction(async (tx) => {
+        await tx.orderItem.deleteMany({
+          where: { orderId: existingPendingOrder.id }
+        });
+
+        const updatedOrder = await tx.order.update({
+          where: { id: existingPendingOrder.id },
+          data: {
+            userId: body.userId || null,
+            cashierId: session.user.id,
+            orderType,
+            source: 'POS',
+            customerName: body.customerName,
+            customerPhone: body.customerPhone || '-',
+            address: body.address || '',
+            tableNumber: body.tableNumber || null,
+            notes: body.notes || null,
+            subtotal: secureSubtotal,
+            deliveryFee,
+            total: secureTotal,
+            paymentMethod: body.paymentMethod || 'CASH',
+            status: initialStatus,
+            hasTumbler,
+            paymentProofUrl: '/verified-cashier.svg',
+            items: {
+              create: orderItemsToCreate
+            }
+          }
+        });
+
+        if (orderType === 'DINE_IN' && body.tableNumber) {
+          const tbl = await tx.diningTable.findUnique({
+            where: { number: body.tableNumber }
+          });
+          if (tbl) {
+            const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1;
+            const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats);
+            await tx.diningTable.update({
+              where: { number: body.tableNumber },
+              data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
+            });
           }
         }
-      })
 
-      if (orderType === 'DINE_IN' && body.tableNumber) {
-        const tbl = await tx.diningTable.findUnique({
-          where: { number: body.tableNumber }
-        })
-        if (tbl) {
-          const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1
-          const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats)
-          await tx.diningTable.update({
-            where: { number: body.tableNumber },
-            data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
-          })
+        return updatedOrder;
+      });
+    } else {
+      // Create a brand new order with sequential queue number in a transaction
+      order = await prisma.$transaction(async (tx) => {
+        const newOrder = await tx.order.create({
+          data: {
+            userId: body.userId || null,
+            cashierId: session.user.id,
+            orderType,
+            source: 'POS',
+            customerName: body.customerName,
+            customerPhone: body.customerPhone || '-',
+            address: body.address || '',
+            tableNumber: body.tableNumber || null,
+            notes: body.notes || null,
+            subtotal: secureSubtotal,
+            deliveryFee,
+            total: secureTotal,
+            paymentMethod: body.paymentMethod || 'CASH',
+            status: initialStatus,
+            hasTumbler,
+            queueNumber,
+            items: {
+              create: orderItemsToCreate
+            }
+          }
+        });
+
+        if (orderType === 'DINE_IN' && body.tableNumber) {
+          const tbl = await tx.diningTable.findUnique({
+            where: { number: body.tableNumber }
+          });
+          if (tbl) {
+            const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1;
+            const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats);
+            await tx.diningTable.update({
+              where: { number: body.tableNumber },
+              data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
+            });
+          }
         }
-      }
 
-      return newOrder
-    })
+        return newOrder;
+      });
+    }
 
     // Automatically award points/rewards if customer account (userId) was linked to the POS order
     let pointsResult: any = null
