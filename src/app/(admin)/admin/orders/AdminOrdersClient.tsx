@@ -207,9 +207,9 @@ export default function AdminOrdersClient({
                       order.source === 'POS' ? 'bg-amber-50 text-amber-700 border border-amber-100 shadow-sm' :
                       'bg-sky-50 text-sky-700 border border-sky-100 shadow-sm'
                     }`}>
-                      {order.source === 'SPMB' ? `SPMB: ${order.pickupTime || ''}` : 
-                       order.source === 'WA' ? 'WhatsApp Bot' : 
-                       order.source === 'POS' ? 'Kasir (POS)' : 'Storefront/Web'}
+                      {order.source === 'SPMB' ? `SPMB (Self Service)${order.pickupTime ? `: ${order.pickupTime}` : ''}` : 
+                       order.source === 'WA' ? 'Bot WhatsApp' : 
+                       order.source === 'POS' ? 'Kasir (POS)' : 'Aplikasi'}
                     </span>
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
                       order.orderType === 'PICKUP' ? 'bg-purple-50 text-purple-700 border border-purple-100' :

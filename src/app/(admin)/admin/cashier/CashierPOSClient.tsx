@@ -34,12 +34,28 @@ const DEFAULT_DRINK_SIZES = [
   { name: 'Large', price: 2000 },
 ];
 
+const DEFAULT_ESPRESSO_SHOTS = [
+  { name: 'Single Shot', shots: 1, price: 0 },
+  { name: 'Double Shot', shots: 2, price: 5000 },
+  { name: 'Triple Shot', shots: 3, price: 10000 },
+];
+
 function getEffectiveSizes(productMods: POSProduct['modifiers']) {
   if (productMods?.sizes && productMods.sizes.length > 0) {
     return productMods.sizes;
   }
   if (productMods?.showSweetness !== false) {
     return DEFAULT_DRINK_SIZES;
+  }
+  return [];
+}
+
+function getEffectiveShots(productMods: POSProduct['modifiers']) {
+  if (productMods?.espressoShots && productMods.espressoShots.length > 0) {
+    return productMods.espressoShots;
+  }
+  if (productMods?.showEspressoShot === true) {
+    return DEFAULT_ESPRESSO_SHOTS;
   }
   return [];
 }
@@ -63,6 +79,10 @@ type POSProduct = {
     defaultIce?: string;
     showMatcha?: boolean;
     defaultMatcha?: number;
+    showEspressoShot?: boolean;
+    defaultEspressoShot?: number;
+    espressoShotPrice?: number;
+    espressoShots?: { name: string; shots: number; price: number }[];
     sizes?: { name: string; price: number }[];
   } | null;
 };
@@ -78,6 +98,9 @@ type CartItemPOS = {
   matchaLevel?: number;
   size?: string;
   sizePrice?: number;
+  shotName?: string;
+  shotCount?: number;
+  shotPrice?: number;
   addOns: { id: string; name: string; price: number }[];
   totalPrice: number;
   image?: string | null;
@@ -197,8 +220,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
           items: cart.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
-            basePrice: item.basePrice,
-            modsString: `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map((a) => a.name).join(', +') : ''}`,
+            basePrice: item.quantity > 0 ? (item.totalPrice / item.quantity) : item.basePrice,
+            modsString: `${item.matchaLevel !== undefined ? `Matcha Lvl: ${item.matchaLevel}, ` : ''}${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map((a) => a.name).join(', +') : ''}`,
           })),
         }),
       })
@@ -280,7 +303,10 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [modMatcha, setModMatcha] = useState(5);
   const [modSize, setModSize] = useState('Normal');
   const [modSizePrice, setModSizePrice] = useState(0);
-  const [activeStep, setActiveStep] = useState<'MATCHA' | 'SWEETNESS' | 'ICE' | 'SIZE'>('SWEETNESS');
+  const [modShot, setModShot] = useState('Single Shot');
+  const [modShotCount, setModShotCount] = useState(1);
+  const [modShotPrice, setModShotPrice] = useState(0);
+  const [activeStep, setActiveStep] = useState<'MATCHA' | 'SWEETNESS' | 'ICE' | 'SIZE' | 'ESPRESSO'>('SWEETNESS');
   const [modAddOns, setModAddOns] = useState<{ id: string; name: string; price: number }[]>([]);
   const [modQty, setModQty] = useState(1);
 
@@ -316,15 +342,20 @@ export default function CashierPOSClient({ products, categories }: Props) {
         activeModifier: modifierProduct ? {
           productName: modifierProduct.name,
           productImage: modifierProduct.image,
-          price: modifierProduct.price + modSizePrice,
+          price: modifierProduct.price + modSizePrice + modShotPrice + (modMatcha >= 9 ? 2000 : (modMatcha >= 7 ? 1000 : 0)),
           iceLevel: modIce,
           sugarLevel: modSugar,
           matchaLevel: modMatcha,
           size: modSize,
           sizePrice: modSizePrice,
+          shotName: modShot,
+          shotCount: modShotCount,
+          shotPrice: modShotPrice,
+          shots: getEffectiveShots(modifierProduct.modifiers),
           sizes: getEffectiveSizes(modifierProduct.modifiers),
           showSweetness: modifierProduct.modifiers?.showSweetness !== false,
           showMatcha: modifierProduct.modifiers?.showMatcha === true,
+          showEspressoShot: modifierProduct.modifiers?.showEspressoShot === true,
           defaultMatcha: modifierProduct.modifiers?.defaultMatcha ?? 5,
           activeStep,
         } : null,
@@ -336,7 +367,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
       }
       localStorage.setItem('pos_customer_display_state', JSON.stringify(statePayload));
     } catch {}
-  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, activeStep]);
+  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modShot, modShotCount, modShotPrice, activeStep]);
 
   // Pre-order QR scan state
   const [showPreScanQR, setShowPreScanQR] = useState(false);
@@ -418,9 +449,11 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
     const mods = product.modifiers;
     const effectiveSizes = getEffectiveSizes(mods);
+    const effectiveShots = getEffectiveShots(mods);
     const hasModifiers = mods && (
       mods.showSweetness !== false ||
       mods.showMatcha === true ||
+      effectiveShots.length > 0 ||
       effectiveSizes.length > 0 ||
       mods.iceLevel?.length ||
       mods.sugarLevel?.length ||
@@ -436,7 +469,14 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setModSize(firstSize?.name || 'Regular');
       setModSizePrice(firstSize?.price || 0);
 
-      if (mods?.showMatcha) {
+      const firstShot = effectiveShots[0];
+      setModShot(firstShot?.name || 'Single Shot');
+      setModShotCount(firstShot?.shots || 1);
+      setModShotPrice(firstShot?.price || 0);
+
+      if (effectiveShots.length > 0) {
+        setActiveStep('ESPRESSO');
+      } else if (mods?.showMatcha) {
         setActiveStep('MATCHA');
       } else if (mods?.showSweetness !== false) {
         setActiveStep('SWEETNESS');
@@ -449,8 +489,15 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setModAddOns([]);
       setModQty(1);
     } else {
-      addToCart(product, 'Normal Ice', 'Biasa', 5, 'Regular', 0, [], 1);
+      addToCart(product, 'Normal Ice', 'Biasa', 5, 'Regular', 0, 'Single Shot', 1, 0, [], 1);
     }
+  };
+
+  const getMatchaCharge = (level?: number) => {
+    if (!level) return 0;
+    if (level === 7 || level === 8) return 1000;
+    if (level >= 9) return 2000;
+    return 0;
   };
 
   const addToCart = (
@@ -460,13 +507,17 @@ export default function CashierPOSClient({ products, categories }: Props) {
     matchaLevel: number,
     size: string,
     sizePrice: number,
+    shotName: string,
+    shotCount: number,
+    shotPrice: number,
     addOns: { id: string; name: string; price: number }[],
     qty: number
   ) => {
     const addOnIds = addOns.map((a) => a.id).sort().join(',');
-    const cartId = `${product.id}__${iceLevel}__${sugarLevel}__${matchaLevel}__${size}__${addOnIds}`;
+    const cartId = `${product.id}__${iceLevel}__${sugarLevel}__${matchaLevel}__${size}__${shotName}__${addOnIds}`;
     const addOnTotal = addOns.reduce((sum, a) => sum + a.price, 0);
-    const itemPrice = product.price + sizePrice + addOnTotal;
+    const matchaCharge = getMatchaCharge(matchaLevel);
+    const itemPrice = product.price + sizePrice + shotPrice + addOnTotal + matchaCharge;
 
     setCart((prev) => {
       const existing = prev.find((i) => i.id === cartId);
@@ -490,6 +541,9 @@ export default function CashierPOSClient({ products, categories }: Props) {
           matchaLevel,
           size,
           sizePrice,
+          shotName,
+          shotCount,
+          shotPrice,
           addOns,
           totalPrice: itemPrice * qty,
           image: product.image,
@@ -500,7 +554,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
 
   const handleModifierConfirm = () => {
     if (!modifierProduct) return;
-    addToCart(modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modAddOns, modQty);
+    addToCart(modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modShot, modShotCount, modShotPrice, modAddOns, modQty);
     setModifierProduct(null);
   };
 
@@ -509,15 +563,15 @@ export default function CashierPOSClient({ products, categories }: Props) {
       setCart((prev) => prev.filter((i) => i.id !== id));
     } else {
       setCart((prev) =>
-        prev.map((i) =>
-          i.id === id
-            ? {
-                ...i,
-                quantity: newQty,
-                totalPrice: (i.basePrice + i.addOns.reduce((s, a) => s + a.price, 0)) * newQty,
-              }
-            : i
-        )
+        prev.map((i) => {
+          if (i.id !== id) return i;
+          const unitPrice = i.quantity > 0 ? (i.totalPrice / i.quantity) : (i.basePrice + (i.sizePrice || 0) + (i.shotPrice || 0) + getMatchaCharge(i.matchaLevel) + i.addOns.reduce((s, a) => s + a.price, 0));
+          return {
+            ...i,
+            quantity: newQty,
+            totalPrice: unitPrice * newQty,
+          };
+        })
       );
     }
   };
@@ -570,7 +624,10 @@ export default function CashierPOSClient({ products, categories }: Props) {
           productId: item.productId,
           quantity: item.quantity,
           addOnIds: item.addOns.map((a) => a.id),
-          modsString: `${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map((a) => a.name).join(', +') : ''}`,
+          sizePrice: item.sizePrice || 0,
+          shotPrice: item.shotPrice || 0,
+          matchaLevel: item.matchaLevel,
+          modsString: `${item.matchaLevel !== undefined ? `Matcha Lvl: ${item.matchaLevel}, ` : ''}${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map((a) => a.name).join(', +') : ''}`,
         })),
       };
 
@@ -667,9 +724,9 @@ export default function CashierPOSClient({ products, categories }: Props) {
           onClick={() => {
             window.open('/display', 'CustomerDisplayWindow', 'width=1280,height=800');
           }}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-slate-100 border border-slate-700 text-xs font-bold shadow-md hover:bg-slate-800 transition-all active:scale-[0.97]"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white border border-orange-600 text-xs font-bold shadow-md transition-all active:scale-[0.97]"
         >
-          <Monitor className="w-4 h-4 text-amber-400" />
+          <Monitor className="w-4 h-4 text-white" />
           Layar Monitor 2 🖥️
         </button>
       </div>
@@ -1204,11 +1261,23 @@ export default function CashierPOSClient({ products, categories }: Props) {
               <div className="p-5 space-y-4 max-h-[65vh] overflow-y-auto">
                 {(() => {
                   const effectiveSizes = getEffectiveSizes(modifierProduct.modifiers);
+                  const effectiveShots = getEffectiveShots(modifierProduct.modifiers);
                   return (
                     <>
                       {/* Step Focus Bar (Display Sync Control) */}
                       <div className="flex items-center gap-1.5 p-1.5 rounded-xl bg-slate-100 border border-slate-200 overflow-x-auto">
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-1.5 shrink-0">Focus Display:</span>
+                        {effectiveShots.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setActiveStep('ESPRESSO')}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
+                              activeStep === 'ESPRESSO' ? 'bg-amber-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            ☕ Espresso
+                          </button>
+                        )}
                         {modifierProduct.modifiers?.showMatcha && (
                           <button
                             type="button"
@@ -1254,6 +1323,44 @@ export default function CashierPOSClient({ products, categories }: Props) {
                           </button>
                         )}
                       </div>
+
+                      {/* Espresso Shot Options */}
+                      {effectiveShots.length > 0 && (
+                        <div
+                          onClick={() => setActiveStep('ESPRESSO')}
+                          className={`p-3 rounded-2xl border transition-all ${
+                            activeStep === 'ESPRESSO' ? 'border-amber-800 bg-amber-50/70 shadow-sm' : 'border-border/40'
+                          }`}
+                        >
+                          <p className="text-xs font-bold text-amber-950 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span>☕ Espresso Shot</span>
+                            <span className="text-[10px] text-amber-800 font-semibold">{modShot} {modShotPrice > 0 ? `(+${formatRupiah(modShotPrice)})` : ''}</span>
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {effectiveShots.map((st) => (
+                              <button
+                                key={st.name}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setModShot(st.name);
+                                  setModShotCount(st.shots || 1);
+                                  setModShotPrice(st.price);
+                                  setActiveStep('ESPRESSO');
+                                }}
+                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                  modShot === st.name
+                                    ? 'bg-amber-800 text-white shadow-sm'
+                                    : 'bg-white border border-border/60 text-foreground hover:border-amber-400'
+                                }`}
+                              >
+                                <span>{st.name}</span>
+                                <span className="text-[10px] opacity-80">{st.price > 0 ? `(+${formatRupiah(st.price)})` : 'Gratis'}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Size Options */}
                       {effectiveSizes.length > 0 && (
@@ -1372,7 +1479,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                         🍵 Kepekatan Matcha
                       </p>
                       <span className="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200">
-                        Level {modMatcha}
+                        Level {modMatcha} {modMatcha >= 9 ? '(+Rp 2.000)' : (modMatcha >= 7 ? '(+Rp 1.000)' : '')}
                       </span>
                     </div>
                     <input
@@ -1448,7 +1555,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-sm hover:shadow-md transition-all active:scale-[0.98]"
                 >
                   Tambah ke Pesanan — {formatRupiah(
-                    (modifierProduct.price + modSizePrice + modAddOns.reduce((s, a) => s + a.price, 0)) * modQty
+                    (modifierProduct.price + modSizePrice + modShotPrice + getMatchaCharge(modMatcha) + modAddOns.reduce((s, a) => s + a.price, 0)) * modQty
                   )}
                 </button>
               </div>

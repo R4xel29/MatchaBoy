@@ -6,7 +6,8 @@ import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import {
   Search, Plus, Edit2, Trash2, Power, PowerOff, X, Save, Loader2,
-  ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus, History, Archive, ArchiveRestore
+  ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus, History, Archive, ArchiveRestore,
+  CupSoda, Utensils
 } from 'lucide-react';
 
 // ── Types ──
@@ -28,6 +29,7 @@ interface ProductPromo {
 }
 
 interface ModifiersData {
+  productType?: 'minuman' | 'makanan';
   iceLevel?: string[];
   sugarLevel?: string[];
   addOns?: AddOnItem[];
@@ -40,6 +42,7 @@ interface ModifiersData {
   promo?: ProductPromo;
   // Per-product customizer settings
   showMatcha?: boolean;
+  showEspressoShot?: boolean;
   defaultMatcha?: number;
   showSweetness?: boolean;
   defaultSugar?: string;
@@ -174,6 +177,8 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [pickerCategory, setPickerCategory] = useState('all');
 
   // Modal state
+  const [showTypePickerModal, setShowTypePickerModal] = useState(false);
+  const [productType, setProductType] = useState<'minuman' | 'makanan'>('minuman');
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '', price: '', categoryId: '', image: '' });
@@ -209,6 +214,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [showSweetness, setShowSweetness] = useState<boolean>(true);
   const [defaultSugar, setDefaultSugar] = useState<string>('Biasa');
   const [defaultIce, setDefaultIce] = useState<string>('Normal Ice');
+  const [showEspressoShot, setShowEspressoShot] = useState<boolean>(false);
 
   // Product Sizes state (e.g. Regular, Large (+5k))
   const [modSizes, setModSizes] = useState<{ name: string; price: number }[]>([]);
@@ -411,6 +417,40 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
     }
   };
 
+  const handleSelectType = (type: 'minuman' | 'makanan') => {
+    setProductType(type);
+    setShowTypePickerModal(false);
+    if (type === 'minuman') {
+      setShowSweetness(true);
+      setShowMatcha(false);
+      setShowEspressoShot(false);
+      setModIce(['Normal Ice', 'Less Ice', 'No Ice']);
+      setModSugar(['Less', 'Biasa', 'Lumayan', 'Manis Sekali']);
+    } else {
+      setShowSweetness(false);
+      setShowMatcha(false);
+      setShowEspressoShot(false);
+      setModIce([]);
+      setModSugar([]);
+    }
+    setShowModal(true);
+  };
+
+  const handleSelectTypeInForm = (type: 'minuman' | 'makanan') => {
+    setProductType(type);
+    if (type === 'minuman') {
+      setShowSweetness(true);
+      if (modIce.length === 0) setModIce(['Normal Ice', 'Less Ice', 'No Ice']);
+      if (modSugar.length === 0) setModSugar(['Less', 'Biasa', 'Lumayan', 'Manis Sekali']);
+    } else {
+      setShowSweetness(false);
+      setShowMatcha(false);
+      setShowEspressoShot(false);
+      setModIce([]);
+      setModSugar([]);
+    }
+  };
+
   const openModal = (product?: ProductItem) => {
     if (product) {
       setEditingProduct(product);
@@ -423,6 +463,10 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
       // Parse modifiers
       const mods: ModifiersData = product.modifiers ? JSON.parse(product.modifiers) : {};
+      const detectedType = mods.productType || 
+        (mods.showMatcha || mods.showSweetness || mods.showEspressoShot || (mods.iceLevel && mods.iceLevel.length > 0) ? 'minuman' : 'makanan');
+      setProductType(detectedType);
+
       setModIce(mods.iceLevel || []);
       setModSugar(mods.sugarLevel || []);
       setModAddOns(mods.addOns || []);
@@ -433,18 +477,21 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setDiscountType(mods.discountType || 'fixed');
       setDiscountValue(mods.discountValue ? mods.discountValue.toString() : '');
 
-      // New customizer fields
-      setShowMatcha(mods.showMatcha !== false);
+      // Customizer fields
+      setShowMatcha(mods.showMatcha === true);
       setDefaultMatcha(mods.defaultMatcha ?? 5);
       setShowSweetness(mods.showSweetness !== false);
       setDefaultSugar(mods.defaultSugar || 'Biasa');
       setDefaultIce(mods.defaultIce || 'Normal Ice');
+      setShowEspressoShot(mods.showEspressoShot === true);
 
       // Promo properties
       setPromoActive(mods.promo?.isActive || false);
       setPromoPrice(mods.promo?.promoPrice ? mods.promo.promoPrice.toString() : '');
       setPromoStartDate(mods.promo?.startDate ? formatDateTimeLocal(mods.promo.startDate) : '');
       setPromoEndDate(mods.promo?.endDate ? formatDateTimeLocal(mods.promo.endDate) : '');
+
+      setShowModal(true);
     } else {
       setEditingProduct(null);
       setFormData({ name: '', description: '', price: '', categoryId: categories[0]?.id || '', image: '' });
@@ -459,25 +506,36 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setDiscountType('fixed');
       setDiscountValue('');
 
-      // New customizer fields defaults
-      setShowMatcha(true);
+      // Customizer fields defaults
+      setShowMatcha(false);
       setDefaultMatcha(5);
       setShowSweetness(true);
       setDefaultSugar('Biasa');
       setDefaultIce('Normal Ice');
+      setShowEspressoShot(false);
 
       // Reset promo properties
       setPromoActive(false);
       setPromoPrice('');
       setPromoStartDate('');
       setPromoEndDate('');
+
+      if (activeTab === 'combos') {
+        setShowModal(true);
+      } else {
+        // Show Step 1: Product Type Picker Modal
+        setShowTypePickerModal(true);
+      }
     }
     setNewAddOnName('');
     setNewAddOnPrice('');
-    setShowModal(true);
   };
 
-  const closeModal = () => { setShowModal(false); setEditingProduct(null); };
+  const closeModal = () => { 
+    setShowModal(false); 
+    setShowTypePickerModal(false);
+    setEditingProduct(null); 
+  };
 
   // ── Image Upload & Cropping handlers ──
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -683,7 +741,9 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
     if (!formData.name || !formData.description || !formData.price || !formData.categoryId) { showToast('Harap isi semua kolom wajib', 'error'); return; }
     setSaving(true);
 
-    const modifiers: ModifiersData = {};
+    const modifiers: ModifiersData = {
+      productType: productType,
+    };
     if (isBundle) {
       modifiers.isBundle = true;
       modifiers.bundleGroups = bundleGroups;
@@ -692,17 +752,24 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       modifiers.discountValue = Number(discountValue || 0);
       modifiers.originalPrice = getRegularTotalPrice();
     } else {
-      if (showSweetness) {
-        modifiers.iceLevel = ['Normal Ice', 'Less Ice', 'No Ice'];
-        modifiers.sugarLevel = ['Less', 'Biasa', 'Lumayan', 'Manis Sekali'];
+      if (productType === 'minuman') {
+        if (showSweetness) {
+          modifiers.iceLevel = modIce.length > 0 ? modIce : ['Normal Ice', 'Less Ice', 'No Ice'];
+          modifiers.sugarLevel = modSugar.length > 0 ? modSugar : ['Less', 'Biasa', 'Lumayan', 'Manis Sekali'];
+        }
+        modifiers.showMatcha = showMatcha;
+        modifiers.defaultMatcha = defaultMatcha;
+        modifiers.showEspressoShot = showEspressoShot;
+        modifiers.showSweetness = showSweetness;
+        modifiers.defaultSugar = defaultSugar;
+        modifiers.defaultIce = defaultIce;
+      } else {
+        modifiers.showMatcha = false;
+        modifiers.showEspressoShot = false;
+        modifiers.showSweetness = false;
       }
       if (modAddOns.length > 0) modifiers.addOns = modAddOns;
       if (modSizes.length > 0) modifiers.sizes = modSizes;
-      modifiers.showMatcha = showMatcha;
-      modifiers.defaultMatcha = defaultMatcha;
-      modifiers.showSweetness = showSweetness;
-      modifiers.defaultSugar = defaultSugar;
-      modifiers.defaultIce = defaultIce;
     }
 
     if (promoActive) {
@@ -1002,9 +1069,22 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-foreground text-[13px]">{product.name}</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{product.description}</p>
-                  <div className="flex items-center gap-2 mt-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     <span className="font-bold text-sm">{formatRupiah(product.price)}</span>
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-brand-50 text-brand-700">{product.category.name}</span>
+                    {(() => {
+                      try {
+                        const m = product.modifiers ? JSON.parse(product.modifiers) : {};
+                        const type = m.productType || (m.showMatcha || m.showSweetness || m.showEspressoShot || (m.iceLevel && m.iceLevel.length > 0) ? 'minuman' : 'makanan');
+                        return (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${type === 'minuman' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                            {type === 'minuman' ? '🥤 Minuman' : '🍱 Makanan'}
+                          </span>
+                        );
+                      } catch {
+                        return null;
+                      }
+                    })()}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1">{getModifierSummary(product.modifiers)}</p>
                 </div>
@@ -1036,6 +1116,73 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
         })}
       </div>
 
+      {/* ═══════ Step 1: Modal Pilih Tipe Produk (Minuman vs Makanan) ═══════ */}
+      {showTypePickerModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setShowTypePickerModal(false)}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-border/40 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-border/30 bg-gradient-to-r from-emerald-50/50 via-white to-amber-50/50">
+              <div>
+                <h3 className="text-lg font-bold font-heading text-foreground">Pilih Tipe Produk</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Tentukan tipe produk sebelum masuk ke form detail</p>
+              </div>
+              <button onClick={() => setShowTypePickerModal(false)} className="p-2 hover:bg-muted/80 rounded-xl transition-colors">
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* Content Cards */}
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Option 1: Minuman */}
+              <button
+                type="button"
+                onClick={() => handleSelectType('minuman')}
+                className="group relative flex flex-col items-start p-5 rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-50/60 to-emerald-100/30 hover:border-emerald-500 hover:from-emerald-50 hover:to-emerald-100/80 hover:shadow-lg hover:shadow-emerald-900/5 transition-all text-left active:scale-[0.98]"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 mb-3 group-hover:scale-110 transition-transform">
+                  <CupSoda className="w-6 h-6" />
+                </div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="font-bold text-base text-emerald-950">Minuman</span>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800">Drink</span>
+                </div>
+                <p className="text-xs text-emerald-900/70 leading-relaxed">
+                  Kopi, matcha, boba, jus, teh, dll. Mengaktifkan opsi Level Es, Gula, Size, Matcha & Espresso.
+                </p>
+                <div className="mt-4 flex items-center text-xs font-bold text-emerald-700 group-hover:translate-x-1 transition-transform">
+                  Pilih Minuman &rarr;
+                </div>
+              </button>
+
+              {/* Option 2: Makanan */}
+              <button
+                type="button"
+                onClick={() => handleSelectType('makanan')}
+                className="group relative flex flex-col items-start p-5 rounded-2xl border-2 border-amber-200 bg-gradient-to-b from-amber-50/60 to-amber-100/30 hover:border-amber-500 hover:from-amber-50 hover:to-amber-100/80 hover:shadow-lg hover:shadow-amber-900/5 transition-all text-left active:scale-[0.98]"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 mb-3 group-hover:scale-110 transition-transform">
+                  <Utensils className="w-6 h-6" />
+                </div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="font-bold text-base text-amber-950">Makanan</span>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-800">Food</span>
+                </div>
+                <p className="text-xs text-amber-900/70 leading-relaxed">
+                  Makanan berat, snack, kue, & pastry. Menonaktifkan kustomisasi es & gula khas minuman.
+                </p>
+                <div className="mt-4 flex items-center text-xs font-bold text-amber-700 group-hover:translate-x-1 transition-transform">
+                  Pilih Makanan &rarr;
+                </div>
+              </button>
+            </div>
+
+            <div className="px-6 py-3.5 bg-muted/20 border-t border-border/30 text-center">
+              <p className="text-[11px] text-muted-foreground">Tipe produk dapat diubah kapan saja di dalam form detail produk</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ═══════ Add/Edit Modal ═══════ */}
       {showModal && (
         <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={closeModal}>
@@ -1052,6 +1199,39 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
             </div>
 
             <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+              {/* ── Product Type Toggle in Form ── */}
+              {!isBundle && (
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-slate-50 to-gray-50 border border-border/40 shadow-sm">
+                  <div>
+                    <span className="text-xs font-bold text-foreground block">Tipe Produk</span>
+                    <span className="text-[10px] text-muted-foreground">Pilih tipe produk untuk menyesuaikan form kustomisasi</span>
+                  </div>
+                  <div className="flex items-center p-1 bg-white border border-border/40 rounded-xl gap-1 shadow-inner">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTypeInForm('minuman')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        productType === 'minuman'
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <CupSoda className="w-3.5 h-3.5" /> Minuman
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTypeInForm('makanan')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        productType === 'makanan'
+                          ? 'bg-amber-600 text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Utensils className="w-3.5 h-3.5" /> Makanan
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* ── Image Upload ── */}
               <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Product Image</label>
@@ -1414,13 +1594,27 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                 /* ── Standard Modifiers ── */
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers
+                    <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers ({productType === 'minuman' ? 'Minuman' : 'Makanan'})
                   </h4>
                   <p className="text-[10px] text-muted-foreground mb-3">Kelola add-on tambahan dan kustomisasi produk di bawah ini</p>
 
-                  {/* Sizes (Ukuran Gelas & Harga Tambahan) */}
+                  {productType === 'makanan' && (
+                    <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/40 text-amber-900 text-xs shadow-sm">
+                      <div className="flex items-center gap-2 font-bold mb-1 text-amber-950">
+                        <Utensils className="w-4 h-4 text-amber-600" />
+                        <span>Mode Produk Makanan Active</span>
+                      </div>
+                      <p className="text-[11px] text-amber-900/80 leading-relaxed">
+                        Kustomisasi khas minuman (Kadar Es, Kadar Gula, Kepekatan Matcha, & Espresso Shot) dinonaktifkan secara otomatis. Anda tetap dapat menentukan Pilihan Ukuran Porsi & Add-ons Makanan di bawah ini.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Sizes (Ukuran Porsi / Gelas & Harga Tambahan) */}
                   <div className="mb-4">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🥤 Ukuran Gelas & Harga Tambahan</label>
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+                      {productType === 'minuman' ? '🥤 Ukuran Gelas & Harga Tambahan' : '🍱 Ukuran Porsi & Harga Tambahan'}
+                    </label>
                     {modSizes.length > 0 && (
                       <div className="space-y-1.5 mb-2">
                         {modSizes.map((sz, idx) => (
@@ -1438,7 +1632,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <input value={newSizeName} onChange={e => setNewSizeName(e.target.value)} placeholder="Nama Ukuran (misal: Large)"
+                      <input value={newSizeName} onChange={e => setNewSizeName(e.target.value)} placeholder={productType === 'minuman' ? "Nama Ukuran (misal: Large)" : "Nama Porsi (misal: Jumbo / Extra)"}
                         onKeyDown={e => e.key === 'Enter' && addSizeOption()}
                         className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
                       <input type="number" value={newSizePrice} onChange={e => setNewSizePrice(e.target.value)} placeholder="+Harga (misal: 5000)"
@@ -1484,86 +1678,110 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                     </div>
                   </div>
 
-                  {/* ── Matcha Customizer Toggle ── */}
-                  <div className="pt-4 border-t border-border/30">
-                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-brand-100 bg-brand-50/20 mb-3">
-                      <div>
-                        <h4 className="text-xs font-bold text-brand-800 uppercase tracking-wider flex items-center gap-2">
-                          🍵 Kustomisasi Kepekatan Matcha
-                        </h4>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kepekatan matcha untuk produk ini</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowMatcha(!showMatcha)}
-                        className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showMatcha ? 'bg-[#2E5A44]' : 'bg-gray-200'}`}
-                      >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showMatcha ? 'left-[18px]' : 'left-0.5'}`} />
-                      </button>
-                    </div>
-                    {showMatcha && (
-                      <div className="px-1 pb-1 space-y-2">
-                        <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Default Kepekatan Matcha (1–10)</label>
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="range" min="1" max="10"
-                            value={defaultMatcha}
-                            onChange={(e) => setDefaultMatcha(parseInt(e.target.value))}
-                            className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-emerald-100 to-emerald-900"
-                          />
-                          <span className="text-sm font-black text-[#2E5A44] w-6 text-center">{defaultMatcha}</span>
+                  {/* ── Drink Specific Customizers (Only for Minuman) ── */}
+                  {productType === 'minuman' && (
+                    <>
+                      {/* ── Espresso Shot Customizer Toggle ── */}
+                      <div className="pt-4 border-t border-border/30">
+                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-800/20 bg-amber-950/5 mb-3">
+                          <div>
+                            <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
+                              ☕ Kustomisasi Espresso Shot
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan pilihan Espresso Shot (Single, Double, Triple) untuk produk ini</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowEspressoShot(!showEspressoShot)}
+                            className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showEspressoShot ? 'bg-amber-800' : 'bg-gray-200'}`}
+                          >
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showEspressoShot ? 'left-[18px]' : 'left-0.5'}`} />
+                          </button>
                         </div>
                       </div>
-                    )}
-                  </div>
 
-                  {/* ── Sweetness & Ice Toggle ── */}
-                  <div className="pt-4 border-t border-border/30">
-                    <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-3">
-                      <div>
-                        <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
-                          🍯 Kustomisasi Kemanisan & Es
-                        </h4>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kemanisan dan pilihan es untuk produk ini</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowSweetness(!showSweetness)}
-                        className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showSweetness ? 'bg-amber-500' : 'bg-gray-200'}`}
-                      >
-                        <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showSweetness ? 'left-[18px]' : 'left-0.5'}`} />
-                      </button>
-                    </div>
-                    {showSweetness && (
-                      <div className="grid grid-cols-2 gap-3 bg-muted/10 p-3 rounded-xl border border-border/20">
-                        <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Kemanisan</label>
-                          <select
-                            value={defaultSugar}
-                            onChange={(e) => setDefaultSugar(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
+                      {/* ── Matcha Customizer Toggle ── */}
+                      <div className="pt-4 border-t border-border/30">
+                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-brand-100 bg-brand-50/20 mb-3">
+                          <div>
+                            <h4 className="text-xs font-bold text-brand-800 uppercase tracking-wider flex items-center gap-2">
+                              🍵 Kustomisasi Kepekatan Matcha
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kepekatan matcha untuk produk ini</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowMatcha(!showMatcha)}
+                            className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showMatcha ? 'bg-[#2E5A44]' : 'bg-gray-200'}`}
                           >
-                            <option value="Less">Less</option>
-                            <option value="Biasa">Biasa</option>
-                            <option value="Lumayan">Lumayan</option>
-                            <option value="Manis Sekali">Manis Sekali</option>
-                          </select>
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showMatcha ? 'left-[18px]' : 'left-0.5'}`} />
+                          </button>
                         </div>
-                        <div>
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Es</label>
-                          <select
-                            value={defaultIce}
-                            onChange={(e) => setDefaultIce(e.target.value)}
-                            className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
-                          >
-                            <option value="Normal Ice">Normal Ice</option>
-                            <option value="Less Ice">Less Ice</option>
-                            <option value="No Ice">No Ice</option>
-                          </select>
-                        </div>
+                        {showMatcha && (
+                          <div className="px-1 pb-1 space-y-2">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Default Kepekatan Matcha (1–10)</label>
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="range" min="1" max="10"
+                                value={defaultMatcha}
+                                onChange={(e) => setDefaultMatcha(parseInt(e.target.value))}
+                                className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-emerald-100 to-emerald-900"
+                              />
+                              <span className="text-sm font-black text-[#2E5A44] w-6 text-center">{defaultMatcha}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+
+                      {/* ── Sweetness & Ice Toggle ── */}
+                      <div className="pt-4 border-t border-border/30">
+                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-3">
+                          <div>
+                            <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
+                              🍯 Kustomisasi Kemanisan & Es
+                            </h4>
+                            <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kemanisan dan pilihan es untuk produk ini</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShowSweetness(!showSweetness)}
+                            className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showSweetness ? 'bg-amber-500' : 'bg-gray-200'}`}
+                          >
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showSweetness ? 'left-[18px]' : 'left-0.5'}`} />
+                          </button>
+                        </div>
+                        {showSweetness && (
+                          <div className="grid grid-cols-2 gap-3 bg-muted/10 p-3 rounded-xl border border-border/20">
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Kemanisan</label>
+                              <select
+                                value={defaultSugar}
+                                onChange={(e) => setDefaultSugar(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
+                              >
+                                <option value="Less">Less</option>
+                                <option value="Biasa">Biasa</option>
+                                <option value="Lumayan">Lumayan</option>
+                                <option value="Manis Sekali">Manis Sekali</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Es</label>
+                              <select
+                                value={defaultIce}
+                                onChange={(e) => setDefaultIce(e.target.value)}
+                                className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
+                              >
+                                <option value="Normal Ice">Normal Ice</option>
+                                <option value="Less Ice">Less Ice</option>
+                                <option value="No Ice">No Ice</option>
+                              </select>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>

@@ -22,7 +22,10 @@ import {
   MapPin,
   ImageIcon,
   MessageCircle,
-  Coffee
+  Coffee,
+  Store,
+  Smartphone,
+  Monitor
 } from 'lucide-react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 import { useToast } from '@/components/ui/Toast';
@@ -288,6 +291,29 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
 
   // State variables moved to top
 
+  const [sourceFilter, setSourceFilter] = useState('ALL');
+
+  const channelStats = useMemo(() => {
+    let pos = 0;
+    let app = 0;
+    let wa = 0;
+    let spmb = 0;
+
+    orders.forEach((o) => {
+      if (o.source === 'POS') {
+        pos++;
+      } else if (o.source === 'WA') {
+        wa++;
+      } else if (o.source === 'SPMB') {
+        spmb++;
+      } else {
+        app++;
+      }
+    });
+
+    return { pos, app, wa, spmb };
+  }, [orders]);
+
   const currentOrders = activeTab === 'antrian' ? antrianOrders : selesaiOrders;
 
   const filteredOrders = currentOrders.filter((o) => {
@@ -296,7 +322,14 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
       o.customerName.toLowerCase().includes(search.toLowerCase());
     const matchesType = typeFilter === 'ALL' || o.orderType === typeFilter;
     const matchesTable = tableFilter === 'ALL' || o.tableNumber === tableFilter;
-    return matchesSearch && matchesType && matchesTable;
+    
+    let matchesSource = true;
+    if (sourceFilter === 'POS') matchesSource = o.source === 'POS';
+    else if (sourceFilter === 'WA') matchesSource = o.source === 'WA';
+    else if (sourceFilter === 'SPMB') matchesSource = o.source === 'SPMB';
+    else if (sourceFilter === 'APP') matchesSource = o.source !== 'POS' && o.source !== 'WA' && o.source !== 'SPMB';
+
+    return matchesSearch && matchesType && matchesTable && matchesSource;
   });
 
   const getNextStatus = (status: string, orderType: string, paymentMethod?: string, paymentProofUrl?: string | null) => {
@@ -454,6 +487,101 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
         </div>
       )}
 
+      {/* Headline Saluran Pemesanan Summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <button
+          type="button"
+          onClick={() => setSourceFilter(prev => prev === 'POS' ? 'ALL' : 'POS')}
+          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+            sourceFilter === 'POS'
+              ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-[1.02]'
+              : 'bg-white border-amber-200/70 hover:border-amber-400 text-slate-800 shadow-sm hover:shadow'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'POS' ? 'text-amber-100' : 'text-amber-700'}`}>
+              Kasir (POS)
+            </span>
+            <Store className={`w-4 h-4 ${sourceFilter === 'POS' ? 'text-white' : 'text-amber-600'}`} />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl font-black">{channelStats.pos}</span>
+            <span className={`text-[10px] font-semibold ${sourceFilter === 'POS' ? 'text-amber-100' : 'text-slate-500'}`}>
+              pesanan
+            </span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSourceFilter(prev => prev === 'APP' ? 'ALL' : 'APP')}
+          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+            sourceFilter === 'APP'
+              ? 'bg-sky-600 text-white border-sky-700 shadow-md scale-[1.02]'
+              : 'bg-white border-sky-200/70 hover:border-sky-400 text-slate-800 shadow-sm hover:shadow'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'APP' ? 'text-sky-100' : 'text-sky-700'}`}>
+              Aplikasi
+            </span>
+            <Smartphone className={`w-4 h-4 ${sourceFilter === 'APP' ? 'text-white' : 'text-sky-600'}`} />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl font-black">{channelStats.app}</span>
+            <span className={`text-[10px] font-semibold ${sourceFilter === 'APP' ? 'text-sky-100' : 'text-slate-500'}`}>
+              pesanan
+            </span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSourceFilter(prev => prev === 'WA' ? 'ALL' : 'WA')}
+          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+            sourceFilter === 'WA'
+              ? 'bg-emerald-600 text-white border-emerald-700 shadow-md scale-[1.02]'
+              : 'bg-white border-emerald-200/70 hover:border-emerald-400 text-slate-800 shadow-sm hover:shadow'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'WA' ? 'text-emerald-100' : 'text-emerald-700'}`}>
+              Bot WhatsApp
+            </span>
+            <MessageCircle className={`w-4 h-4 ${sourceFilter === 'WA' ? 'text-white' : 'text-emerald-600'}`} />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl font-black">{channelStats.wa}</span>
+            <span className={`text-[10px] font-semibold ${sourceFilter === 'WA' ? 'text-emerald-100' : 'text-slate-500'}`}>
+              pesanan
+            </span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSourceFilter(prev => prev === 'SPMB' ? 'ALL' : 'SPMB')}
+          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
+            sourceFilter === 'SPMB'
+              ? 'bg-indigo-600 text-white border-indigo-700 shadow-md scale-[1.02]'
+              : 'bg-white border-indigo-200/70 hover:border-indigo-400 text-slate-800 shadow-sm hover:shadow'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'SPMB' ? 'text-indigo-100' : 'text-indigo-700'}`}>
+              SPMB (Self Service)
+            </span>
+            <Monitor className={`w-4 h-4 ${sourceFilter === 'SPMB' ? 'text-white' : 'text-indigo-600'}`} />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-xl font-black">{channelStats.spmb}</span>
+            <span className={`text-[10px] font-semibold ${sourceFilter === 'SPMB' ? 'text-indigo-100' : 'text-slate-500'}`}>
+              pesanan
+            </span>
+          </div>
+        </button>
+      </div>
+
       {/* Tabs: Antrian / Selesai */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
         <button
@@ -498,6 +626,17 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
             className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
           />
         </div>
+        <select
+          value={sourceFilter}
+          onChange={(e) => setSourceFilter(e.target.value)}
+          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)] font-medium"
+        >
+          <option value="ALL">Semua Saluran</option>
+          <option value="POS">Kasir (POS)</option>
+          <option value="APP">Aplikasi (App/Web)</option>
+          <option value="WA">Bot WhatsApp</option>
+          <option value="SPMB">SPMB (Self Service)</option>
+        </select>
         <select
           value={typeFilter}
           onChange={(e) => setTypeFilter(e.target.value)}
@@ -565,9 +704,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                         order.source === 'POS' ? 'bg-amber-50 text-amber-700 border border-amber-100 shadow-sm' :
                         'bg-sky-50 text-sky-700 border border-sky-100 shadow-sm'
                       }`}>
-                        {order.source === 'SPMB' ? `SPMB: ${order.pickupTime || ''}` : 
-                         order.source === 'WA' ? 'WhatsApp Bot' : 
-                         order.source === 'POS' ? 'Kasir (POS)' : 'Storefront/Web'}
+                        {order.source === 'SPMB' ? `SPMB (Self Service)${order.pickupTime ? `: ${order.pickupTime}` : ''}` : 
+                         order.source === 'WA' ? 'Bot WhatsApp' : 
+                         order.source === 'POS' ? 'Kasir (POS)' : 'Aplikasi'}
                       </span>
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getTypeStyle(order.orderType)}`}>
                         <TypeIcon className="w-3 h-3 inline mr-0.5 -mt-0.5" />
@@ -842,6 +981,16 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                 <h2 className="text-lg font-bold font-heading text-foreground">Detail Pesanan</h2>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                   <p className="text-sm font-mono text-amber-700 font-semibold">#{selectedOrder.id.toUpperCase()}</p>
+                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                    selectedOrder.source === 'SPMB' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm' :
+                    selectedOrder.source === 'WA' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm' :
+                    selectedOrder.source === 'POS' ? 'bg-amber-50 text-amber-700 border border-amber-100 shadow-sm' :
+                    'bg-sky-50 text-sky-700 border border-sky-100 shadow-sm'
+                  }`}>
+                    {selectedOrder.source === 'SPMB' ? `SPMB (Self Service)` : 
+                     selectedOrder.source === 'WA' ? 'Bot WhatsApp' : 
+                     selectedOrder.source === 'POS' ? 'Kasir (POS)' : 'Aplikasi'}
+                  </span>
                   {selectedOrder.queueNumber && (
                     <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-extrabold text-[11px] rounded-lg border border-amber-200 uppercase">
                       Antrean: {selectedOrder.queueNumber}

@@ -229,7 +229,17 @@ export async function POST(req: Request) {
             }
           }
         }
-        secureItemPrice += addOnsTotal;
+
+        let sizePrice = Number(item.sizePrice) || 0;
+        let shotPrice = Number(item.shotPrice) || 0;
+        let matchaCharge = 0;
+        if (item.matchaLevel !== undefined && item.matchaLevel !== null) {
+          const mLevel = Number(item.matchaLevel);
+          if (mLevel === 7 || mLevel === 8) matchaCharge = 1000;
+          else if (mLevel >= 9) matchaCharge = 2000;
+        }
+
+        secureItemPrice += sizePrice + shotPrice + addOnsTotal + matchaCharge;
       }
 
       const secureItemTotal = secureItemPrice * item.quantity
