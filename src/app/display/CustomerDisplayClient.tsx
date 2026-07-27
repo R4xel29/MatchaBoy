@@ -106,6 +106,18 @@ export default function CustomerDisplayClient() {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [activeBannerIndex, setActiveBannerIndex] = useState(0);
   const [resetCountdown, setResetCountdown] = useState<number | null>(null);
+  const [currentTime, setCurrentTime] = useState<string>('');
+
+  useEffect(() => {
+    const updateTime = () => {
+      setCurrentTime(
+        new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+      );
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const catalogScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -305,7 +317,7 @@ export default function CustomerDisplayClient() {
           )}
           <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-orange-50/50 px-3 py-1.5 rounded-xl border border-orange-100">
             <Clock className="w-3.5 h-3.5 text-orange-500" />
-            <span>{new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
+            <span>{currentTime}</span>
           </div>
           <button
             onClick={toggleFullscreen}
