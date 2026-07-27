@@ -5,6 +5,7 @@ import { AuthProvider } from "@/components/providers/AuthProvider";
 import { PermissionPrompt } from "@/components/ui/PermissionPrompt";
 import { SplashProvider } from "@/components/providers/SplashProvider";
 import { prisma } from "@/lib/prisma";
+import { AutoUpdateProvider } from "@/components/providers/AutoUpdateProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -104,6 +105,7 @@ export default function RootLayout({
         <AuthProvider>
           <ToastProvider>
             <SplashProvider>
+              <AutoUpdateProvider />
               {children}
               <PermissionPrompt />
             </SplashProvider>
