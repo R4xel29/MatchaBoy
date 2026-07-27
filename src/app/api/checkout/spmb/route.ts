@@ -287,7 +287,8 @@ export async function POST(req: Request) {
         data: {
           id: orderId,
           userId: null, // guest account
-          orderType: 'PICKUP', // pickup style (no courier)
+          orderType: body.orderType || 'DINE_IN',
+          tableNumber: body.tableNumber ? body.tableNumber.toString() : null,
           source: 'SPMB', // origin tag
           customerName: body.name,
           customerPhone: body.phone,
@@ -454,12 +455,13 @@ export async function POST(req: Request) {
       select: { paymentUrl: true, paymentQrContent: true }
     });
 
-    // Send admin notification
+    // Send admin & kitchen notification
     try {
-      const { sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service');
+      const { sendAdminNewOrderNotification, sendKitchenNotification } = await import('@/lib/whatsapp-service');
       await sendAdminNewOrderNotification(order.id);
+      await sendKitchenNotification(order.id);
     } catch (e) {
-      console.error('[SPMB CHECKOUT] Admin notification error:', e);
+      console.error('[SPMB CHECKOUT] Admin/Kitchen notification error:', e);
     }
 
     return NextResponse.json({

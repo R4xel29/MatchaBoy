@@ -118,7 +118,7 @@ export default function StorefrontLayout({
         <main className={pathname === '/spmb' ? "pb-0" : "pb-20 md:pb-0"}>{children}</main>
         {pathname !== '/spmb' && <FloatingCart />}
         <ActiveOrderPopup />
-        <PromoPopup />
+        {pathname !== '/spmb' && !pathname?.startsWith('/spmb') && <PromoPopup />}
         <MatchaVibesPlayer />
 
         {pathname !== '/spmb' && (

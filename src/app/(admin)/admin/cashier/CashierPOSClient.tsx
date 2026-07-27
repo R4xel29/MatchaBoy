@@ -31,7 +31,7 @@ import { useToast } from '@/components/ui/Toast';
 
 const DEFAULT_DRINK_SIZES = [
   { name: 'Regular', price: 0 },
-  { name: 'Large', price: 2000 },
+  { name: 'Large', price: 3000 },
 ];
 
 const DEFAULT_ESPRESSO_SHOTS = [

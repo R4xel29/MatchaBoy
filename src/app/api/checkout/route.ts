@@ -317,13 +317,30 @@ export async function POST(req: Request) {
             const secureItemTotal = secureItemPrice * item.quantity
             secureSubtotal += secureItemTotal
 
+            let selectedAddOns = []
+            if (item.addOnIds && Array.isArray(item.addOnIds) && dbModifiers.addOns) {
+                for (const addOnId of item.addOnIds) {
+                    const validAddOn = dbModifiers.addOns.find((a: any) => a.id === addOnId)
+                    if (validAddOn) {
+                        selectedAddOns.push(validAddOn)
+                    }
+                }
+            }
+
+            const modifierData = dbModifiers.isBundle 
+                ? { isBundle: true, bundleSelections: item.bundleSelections }
+                : { 
+                    size: item.size,
+                    addOns: selectedAddOns,
+                    modsString: item.modsString || null,
+                    matchaLevel: item.matchaLevel
+                  };
+
             orderItemsToCreate.push({
                 productId: dbProduct.id,
                 qty: item.quantity,
                 price: secureItemPrice,
-                modifiers: dbModifiers.isBundle 
-                    ? JSON.stringify({ isBundle: true, bundleSelections: item.bundleSelections }) 
-                    : (item.modsString || null)
+                modifiers: JSON.stringify(modifierData)
             })
         }
 
@@ -997,12 +1014,13 @@ export async function POST(req: Request) {
             console.error('[CHECKOUT] Notification error:', e)
         }
 
-        // Send admin notification
+        // Send admin & kitchen notification
         try {
-            const { sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service')
+            const { sendAdminNewOrderNotification, sendKitchenNotification } = await import('@/lib/whatsapp-service')
             await sendAdminNewOrderNotification(order.id)
+            await sendKitchenNotification(order.id)
         } catch (e) {
-            console.error('[CHECKOUT] Admin notification error:', e)
+            console.error('[CHECKOUT] Admin/Kitchen notification error:', e)
         }
 
         // Read paymentUrl from the order record (set by DOKU block above)

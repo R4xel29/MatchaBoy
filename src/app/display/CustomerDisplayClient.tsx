@@ -680,7 +680,7 @@ export default function CustomerDisplayClient() {
               const activeMod = displayState.activeModifier;
               const defaultDrinkSizes = [
                 { name: 'Regular', price: 0 },
-                { name: 'Large', price: 2000 },
+                { name: 'Large', price: 3000 },
               ];
               const effectiveSizes = (activeMod.sizes && activeMod.sizes.length > 0)
                 ? activeMod.sizes
@@ -1132,7 +1132,7 @@ function IceCupVisualizer({ level }: { level: string }) {
 function GlassSizeVisualizer({ currentSize, sizes, price }: { currentSize?: string; sizes?: { name: string; price: number }[]; price?: number }) {
   const sizeList = sizes && sizes.length > 0 ? sizes : [
     { name: 'Regular', price: 0 },
-    { name: 'Large', price: 2000 },
+    { name: 'Large', price: 3000 },
   ];
 
   return (

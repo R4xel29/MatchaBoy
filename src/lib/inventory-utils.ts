@@ -42,6 +42,7 @@ export async function deductStockForOrder(orderId: string) {
     for (const item of order.items) {
       let isBundle = false;
       let bundleSelections: any[] = [];
+      let addOns: any[] = [];
       if (item.modifiers) {
         try {
           const parsed = JSON.parse(item.modifiers);
@@ -49,8 +50,36 @@ export async function deductStockForOrder(orderId: string) {
             isBundle = true;
             bundleSelections = parsed.bundleSelections;
           }
+          if (parsed && Array.isArray(parsed.addOns)) {
+            addOns = parsed.addOns;
+          }
         } catch {
           // Ignore
+        }
+      }
+
+      // Deduct addOns if any
+      for (const addOn of addOns) {
+        if (addOn.ingredientId && addOn.ingredientQty) {
+          const totalAddOnQty = addOn.ingredientQty * item.qty;
+          await prisma.$transaction([
+            prisma.ingredient.update({
+              where: { id: addOn.ingredientId },
+              data: {
+                stock: {
+                  decrement: totalAddOnQty,
+                },
+              },
+            }),
+            prisma.stockMovement.create({
+              data: {
+                ingredientId: addOn.ingredientId,
+                quantity: -totalAddOnQty,
+                type: 'OUT',
+                reason: `Order #${orderId.slice(-6).toUpperCase()} - Topping: ${addOn.name} (Qty: ${item.qty})`,
+              },
+            }),
+          ]);
         }
       }
 

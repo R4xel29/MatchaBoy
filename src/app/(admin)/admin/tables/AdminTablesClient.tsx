@@ -420,7 +420,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   // Get dynamic domain or origin
   const getStoreUrl = (tableNum: string) => {
     if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/?table=${encodeURIComponent(tableNum)}`;
+    return `${window.location.origin}/spmb?table=${encodeURIComponent(tableNum)}`;
   };
 
   return (

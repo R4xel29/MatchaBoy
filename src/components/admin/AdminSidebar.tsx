@@ -58,6 +58,7 @@ import Image from 'next/image';
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
+  { label: 'Layar Dapur HP', href: '/admin/kitchen', icon: ChefHat },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
   { label: 'Laba Rugi', href: '/admin/reports/profit', icon: BarChart4 },
   { label: 'Penjualan', href: '/admin/reports', icon: BarChart3 },

@@ -198,6 +198,7 @@ model Product {
 
   orderItems OrderItem[]
   productIngredients ProductIngredient[]
+  productToppings ProductTopping[]
 
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -683,6 +684,36 @@ model BannedContact {
 // INVENTORY & PROFIT MODELS
 // -----------------------------------------------------------------------------
 
+model Topping {
+  id            String    @id @default(cuid())
+  name          String
+  price         Int       @default(0)
+  image         String?
+  isAvailable   Boolean   @default(true)
+  
+  ingredientId  String?
+  ingredient    Ingredient? @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  ingredientQty Float     @default(1)
+
+  productToppings ProductTopping[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model ProductTopping {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  toppingId   String
+  topping     Topping  @relation(fields: [toppingId], references: [id], onDelete: Cascade)
+  customPrice Int?
+
+  createdAt   DateTime @default(now())
+
+  @@unique([productId, toppingId])
+}
+
 model Ingredient {
   id            String   @id @default(cuid())
   name          String
@@ -693,6 +724,7 @@ model Ingredient {
   
   productIngredients ProductIngredient[]
   stockMovements    StockMovement[]
+  toppings          Topping[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

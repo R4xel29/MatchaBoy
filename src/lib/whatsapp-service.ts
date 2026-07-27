@@ -549,6 +549,86 @@ export async function sendOnDeliveryNotification(orderId: string) {
   }
 }
 
+export async function sendKitchenNotification(orderId: string) {
+  try {
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          include: {
+            product: true
+          }
+        }
+      }
+    });
+
+    if (!order) {
+      console.warn(`[WHATSAPP_SERVICE] Order ${orderId} tidak ditemukan untuk notifikasi dapur.`);
+      return;
+    }
+
+    const storeSettings = await prisma.storeSettings.findFirst();
+    const envKitchenTarget = process.env.KITCHEN_WA_NUMBER || process.env.KITCHEN_WA_JID;
+
+    let targetList: string[] = [];
+    if (envKitchenTarget) {
+      targetList.push(envKitchenTarget.endsWith('@g.us') ? envKitchenTarget : standardizeJid(envKitchenTarget));
+    } else if (storeSettings?.adminWaNumbers) {
+      targetList = storeSettings.adminWaNumbers
+        .split(',')
+        .map(n => n.trim())
+        .filter(n => n.length > 0)
+        .map(n => (n.endsWith('@g.us') ? n : standardizeJid(n)));
+    } else if (storeSettings?.whatsappNumber) {
+      targetList.push(standardizeJid(storeSettings.whatsappNumber));
+    }
+
+    if (targetList.length === 0) {
+      console.log('[WHATSAPP_SERVICE] Tidak ada nomor/grup WA dapur yang dikonfigurasi. Skipping kitchen alert.');
+      return;
+    }
+
+    const tableInfo = order.tableNumber
+      ? `*MEJA ${order.tableNumber}*`
+      : (order.source === 'SPMB' ? `*SPMB (${order.address || 'Gedung Sekolah'})*` : `*-*`);
+
+    const itemsStr = order.items.map(item => {
+      const modStr = item.modifiers ? `\n   └ _${item.modifiers}_` : '';
+      return `• *${item.qty}x ${item.product.name}*${modStr}`;
+    }).join('\n');
+
+    let orderTypeLabel = order.orderType;
+    if (order.source === 'SPMB') orderTypeLabel = 'SPMB (Antar Kelas)';
+    else if (order.orderType === 'DINE_IN') orderTypeLabel = 'DINE IN (Makan di Tempat)';
+    else if (order.orderType === 'PICKUP') orderTypeLabel = 'PICKUP (Takeaway)';
+    else if (order.orderType === 'DELIVERY') orderTypeLabel = 'DELIVERY (Pengiriman)';
+
+    const queueStr = order.queueNumber || order.id.slice(-6).toUpperCase();
+    const timeStr = new Date(order.createdAt).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+
+    let message = `🍳 *NOTIFIKASI PESANAN DAPUR BARU!* 🚨\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n`;
+    message += `📌 *LOKASI / MEJA:* ${tableInfo}\n`;
+    message += `🆔 *No. Antrean:* #${queueStr} (${order.id})\n`;
+    message += `📋 *Tipe Pesanan:* ${orderTypeLabel}\n`;
+    message += `👤 *Pelanggan:* ${order.customerName} (${order.customerPhone})\n`;
+    if (order.notes) {
+      message += `📝 *Catatan Khusus:* ${order.notes}\n`;
+    }
+    message += `\n🛒 *RINCIAN MENU PESANAN:*\n${itemsStr}\n`;
+    message += `━━━━━━━━━━━━━━━━━━━━\n`;
+    message += `⏰ *Waktu Pesanan:* ${timeStr} WIB\n`;
+    message += `💳 *Pembayaran:* ${order.paymentMethod} (Status: ${order.status})`;
+
+    for (const target of targetList) {
+      await sendWhatsAppMessage(target, message);
+    }
+  } catch (error) {
+    console.error(`[WHATSAPP_SERVICE] Gagal mengirim kitchen notification untuk order ${orderId}:`, error);
+  }
+}
+
+
 
 
 

@@ -20,7 +20,8 @@ interface ProductItem {
 interface IngredientItem { id: string; name: string; unit: string; costPerUnit: number; }
 interface Props { initialProducts: ProductItem[]; categories: CategoryItem[]; ingredients: IngredientItem[]; }
 
-interface AddOnItem { id: string; name: string; price: number; }
+interface AddOnItem { id: string; name: string; price: number; ingredientId?: string; ingredientQty?: number; }
+interface ToppingItem { id: string; name: string; defaultPrice: number; ingredientId?: string | null; ingredientQty?: number | null; isAvailable: boolean; }
 interface ProductPromo {
   promoPrice: number;
   startDate: string;
@@ -104,7 +105,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [isUpdating, setIsUpdating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'products' | 'combos'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'combos' | 'toppings'>('products');
   const [showArchived, setShowArchived] = useState(false);
 
   useEffect(() => {
@@ -112,6 +113,101 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
       setSelectedCategory(categoryParam);
     }
   }, [categoryParam]);
+
+  // Master Toppings State
+  const [masterToppings, setMasterToppings] = useState<ToppingItem[]>([]);
+  const [loadingToppings, setLoadingToppings] = useState(false);
+
+  const fetchToppings = useCallback(async () => {
+    setLoadingToppings(true);
+    try {
+      const res = await fetch('/api/admin/toppings');
+      const data = await res.json();
+      setMasterToppings(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingToppings(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchToppings();
+  }, [fetchToppings]);
+
+  // Master Toppings Modal State
+  const [showToppingModal, setShowToppingModal] = useState(false);
+  const [editingTopping, setEditingTopping] = useState<ToppingItem | null>(null);
+  const [toppingForm, setToppingForm] = useState({ name: '', defaultPrice: '', ingredientId: '', ingredientQty: '' });
+  const [savingTopping, setSavingTopping] = useState(false);
+
+  const openToppingModal = (topping?: ToppingItem) => {
+    if (topping) {
+      setEditingTopping(topping);
+      setToppingForm({
+        name: topping.name,
+        defaultPrice: topping.defaultPrice.toString(),
+        ingredientId: topping.ingredientId || '',
+        ingredientQty: topping.ingredientQty?.toString() || ''
+      });
+    } else {
+      setEditingTopping(null);
+      setToppingForm({ name: '', defaultPrice: '', ingredientId: '', ingredientQty: '' });
+    }
+    setShowToppingModal(true);
+  };
+
+  const handleSaveTopping = async () => {
+    if (!toppingForm.name || !toppingForm.defaultPrice) return showToast('Nama dan harga wajib diisi', 'error');
+    setSavingTopping(true);
+    try {
+      const payload = {
+        name: toppingForm.name,
+        defaultPrice: Number(toppingForm.defaultPrice),
+        ingredientId: toppingForm.ingredientId || null,
+        ingredientQty: toppingForm.ingredientQty ? Number(toppingForm.ingredientQty) : null,
+        isAvailable: editingTopping ? editingTopping.isAvailable : true
+      };
+      const url = editingTopping ? `/api/admin/toppings/${editingTopping.id}` : '/api/admin/toppings';
+      const res = await fetch(url, {
+        method: editingTopping ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error();
+      showToast('Master Topping berhasil disimpan', 'success');
+      setShowToppingModal(false);
+      fetchToppings();
+    } catch {
+      showToast('Gagal menyimpan Topping', 'error');
+    } finally {
+      setSavingTopping(false);
+    }
+  };
+
+  const handleDeleteTopping = async (id: string) => {
+    if (!confirm('Hapus master topping ini?')) return;
+    try {
+      await fetch(`/api/admin/toppings/${id}`, { method: 'DELETE' });
+      showToast('Topping dihapus', 'success');
+      fetchToppings();
+    } catch {
+      showToast('Gagal menghapus topping', 'error');
+    }
+  };
+
+  const toggleToppingStatus = async (topping: ToppingItem) => {
+    try {
+      await fetch(`/api/admin/toppings/${topping.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isAvailable: !topping.isAvailable })
+      });
+      fetchToppings();
+    } catch {
+      showToast('Gagal update status', 'error');
+    }
+  };
 
   // Checkbox Selection & Bulk Actions
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -831,10 +927,10 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
   return (
     <>
       {/* Premium Tab Navigation */}
-      <div className="flex gap-2 border-b border-border/30 pb-3 mb-5">
+      <div className="flex gap-2 border-b border-border/30 pb-3 mb-5 overflow-x-auto no-scrollbar">
         <button
           onClick={() => { setActiveTab('products'); setSelectedCategory('all'); }}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
             activeTab === 'products'
               ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
               : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
@@ -844,7 +940,7 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
         </button>
         <button
           onClick={() => { setActiveTab('combos'); setSelectedCategory('all'); }}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
             activeTab === 'combos'
               ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
               : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
@@ -852,43 +948,65 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
         >
           📦 Paket Combo & Promo ({initialProducts.filter(p => isProductBundle(p)).length})
         </button>
+        <button
+          onClick={() => { setActiveTab('toppings'); }}
+          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+            activeTab === 'toppings'
+              ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
+              : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
+          }`}
+        >
+          🧁 Master Toppings
+        </button>
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-          <input type="text" placeholder={activeTab === 'combos' ? "Cari paket combo / promo..." : "Cari produk..."} value={search} onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
-        </div>
-        <div className="flex gap-2">
-          {activeTab !== 'combos' && (
-            <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-              <option value="all">All Categories</option>
-              {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
-            </select>
-          )}
-          <button 
-            onClick={() => setShowArchived(!showArchived)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all shadow-sm whitespace-nowrap ${
-              showArchived 
-                ? 'bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200' 
-                : 'bg-white text-muted-foreground border border-border/40 hover:bg-muted/30'
-            }`}
-          >
-            <Archive className="w-4 h-4" /> 
-            {showArchived ? 'Hide Archived' : 'Show Archived'}
-          </button>
-          <button onClick={() => openModal()}
-            className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md shadow-brand-700/15 active:scale-[0.98] whitespace-nowrap">
-            <Plus className="w-4 h-4" /> {activeTab === 'combos' ? 'Tambah Combo' : 'Add'}
+      {activeTab === 'toppings' ? (
+        <div className="flex flex-col sm:flex-row gap-3 mb-4 justify-between items-center">
+          <div className="flex-1">
+            <h2 className="text-lg font-bold">Manajemen Master Topping</h2>
+            <p className="text-xs text-muted-foreground">Kelola semua topping/add-on yang bisa ditambahkan ke produk.</p>
+          </div>
+          <button onClick={() => openToppingModal()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md">
+            <Plus className="w-4 h-4" /> Tambah Topping
           </button>
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
+            <input type="text" placeholder={activeTab === 'combos' ? "Cari paket combo / promo..." : "Cari produk..."} value={search} onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
+          </div>
+          <div className="flex gap-2">
+            {activeTab !== 'combos' && (
+              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
+                className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <option value="all">All Categories</option>
+                {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+              </select>
+            )}
+            <button 
+              onClick={() => setShowArchived(!showArchived)}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all shadow-sm whitespace-nowrap ${
+                showArchived 
+                  ? 'bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200' 
+                  : 'bg-white text-muted-foreground border border-border/40 hover:bg-muted/30'
+              }`}
+            >
+              <Archive className="w-4 h-4" /> 
+              {showArchived ? 'Hide Archived' : 'Show Archived'}
+            </button>
+            <button onClick={() => openModal()}
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md shadow-brand-700/15 active:scale-[0.98] whitespace-nowrap">
+              <Plus className="w-4 h-4" /> {activeTab === 'combos' ? 'Tambah Combo' : 'Add'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Action Bar */}
-      {selectedIds.length > 0 && (
+      {selectedIds.length > 0 && activeTab !== 'toppings' && (
         <div className="mb-4 flex flex-col md:flex-row items-center justify-between gap-3 p-4 bg-brand-50 border border-brand-200 rounded-2xl animate-in slide-in-from-top-2 duration-300">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-brand-600 animate-pulse" />
@@ -946,6 +1064,55 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
         </div>
       )}
 
+      {activeTab === 'toppings' ? (
+        <div className="bg-white border border-border/40 rounded-2xl shadow-sm overflow-hidden mb-6">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/40 bg-muted/10">
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Nama Topping</th>
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Harga Default</th>
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Bahan Baku (Inventaris)</th>
+                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/30">
+              {loadingToppings ? (
+                <tr><td colSpan={5} className="py-12 text-center text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Loading...</td></tr>
+              ) : masterToppings.length === 0 ? (
+                <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">Belum ada data Master Topping</td></tr>
+              ) : (
+                masterToppings.map(t => {
+                  const ing = ingredients.find(i => i.id === t.ingredientId);
+                  return (
+                    <tr key={t.id} className="hover:bg-muted/20">
+                      <td className="px-5 py-3 font-semibold text-[13px]">{t.name}</td>
+                      <td className="px-5 py-3">{formatRupiah(t.defaultPrice)}</td>
+                      <td className="px-5 py-3 text-[11px]">
+                        {ing ? (
+                          <span className="flex items-center gap-1"><Archive className="w-3 h-3 text-muted-foreground" /> {ing.name} ({t.ingredientQty} {ing.unit})</span>
+                        ) : '-'}
+                      </td>
+                      <td className="px-5 py-3">
+                        <button onClick={() => toggleToppingStatus(t)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-all ${t.isAvailable ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-rose-100 text-rose-700 hover:bg-rose-200'}`}>
+                          {t.isAvailable ? 'Tersedia' : 'Habis'}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => openToppingModal(t)} className="p-1.5 hover:bg-blue-50 rounded-lg text-muted-foreground hover:text-blue-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => handleDeleteTopping(t.id)} className="p-1.5 hover:bg-rose-50 rounded-lg text-muted-foreground hover:text-rose-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <>
       {/* Desktop Table */}
       <div className="hidden md:block bg-white border border-border/40 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
         <table className="w-full text-sm">
@@ -1115,6 +1282,8 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
           );
         })}
       </div>
+      </>
+      )}
 
       {/* ═══════ Step 1: Modal Pilih Tipe Produk (Minuman vs Makanan) ═══════ */}
       {showTypePickerModal && (
@@ -1612,9 +1781,35 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
 
                   {/* Sizes (Ukuran Porsi / Gelas & Harga Tambahan) */}
                   <div className="mb-4">
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
-                      {productType === 'minuman' ? '🥤 Ukuran Gelas & Harga Tambahan' : '🍱 Ukuran Porsi & Harga Tambahan'}
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                        {productType === 'minuman' ? '🥤 Ukuran Gelas & Harga Tambahan' : '🍱 Ukuran Porsi & Harga Tambahan'}
+                      </label>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!modSizes.some(s => s.name.toLowerCase() === 'big size')) {
+                              setModSizes(prev => [...prev, { name: 'Big Size', price: 3000 }]);
+                            }
+                          }}
+                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200/50 transition-all"
+                        >
+                          + Big Size (+Rp 3.000)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!modSizes.some(s => s.name.toLowerCase() === 'large')) {
+                              setModSizes(prev => [...prev, { name: 'Large', price: 5000 }]);
+                            }
+                          }}
+                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all"
+                        >
+                          + Large (+Rp 5.000)
+                        </button>
+                      </div>
+                    </div>
                     {modSizes.length > 0 && (
                       <div className="space-y-1.5 mb-2">
                         {modSizes.map((sz, idx) => (
@@ -1632,10 +1827,10 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                       </div>
                     )}
                     <div className="flex gap-2">
-                      <input value={newSizeName} onChange={e => setNewSizeName(e.target.value)} placeholder={productType === 'minuman' ? "Nama Ukuran (misal: Large)" : "Nama Porsi (misal: Jumbo / Extra)"}
+                      <input value={newSizeName} onChange={e => setNewSizeName(e.target.value)} placeholder={productType === 'minuman' ? "Nama Ukuran (misal: Big Size)" : "Nama Porsi (misal: Jumbo / Extra)"}
                         onKeyDown={e => e.key === 'Enter' && addSizeOption()}
                         className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                      <input type="number" value={newSizePrice} onChange={e => setNewSizePrice(e.target.value)} placeholder="+Harga (misal: 5000)"
+                      <input type="number" value={newSizePrice} onChange={e => setNewSizePrice(e.target.value)} placeholder="+Harga (misal: 3000)"
                         onKeyDown={e => e.key === 'Enter' && addSizeOption()}
                         className="w-32 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
                       <button type="button" onClick={addSizeOption}
@@ -1645,36 +1840,63 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
                     </div>
                   </div>
 
-                  {/* Add-Ons */}
+                  {/* Master Toppings Checklist */}
                   <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🧁 Add-Ons</label>
-                    {modAddOns.length > 0 && (
-                      <div className="space-y-1.5 mb-2">
-                        {modAddOns.map(addon => (
-                          <div key={addon.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
-                            <span className="text-xs font-medium text-foreground">{addon.name}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-brand-600 font-medium">+{formatRupiah(addon.price)}</span>
-                              <button type="button" onClick={() => removeAddOn(addon.id)}
-                                className="p-0.5 hover:bg-rose-50 rounded text-muted-foreground hover:text-rose-500 transition-colors">
-                                <CircleMinus className="w-3.5 h-3.5" />
-                              </button>
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🧁 Toppings / Add-Ons</label>
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {masterToppings.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-dashed border-border/40 text-center">Belum ada Master Topping. Silakan tambahkan di Tab Toppings.</p>
+                      ) : (
+                        masterToppings.filter(t => t.isAvailable).map(topping => {
+                          const isSelected = modAddOns.some(a => a.id === topping.id);
+                          const currentAddOn = modAddOns.find(a => a.id === topping.id);
+                          return (
+                            <div key={topping.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl border ${isSelected ? 'border-brand-500 bg-brand-50/30 shadow-sm' : 'border-border/40 bg-white hover:border-brand-300'} transition-all`}>
+                              <label className="flex items-center gap-3 flex-1 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setModAddOns(prev => [...prev, {
+                                        id: topping.id,
+                                        name: topping.name,
+                                        price: topping.defaultPrice,
+                                        ingredientId: topping.ingredientId || undefined,
+                                        ingredientQty: topping.ingredientQty || undefined
+                                      }]);
+                                    } else {
+                                      setModAddOns(prev => prev.filter(a => a.id !== topping.id));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-border text-brand-600 focus:ring-brand-500/20"
+                                />
+                                <div>
+                                  <p className="text-sm font-semibold text-foreground">{topping.name}</p>
+                                  <p className="text-[10px] text-muted-foreground">Default: {formatRupiah(topping.defaultPrice)}</p>
+                                </div>
+                              </label>
+                              {isSelected && (
+                                <div className="flex items-center gap-2 pl-7 sm:pl-0 border-t sm:border-t-0 sm:border-l border-border/30 pt-2 sm:pt-0 sm:pl-3 mt-1 sm:mt-0">
+                                  <span className="text-[10px] font-bold text-muted-foreground">Custom Price:</span>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">Rp</span>
+                                    <input
+                                      type="number"
+                                      value={currentAddOn?.price ?? topping.defaultPrice}
+                                      onChange={(e) => {
+                                        const newPrice = Number(e.target.value);
+                                        setModAddOns(prev => prev.map(a => a.id === topping.id ? { ...a, price: newPrice } : a));
+                                      }}
+                                      className="w-24 pl-7 pr-2 py-1.5 text-xs bg-white border border-border/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-semibold"
+                                    />
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <input value={newAddOnName} onChange={e => setNewAddOnName(e.target.value)} placeholder="Add-on name"
-                        onKeyDown={e => e.key === 'Enter' && addAddOn()}
-                        className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                      <input type="number" value={newAddOnPrice} onChange={e => setNewAddOnPrice(e.target.value)} placeholder="Price"
-                        onKeyDown={e => e.key === 'Enter' && addAddOn()}
-                        className="w-24 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                      <button type="button" onClick={addAddOn}
-                        className="p-2 rounded-lg bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors">
-                        <CirclePlus className="w-4 h-4" />
-                      </button>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
 
@@ -2177,6 +2399,52 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
             </div>
             <h3 className="text-base font-bold mb-2">Processing...</h3>
             <p className="text-sm text-muted-foreground">Mengarsipkan produk, mohon tunggu...</p>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ Master Topping Modal ═══════ */}
+      {showToppingModal && (
+        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowToppingModal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 bg-white">
+              <h3 className="text-base font-bold font-heading">{editingTopping ? 'Edit Master Topping' : 'Tambah Master Topping'}</h3>
+              <button onClick={() => setShowToppingModal(false)} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Nama Topping *</label>
+                <input value={toppingForm.name} onChange={e => setToppingForm(p => ({ ...p, name: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Harga Default (Rp) *</label>
+                <input type="number" value={toppingForm.defaultPrice} onChange={e => setToppingForm(p => ({ ...p, defaultPrice: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Bahan Inventaris Terikat (Opsional)</label>
+                <select value={toppingForm.ingredientId} onChange={e => setToppingForm(p => ({ ...p, ingredientId: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all">
+                  <option value="">-- Tidak Terikat Bahan --</option>
+                  {ingredients.map(ing => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
+                </select>
+              </div>
+              {toppingForm.ingredientId && (
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Takaran / Porsi (Qty)</label>
+                  <input type="number" value={toppingForm.ingredientQty} onChange={e => setToppingForm(p => ({ ...p, ingredientQty: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
+                </div>
+              )}
+            </div>
+            <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10">
+              <button onClick={() => setShowToppingModal(false)} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Batal</button>
+              <button onClick={handleSaveTopping} disabled={savingTopping}
+                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
+                {savingTopping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
+              </button>
+            </div>
           </div>
         </div>
       )}

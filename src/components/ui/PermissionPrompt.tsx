@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, ShieldCheck, X, Bell } from 'lucide-react';
 import { useSession } from 'next-auth/react';
@@ -21,8 +22,10 @@ function urlBase64ToUint8Array(base64String: string) {
 export function PermissionPrompt() {
   const [isOpen, setIsOpen] = useState(false);
   const { data: session } = useSession();
+  const pathname = usePathname();
 
   useEffect(() => {
+    if (pathname === '/spmb' || pathname?.startsWith('/spmb')) return;
     const hasSeenPrompt = localStorage.getItem('has_seen_permission_prompt');
     if (!hasSeenPrompt) {
       const timer = setTimeout(() => {
@@ -30,7 +33,7 @@ export function PermissionPrompt() {
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [pathname]);
 
   const handleClose = () => {
     localStorage.setItem('has_seen_permission_prompt', 'true');
@@ -74,6 +77,10 @@ export function PermissionPrompt() {
 
     handleClose();
   };
+
+  if (pathname === '/spmb' || pathname?.startsWith('/spmb')) {
+    return null;
+  }
 
   return (
     <AnimatePresence>

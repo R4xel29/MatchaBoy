@@ -1,5 +1,7 @@
+import { Suspense } from "react"
 import { prisma } from "@/lib/prisma"
 import SpmbClient from "./SpmbClient"
+import { LoadingScreen } from "@/components/ui/LoadingScreen"
 
 export const dynamic = 'force-dynamic'
 
@@ -56,15 +58,17 @@ export default async function SpmbPage() {
   const botNumber = storeSettings?.whatsappNumber || "";
 
   return (
-    <SpmbClient 
-      categories={mappedCategories} 
-      products={mappedProducts}
-      botNumber={botNumber}
-      spmbStartTime={storeSettings?.spmbStartTime || "08:00"}
-      spmbEndTime={storeSettings?.spmbEndTime || "13:00"}
-      spmbCloseTime={storeSettings?.spmbCloseTime || "16:00"}
-      operationalDays={storeSettings?.operationalDays || "[0,1,2,3,4,5,6]"}
-      disabledDates={storeSettings?.disabledDates || "[]"}
-    />
+    <Suspense fallback={<LoadingScreen isSplash={false} />}>
+      <SpmbClient 
+        categories={mappedCategories} 
+        products={mappedProducts}
+        botNumber={botNumber}
+        spmbStartTime={storeSettings?.spmbStartTime || "08:00"}
+        spmbEndTime={storeSettings?.spmbEndTime || "13:00"}
+        spmbCloseTime={storeSettings?.spmbCloseTime || "16:00"}
+        operationalDays={storeSettings?.operationalDays || "[0,1,2,3,4,5,6]"}
+        disabledDates={storeSettings?.disabledDates || "[]"}
+      />
+    </Suspense>
   )
 }
