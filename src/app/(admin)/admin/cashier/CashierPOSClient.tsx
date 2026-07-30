@@ -369,6 +369,42 @@ export default function CashierPOSClient({ products, categories }: Props) {
     } catch {}
   }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modShot, modShotCount, modShotPrice, activeStep]);
 
+  // User activity tracker for Cashier POS to keep customer display active
+
+  const lastUserActivityRef = useRef<number>(Date.now());
+  useEffect(() => {
+    const handleUserActivity = () => {
+      const now = Date.now();
+      if (now - lastUserActivityRef.current >= 3000) {
+        lastUserActivityRef.current = now;
+        try {
+          const currentSaved = localStorage.getItem('pos_customer_display_state');
+          if (currentSaved) {
+            const parsed = JSON.parse(currentSaved);
+            parsed.timestamp = now;
+            if (displayChannelRef.current) {
+              displayChannelRef.current.postMessage(parsed);
+            }
+            localStorage.setItem('pos_customer_display_state', JSON.stringify(parsed));
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener('mousemove', handleUserActivity);
+    window.addEventListener('keydown', handleUserActivity);
+    window.addEventListener('click', handleUserActivity);
+    window.addEventListener('touchstart', handleUserActivity);
+
+    return () => {
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+      window.removeEventListener('touchstart', handleUserActivity);
+    };
+  }, []);
+
+
   // Pre-order QR scan state
   const [showPreScanQR, setShowPreScanQR] = useState(false);
 

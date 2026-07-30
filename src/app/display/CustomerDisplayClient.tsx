@@ -108,6 +108,45 @@ export default function CustomerDisplayClient() {
   const [resetCountdown, setResetCountdown] = useState<number | null>(null);
   const [currentTime, setCurrentTime] = useState<string>('');
 
+  // 40-second cashier inactivity detection & SPMB QR code state
+  const [isIdle, setIsIdle] = useState(false);
+  const [lastActivityTime, setLastActivityTime] = useState<number>(Date.now());
+  const [spmbUrl, setSpmbUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSpmbUrl(`${window.location.origin}/spmb`);
+    }
+  }, []);
+
+  const markActivity = () => {
+    setLastActivityTime(Date.now());
+    setIsIdle(false);
+  };
+
+  // Activity listeners on display screen window
+  useEffect(() => {
+    const handleActivity = () => markActivity();
+    window.addEventListener('mousemove', handleActivity);
+    window.addEventListener('keydown', handleActivity);
+    window.addEventListener('touchstart', handleActivity);
+    return () => {
+      window.removeEventListener('mousemove', handleActivity);
+      window.removeEventListener('keydown', handleActivity);
+      window.removeEventListener('touchstart', handleActivity);
+    };
+  }, []);
+
+  // 40 seconds idle timer
+  useEffect(() => {
+    const idleCheckInterval = setInterval(() => {
+      if (Date.now() - lastActivityTime >= 40000) {
+        setIsIdle(true);
+      }
+    }, 1000);
+    return () => clearInterval(idleCheckInterval);
+  }, [lastActivityTime]);
+
   useEffect(() => {
     const updateTime = () => {
       setCurrentTime(
@@ -212,6 +251,7 @@ export default function CustomerDisplayClient() {
     const handleMessage = (event: MessageEvent<POSDisplayState>) => {
       if (event.data) {
         setDisplayState(event.data);
+        markActivity();
       }
     };
 
@@ -223,6 +263,7 @@ export default function CustomerDisplayClient() {
         try {
           const parsed = JSON.parse(e.newValue);
           setDisplayState(parsed);
+          markActivity();
         } catch {}
       }
     };
@@ -245,6 +286,7 @@ export default function CustomerDisplayClient() {
           const parsed = JSON.parse(currentSaved);
           setDisplayState((prev) => {
             if (!prev || prev.timestamp !== parsed.timestamp) {
+              markActivity();
               return parsed;
             }
             return prev;
@@ -260,14 +302,46 @@ export default function CustomerDisplayClient() {
     };
   }, []);
 
+  const fallbackBanners = useMemo(
+    () => [
+      {
+        id: 'fb-1',
+        headline: 'Authentic Matcha & Artisanal Coffee 🍵',
+        subheadline: 'Nikmati kelezatan matcha murni kualitas premium dan keharuman kopi pilihan terbaik di Arum Seduh.',
+        image: null,
+        icon: '🍵',
+      },
+      {
+        id: 'fb-2',
+        headline: 'Bawa Tumbler Sendiri, Dapatkan Diskon & Bonus 🌿',
+        subheadline: 'Dukung gerakan ramah lingkungan dan nikmati potongan harga langsung untuk setiap pembelian menggunakan tumbler.',
+        image: null,
+        icon: '🌿',
+      },
+      {
+        id: 'fb-3',
+        headline: 'Pesan Mandiri Lebih Cepat & Praktis 📱',
+        subheadline: 'Tanpa perlu antre di kasir, scan kode QR di sebelah kanan untuk melihat katalog lengkap, atur opsi rasa, dan bayar!',
+        image: null,
+        icon: '📱',
+      },
+    ],
+    []
+  );
+
+  const promoSlides = useMemo(() => {
+    return settings.banners.length > 0 ? settings.banners : fallbackBanners;
+  }, [settings.banners, fallbackBanners]);
+
   // Auto banner rotation
   useEffect(() => {
-    if (settings.banners.length <= 1) return;
+    if (promoSlides.length <= 1) return;
     const interval = setInterval(() => {
-      setActiveBannerIndex((prev) => (prev + 1) % settings.banners.length);
-    }, 6000);
+      setActiveBannerIndex((prev) => (prev + 1) % promoSlides.length);
+    }, 5000);
     return () => clearInterval(interval);
-  }, [settings.banners]);
+  }, [promoSlides]);
+
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -309,12 +383,17 @@ export default function CustomerDisplayClient() {
 
         {/* Live Status & Controls */}
         <div className="flex items-center gap-4">
-          {displayState?.customerName && (
+          {isIdle ? (
+            <div className="px-3.5 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-xs font-bold text-amber-800 flex items-center gap-2 shadow-sm animate-pulse">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              Mode Idle (Promosi & Self-Service)
+            </div>
+          ) : displayState?.customerName ? (
             <div className="px-3.5 py-1.5 rounded-full bg-orange-50 border border-orange-200 text-xs font-bold text-orange-800 flex items-center gap-2 shadow-sm">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               Pelanggan: {displayState.customerName}
             </div>
-          )}
+          ) : null}
           <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-orange-50/50 px-3 py-1.5 rounded-xl border border-orange-100">
             <Clock className="w-3.5 h-3.5 text-orange-500" />
             <span>{currentTime}</span>
@@ -331,10 +410,187 @@ export default function CustomerDisplayClient() {
 
       {/* Main Dual Grid View */}
       <main className="flex-1 grid grid-cols-12 overflow-hidden relative">
-        {/* LEFT COLUMN: Menu Catalog Grid & Prices (7 cols) */}
-        <div className="col-span-7 p-6 border-r border-orange-100 flex flex-col justify-between relative bg-gradient-to-br from-orange-50/30 via-white to-amber-50/30 overflow-hidden">
-          {/* Background Ambient Glow */}
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+        <AnimatePresence mode="wait">
+          {isIdle ? (
+            <motion.div
+              key="idle-promo-screen"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.4 }}
+              className="col-span-12 h-full grid grid-cols-12 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-950 to-orange-950 text-white relative z-20"
+            >
+              {/* Background Ambient Glows */}
+              <div className="absolute top-1/4 left-1/4 w-[500px] h-[500px] bg-orange-500/15 rounded-full blur-[120px] pointer-events-none" />
+              <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-amber-500/15 rounded-full blur-[120px] pointer-events-none" />
+
+              {/* LEFT COLUMN: Banner Promosi (7 cols) */}
+              <div className="col-span-7 p-8 flex flex-col justify-between border-r border-slate-800/80 relative z-10 bg-slate-950/40 backdrop-blur-sm">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1 rounded-full bg-orange-500/20 border border-orange-500/40 text-orange-400 text-xs font-black uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-md">
+                      <Sparkles className="w-3.5 h-3.5 text-orange-400 animate-spin" /> Promosi Spesial Arum Seduh
+                    </span>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-400 bg-slate-800/60 px-3 py-1 rounded-full border border-slate-700/60">
+                    Menu Favorites & Special Offers
+                  </span>
+                </div>
+
+                <div className="my-auto py-6">
+                  <AnimatePresence mode="wait">
+                    {(() => {
+                      const activeBanner = promoSlides[activeBannerIndex % promoSlides.length];
+                      if (!activeBanner) return null;
+                      return (
+                        <motion.div
+                          key={activeBanner.id || activeBannerIndex}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: 20 }}
+                          transition={{ duration: 0.5 }}
+                          className="space-y-6"
+                        >
+                          {activeBanner.image ? (
+                            <div className="relative aspect-[16/9] rounded-3xl overflow-hidden border border-white/10 shadow-2xl group">
+                              <img
+                                src={activeBanner.image}
+                                alt={activeBanner.headline || 'Banner Promosi'}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent" />
+                              <div className="absolute bottom-6 left-6 right-6 space-y-2">
+                                <h2 className="text-3xl font-black text-white drop-shadow-md">
+                                  {activeBanner.headline}
+                                </h2>
+                                {activeBanner.subheadline && (
+                                  <p className="text-sm text-slate-300 max-w-lg font-medium drop-shadow">
+                                    {activeBanner.subheadline}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="p-10 rounded-3xl bg-gradient-to-br from-orange-600/30 via-slate-900/80 to-amber-600/20 border border-orange-500/30 backdrop-blur-xl shadow-2xl space-y-5">
+                              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-3xl shadow-lg shadow-orange-500/30">
+                                {('icon' in activeBanner && activeBanner.icon) ? (activeBanner as any).icon : '🍵'}
+                              </div>
+                              <div className="space-y-3">
+                                <h2 className="text-3xl font-black text-white leading-tight">
+                                  {activeBanner.headline}
+                                </h2>
+                                <p className="text-base text-slate-300 font-medium leading-relaxed max-w-xl">
+                                  {activeBanner.subheadline}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })()}
+                  </AnimatePresence>
+
+                  {promoSlides.length > 1 && (
+                    <div className="flex items-center gap-2 mt-6">
+                      {promoSlides.map((_, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => setActiveBannerIndex(idx)}
+                          className={`h-2 rounded-full transition-all duration-500 ${
+                            activeBannerIndex === idx
+                              ? 'w-8 bg-orange-500 shadow-md shadow-orange-500/50'
+                              : 'w-2 bg-slate-700 hover:bg-slate-500'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-400 border-t border-slate-800/80 pt-4">
+                  <span className="flex items-center gap-1.5 font-semibold text-emerald-400">
+                    <Leaf className="w-4 h-4" /> Diskon Tumbler & Poin Loyalti
+                  </span>
+                  <span className="text-slate-400 font-medium">#ArumSeduhAuthentic</span>
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN: Space "Kasir tidak ada ?, scan code qr berikut yuk" (5 cols) */}
+              <div className="col-span-5 p-8 flex flex-col justify-between bg-gradient-to-b from-orange-600/20 via-slate-900/90 to-slate-950 border-l border-slate-800/80 relative z-10">
+                <div className="space-y-4 text-center">
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider shadow-inner">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
+                    Kasir Sedang Tidak Di Tempat
+                  </div>
+
+                  <div className="space-y-2">
+                    <h2 className="text-3xl font-black text-white tracking-tight leading-tight">
+                      Kasir tidak ada ?
+                    </h2>
+                    <p className="text-lg font-black text-amber-300">
+                      Scan code QR berikut yuk!
+                    </p>
+                    <p className="text-xs text-slate-300 max-w-xs mx-auto font-medium leading-relaxed">
+                      Arahkan kamera HP Anda untuk memesan menu favorit secara mandiri tanpa harus mengantre.
+                    </p>
+                  </div>
+                </div>
+
+                {/* QR Code Container */}
+                <div className="my-auto flex flex-col items-center justify-center space-y-4">
+                  <div className="relative p-5 bg-white rounded-3xl shadow-2xl shadow-orange-500/25 border-4 border-orange-500 flex flex-col items-center justify-center group">
+                    <div className="absolute -inset-1 rounded-[28px] bg-gradient-to-r from-orange-500 via-amber-400 to-orange-600 opacity-40 blur-md group-hover:opacity-80 transition-opacity pointer-events-none" />
+
+                    <div className="relative bg-white p-2 rounded-2xl">
+                      <QRCodeSVG
+                        value={spmbUrl || 'https://matchaboy.app/spmb'}
+                        size={210}
+                        level="H"
+                        includeMargin={true}
+                      />
+                    </div>
+
+                    <div className="mt-3 px-3 py-1 rounded-full bg-orange-50 border border-orange-200 text-[11px] font-mono font-black text-orange-700 flex items-center gap-1.5 shadow-sm">
+                      <QrCode className="w-3.5 h-3.5 text-orange-500" />
+                      <span>{spmbUrl ? new URL(spmbUrl).pathname : '/spmb'}</span>
+                    </div>
+                  </div>
+
+                  {/* Step instructions */}
+                  <div className="w-full max-w-xs space-y-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-3 text-slate-200 shadow-sm">
+                      <div className="w-6 h-6 rounded-lg bg-orange-500 text-white font-black flex items-center justify-center text-xs shrink-0">1</div>
+                      <span className="font-semibold">Buka Kamera HP / App QR Scanner</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-3 text-slate-200 shadow-sm">
+                      <div className="w-6 h-6 rounded-lg bg-orange-500 text-white font-black flex items-center justify-center text-xs shrink-0">2</div>
+                      <span className="font-semibold">Pilih Menu Favorit & Atur Opsi Rasa</span>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center gap-3 text-slate-200 shadow-sm">
+                      <div className="w-6 h-6 rounded-lg bg-emerald-500 text-white font-black flex items-center justify-center text-xs shrink-0">3</div>
+                      <span className="font-semibold">Bayar Langsung & Ambil Pesanan</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-center pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 font-medium">
+                  Layar akan kembali otomatis saat kasir memproses pesanan ✨
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="active-pos-screen"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="col-span-12 h-full grid grid-cols-12 overflow-hidden"
+            >
+              {/* LEFT COLUMN: Menu Catalog Grid & Prices (7 cols) */}
+              <div className="col-span-7 p-6 border-r border-orange-100 flex flex-col justify-between relative bg-gradient-to-br from-orange-50/30 via-white to-amber-50/30 overflow-hidden">
+                {/* Background Ambient Glow */}
+                <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
+
 
           {/* ORDER COMPLETED STATE */}
           <AnimatePresence mode="wait">
@@ -665,7 +921,10 @@ export default function CustomerDisplayClient() {
             </div>
           </div>
         </div>
-      </main>
+      </motion.div>
+    )}
+  </AnimatePresence>
+</main>
       {/* Real-time Customization Pop-up Overlay (Sequential Step-by-Step Pop-up Cards) */}
       <AnimatePresence>
         {displayState?.activeModifier && (
