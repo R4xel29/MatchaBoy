@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useToast } from '@/components/ui/Toast';
 import { 
-  Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, Users, Armchair, Sparkles
+  Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, 
+  Users, Armchair, Sparkles, X, Circle, Square, RotateCw, Settings, UtensilsCrossed,
+  ArrowRight, ShieldCheck, CheckCircle2, ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -25,41 +27,36 @@ interface DiningTable {
 export default function AdminTablesClient({ initialTables }: { initialTables: DiningTable[] }) {
   const { showToast } = useToast();
   const [tables, setTables] = useState<DiningTable[]>(initialTables);
+  
+  // Studio & Selection States
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
-  
-  // CRUD form states
-  const [isEditForm, setIsEditForm] = useState(false);
-  const [formNumber, setFormNumber] = useState('');
-  const [formCapacity, setFormCapacity] = useState(2);
-  const [formShape, setFormShape] = useState('RECTANGLE');
-  const [formStatus, setFormStatus] = useState('AVAILABLE');
-  
-  // Interactive mode: Design Mode (Drag) vs Monitor Mode (Live Status)
-  const [isEditMode, setIsEditMode] = useState(false);
-  
+  const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isDragMode, setIsDragMode] = useState(false);
+
+  // Form / Studio editing values
+  const [editNumber, setEditNumber] = useState('');
+  const [editCapacity, setEditCapacity] = useState(4);
+  const [editShape, setEditShape] = useState<'RECTANGLE' | 'ROUND'>('RECTANGLE');
+  const [editStatus, setEditStatus] = useState('AVAILABLE');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Canvas Dragging ref for floor plan
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ tableId: string; startX: number; startY: number } | null>(null);
 
-  const selectedTable = tables.find(t => t.id === selectedTableId);
+  const selectedTable = useMemo(() => {
+    return tables.find(t => t.id === selectedTableId) || null;
+  }, [tables, selectedTableId]);
 
-  // Initialize form when table selection changes
-  useEffect(() => {
-    if (selectedTable) {
-      setFormNumber(selectedTable.number);
-      setFormCapacity(selectedTable.capacity);
-      setFormShape(selectedTable.shape);
-      setFormStatus(selectedTable.status);
-    } else {
-      resetForm();
-    }
-  }, [selectedTableId]);
-
-  const resetForm = () => {
-    setFormNumber('');
-    setFormCapacity(2);
-    setFormShape('RECTANGLE');
-    setFormStatus('AVAILABLE');
-    setIsEditForm(false);
+  // Open Studio for selected table
+  const openStudio = (table: DiningTable) => {
+    setSelectedTableId(table.id);
+    setEditNumber(table.number);
+    setEditCapacity(table.capacity || 4);
+    setEditShape((table.shape as 'RECTANGLE' | 'ROUND') || 'RECTANGLE');
+    setEditStatus(table.status || 'AVAILABLE');
+    setIsStudioOpen(true);
   };
 
   const fetchTables = async () => {
@@ -77,68 +74,91 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   // Add a new table
   const handleAddTable = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formNumber.trim()) {
+    if (!editNumber.trim()) {
       showToast('Nomor meja wajib diisi', 'error');
       return;
     }
 
+    setIsSaving(true);
     try {
       const res = await fetch('/api/admin/tables', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          number: formNumber,
-          capacity: formCapacity,
-          shape: formShape,
-          x: 45,
-          y: 45
+          number: editNumber.trim(),
+          capacity: editCapacity,
+          shape: editShape,
+          x: 50,
+          y: 50
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal menambahkan meja');
 
-      showToast(`Meja ${formNumber} berhasil ditambahkan`, 'success');
+      showToast(`Meja ${editNumber} berhasil ditambahkan`, 'success');
       setTables(prev => [...prev, data]);
-      setSelectedTableId(data.id);
-      resetForm();
+      setIsAddModalOpen(false);
+      openStudio(data);
     } catch (err: any) {
       showToast(err.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Update table info
-  const handleUpdateTable = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedTableId || !formNumber.trim()) return;
+  // Save changes from Studio
+  const handleSaveStudio = async () => {
+    if (!selectedTableId || !editNumber.trim()) return;
 
+    setIsSaving(true);
     try {
       const res = await fetch(`/api/admin/tables/${selectedTableId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          number: formNumber,
-          capacity: formCapacity,
-          shape: formShape,
-          status: formStatus
+          number: editNumber.trim(),
+          capacity: editCapacity,
+          shape: editShape,
+          status: editStatus
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memperbarui meja');
 
-      showToast('Meja berhasil diperbarui', 'success');
+      showToast(`Pengaturan Meja ${editNumber} disimpan`, 'success');
       setTables(prev => prev.map(t => t.id === selectedTableId ? data : t));
-      setIsEditForm(false);
+      setIsStudioOpen(false);
     } catch (err: any) {
       showToast(err.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
+  };
+
+  // Quick Status Update
+  const handleQuickStatusChange = async (status: string) => {
+    if (!selectedTableId) return;
+    setEditStatus(status);
+    try {
+      const res = await fetch(`/api/admin/tables/${selectedTableId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTables(prev => prev.map(t => t.id === selectedTableId ? data : t));
+        showToast(`Status Meja ${data.number} diubah ke ${status}`, 'info');
+      }
+    } catch {}
   };
 
   // Delete table
   const handleDeleteTable = async () => {
     if (!selectedTableId) return;
-    if (!confirm('Apakah Anda yakin ingin menghapus meja ini?')) return;
+    if (!confirm(`Hapus Meja ${selectedTable?.number}? QR code meja ini tidak akan bisa digunakan lagi.`)) return;
 
     try {
       const res = await fetch(`/api/admin/tables/${selectedTableId}`, {
@@ -152,355 +172,667 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
 
       showToast('Meja berhasil dihapus', 'success');
       setTables(prev => prev.filter(t => t.id !== selectedTableId));
+      setIsStudioOpen(false);
       setSelectedTableId(null);
-      resetForm();
     } catch (err: any) {
       showToast(err.message, 'error');
     }
   };
 
-  // Update status quick toggle
-  const handleUpdateStatus = async (newStatus: string) => {
-    if (!selectedTableId) return;
-    try {
-      const res = await fetch(`/api/admin/tables/${selectedTableId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (!res.ok) throw new Error('Gagal mengubah status');
-      setTables(prev => prev.map(t => t.id === selectedTableId ? { ...t, status: newStatus } : t));
-      showToast(`Status diubah ke ${newStatus}`, 'success');
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
-  };
-
-  // Save table position
-  const saveTablePosition = async (tableId: string, x: number, y: number) => {
-    try {
-      await fetch(`/api/admin/tables/${tableId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ x: Math.round(x), y: Math.round(y) })
-      });
-    } catch (err) {
-      console.error('Failed to save table coordinates:', err);
-    }
-  };
-
-  // Drag handlers
+  // Floor Plan Drag & Drop Position Handler
   const handleStartDrag = (e: React.MouseEvent | React.TouchEvent, tableId: string) => {
-    if (!isEditMode) {
-      setSelectedTableId(tableId);
+    if (!isDragMode) {
+      const targetTable = tables.find(t => t.id === tableId);
+      if (targetTable) openStudio(targetTable);
       return;
     }
-    e.stopPropagation();
 
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    dragInfo.current = { tableId, startX: clientX, startY: clientY };
 
-    dragInfo.current = {
-      tableId,
-      startX: clientX,
-      startY: clientY
-    };
-
-    setSelectedTableId(tableId);
-
-    document.addEventListener('mousemove', handleDragMove);
-    document.addEventListener('mouseup', handleDragEnd);
-    document.addEventListener('touchmove', handleDragMove, { passive: false });
-    document.addEventListener('touchend', handleDragEnd);
+    window.addEventListener('mousemove', handleDragging);
+    window.addEventListener('mouseup', handleEndDrag);
+    window.addEventListener('touchmove', handleDragging);
+    window.addEventListener('touchend', handleEndDrag);
   };
 
-  const handleDragMove = (e: MouseEvent | TouchEvent) => {
+  const handleDragging = (e: MouseEvent | TouchEvent) => {
     if (!dragInfo.current || !canvasRef.current) return;
-
-    const { tableId } = dragInfo.current;
+    const rect = canvasRef.current.getBoundingClientRect();
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const xPercent = Math.max(5, Math.min(95, ((clientX - rect.left) / rect.width) * 100));
+    const yPercent = Math.max(5, Math.min(95, ((clientY - rect.top) / rect.height) * 100));
 
-    let xPercent = ((clientX - canvasRect.left) / canvasRect.width) * 100;
-    let yPercent = ((clientY - canvasRect.top) / canvasRect.height) * 100;
-
-    xPercent = Math.min(Math.max(5, xPercent), 90);
-    yPercent = Math.min(Math.max(5, yPercent), 90);
-
-    setTables(prev => prev.map(t => t.id === tableId ? { ...t, x: xPercent, y: yPercent } : t));
+    setTables(prev => prev.map(t => {
+      if (t.id === dragInfo.current?.tableId) {
+        return { ...t, x: Math.round(xPercent), y: Math.round(yPercent) };
+      }
+      return t;
+    }));
   };
 
-  const handleDragEnd = () => {
+  const handleEndDrag = async () => {
     if (dragInfo.current) {
-      const current = tables.find(t => t.id === dragInfo.current?.tableId);
-      if (current) {
-        saveTablePosition(current.id, current.x, current.y);
+      const draggedTable = tables.find(t => t.id === dragInfo.current?.tableId);
+      if (draggedTable) {
+        try {
+          await fetch(`/api/admin/tables/${draggedTable.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ x: draggedTable.x, y: draggedTable.y })
+          });
+        } catch {}
       }
     }
+
     dragInfo.current = null;
-    document.removeEventListener('mousemove', handleDragMove);
-    document.removeEventListener('mouseup', handleDragEnd);
-    document.removeEventListener('touchmove', handleDragMove);
-    document.removeEventListener('touchend', handleDragEnd);
+    window.removeEventListener('mousemove', handleDragging);
+    window.removeEventListener('mouseup', handleEndDrag);
+    window.removeEventListener('touchmove', handleDragging);
+    window.removeEventListener('touchend', handleEndDrag);
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'OCCUPIED':
-        return {
-          bg: 'bg-blue-500/10',
-          border: 'border-blue-500',
-          text: 'text-blue-700',
-          label: 'Terisi',
-          dot: 'bg-blue-500'
-        };
-      case 'BILLING':
-        return {
-          bg: 'bg-amber-500/10',
-          border: 'border-amber-500',
-          text: 'text-amber-700',
-          label: 'Billing',
-          dot: 'bg-amber-500'
-        };
-      case 'CLEANING':
-        return {
-          bg: 'bg-stone-500/10',
-          border: 'border-stone-400',
-          text: 'text-stone-700',
-          label: 'Pembersihan',
-          dot: 'bg-stone-400'
-        };
-      default:
-        return {
-          bg: 'bg-orange-500/10',
-          border: 'border-emerald-600',
-          text: 'text-orange-700',
-          label: 'Tersedia',
-          dot: 'bg-orange-500'
-        };
+  // Download QR Code image
+  const handleDownloadQR = () => {
+    if (!selectedTable) return;
+    const canvas = document.getElementById(`qr-canvas-${selectedTable.id}`) as HTMLCanvasElement;
+    if (canvas) {
+      const pngUrl = canvas.toDataURL('image/png');
+      const downloadLink = document.createElement('a');
+      downloadLink.href = pngUrl;
+      downloadLink.download = `QR-Meja-${selectedTable.number}-ArumSeduh.png`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      showToast('Gambar QR Code berhasil diunduh', 'success');
     }
   };
 
   const getStoreUrl = (tableNum: string) => {
     if (typeof window !== 'undefined') {
-      return `${window.location.origin}/spmb?table=${tableNum}`;
+      return `${window.location.origin}/spmb?table=${encodeURIComponent(tableNum)}`;
     }
-    return `https://arum-seduh.com/spmb?table=${tableNum}`;
+    return `https://arumseduh.com/spmb?table=${encodeURIComponent(tableNum)}`;
   };
 
-  const handleDownloadQR = () => {
-    if (!selectedTable) return;
-    try {
-      const canvas = document.getElementById(`qr-canvas-${selectedTable.id}`) as HTMLCanvasElement;
-      if (!canvas) return;
-      const url = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `QR_Meja_${selectedTable.number}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast(`QR Code Meja ${selectedTable.number} berhasil diunduh`, 'success');
-    } catch (e) {
-      showToast('Gagal mengunduh QR Code', 'error');
+  // Status visual colors
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'AVAILABLE':
+        return { bg: 'bg-emerald-50', border: 'border-emerald-300', text: 'text-emerald-800', dot: 'bg-emerald-500', label: 'Tersedia' };
+      case 'OCCUPIED':
+        return { bg: 'bg-blue-50', border: 'border-blue-300', text: 'text-blue-800', dot: 'bg-blue-500', label: 'Terisi' };
+      case 'BILLING':
+        return { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', dot: 'bg-amber-500', label: 'Ditagih' };
+      case 'CLEANING':
+        return { bg: 'bg-rose-50', border: 'border-rose-300', text: 'text-rose-800', dot: 'bg-rose-500', label: 'Dibersihkan' };
+      default:
+        return { bg: 'bg-stone-50', border: 'border-stone-300', text: 'text-stone-700', dot: 'bg-stone-400', label: status };
     }
   };
 
-  // Stats
+  // Metrics
   const totalTables = tables.length;
   const occupiedCount = tables.filter(t => t.status === 'OCCUPIED').length;
-  const totalCapacity = tables.reduce((sum, t) => sum + (t.capacity || 0), 0);
+  const totalCapacity = tables.reduce((acc, t) => acc + (t.capacity || 0), 0);
   const occupancyPercent = totalTables > 0 ? Math.round((occupiedCount / totalTables) * 100) : 0;
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#1C1917] p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-h-screen bg-[#FAF9F6] text-[#1C1917] p-4 sm:p-6 lg:p-8 space-y-6 font-sans">
       
-      {/* Header & Stats Banner */}
-      <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F97316]/10 text-[#F97316] text-[11px] font-bold tracking-wide">
-            <Layers className="w-3.5 h-3.5" />
-            <span>Dine-In Management</span>
+      {/* Top Header & Action Controls */}
+      <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[11px] font-bold tracking-wide">
+              <UtensilsCrossed className="w-3.5 h-3.5 text-orange-600" />
+              <span>Manajemen Meja & Kursi Arum Seduh</span>
+            </div>
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
+              Denah Ruangan & Studio Kursi
+            </h1>
+            <p className="text-xs text-stone-500">
+              Klik meja mana pun pada denah untuk mengedit bentuk meja (Kotak/Bulat), kapasitas, dan posisi kursi
+            </p>
           </div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 mt-1">
-            Denah Tata Letak Meja & Kursi
-          </h1>
-          <p className="text-xs text-stone-500 mt-0.5">
-            Atur tata letak meja visual, unduh QR code meja, dan pantau status meja realtime
-          </p>
-        </div>
 
-        {/* Mode Toggle: Design Mode vs Live Monitor */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsEditMode(!isEditMode)}
-            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm ${
-              isEditMode
-                ? 'bg-amber-600 text-white ring-2 ring-amber-400/50'
-                : 'bg-[#F97316] text-white hover:bg-[#EA580C]'
-            }`}
-          >
-            <Move className="w-4 h-4" />
-            <span>{isEditMode ? 'Mode Geser Meja (ON)' : 'Ubah Posisi Meja'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Live Metrics Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Total Meja</p>
-          <p className="font-serif text-2xl font-bold text-stone-900 mt-1">{totalTables}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Meja Terisi</p>
-          <p className="font-serif text-2xl font-bold text-blue-700 mt-1">{occupiedCount}</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Total Kapasitas</p>
-          <p className="font-serif text-2xl font-bold text-orange-700 mt-1">{totalCapacity} Kursi</p>
-        </div>
-        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Okupansi Meja</p>
-          <p className="font-serif text-2xl font-bold text-[#F97316] mt-1">{occupancyPercent}%</p>
-        </div>
-      </div>
-
-      {/* Main Grid: Left Editor Panel & Right Floor Plan Canvas */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* Left Side: Table Details & Actions */}
-        <div className="lg:col-span-4 space-y-4">
-          {selectedTable ? (
-            <motion.div
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-5 text-left"
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsDragMode(!isDragMode)}
+              className={`px-4 py-2.5 rounded-2xl text-xs font-bold border flex items-center gap-2 transition-all cursor-pointer ${
+                isDragMode
+                  ? 'bg-orange-500 text-white border-orange-600 shadow-md shadow-orange-500/20'
+                  : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+              }`}
             >
-              <div className="flex items-center justify-between border-b border-stone-100 pb-4">
-                <div>
-                  <h3 className="font-serif font-bold text-xl text-stone-900">
-                    Meja {selectedTable.number}
-                  </h3>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Kapasitas {selectedTable.capacity} Kursi • {selectedTable.shape === 'ROUND' ? 'Meja Bulat' : 'Meja Persegi'}
+              <Move className="w-3.5 h-3.5" />
+              <span>{isDragMode ? 'Mode Geser Meja Aktif' : 'Geser Posisi Meja'}</span>
+            </button>
+
+            {/* Refresh */}
+            <button
+              type="button"
+              onClick={fetchTables}
+              className="p-2.5 rounded-2xl border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all cursor-pointer"
+              title="Segarkan Denah"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+
+            {/* Tambah Meja Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setEditNumber((tables.length + 1).toString());
+                setEditCapacity(4);
+                setEditShape('RECTANGLE');
+                setIsAddModalOpen(true);
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-orange-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah Meja</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Live Metrics Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 pt-2 border-t border-stone-100">
+          <div className="bg-stone-50/70 p-4 rounded-2xl border border-stone-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Total Meja</p>
+            <p className="font-serif text-2xl font-bold text-stone-900 mt-1">{totalTables} Meja</p>
+          </div>
+          <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Meja Terisi</p>
+            <p className="font-serif text-2xl font-bold text-blue-900 mt-1">{occupiedCount} Meja</p>
+          </div>
+          <div className="bg-orange-50/60 p-4 rounded-2xl border border-orange-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">Total Kursi</p>
+            <p className="font-serif text-2xl font-bold text-orange-900 mt-1">{totalCapacity} Kursi</p>
+          </div>
+          <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Okupansi Ruangan</p>
+            <p className="font-serif text-2xl font-bold text-emerald-900 mt-1">{occupancyPercent}%</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Blueprint Floor Plan Canvas */}
+      <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4 text-left">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
+            <span className="text-xs font-bold uppercase tracking-wider text-orange-700">
+              Denah Visual Ruangan Kafe (Arum Seduh Floor Plan)
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-xs font-semibold text-stone-500">
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Tersedia</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Terisi</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Ditagih</span>
+            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Dibersihkan</span>
+          </div>
+        </div>
+
+        {/* The Blueprint Canvas */}
+        <div
+          ref={canvasRef}
+          className="relative w-full aspect-[16/9] min-h-[460px] rounded-3xl bg-[#FAF7F2] border-2 border-stone-300 shadow-inner overflow-hidden select-none cursor-default"
+          style={{
+            backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
+            backgroundSize: '24px 24px'
+          }}
+        >
+          <div className="absolute top-4 left-6 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none">
+            [Denah Skala Arum Seduh Indoor • Klik meja untuk membuka Studio Kursi]
+          </div>
+
+          {tables.map((table) => {
+            const isSelected = selectedTableId === table.id;
+            const statusStyle = getStatusColor(table.status);
+            const isRound = table.shape === 'ROUND';
+
+            return (
+              <div
+                key={table.id}
+                onMouseDown={(e) => handleStartDrag(e, table.id)}
+                onTouchStart={(e) => handleStartDrag(e, table.id)}
+                style={{
+                  left: `${table.x}%`,
+                  top: `${table.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  touchAction: 'none'
+                }}
+                className={`absolute select-none cursor-pointer flex flex-col items-center justify-center border-2 transition-all ${
+                  isRound 
+                    ? 'w-24 h-24 rounded-full' 
+                    : 'w-32 h-24 rounded-2xl'
+                } ${
+                  isSelected 
+                    ? 'ring-4 ring-orange-500/40 shadow-xl scale-105 z-30 bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white' 
+                    : `${statusStyle.bg} ${statusStyle.border} ${statusStyle.text} hover:border-orange-400 hover:scale-105 z-10 shadow-md`
+                }`}
+              >
+                {/* Table Shape Tag */}
+                <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-black/5 text-stone-600'
+                }`}>
+                  {isRound ? 'Bulat' : 'Kotak'}
+                </span>
+
+                <span className="font-serif font-bold text-sm sm:text-base leading-tight mt-0.5">
+                  Meja {table.number}
+                </span>
+
+                <span className={`text-[10px] font-semibold mt-0.5 flex items-center gap-1 ${
+                  isSelected ? 'text-white/90' : 'text-stone-500'
+                }`}>
+                  <Armchair className="w-3 h-3" /> {table.capacity} Kursi
+                </span>
+
+                {/* Move Handle if in drag mode */}
+                {isDragMode && (
+                  <div className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-orange-600 text-white flex items-center justify-center shadow-md animate-bounce">
+                    <Move className="w-3 h-3" />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {tables.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-stone-400 text-xs font-mono">
+              [Denah kosong. Klik "Tambah Meja" di atas untuk menambahkan meja pertama]
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* DEDICATED TABLE & CHAIR STUDIO MODAL / DRAWER */}
+      <AnimatePresence>
+        {isStudioOpen && selectedTable && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+              onClick={() => setIsStudioOpen(false)}
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl w-full max-w-2xl p-6 sm:p-8 shadow-2xl relative z-10 border border-stone-200 max-h-[90vh] flex flex-col text-left space-y-6"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-4 border-b border-stone-100">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-serif font-bold text-2xl text-stone-900">
+                      Studio Meja {selectedTable.number}
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-xs font-bold">
+                      {editShape === 'ROUND' ? 'Meja Bulat' : 'Meja Kotak'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-500">
+                    Atur bentuk meja (Kotak/Bulat), ubah jumlah kursi, dan atur posisi kursi secara visual
                   </p>
                 </div>
+
                 <button
-                  onClick={() => setSelectedTableId(null)}
-                  className="text-stone-400 hover:text-stone-600 text-xs font-bold"
+                  onClick={() => setIsStudioOpen(false)}
+                  className="w-9 h-9 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50 cursor-pointer"
                 >
-                  Tutup
+                  <X className="w-4 h-4 text-stone-500" />
                 </button>
               </div>
 
-              {/* Status Selector */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                  Status Meja
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {['AVAILABLE', 'OCCUPIED', 'BILLING', 'CLEANING'].map((st) => {
-                    const isSelected = selectedTable.status === st;
-                    const stColor = getStatusColor(st);
-                    return (
+              {/* Studio Body: Left Settings & Right Interactive Visual Canvas */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start overflow-y-auto pr-1">
+                
+                {/* Left Column: Shape, Capacity, Number Controls */}
+                <div className="md:col-span-5 space-y-4">
+                  {/* Shape Switcher */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Bentuk Meja
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
                       <button
-                        key={st}
                         type="button"
-                        onClick={() => handleUpdateStatus(st)}
-                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
-                            : 'bg-stone-50 text-stone-700 border-stone-200 hover:border-stone-400'
+                        onClick={() => setEditShape('RECTANGLE')}
+                        className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          editShape === 'RECTANGLE'
+                            ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
+                            : 'bg-stone-50 border-stone-200 text-stone-600 hover:border-stone-400'
                         }`}
                       >
-                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : stColor.dot}`} />
-                        <span>{stColor.label}</span>
+                        <Square className="w-4 h-4 text-orange-600" />
+                        <span>Meja Kotak</span>
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
 
-              {/* QR Code & Direct Link */}
-              <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200 flex flex-col items-center text-center space-y-3">
-                <div className="bg-white p-2 rounded-2xl border border-stone-200 shadow-sm">
-                  <QRCodeCanvas
-                    id={`qr-canvas-${selectedTable.id}`}
-                    value={getStoreUrl(selectedTable.number)}
-                    size={140}
-                    level="H"
-                  />
+                      <button
+                        type="button"
+                        onClick={() => setEditShape('ROUND')}
+                        className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          editShape === 'ROUND'
+                            ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
+                            : 'bg-stone-50 border-stone-200 text-stone-600 hover:border-stone-400'
+                        }`}
+                      >
+                        <Circle className="w-4 h-4 text-orange-600" />
+                        <span>Meja Bulat</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Table Number & Capacity */}
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                        Nomor Meja
+                      </label>
+                      <input
+                        type="text"
+                        value={editNumber}
+                        onChange={(e) => setEditNumber(e.target.value)}
+                        className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-stone-200 bg-stone-50 focus:outline-none focus:border-orange-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                        Kapasitas Kursi
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditCapacity(Math.max(1, editCapacity - 1))}
+                          className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 font-bold text-sm flex items-center justify-center hover:bg-stone-200 cursor-pointer"
+                        >
+                          -
+                        </button>
+                        <span className="flex-1 text-center font-serif font-bold text-sm text-stone-900">
+                          {editCapacity}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setEditCapacity(Math.min(12, editCapacity + 1))}
+                          className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 font-bold text-sm flex items-center justify-center hover:bg-stone-200 cursor-pointer"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status Selector */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Status Meja Saat Ini
+                    </label>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {['AVAILABLE', 'OCCUPIED', 'BILLING', 'CLEANING'].map((st) => {
+                        const isStSelected = editStatus === st;
+                        const stColor = getStatusColor(st);
+                        return (
+                          <button
+                            key={st}
+                            type="button"
+                            onClick={() => handleQuickStatusChange(st)}
+                            className={`py-2 px-2.5 rounded-xl border text-[11px] font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                              isStSelected
+                                ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                : 'bg-stone-50 text-stone-700 border-stone-200 hover:border-stone-400'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${isStSelected ? 'bg-white' : stColor.dot}`} />
+                            <span>{stColor.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* QR Code Action */}
+                  <div className="p-3.5 rounded-2xl bg-[#FAF7F2] border border-stone-200 space-y-2.5 text-center">
+                    <div className="hidden">
+                      <QRCodeCanvas
+                        id={`qr-canvas-${selectedTable.id}`}
+                        value={getStoreUrl(selectedTable.number)}
+                        size={180}
+                        level="H"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleDownloadQR}
+                      className="w-full py-2 rounded-xl bg-white hover:bg-orange-50 border border-stone-200 hover:border-orange-300 text-orange-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Unduh QR Code Stiker
+                    </button>
+                  </div>
                 </div>
-                <div className="space-y-0.5 w-full">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">URL QR Code Meja</p>
-                  <p className="text-xs font-mono font-bold text-[#F97316] truncate max-w-full">
-                    {getStoreUrl(selectedTable.number)}
+
+                {/* Right Column: High-Res Top-Down Visual Chair Studio Canvas */}
+                <div className="md:col-span-7 bg-[#FAF7F2] rounded-3xl border-2 border-stone-200 p-6 flex flex-col items-center justify-center space-y-4">
+                  <div className="text-center">
+                    <p className="text-[11px] font-bold text-orange-800 uppercase tracking-wider">
+                      Visualisasi Posisi Kursi ({editShape === 'ROUND' ? 'Meja Bulat' : 'Meja Kotak'})
+                    </p>
+                    <p className="text-[10px] text-stone-500">
+                      Tampilan top-down yang akan dilihat pelanggan di layar HP / SPMB
+                    </p>
+                  </div>
+
+                  {/* The Dynamic Table & Chairs Canvas */}
+                  <div className="relative w-64 h-64 bg-white rounded-3xl border border-stone-200 shadow-inner flex items-center justify-center select-none">
+                    
+                    {/* Central Table Graphic */}
+                    {editShape === 'ROUND' ? (
+                      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10">
+                        <span className="font-serif font-black text-xs text-stone-900">MEJA {editNumber}</span>
+                        <span className="text-[8px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-0.5">
+                          {editCapacity} Kursi
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="w-32 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10">
+                        <span className="font-serif font-black text-xs text-stone-900">MEJA {editNumber}</span>
+                        <span className="text-[8px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-0.5">
+                          {editCapacity} Kursi
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Surrounding Dynamic Chairs */}
+                    {Array.from({ length: editCapacity }).map((_, idx) => {
+                      const sLabel = (idx + 1).toString();
+                      let posStyle: React.CSSProperties = {};
+                      let posName = `Kursi ${sLabel}`;
+
+                      if (editShape === 'ROUND') {
+                        // Circular distribution around round table
+                        const angle = (idx / editCapacity) * 2 * Math.PI - Math.PI / 2;
+                        const radius = 95;
+                        posStyle = {
+                          top: `calc(50% + ${Math.sin(angle) * radius}px)`,
+                          left: `calc(50% + ${Math.cos(angle) * radius}px)`,
+                          transform: 'translate(-50%, -50%)'
+                        };
+                      } else {
+                        // Rectangular edge distribution
+                        if (editCapacity <= 2) {
+                          if (idx === 0) {
+                            posStyle = { top: '8px', left: '50%', transform: 'translateX(-50%)' };
+                            posName = 'Depan (1)';
+                          } else {
+                            posStyle = { bottom: '8px', left: '50%', transform: 'translateX(-50%)' };
+                            posName = 'Belakang (2)';
+                          }
+                        } else if (editCapacity === 4) {
+                          if (idx === 0) {
+                            posStyle = { top: '8px', left: '50%', transform: 'translateX(-50%)' };
+                            posName = 'Depan (1)';
+                          } else if (idx === 1) {
+                            posStyle = { right: '8px', top: '50%', transform: 'translateY(-50%)' };
+                            posName = 'Kanan (2)';
+                          } else if (idx === 2) {
+                            posStyle = { bottom: '8px', left: '50%', transform: 'translateX(-50%)' };
+                            posName = 'Belakang (3)';
+                          } else {
+                            posStyle = { left: '8px', top: '50%', transform: 'translateY(-50%)' };
+                            posName = 'Kiri (4)';
+                          }
+                        } else {
+                          const angle = (idx / editCapacity) * 2 * Math.PI - Math.PI / 2;
+                          const radius = 95;
+                          posStyle = {
+                            top: `calc(50% + ${Math.sin(angle) * radius}px)`,
+                            left: `calc(50% + ${Math.cos(angle) * radius}px)`,
+                            transform: 'translate(-50%, -50%)'
+                          };
+                        }
+                      }
+
+                      return (
+                        <div
+                          key={sLabel}
+                          style={posStyle}
+                          title={posName}
+                          className="absolute p-1.5 rounded-xl bg-orange-50 text-orange-700 border-2 border-orange-300 shadow-sm flex flex-col items-center justify-center z-20"
+                        >
+                          <Armchair className="w-3.5 h-3.5 text-orange-600" />
+                          <span className="font-serif font-black text-[9px] leading-none mt-0.5">{sLabel}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <p className="text-[11px] font-medium text-stone-500 text-center">
+                    Gunakan tombol <strong>+</strong> atau <strong>-</strong> pada kapasitas kursi di sebelah kiri untuk menambah atau mengurangi kursi.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadQR}
-                  className="w-full py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                >
-                  <Download className="w-3.5 h-3.5" /> Unduh QR Meja
-                </button>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-2 border-t border-stone-100">
-                <button
-                  type="button"
-                  onClick={() => setIsEditForm(true)}
-                  className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-700 text-xs font-bold hover:bg-stone-50 cursor-pointer"
-                >
-                  Edit Meja
-                </button>
+              {/* Studio Actions */}
+              <div className="pt-4 border-t border-stone-100 flex items-center justify-between gap-3">
                 <button
                   type="button"
                   onClick={handleDeleteTable}
-                  className="px-4 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold hover:bg-rose-100 cursor-pointer"
+                  className="px-4 py-3 rounded-2xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-4 h-4" /> Hapus Meja
                 </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsStudioOpen(false)}
+                    className="px-5 py-3 rounded-2xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-50 cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveStudio}
+                    disabled={isSaving}
+                    className="px-6 py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Meja & Kursi'}
+                  </button>
+                </div>
               </div>
             </motion.div>
-          ) : (
-            <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm text-center space-y-3">
-              <Armchair className="w-10 h-10 text-stone-300 mx-auto" />
-              <h3 className="font-serif font-bold text-base text-stone-800">Pilih Meja di Denah</h3>
-              <p className="text-xs text-stone-400">
-                Klik salah satu meja di denah untuk melihat status, mengunduh QR, atau mengubah informasi meja.
-              </p>
-            </div>
-          )}
+          </div>
+        )}
+      </AnimatePresence>
 
-          {/* Form Tambah / Edit Meja */}
-          <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4 text-left">
-            <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-[#F97316]" />
-              <span>{isEditForm ? 'Edit Detail Meja' : 'Tambah Meja Baru'}</span>
-            </h3>
+      {/* TAMBAH MEJA BARU MODAL */}
+      <AnimatePresence>
+        {isAddModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+              onClick={() => setIsAddModalOpen(false)}
+            />
 
-            <form onSubmit={isEditForm ? handleUpdateTable : handleAddTable} className="space-y-3.5">
-              <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                  Nomor / Label Meja
-                </label>
-                <input
-                  type="text"
-                  placeholder="Contoh: 1, 2A, Outdoor-1"
-                  required
-                  value={formNumber}
-                  onChange={(e) => setFormNumber(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#F97316]"
-                />
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl relative z-10 border border-stone-200 text-left space-y-5"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <h3 className="font-serif font-bold text-xl text-stone-900">Tambah Meja Baru</h3>
+                <button
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50 cursor-pointer"
+                >
+                  <X className="w-4 h-4 text-stone-500" />
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
+              <form onSubmit={handleAddTable} className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                    Nomor / Label Meja
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Contoh: 1, 2, VIP-1, Outdoor-3"
+                    value={editNumber}
+                    onChange={(e) => setEditNumber(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-stone-200 bg-stone-50 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                {/* Shape Selection */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                    Bentuk Meja
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditShape('RECTANGLE')}
+                      className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        editShape === 'RECTANGLE'
+                          ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
+                          : 'bg-stone-50 border-stone-200 text-stone-600 hover:border-stone-400'
+                      }`}
+                    >
+                      <Square className="w-4 h-4 text-orange-600" />
+                      <span>Meja Kotak</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditShape('ROUND')}
+                      className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                        editShape === 'ROUND'
+                          ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
+                          : 'bg-stone-50 border-stone-200 text-stone-600 hover:border-stone-400'
+                      }`}
+                    >
+                      <Circle className="w-4 h-4 text-orange-600" />
+                      <span>Meja Bulat</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
                     Kapasitas Kursi
@@ -509,132 +841,33 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                     type="number"
                     min={1}
                     max={20}
-                    value={formCapacity}
-                    onChange={(e) => setFormCapacity(parseInt(e.target.value) || 2)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#F97316]"
+                    value={editCapacity}
+                    onChange={(e) => setEditCapacity(parseInt(e.target.value) || 2)}
+                    className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-stone-200 bg-stone-50 focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                    Bentuk Meja
-                  </label>
-                  <select
-                    value={formShape}
-                    onChange={(e) => setFormShape(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#F97316]"
-                  >
-                    <option value="RECTANGLE">Persegi</option>
-                    <option value="ROUND">Bulat</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  className="flex-1 py-3 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs shadow-md transition-all cursor-pointer"
-                >
-                  {isEditForm ? 'Simpan Perubahan' : 'Tambah Meja'}
-                </button>
-                {isEditForm && (
+                <div className="flex gap-2 pt-3 border-t border-stone-100">
                   <button
                     type="button"
-                    onClick={resetForm}
-                    className="px-4 py-3 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-50 cursor-pointer"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="flex-1 py-3 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-50 cursor-pointer"
                   >
                     Batal
                   </button>
-                )}
-              </div>
-            </form>
-          </div>
-        </div>
-
-        {/* Right Side: Visual Floor Plan Canvas */}
-        <div className="lg:col-span-8 space-y-4">
-          <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-ping" />
-              <span className="text-xs font-bold uppercase tracking-wider text-[#F97316]">
-                Arum Seduh Cafe Blueprint Canvas
-              </span>
-            </div>
-
-            <button
-              onClick={fetchTables}
-              className="text-xs font-bold text-stone-500 hover:text-stone-900 flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className="w-3.5 h-3.5" /> Segarkan Denah
-            </button>
-          </div>
-
-          {/* Architectural Canvas */}
-          <div
-            ref={canvasRef}
-            className="relative w-full aspect-[4/3] rounded-3xl bg-[#FAF7F2] border-2 border-stone-300 shadow-xl overflow-hidden min-h-[460px] select-none"
-            style={{
-              backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
-              backgroundSize: '24px 24px'
-            }}
-          >
-            {/* Blueprint Grid Overlay */}
-            <div className="absolute top-4 left-6 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none select-none">
-              [Scale 1:25 • Arum Seduh Indoor Cafe]
-            </div>
-
-            {tables.map((table) => {
-              const isSelected = selectedTableId === table.id;
-              const statusStyle = getStatusColor(table.status);
-              const isRound = table.shape === 'ROUND';
-
-              return (
-                <div
-                  key={table.id}
-                  onMouseDown={(e) => handleStartDrag(e, table.id)}
-                  onTouchStart={(e) => handleStartDrag(e, table.id)}
-                  style={{
-                    left: `${table.x}%`,
-                    top: `${table.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                    touchAction: 'none'
-                  }}
-                  className={`absolute transition-transform select-none cursor-pointer ${
-                    isRound 
-                      ? 'w-20 h-20 rounded-full' 
-                      : 'w-28 h-20 rounded-2xl'
-                  } flex flex-col items-center justify-center border-2 shadow-md ${
-                    isSelected 
-                      ? 'ring-4 ring-[#F97316] shadow-xl scale-110 z-30 bg-[#F97316] text-white border-[#F97316]' 
-                      : `${statusStyle.bg} ${statusStyle.border} ${statusStyle.text} bg-white hover:scale-105 z-10`
-                  }`}
-                >
-                  <span className="font-serif font-bold text-xs sm:text-sm">
-                    Meja {table.number}
-                  </span>
-                  <span className={`text-[9px] font-semibold mt-0.5 ${isSelected ? 'text-emerald-200' : 'opacity-70'}`}>
-                    {table.capacity} Kursi
-                  </span>
-
-                  {/* Move Icon indicator when in Edit Mode */}
-                  {isEditMode && (
-                    <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center shadow">
-                      <Move className="w-2.5 h-2.5" />
-                    </div>
-                  )}
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {isSaving ? 'Menyimpan...' : 'Tambah Meja'}
+                  </button>
                 </div>
-              );
-            })}
-
-            {tables.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center text-center text-stone-400 font-mono text-xs p-6 pointer-events-none">
-                [Denah Kosong. Tambah meja melalui panel di sebelah kiri.]
-              </div>
-            )}
+              </form>
+            </motion.div>
           </div>
-        </div>
-
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
