@@ -21,6 +21,7 @@ import {
   ChevronRight,
   Leaf,
   CreditCard,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatRupiah } from '@/lib/utils';
@@ -65,15 +66,35 @@ const STATUS_ORDER_PICKUP = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY',
 const STATUS_ORDER_DELIVERY = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED'];
 
 function getOrderSteps(orderType: string, currentStatus: string, isSpmb?: boolean): OrderStep[] {
+  if (isSpmb || orderType === 'DINE_IN') {
+    const steps: OrderStep[] = [
+      { key: 'PENDING', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
+      { key: 'PREPARING', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: false },
+      { key: 'READY', label: 'Pesanan Selesai', icon: Check, active: false, completed: false },
+    ];
+    const effectiveIdx = (currentStatus === 'PENDING_PAYMENT' || currentStatus === 'PENDING') ? 0 
+      : currentStatus === 'PREPARING' ? 1 
+      : (currentStatus === 'READY' || currentStatus === 'COMPLETED') ? 2 : 0;
+
+    steps.forEach((step, i) => {
+      if (i < effectiveIdx) { 
+        step.completed = true; 
+      } else if (i === effectiveIdx) { 
+        step.active = true; 
+        step.completed = ['READY', 'COMPLETED'].includes(currentStatus); 
+      }
+    });
+    return steps;
+  }
+
   if (orderType === 'PICKUP') {
     const steps: OrderStep[] = [
       { key: 'PENDING', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
       { key: 'PREPARING', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: false },
-      { key: 'READY', label: isSpmb ? 'Siap Diantar' : 'Siap Diambil', icon: ShoppingBag, active: false, completed: false },
+      { key: 'READY', label: 'Siap Diambil', icon: ShoppingBag, active: false, completed: false },
       { key: 'COMPLETED', label: 'Selesai', icon: Check, active: false, completed: false },
     ];
     const currentIdx = STATUS_ORDER_PICKUP.indexOf(currentStatus);
-    // Map PENDING_PAYMENT to PENDING index
     const effectiveIdx = currentStatus === 'PENDING_PAYMENT' ? 0 : currentIdx;
     steps.forEach((step, i) => {
       if (i < effectiveIdx) { step.completed = true; }
@@ -100,7 +121,7 @@ function getOrderSteps(orderType: string, currentStatus: string, isSpmb?: boolea
 }
 
 function getOrderTypeLabel(type: string, isSpmb?: boolean) {
-  if (isSpmb) return 'Pengantaran SPMB';
+  if (isSpmb || type === 'DINE_IN') return 'Dine-In (Pesanan Meja)';
   switch (type) {
     case 'PICKUP': return 'Ambil Sendiri';
     default: return 'Pengiriman';
@@ -108,7 +129,7 @@ function getOrderTypeLabel(type: string, isSpmb?: boolean) {
 }
 
 function getOrderTypeIcon(type: string, isSpmb?: boolean) {
-  if (isSpmb) return MapPin;
+  if (isSpmb || type === 'DINE_IN') return UtensilsCrossed;
   switch (type) {
     case 'PICKUP': return ShoppingBag;
     default: return Truck;
@@ -655,7 +676,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         <div className="flex items-center gap-3 px-4 py-3 max-w-6xl mx-auto">
           <button
             onClick={() => {
-              if (currentStatus !== 'PENDING_PAYMENT') {
+              if (isSpmb) {
+                router.push('/spmb')
+              } else if (currentStatus !== 'PENDING_PAYMENT') {
                 router.push('/profile?section=orders')
               } else {
                 router.back()
@@ -725,7 +748,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               <div className="flex-1">
                 <p className="text-sm font-semibold">{getOrderTypeLabel(order.orderType, isSpmb)}</p>
                 <p className="text-xs text-brand-200">
-                  {isSpmb ? 'Diantar ke kelas/lokasi Anda' : order.orderType === 'DELIVERY' ? 'Diantar ke alamat Anda' : 'Ambil di toko'}
+                  {isSpmb ? 'Diantar langsung ke meja Anda' : order.orderType === 'DELIVERY' ? 'Diantar ke alamat Anda' : 'Ambil di toko'}
                 </p>
               </div>
             </div>
@@ -1033,6 +1056,27 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           </div>
         )}
 
+        {/* 20-Minute Alert Notification for SPMB */}
+        {isSpmb && !['COMPLETED', 'READY', 'CANCELLED'].includes(currentStatus) && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">⏱️</span>
+              <div>
+                <p className="text-xs font-bold text-amber-950">Pesanan belum selesai lebih dari 20 menit?</p>
+                <p className="text-[11px] text-amber-800/90 font-medium">Silakan hubungi kasir atau barista kami via WhatsApp.</p>
+              </div>
+            </div>
+            <a
+              href={`https://wa.me/${order.adminWhatsApp || ''}?text=${encodeURIComponent(`Halo admin/kasir, saya mau menanyakan pesanan ${order.id} untuk ${order.address || 'Meja'} yang belum selesai.`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold shrink-0 inline-flex items-center gap-1.5 transition-all shadow-sm"
+            >
+              <MessageCircle className="w-3.5 h-3.5" /> Hubungi Kasir via WA
+            </a>
+          </div>
+        )}
+
         {/* Contact Admin */}
         <button
           onClick={() => {
@@ -1165,10 +1209,15 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   Pesanan Anda telah berhasil dibatalkan.
                 </p>
                 <button
-                  onClick={() => setShowCancelSuccess(false)}
+                  onClick={() => {
+                    setShowCancelSuccess(false);
+                    if (isSpmb) {
+                      router.push('/spmb');
+                    }
+                  }}
                   className="w-full py-3 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700 transition-colors"
                 >
-                  Tutup
+                  {isSpmb ? 'Kembali ke Menu Meja (SPMB)' : 'Tutup'}
                 </button>
               </div>
             </motion.div>

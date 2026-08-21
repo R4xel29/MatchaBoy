@@ -6,9 +6,10 @@ import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingBag, Trash2, Plus, Minus, User, Phone, MapPin, Clock, 
-  CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, Utensils, Lock, ExternalLink
+  CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
+  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
 import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
@@ -59,11 +60,11 @@ export default function SpmbClient({
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Form State
+  // Form State - STRICTLY 2 PAYMENT OPTIONS: 'QRIS' or 'COD' (Tunai di Kasir)
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'COD' | 'QRIS' | 'QRIS_INSTAN'>('COD');
+  const [paymentMethod, setPaymentMethod] = useState<'QRIS' | 'COD'>('QRIS');
   
   // Checkout Status
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -74,7 +75,7 @@ export default function SpmbClient({
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [activeOrderStatus, setActiveOrderStatus] = useState<any>(null);
 
-  // QRIS Instan Modal state
+  // QRIS Payment Modal state
   const [showQrisModal, setShowQrisModal] = useState(false);
   const [qrisQrContent, setQrisQrContent] = useState('');
   const [qrisOrderId, setQrisOrderId] = useState('');
@@ -139,7 +140,7 @@ export default function SpmbClient({
     return () => clearInterval(interval);
   }, [activeOrderId]);
 
-  // 4. Poll payment status for QRIS Instan modal
+  // 4. Poll payment status for QRIS Modal
   useEffect(() => {
     if (!showQrisModal || !qrisOrderId || qrisPaymentPaid) return;
 
@@ -153,16 +154,25 @@ export default function SpmbClient({
             clearInterval(interval);
             setTimeout(() => {
               window.location.href = `/orders/${qrisOrderId}`;
-            }, 2500);
+            }, 2000);
           }
         }
       } catch (err) {
         console.error('Error polling QRIS payment status:', err);
       }
-    }, 3000);
+    }, 2500);
 
     return () => clearInterval(interval);
   }, [showQrisModal, qrisOrderId, qrisPaymentPaid]);
+
+  // Check if active order is taking more than 20 minutes
+  const isOrderOver20Min = useMemo(() => {
+    if (!activeOrderStatus?.createdAt) return false;
+    const created = new Date(activeOrderStatus.createdAt).getTime();
+    const now = Date.now();
+    const diffMinutes = (now - created) / (1000 * 60);
+    return diffMinutes >= 20 && !['READY', 'COMPLETED', 'CANCELLED'].includes(activeOrderStatus.status);
+  }, [activeOrderStatus]);
 
   // Filtered Products
   const filteredProducts = useMemo(() => {
@@ -205,6 +215,22 @@ export default function SpmbClient({
     setShowConfirmModal(true);
   };
 
+  const handleDownloadQris = () => {
+    try {
+      const canvas = document.getElementById('spmb-qris-canvas') as HTMLCanvasElement;
+      if (!canvas) return;
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `QRIS_ArumSeduh_Meja${tableNumber}_${qrisOrderId.slice(0, 8)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Failed to download QRIS:', err);
+    }
+  };
+
   const executeCheckout = async () => {
     setShowConfirmModal(false);
     setIsSubmitting(true);
@@ -216,8 +242,12 @@ export default function SpmbClient({
         name: item.name,
         quantity: item.quantity,
         size: item.size || 'Normal',
+        shot: (item as any).shot || undefined,
         addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
-        modsString: (item.matchaLevel !== undefined && item.matchaLevel !== null ? `Matcha Lvl: ${item.matchaLevel}, ` : '') + item.iceLevel + ', ' + item.sugarLevel + (item.addOns && item.addOns.length > 0 ? ', ' + item.addOns.map((a: any) => a.name).join(', ') : ''),
+        modsString: (item.matchaLevel !== undefined && item.matchaLevel !== null ? `Matcha: Level ${item.matchaLevel}, ` : '') +
+          ((item as any).shot ? `${(item as any).shot}, ` : '') +
+          item.iceLevel + ', ' + item.sugarLevel +
+          (item.addOns && item.addOns.length > 0 ? ', ' + item.addOns.map((a: any) => a.name).join(', ') : ''),
         bundleSelections: item.bundleSelections,
         matchaLevel: (item as any).matchaLevel
       }));
@@ -225,13 +255,15 @@ export default function SpmbClient({
       const cleanPhone = phone.replace(/[^0-9]/g, '');
       const formattedTableNumber = tableNumber.trim();
 
+      const backendPaymentMethod = paymentMethod === 'QRIS' ? 'QRIS_INSTAN' : 'COD';
+
       const payload = {
         name,
         phone: cleanPhone,
         tableNumber: formattedTableNumber,
         orderType: 'DINE_IN',
         address: `Meja ${formattedTableNumber}`,
-        paymentMethod,
+        paymentMethod: backendPaymentMethod,
         items: itemsPayload,
         notes: notes || undefined
       };
@@ -265,14 +297,19 @@ export default function SpmbClient({
       clearCart();
       setIsCartOpen(false);
 
-      if (paymentMethod === 'QRIS_INSTAN' && data.paymentQrContent) {
-        setQrisQrContent(data.paymentQrContent);
-        setQrisOrderId(data.orderId);
-        setQrisTotal(data.total);
-        setQrisPaymentPaid(false);
-        setShowQrisModal(true);
-      } else if (data.paymentUrl) {
-        window.location.href = data.paymentUrl;
+      if (paymentMethod === 'QRIS') {
+        if (data.paymentQrContent) {
+          setQrisQrContent(data.paymentQrContent);
+          setQrisOrderId(data.orderId);
+          setQrisTotal(data.total);
+          setQrisPaymentPaid(false);
+          setShowQrisModal(true);
+        } else if (data.paymentUrl) {
+          window.location.href = data.paymentUrl;
+        } else {
+          // Direct fallback to order tracking
+          window.location.href = `/orders/${data.orderId}`;
+        }
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
@@ -282,169 +319,167 @@ export default function SpmbClient({
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] pb-28 relative overflow-hidden font-sans">
-      {/* Premium Ambient Background Mesh */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,_rgba(249,115,22,0.18)_0%,_rgba(250,247,242,0)_65%)] pointer-events-none z-0" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_40%,_rgba(212,165,116,0.10)_0%,_rgba(250,247,242,0)_50%)] pointer-events-none z-0" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#00000005_1px,transparent_1px),linear-gradient(to_bottom,#00000005_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none z-0 opacity-60" />
+    <div className="min-h-screen bg-[#FAF7F2] text-[#1C1917] pb-32 font-sans selection:bg-[#2E5A44]/20 selection:text-[#2E5A44]">
+      {/* Top Ambient Subtle Glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 bg-gradient-to-b from-[#2E5A44]/10 via-[#FAF7F2]/40 to-transparent pointer-events-none" />
 
-      {/* Main Header Container */}
-      <div className="relative z-10 max-w-6xl mx-auto px-4 pt-8 md:pt-12">
-        <div className="bg-gradient-to-br from-[#1C1917] via-[#292524] to-[#1C1917] text-white rounded-[2.5rem] p-6 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.25)] border border-amber-500/30 overflow-hidden relative mb-8 backdrop-blur-md">
-          {/* Ambient Glow Orbs */}
-          <div className="absolute -right-16 -top-16 w-56 h-56 bg-gradient-to-br from-orange-500/20 to-amber-500/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-gradient-to-tr from-amber-600/15 to-orange-600/15 rounded-full blur-3xl pointer-events-none" />
-          
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-            <div className="space-y-3 text-left">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-500/20 via-orange-500/20 to-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-black uppercase tracking-widest shadow-sm">
-                <span>✨</span> Self-Service Order per Meja
+      {/* Main Container */}
+      <div className="relative z-10 max-w-5xl mx-auto px-4 pt-6 sm:pt-10">
+        
+        {/* Editorial Zen Header */}
+        <header className="mb-6 sm:mb-8 text-left bg-white/80 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-stone-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2E5A44]/10 border border-[#2E5A44]/20 text-[#2E5A44] text-[11px] font-bold tracking-wide">
+                <UtensilsCrossed className="w-3.5 h-3.5" />
+                <span>Self-Service Dine-In</span>
               </div>
-              <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-amber-100 via-orange-300 to-amber-400 drop-shadow-sm">
+              <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-stone-900">
                 Arum Seduh
               </h1>
-              <p className="text-xs sm:text-sm text-stone-300 font-medium max-w-xl leading-relaxed">
-                Nikmati kemudahan memesan langsung dari meja Anda. Pilih menu favorit, selesaikan pesanan, dan hidangan terbaik akan diantarkan langsung ke meja Anda.
+              <p className="text-xs sm:text-sm text-stone-600 max-w-lg leading-relaxed">
+                Pesan hidangan & minuman matcha favorit langsung dari meja Anda. Pesanan akan diantarkan langsung ke meja setelah siap.
               </p>
             </div>
-            
-            <div className="shrink-0 flex items-center gap-3.5 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-4 shadow-inner">
-              <span className="text-3xl">☕</span>
+
+            {/* Table Badge & Quick Selector */}
+            <div className="shrink-0 p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-[#2E5A44] text-white flex items-center justify-center font-serif text-xl font-bold shadow-sm">
+                {tableNumber || '—'}
+              </div>
               <div className="text-left">
-                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest leading-none">Layanan Premium</p>
-                <p className="text-xs font-bold mt-1 text-white">Self-Service Dine In</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Table Banner & Selection Card */}
-          <div className="mt-8 pt-6 border-t border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white/5 backdrop-blur-md rounded-2xl p-4.5 border border-white/10">
-            <div className="flex items-center gap-3.5 text-left">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400/25 to-orange-500/25 border border-amber-400/40 flex items-center justify-center text-amber-300 font-bold text-xl shrink-0 shadow-sm">
-                📍
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Lokasi Meja Anda</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Nomor Meja</p>
                 {isTableLocked ? (
-                  <p className="text-base sm:text-lg font-black text-white mt-0.5 flex items-center gap-2">
-                    Meja {tableNumber}
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10px] font-extrabold shadow-sm">
-                      <Lock className="w-3 h-3" /> Dikunci via QR Code
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="font-serif font-bold text-stone-900 text-base">Meja {tableNumber}</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                      <Lock className="w-2.5 h-2.5" /> QR Code
                     </span>
-                  </p>
+                  </div>
                 ) : (
-                  <p className="text-sm font-bold text-white mt-0.5">
-                    {tableNumber ? `Meja ${tableNumber}` : 'Silakan pilih nomor meja Anda'}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Table Selector Dropdown / Input if not locked */}
-            {!isTableLocked && (
-              <div className="w-full sm:w-auto flex items-center gap-2">
-                {activeTables.length > 0 ? (
-                  <select
-                    value={tableNumber}
-                    onChange={(e) => setTableNumber(e.target.value)}
-                    className="w-full sm:w-auto bg-stone-900/90 text-amber-300 font-bold text-xs px-4 py-3 rounded-xl border border-amber-500/40 focus:ring-2 focus:ring-amber-400 cursor-pointer shadow-lg transition-all"
-                  >
-                    <option value="">-- Pilih Meja --</option>
-                    {activeTables.map((t) => (
-                      <option key={t.id} value={t.number} className="bg-stone-900 text-white">
-                        Meja {t.number} {t.status ? `(${t.status})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex items-center gap-2 w-full sm:w-auto">
-                    <span className="text-xs font-bold text-stone-300">Nomor Meja:</span>
-                    <input
-                      type="text"
-                      placeholder="Contoh: 5"
-                      value={tableNumber}
-                      onChange={(e) => setTableNumber(e.target.value)}
-                      className="bg-stone-900/90 text-amber-300 font-bold text-xs px-3 py-2.5 rounded-xl border border-amber-500/40 w-28 focus:ring-2 focus:ring-amber-400 shadow-lg text-center"
-                    />
+                  <div className="mt-1">
+                    {activeTables.length > 0 ? (
+                      <select
+                        value={tableNumber}
+                        onChange={(e) => setTableNumber(e.target.value)}
+                        className="bg-white text-stone-900 font-bold text-xs px-3 py-1.5 rounded-lg border border-stone-300 focus:outline-none focus:border-[#2E5A44] cursor-pointer"
+                      >
+                        <option value="">-- Pilih Meja --</option>
+                        {activeTables.map((t) => (
+                          <option key={t.id} value={t.number}>
+                            Meja {t.number}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="Contoh: 3"
+                        value={tableNumber}
+                        onChange={(e) => setTableNumber(e.target.value)}
+                        className="bg-white text-stone-900 font-bold text-xs px-2.5 py-1 rounded-lg border border-stone-300 w-20 text-center"
+                      />
+                    )}
                   </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
-        </div>
+        </header>
 
-        {/* Realtime Order Status Card (PENDING, PREPARING, READY) */}
+        {/* Realtime Active Order Status Card */}
         {activeOrderStatus && (
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-5 bg-white rounded-3xl border border-[#EA580C]/20 shadow-lg relative overflow-hidden"
+            className="mb-6 p-5 sm:p-6 bg-white rounded-3xl border border-stone-200 shadow-sm space-y-4 text-left"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-100 pb-3 mb-4 gap-2">
-              <div className="flex items-center gap-3 text-left">
-                <div className="w-10 h-10 rounded-2xl bg-[#EA580C]/10 flex items-center justify-center text-[#EA580C] font-bold text-lg">
-                  🍽️
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#2E5A44]/10 text-[#2E5A44] flex items-center justify-center font-bold">
+                  <UtensilsCrossed className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-stone-900">
                     Status Pesanan {activeOrderStatus.tableNumber ? `Meja ${activeOrderStatus.tableNumber}` : ''}
                   </h3>
-                  <p className="text-[11px] text-gray-400 font-mono">ID: {activeOrderStatus.id}</p>
+                  <p className="text-[11px] font-mono text-stone-400">ID: {activeOrderStatus.id}</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5
-                  ${activeOrderStatus.status === 'PENDING' || activeOrderStatus.status === 'PENDING_PAYMENT' ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse' : ''}
-                  ${activeOrderStatus.status === 'PREPARING' ? 'bg-blue-100 text-blue-900 border border-blue-300 animate-pulse' : ''}
-                  ${activeOrderStatus.status === 'READY' ? 'bg-emerald-100 text-emerald-900 border border-emerald-400 animate-bounce' : ''}
-                  ${activeOrderStatus.status === 'COMPLETED' ? 'bg-gray-100 text-gray-800 border border-gray-300' : ''}
-                  ${activeOrderStatus.status === 'CANCELLED' ? 'bg-rose-100 text-rose-800 border border-rose-300' : ''}
+              <div>
+                <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5
+                  ${activeOrderStatus.status === 'PENDING' || activeOrderStatus.status === 'PENDING_PAYMENT' ? 'bg-amber-50 text-amber-800 border border-amber-200 animate-pulse' : ''}
+                  ${activeOrderStatus.status === 'PREPARING' ? 'bg-blue-50 text-blue-800 border border-blue-200 animate-pulse' : ''}
+                  ${activeOrderStatus.status === 'READY' ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 animate-bounce' : ''}
+                  ${activeOrderStatus.status === 'COMPLETED' ? 'bg-stone-100 text-stone-700' : ''}
+                  ${activeOrderStatus.status === 'CANCELLED' ? 'bg-rose-50 text-rose-700 border border-rose-200' : ''}
                 `}>
-                  {activeOrderStatus.status === 'PENDING' && '⏳ PENDING (Menunggu Konfirmasi)'}
+                  {activeOrderStatus.status === 'PENDING' && '⏳ Pesanan Diterima'}
                   {activeOrderStatus.status === 'PENDING_PAYMENT' && '💳 Menunggu Pembayaran'}
-                  {activeOrderStatus.status === 'PREPARING' && '🍳 PREPARING (Sedang Disiapkan)'}
-                  {activeOrderStatus.status === 'READY' && '✨ READY (Pesanan Siap!)'}
-                  {activeOrderStatus.status === 'COMPLETED' && '✅ COMPLETED (Selesai)'}
+                  {activeOrderStatus.status === 'PREPARING' && '🍳 Sedang Disiapkan'}
+                  {activeOrderStatus.status === 'READY' && '✨ Pesanan Siap!'}
+                  {activeOrderStatus.status === 'COMPLETED' && '✅ Selesai'}
                   {activeOrderStatus.status === 'CANCELLED' && '❌ Dibatalkan'}
                 </span>
               </div>
             </div>
 
-            {/* Step Progress Tracker */}
-            <div className="grid grid-cols-3 gap-2 text-center my-4">
+            {/* 3-Step Simple Progress Bar for SPMB */}
+            <div className="grid grid-cols-3 gap-2 text-center">
               <div className={`p-3 rounded-2xl border transition-all ${
                 ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'].includes(activeOrderStatus.status)
-                  ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#EA580C] font-bold'
-                  : 'bg-gray-50 border-gray-200 text-gray-400'
+                  ? 'bg-[#2E5A44]/10 border-[#2E5A44] text-[#2E5A44] font-bold'
+                  : 'bg-stone-50 border-stone-200 text-stone-400'
               }`}>
-                <p className="text-[9px] uppercase tracking-wider font-extrabold">Step 1</p>
-                <p className="text-xs font-black mt-0.5">PENDING</p>
+                <p className="text-[9px] uppercase tracking-wider font-bold">Langkah 1</p>
+                <p className="text-xs font-bold mt-0.5">Diterima</p>
               </div>
 
               <div className={`p-3 rounded-2xl border transition-all ${
                 ['PREPARING', 'READY', 'COMPLETED'].includes(activeOrderStatus.status)
-                  ? 'bg-[#EA580C]/10 border-[#EA580C] text-[#EA580C] font-bold'
-                  : 'bg-gray-50 border-gray-200 text-gray-400'
+                  ? 'bg-[#2E5A44]/10 border-[#2E5A44] text-[#2E5A44] font-bold'
+                  : 'bg-stone-50 border-stone-200 text-stone-400'
               }`}>
-                <p className="text-[9px] uppercase tracking-wider font-extrabold">Step 2</p>
-                <p className="text-xs font-black mt-0.5">PREPARING</p>
+                <p className="text-[9px] uppercase tracking-wider font-bold">Langkah 2</p>
+                <p className="text-xs font-bold mt-0.5">Disiapkan</p>
               </div>
 
               <div className={`p-3 rounded-2xl border transition-all ${
                 ['READY', 'COMPLETED'].includes(activeOrderStatus.status)
-                  ? 'bg-emerald-100 border-emerald-500 text-emerald-900 font-black shadow-sm'
-                  : 'bg-gray-50 border-gray-200 text-gray-400'
+                  ? 'bg-emerald-100 border-emerald-600 text-emerald-900 font-bold shadow-sm'
+                  : 'bg-stone-50 border-stone-200 text-stone-400'
               }`}>
-                <p className="text-[9px] uppercase tracking-wider font-extrabold">Step 3</p>
-                <p className="text-xs font-black mt-0.5">READY</p>
+                <p className="text-[9px] uppercase tracking-wider font-bold">Langkah 3</p>
+                <p className="text-xs font-bold mt-0.5">Selesai</p>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2 mt-4 pt-3 border-t border-gray-100">
+            {/* 20-Minute Alert Notification */}
+            {isOrderOver20Min && (
+              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">⏱️</span>
+                  <div>
+                    <p className="text-xs font-bold text-amber-950">Pesanan belum selesai lebih dari 20 menit?</p>
+                    <p className="text-[11px] text-amber-800/90 font-medium">Silakan hubungi kasir atau barista kami untuk konfirmasi langsung.</p>
+                  </div>
+                </div>
+                <a
+                  href={`https://wa.me/${botNumber || ''}?text=${encodeURIComponent(`Halo Arum Seduh, saya ingin menanyakan pesanan Meja ${activeOrderStatus.tableNumber || tableNumber} dengan ID ${activeOrderStatus.id} yang belum selesai.`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-2 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white text-[11px] font-bold shrink-0 inline-flex items-center gap-1.5 transition-all shadow-sm"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" /> Hubungi Kasir via WA
+                </a>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-stone-100">
               <button
                 onClick={() => window.location.href = `/orders/${activeOrderStatus.id}`}
-                className="flex-1 py-2.5 rounded-xl bg-[#EA580C] text-white text-xs font-bold hover:bg-[#C2410C] transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-[#2E5A44] text-white text-xs font-bold hover:bg-[#234533] transition-all flex items-center justify-center gap-1.5"
               >
                 <ExternalLink className="w-3.5 h-3.5" /> Lihat Rincian Pesanan
               </button>
@@ -454,33 +489,33 @@ export default function SpmbClient({
                   setActiveOrderId(null);
                   setActiveOrderStatus(null);
                 }}
-                className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-all"
+                className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-xs font-bold hover:bg-stone-50 transition-all"
               >
-                Buat Pesanan Baru
+                Pesan Menu Baru
               </button>
             </div>
           </motion.div>
         )}
 
-        {/* Category Navigation */}
-        <div className="flex gap-2.5 overflow-x-auto pb-4 scrollbar-none relative z-10 select-none">
+        {/* Category Navigation Pills */}
+        <nav className="flex gap-2 overflow-x-auto pb-3 scrollbar-none select-none">
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.slug)}
-              className={`px-5 py-2.5 rounded-2xl text-xs font-bold uppercase tracking-wider shrink-0 transition-all duration-300 border
+              className={`px-4 py-2 rounded-full text-xs font-bold tracking-wide shrink-0 transition-all border
                 ${selectedCategory === cat.slug
-                  ? 'bg-gradient-to-r from-[#EA580C] to-[#C2410C] text-white border-orange-500 shadow-lg shadow-orange-500/25 scale-102 font-extrabold'
-                  : 'bg-white/90 backdrop-blur-md text-stone-700 border-stone-200/80 hover:border-orange-300 hover:text-orange-600 shadow-sm'
+                  ? 'bg-[#2E5A44] text-white border-[#2E5A44] shadow-sm'
+                  : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
                 }`}
             >
               {cat.name}
             </button>
           ))}
-        </div>
+        </nav>
 
         {/* Product Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5 mt-4 relative z-10">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4 mt-4">
           {filteredProducts.map((product) => {
             const isSoldOut = product.badge === 'sold-out';
             const promo = getActivePromo(product);
@@ -490,28 +525,28 @@ export default function SpmbClient({
             return (
               <motion.div
                 key={product.id}
-                whileHover={isSoldOut ? {} : { y: -5 }}
-                transition={{ duration: 0.25 }}
+                whileHover={isSoldOut ? {} : { y: -3 }}
+                transition={{ duration: 0.2 }}
                 onClick={() => handleProductClick(product)}
-                className={`bg-white rounded-[2rem] border border-stone-200/60 overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.03)] flex flex-col group relative transition-all duration-300
-                  ${isSoldOut ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer hover:shadow-[0_20px_40px_rgba(234,88,12,0.12)] hover:border-orange-300/60'}`}
+                className={`bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col group relative transition-all
+                  ${isSoldOut ? 'opacity-65 cursor-not-allowed' : 'cursor-pointer hover:shadow-md hover:border-[#2E5A44]/40'}`}
               >
-                {/* Promo Timer Overlay */}
+                {/* Promo Overlay */}
                 {promo && !isSoldOut && (
                   <div className="absolute top-2.5 right-2.5 z-20">
                     <PromoCountdown endDate={promo.endDate} compact />
                   </div>
                 )}
 
-                {/* Badge (New/Best Seller/Promo) */}
+                {/* Badge (Promo / Best Seller / New) */}
                 {promo && !isSoldOut ? (
-                  <span className="absolute top-3 left-3 z-10 px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest uppercase bg-gradient-to-r from-rose-500 to-red-600 text-white shadow-md">
+                  <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-600 text-white shadow-sm">
                     🔥 Promo
                   </span>
                 ) : product.badge && (
-                  <span className={`absolute top-3 left-3 z-10 px-2.5 py-1 rounded-full text-[9px] font-black tracking-widest uppercase shadow-sm
-                    ${product.badge === 'best-seller' ? 'bg-gradient-to-r from-amber-500 to-orange-500 text-white' : ''}
-                    ${product.badge === 'new' ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-amber-100' : ''}
+                  <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm
+                    ${product.badge === 'best-seller' ? 'bg-[#8C6239] text-white' : ''}
+                    ${product.badge === 'new' ? 'bg-[#2E5A44] text-white' : ''}
                     ${product.badge === 'sold-out' ? 'bg-stone-400 text-white' : ''}
                   `}>
                     {product.badge === 'best-seller' && 'Best Seller'}
@@ -521,14 +556,14 @@ export default function SpmbClient({
                 )}
 
                 {/* Product Image */}
-                <div className="relative w-full aspect-[4/3] bg-stone-100 overflow-hidden">
+                <div className="relative w-full aspect-square bg-[#FAF7F2] overflow-hidden">
                   {product.image ? (
                     <Image
                       src={product.image}
                       alt={product.name}
                       fill
                       sizes="(max-width: 768px) 50vw, 25vw"
-                      className={`object-cover group-hover:scale-105 transition-transform duration-500
+                      className={`object-cover group-hover:scale-105 transition-transform duration-300
                         ${isSoldOut ? 'grayscale opacity-60' : ''}`}
                     />
                   ) : (
@@ -537,30 +572,30 @@ export default function SpmbClient({
                 </div>
 
                 {/* Product Info */}
-                <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between text-left">
-                  <div className="space-y-1.5">
-                    <h3 className="font-heading font-bold text-sm sm:text-base text-stone-900 group-hover:text-orange-600 transition-colors line-clamp-1">
+                <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between text-left">
+                  <div className="space-y-1">
+                    <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-[#2E5A44] transition-colors line-clamp-1">
                       {product.name}
                     </h3>
-                    <p className="text-[11px] text-stone-400 font-medium leading-relaxed line-clamp-2">
+                    <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed">
                       {product.description}
                     </p>
                   </div>
                   
-                  <div className="mt-4 pt-3.5 border-t border-stone-100 flex items-center justify-between">
+                  <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between">
                     <div className="flex flex-col text-left">
                       {originalPrice && originalPrice > displayPrice && (
-                        <span className="text-[10px] text-stone-400 line-through leading-none mb-1">
+                        <span className="text-[10px] text-stone-400 line-through leading-none mb-0.5">
                           {formatRupiah(originalPrice)}
                         </span>
                       )}
-                      <span className="font-extrabold text-sm sm:text-base text-orange-600">
+                      <span className="font-bold text-xs sm:text-sm text-[#2E5A44]">
                         {formatRupiah(displayPrice)}
                       </span>
                     </div>
                     
                     {!isSoldOut && (
-                      <span className="w-8 h-8 rounded-2xl bg-orange-50 border border-orange-200/60 text-orange-600 flex items-center justify-center text-sm font-black group-hover:bg-gradient-to-r group-hover:from-orange-600 group-hover:to-amber-600 group-hover:text-white group-hover:border-transparent transition-all shadow-sm">
+                      <span className="w-7 h-7 rounded-xl bg-stone-100 text-stone-700 flex items-center justify-center text-xs font-bold group-hover:bg-[#2E5A44] group-hover:text-white transition-all shadow-sm">
                         +
                       </span>
                     )}
@@ -574,104 +609,106 @@ export default function SpmbClient({
 
       {/* Floating Bottom Cart Bar */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-lg bg-[#1C1917]/95 backdrop-blur-xl text-white rounded-[2.5rem] p-4 shadow-[0_20px_50px_rgba(0,0,0,0.35)] border border-amber-500/40 flex items-center justify-between animate-in fade-in slide-in-from-bottom-5 duration-300">
-          <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400/20 to-orange-500/20 border border-amber-400/30 flex items-center justify-center relative shadow-inner">
-              <ShoppingBag className="w-5 h-5 text-amber-300" />
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gradient-to-r from-amber-400 to-orange-500 text-stone-950 font-black text-[10px] flex items-center justify-center border-2 border-stone-900 shadow-md">
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md bg-[#1C1917] text-white rounded-3xl p-3.5 shadow-2xl border border-stone-800 flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center gap-3 pl-1">
+            <div className="w-10 h-10 rounded-2xl bg-[#2E5A44] flex items-center justify-center relative shadow-inner">
+              <ShoppingBag className="w-5 h-5 text-white" />
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-400 text-stone-950 font-black text-[10px] flex items-center justify-center border-2 border-stone-900">
                 {cartItems.reduce((acc, i) => acc + i.quantity, 0)}
               </span>
             </div>
             <div className="text-left">
-              <p className="text-[10px] text-amber-300/80 font-black uppercase tracking-widest leading-none">Total Belanja</p>
-              <p className="text-base sm:text-lg font-black text-white mt-1 font-serif">{formatRupiah(totalPrice)}</p>
+              <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Total</p>
+              <p className="text-sm font-serif font-bold text-white mt-0.5">{formatRupiah(totalPrice)}</p>
             </div>
           </div>
           
           <button
             onClick={() => setIsCartOpen(true)}
-            className="px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 text-stone-950 font-black text-xs uppercase tracking-wider hover:brightness-110 active:scale-[0.98] transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-orange-500/20"
+            className="px-4 py-2.5 rounded-2xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs tracking-wide transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
           >
-            Keranjang & Checkout <ArrowRight className="w-4 h-4" />
+            Lihat Pesanan <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Cart & Checkout Slide-over Panel */}
+      {/* Cart & Checkout Slide-Over Panel */}
       <AnimatePresence>
         {isCartOpen && (
           <>
-            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 cursor-pointer"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 cursor-pointer"
               onClick={() => setIsCartOpen(false)}
             />
 
-            {/* Panel */}
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
               className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
             >
               {/* Drawer Header */}
-              <div className="p-5 border-b flex items-center justify-between bg-[#FAF8F5] shrink-0">
-                <div className="flex items-center gap-2">
-                  <ShoppingBag className="w-5 h-5 text-[#EA580C]" />
-                  <h2 className="font-serif font-black text-lg text-gray-900">Keranjang Self-Service</h2>
+              <div className="p-5 border-b border-stone-100 flex items-center justify-between bg-[#FAF7F2] shrink-0">
+                <div className="flex items-center gap-2 text-left">
+                  <UtensilsCrossed className="w-5 h-5 text-[#2E5A44]" />
+                  <div>
+                    <h2 className="font-serif font-bold text-base text-stone-900">Pesanan Meja</h2>
+                    <p className="text-[11px] text-stone-500 font-medium">Meja {tableNumber || '—'}</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setIsCartOpen(false)}
-                  className="w-8 h-8 rounded-full border bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  className="w-8 h-8 rounded-full border border-stone-200 bg-white flex items-center justify-center hover:bg-stone-50 transition-colors"
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4 text-stone-500" />
                 </button>
               </div>
 
-              {/* Drawer Content */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {/* Drawer Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-5">
                 {/* Cart Items List */}
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-left">Daftar Item</h3>
+                <div className="space-y-2.5">
+                  <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider text-left">Menu yang Dipesan</h3>
                   {cartItems.map((item) => (
-                    <div key={item.id} className="flex gap-3 p-3.5 rounded-2xl border border-gray-100 bg-[#FAF8F5]/50 hover:bg-[#FAF8F5] transition-colors items-start">
+                    <div key={item.id} className="flex gap-3 p-3 rounded-2xl border border-stone-100 bg-[#FAF7F2]/50 hover:bg-[#FAF7F2] transition-colors items-start">
                       {item.image && (
-                        <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-muted shrink-0">
+                        <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-100 shrink-0">
                           <Image src={item.image} alt={item.name} fill className="object-cover" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0 text-left">
-                        <h4 className="text-xs font-bold text-gray-900 line-clamp-1">{item.name}</h4>
-                        <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2 leading-relaxed">
+                        <h4 className="text-xs font-bold text-stone-900 line-clamp-1">{item.name}</h4>
+                        <p className="text-[10px] text-stone-500 mt-0.5 line-clamp-2 leading-relaxed">
                           Size: {item.size || 'Normal'} | Ice: {item.iceLevel} | Sugar: {item.sugarLevel}
-                          {item.addOns && item.addOns.length > 0 && ` | Addons: ${item.addOns.map((a) => a.name).join(', ')}`}
+                          {(item as any).shot && ` | ${(item as any).shot}`}
+                          {item.addOns && item.addOns.length > 0 && ` | ${item.addOns.map((a) => a.name).join(', ')}`}
                         </p>
-                        <p className="text-xs font-bold text-[#EA580C] mt-1.5">{formatRupiah(item.totalPrice)}</p>
+                        <p className="text-xs font-bold text-[#2E5A44] mt-1.5">{formatRupiah(item.totalPrice)}</p>
                       </div>
                       
                       <div className="flex flex-col items-end gap-2 shrink-0">
                         <button
                           onClick={() => removeItem(item.id)}
-                          className="text-gray-300 hover:text-red-500 transition-colors"
+                          className="text-stone-300 hover:text-rose-500 transition-colors"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                         
-                        <div className="flex items-center gap-2 border bg-white rounded-lg p-1 shrink-0">
+                        <div className="flex items-center gap-1.5 border border-stone-200 bg-white rounded-lg p-0.5 shrink-0">
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="p-1 text-gray-500 hover:bg-gray-50 rounded"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded"
                           >
                             <Minus className="w-2.5 h-2.5" />
                           </button>
                           <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="p-1 text-gray-500 hover:bg-gray-50 rounded"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded"
                           >
                             <Plus className="w-2.5 h-2.5" />
                           </button>
@@ -681,20 +718,21 @@ export default function SpmbClient({
                   ))}
                 </div>
 
-                <hr className="border-gray-100" />
+                <hr className="border-stone-100" />
 
+                {/* Form Informasi Pemesan */}
                 <form onSubmit={handlePreSubmit} className="space-y-4">
-                  <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider text-left">Informasi Pesanan Meja</h3>
+                  <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider text-left">Informasi Pemesan</h3>
 
-                  {/* Table Selection Display */}
+                  {/* Nomor Meja */}
                   <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <Utensils className="w-3 h-3 text-[#EA580C]" /> Nomor Meja (Dine-In)
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                      <UtensilsCrossed className="w-3 h-3 text-[#2E5A44]" /> Nomor Meja (Dine-In)
                     </label>
                     {isTableLocked ? (
-                      <div className="w-full px-4 py-2.5 text-sm rounded-xl border border-orange-200 bg-orange-50/50 text-[#C2410C] font-bold flex items-center justify-between">
+                      <div className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold flex items-center justify-between">
                         <span>Meja {tableNumber}</span>
-                        <span className="text-[10px] text-orange-700 bg-orange-100 border border-orange-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <span className="text-[10px] text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
                           <Lock className="w-2.5 h-2.5" /> Terkunci
                         </span>
                       </div>
@@ -703,46 +741,46 @@ export default function SpmbClient({
                         required
                         value={tableNumber}
                         onChange={(e) => setTableNumber(e.target.value)}
-                        className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] transition-colors"
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
                       >
                         <option value="">-- Pilih Meja --</option>
                         {activeTables.map((t) => (
                           <option key={t.id} value={t.number}>
-                            Meja {t.number} {t.status ? `(${t.status})` : ''}
+                            Meja {t.number}
                           </option>
                         ))}
                       </select>
                     ) : (
                       <input
                         type="text"
-                        placeholder="Masukkan nomor meja (misal: 5)"
+                        placeholder="Contoh: 3"
                         required
                         value={tableNumber}
                         onChange={(e) => setTableNumber(e.target.value)}
-                        className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] transition-colors"
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
                       />
                     )}
                   </div>
 
-                  {/* Customer Name */}
+                  {/* Nama Pemesan */}
                   <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <User className="w-3 h-3 text-[#EA580C]" /> Nama Pemesan
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                      <User className="w-3 h-3 text-[#2E5A44]" /> Nama Pemesan
                     </label>
                     <input
                       type="text"
-                      placeholder="Contoh: Budi Santoso"
+                      placeholder="Contoh: Budi"
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] transition-colors"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
                     />
                   </div>
 
-                  {/* Customer Phone */}
+                  {/* Nomor WhatsApp */}
                   <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <Phone className="w-3 h-3 text-[#EA580C]" /> Nomor WhatsApp
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                      <Phone className="w-3 h-3 text-[#2E5A44]" /> Nomor WhatsApp
                     </label>
                     <input
                       type="tel"
@@ -750,70 +788,36 @@ export default function SpmbClient({
                       required
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] transition-colors"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
                     />
                   </div>
 
-                  {/* Special Notes */}
+                  {/* Catatan Khusus */}
                   <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
-                      <MapPin className="w-3 h-3 text-[#EA580C]" /> Catatan Khusus (Opsional)
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-[#2E5A44]" /> Catatan Tambahan (Opsional)
                     </label>
                     <textarea
-                      placeholder="Contoh: Tanpa sedotan plastik, es sedikit"
+                      placeholder="Contoh: Kurangi es, tanpa sedotan"
                       rows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      className="w-full px-4 py-2.5 text-sm rounded-xl border border-gray-200 bg-[#FAF8F5]/30 focus:outline-none focus:border-[#EA580C] focus:ring-1 focus:ring-[#EA580C] transition-colors resize-none"
+                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44] resize-none"
                     />
                   </div>
 
-                  {/* Payment Method Selection */}
+                  {/* STRICTLY 2 PAYMENT METHODS: QRIS & TUNAI */}
                   <div className="space-y-2 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5 mb-1">
-                      <CreditCard className="w-3 h-3 text-[#EA580C]" /> Metode Pembayaran
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                      <CreditCard className="w-3 h-3 text-[#2E5A44]" /> Metode Pembayaran
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border cursor-pointer transition-colors text-center
-                        ${paymentMethod === 'COD' 
-                          ? 'border-[#EA580C] bg-[#EA580C]/5 text-[#EA580C] font-bold' 
-                          : 'border-gray-200 bg-white text-gray-650 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          checked={paymentMethod === 'COD'}
-                          onChange={() => setPaymentMethod('COD')}
-                          className="hidden"
-                        />
-                        <Banknote className="w-4 h-4" />
-                        <span className="text-[10px] uppercase font-bold">Bayar Kasir</span>
-                      </label>
-
-                      <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border cursor-pointer transition-colors text-center
-                        ${paymentMethod === 'QRIS_INSTAN' 
-                          ? 'border-[#EA580C] bg-[#EA580C]/5 text-[#EA580C] font-bold' 
-                          : 'border-gray-200 bg-white text-gray-650 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="paymentMethod"
-                          checked={paymentMethod === 'QRIS_INSTAN'}
-                          onChange={() => setPaymentMethod('QRIS_INSTAN')}
-                          className="hidden"
-                        />
-                        <CreditCard className="w-4 h-4" />
-                        <span className="text-[10px] uppercase font-bold">QRIS Instan</span>
-                      </label>
-
-                      <label className={`flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl border cursor-pointer transition-colors text-center
-                        ${paymentMethod === 'QRIS' 
-                          ? 'border-[#EA580C] bg-[#EA580C]/5 text-[#EA580C] font-bold' 
-                          : 'border-gray-200 bg-white text-gray-650 hover:bg-gray-50'
-                        }`}
-                      >
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {/* Option 1: QRIS */}
+                      <label className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all text-center ${
+                        paymentMethod === 'QRIS'
+                          ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold shadow-sm'
+                          : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                      }`}>
                         <input
                           type="radio"
                           name="paymentMethod"
@@ -821,14 +825,41 @@ export default function SpmbClient({
                           onChange={() => setPaymentMethod('QRIS')}
                           className="hidden"
                         />
-                        <CreditCard className="w-4 h-4" />
-                        <span className="text-[10px] uppercase font-bold">QRIS (Doku)</span>
+                        <div className="w-8 h-8 rounded-full bg-[#2E5A44]/10 flex items-center justify-center text-[#2E5A44]">
+                          <CreditCard className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold">QRIS</p>
+                          <p className="text-[10px] text-stone-400 font-medium mt-0.5">Scan & Bayar Otomatis</p>
+                        </div>
+                      </label>
+
+                      {/* Option 2: Tunai di Kasir */}
+                      <label className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all text-center ${
+                        paymentMethod === 'COD'
+                          ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold shadow-sm'
+                          : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          checked={paymentMethod === 'COD'}
+                          onChange={() => setPaymentMethod('COD')}
+                          className="hidden"
+                        />
+                        <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-700">
+                          <Banknote className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold">Tunai</p>
+                          <p className="text-[10px] text-stone-400 font-medium mt-0.5">Bayar di Kasir</p>
+                        </div>
                       </label>
                     </div>
                   </div>
 
                   {errorMsg && (
-                    <div className="p-3 bg-red-50 text-red-600 rounded-xl text-xs font-semibold text-left">
+                    <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs font-medium text-left">
                       ⚠️ {errorMsg}
                     </div>
                   )}
@@ -836,14 +867,14 @@ export default function SpmbClient({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-4 rounded-2xl bg-[#EA580C] text-white font-bold text-sm uppercase tracking-wider shadow-md hover:bg-[#C2410C] transition-all flex items-center justify-center gap-2 cursor-pointer mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3.5 rounded-2xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-3 disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Memproses Pesanan...
+                        <Loader2 className="w-4 h-4 animate-spin" /> Memproses...
                       </>
                     ) : (
-                      'Kirim Pesanan Meja'
+                      `Kirim Pesanan (${formatRupiah(totalPrice)})`
                     )}
                   </button>
                 </form>
@@ -861,31 +892,34 @@ export default function SpmbClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
               onClick={() => setShowConfirmModal(false)}
             />
             
             <motion.div
-              initial={{ scale: 0.95, y: 15 }}
+              initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-gray-100"
+              exit={{ scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-stone-200"
             >
-              <h3 className="font-serif font-black text-xl text-gray-900 mb-2">Konfirmasi Pesanan Meja 🍽️</h3>
-              <p className="text-xs text-gray-500 leading-relaxed mb-6">
-                Pesanan akan diproses untuk <span className="font-bold text-gray-900">Meja {tableNumber}</span> atas nama <span className="font-bold text-gray-900">{name}</span>. Apakah data sudah benar?
+              <div className="w-12 h-12 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] flex items-center justify-center mx-auto mb-3">
+                <UtensilsCrossed className="w-6 h-6" />
+              </div>
+              <h3 className="font-serif font-bold text-lg text-stone-900 mb-1">Konfirmasi Pesanan Meja</h3>
+              <p className="text-xs text-stone-600 leading-relaxed mb-5">
+                Pesanan akan dibuat untuk <span className="font-bold text-stone-900">Meja ${tableNumber}</span> atas nama <span className="font-bold text-stone-900">${name}</span>.
               </p>
 
-              <div className="flex gap-3">
+              <div className="flex gap-2.5">
                 <button
                   onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 py-3.5 rounded-xl border border-gray-200 text-gray-500 font-bold text-xs uppercase tracking-wider hover:bg-gray-50 transition-all cursor-pointer"
+                  className="flex-1 py-3 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs uppercase tracking-wider hover:bg-stone-50 transition-all"
                 >
                   Batal
                 </button>
                 <button
                   onClick={executeCheckout}
-                  className="flex-1 py-3.5 rounded-xl bg-[#EA580C] text-white font-bold text-xs uppercase tracking-wider hover:bg-[#C2410C] transition-all cursor-pointer shadow-md"
+                  className="flex-1 py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all"
                 >
                   Ya, Kirim
                 </button>
@@ -895,7 +929,7 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Customized Product Detail Modal */}
+      {/* Product Detail Modal */}
       <ProductModal
         product={selectedProduct}
         isOpen={isProductModalOpen}
@@ -906,7 +940,7 @@ export default function SpmbClient({
         allProducts={products}
       />
 
-      {/* QRIS Instan Payment Modal */}
+      {/* Dynamic QRIS Payment Modal with Download Feature */}
       <AnimatePresence>
         {showQrisModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -926,73 +960,84 @@ export default function SpmbClient({
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-[2rem] w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-gray-100 flex flex-col items-center"
+              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-stone-200 flex flex-col items-center"
             >
               {/* Close Button */}
               {!qrisPaymentPaid && (
                 <button
                   onClick={() => setShowQrisModal(false)}
-                  className="absolute top-4 right-4 w-8 h-8 rounded-full border bg-white flex items-center justify-center hover:bg-gray-50 transition-colors"
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full border border-stone-200 bg-white flex items-center justify-center hover:bg-stone-50 transition-colors"
                 >
-                  <X className="w-4 h-4 text-gray-500" />
+                  <X className="w-4 h-4 text-stone-500" />
                 </button>
               )}
 
-              {/* Header */}
-              <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-4 shrink-0 mt-2">
-                <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
+              {/* QRIS Header */}
+              <div className="w-full flex items-center justify-between border-b border-stone-100 pb-3 mb-4 shrink-0">
+                <span className="text-lg font-black tracking-tight text-[#1b4353]">
                   QR<span className="text-[#e26d5c]">IS</span>
                 </span>
-                <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
-                  Dynamic GPN
+                <span className="text-[9px] font-bold uppercase tracking-wider text-stone-600 bg-stone-100 px-2.5 py-0.5 rounded-md">
+                  GPN Dynamic
                 </span>
               </div>
 
               {qrisPaymentPaid ? (
-                <div className="py-8 space-y-4 flex flex-col items-center">
-                  <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center border border-green-200">
-                    <CheckCircle className="w-8 h-8 text-green-500" />
+                <div className="py-8 space-y-3 flex flex-col items-center">
+                  <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-200">
+                    <CheckCircle className="w-8 h-8" />
                   </div>
-                  <h3 className="font-serif font-black text-xl text-gray-900">Pembayaran Berhasil!</h3>
-                  <p className="text-xs text-gray-550">Mengarahkan Anda ke halaman rincian pesanan...</p>
+                  <h3 className="font-serif font-bold text-lg text-stone-900">Pembayaran Berhasil!</h3>
+                  <p className="text-xs text-stone-500">Mengarahkan Anda ke halaman rincian pesanan...</p>
                 </div>
               ) : (
                 <>
-                  <div className="relative w-60 h-60 bg-white rounded-2xl p-2 border border-gray-100 shadow-inner flex items-center justify-center">
-                    <QRCodeSVG
+                  <div className="relative w-64 h-64 bg-white rounded-2xl p-2 border border-stone-200 shadow-inner flex items-center justify-center">
+                    <QRCodeCanvas
+                      id="spmb-qris-canvas"
                       value={qrisQrContent}
-                      size={220}
+                      size={240}
                       level="M"
                       includeMargin={false}
                       className="w-full h-full object-contain rounded-xl"
                     />
                   </div>
 
-                  <div className="mt-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 w-full text-center">
-                    <p className="text-[10px] text-green-600 font-bold">
-                      Scan & bayar otomatis terverifikasi
+                  <div className="mt-3 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-100 w-full text-center">
+                    <p className="text-[10px] text-emerald-700 font-bold">
+                      Scan QR dengan BCA, GoPay, OVO, ShopeePay, Dana, dll.
                     </p>
                   </div>
 
-                  <div className="mt-4 text-center">
-                    <p className="text-[10px] text-gray-400 font-extrabold uppercase">Total Pembayaran</p>
-                    <p className="text-2xl font-black font-serif text-[#EA580C] mt-1">
+                  <div className="mt-3 text-center">
+                    <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Total Tagihan</p>
+                    <p className="text-xl font-serif font-bold text-[#2E5A44] mt-0.5">
                       {formatRupiah(qrisTotal)}
                     </p>
                   </div>
 
-                  <div className="mt-5 w-full flex items-center justify-center gap-2 text-xs text-gray-500 font-bold">
-                    <Loader2 className="w-4 h-4 animate-spin text-[#EA580C]" />
-                    <span>Menunggu pembayaran Anda...</span>
+                  {/* Unduh QRIS Button */}
+                  <button
+                    type="button"
+                    onClick={handleDownloadQris}
+                    className="mt-3 w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-stone-600" />
+                    <span>Unduh Gambar QRIS</span>
+                  </button>
+
+                  <div className="mt-4 w-full flex items-center justify-center gap-2 text-xs text-stone-500 font-bold">
+                    <Loader2 className="w-4 h-4 animate-spin text-[#2E5A44]" />
+                    <span>Menunggu verifikasi pembayaran...</span>
                   </div>
 
                   <button
                     onClick={() => {
                       window.location.href = `/orders/${qrisOrderId}`;
                     }}
-                    className="w-full mt-5 py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
+                    className="w-full mt-3 py-2 text-stone-500 hover:text-stone-800 text-[11px] font-semibold underline"
                   >
-                    Buka Halaman Rincian Pesanan
+                    Buka Rincian Pesanan
                   </button>
                 </>
               )}

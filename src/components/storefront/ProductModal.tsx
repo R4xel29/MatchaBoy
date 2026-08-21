@@ -51,6 +51,8 @@ export function ProductModal({
   const [selectedAddOns, setSelectedAddOns] = useState<AddOn[]>([]);
   const [size, setSize] = useState<string>('Normal');
   const [sizePrice, setSizePrice] = useState<number>(0);
+  const [shot, setShot] = useState<string>('Single Shot');
+  const [shotPrice, setShotPrice] = useState<number>(0);
   const [quantity, setQuantity] = useState(1);
   const [isDesktop, setIsDesktop] = useState(false);
   const [matchaLevel, setMatchaLevel] = useState<number>(5);
@@ -297,6 +299,34 @@ export function ProductModal({
     return nameLower.includes('matcha') || nameLower.includes('green tea') || descLower.includes('matcha');
   }, [product]);
 
+  const isAmericanoOrCoffee = useMemo(() => {
+    if (!product) return false;
+    const nameLower = product.name.toLowerCase();
+    const descLower = product.description.toLowerCase();
+    return nameLower.includes('americano') || nameLower.includes('espresso') || nameLower.includes('kopi') || nameLower.includes('coffee') || descLower.includes('americano') || descLower.includes('espresso');
+  }, [product]);
+
+  const isBeverage = useMemo(() => {
+    if (!product) return false;
+    const nameLower = product.name.toLowerCase();
+    const descLower = product.description.toLowerCase();
+    const isPastry = product.category === 'pastries' || nameLower.includes('croissant') || nameLower.includes('cookie') || nameLower.includes('tiramisu') || descLower.includes('croissant') || descLower.includes('cookie');
+    return !isPastry;
+  }, [product]);
+
+  const availableSizes = useMemo(() => {
+    if (product?.modifiers?.sizes && product.modifiers.sizes.length > 0) {
+      return product.modifiers.sizes;
+    }
+    if (isBeverage && !product?.modifiers?.isBundle) {
+      return [
+        { name: 'Normal', price: 0 },
+        { name: 'Large', price: 3000 }
+      ];
+    }
+    return [];
+  }, [product, isBeverage]);
+
   const hasSugarOption = useMemo(() => {
     return !!(product?.modifiers?.sugarLevel && product.modifiers.sugarLevel.length > 0);
   }, [product]);
@@ -313,19 +343,13 @@ export function ProductModal({
     return isShown && loyaltySettings?.showSweetnessCustomizer !== false;
   }, [product, hasSugarOption, isMatchaProduct, loyaltySettings]);
 
-  const matchaPremium = useMemo(() => {
-    if (!shouldShowMatchaCustomizer || product?.modifiers?.isBundle) return 0;
-    if (matchaLevel === 7 || matchaLevel === 8) return 1000;
-    if (matchaLevel === 9 || matchaLevel === 10) return 2000;
-    return 0;
-  }, [shouldShowMatchaCustomizer, matchaLevel, product]);
-
   const activePromo = product ? getActivePromo(product) : null;
   const baseProductPrice = activePromo ? activePromo.promoPrice : (product?.price ?? 0);
+  const shotPriceComputed = isAmericanoOrCoffee && (shot === 'Double Shot' || shot === 'Double') ? 5000 : 0;
 
   const unitPrice = product?.modifiers?.isBundle
     ? (baseProductPrice + bundleAdjustmentsTotal)
-    : (baseProductPrice + sizePrice + addOnTotal + matchaPremium);
+    : (baseProductPrice + sizePrice + addOnTotal + shotPriceComputed);
   
   const totalPrice = unitPrice * quantity;
 
@@ -389,6 +413,8 @@ export function ProductModal({
       sugarLevel: product.modifiers?.isBundle ? 'Normal Sugar' as const : sugarLevel,
       size: product.modifiers?.isBundle ? 'Normal' : size,
       sizePrice: product.modifiers?.isBundle ? 0 : sizePrice,
+      shot: isAmericanoOrCoffee ? shot : undefined,
+      shotPrice: isAmericanoOrCoffee ? shotPriceComputed : 0,
       addOns: product.modifiers?.isBundle ? [] : selectedAddOns,
       isBundle: product.modifiers?.isBundle || false,
       bundleSelections: product.modifiers?.isBundle ? (bundleSelectionsArray as any[]) : undefined,
@@ -408,7 +434,7 @@ export function ProductModal({
 
   const hasIceOption = product?.modifiers?.showSweetness !== false || !!(product?.modifiers?.iceLevel && product.modifiers.iceLevel.length > 0);
   const hasAddOns = product?.modifiers?.addOns && product.modifiers.addOns.length > 0;
-  const hasSizeOption = product?.modifiers?.sizes && product.modifiers.sizes.length > 0;
+  const hasSizeOption = availableSizes.length > 0;
   const isBundleProduct = product?.modifiers?.isBundle === true;
 
   return (
@@ -712,34 +738,65 @@ export function ProductModal({
                     ) : (
                       /* ── Standard Customization ── */
                       <>
-                        {/* Matcha Level Slider (Khusus Produk Matcha) */}
+                        {/* Matcha Preference Customizer (Khusus Produk Matcha) */}
                         {shouldShowMatchaCustomizer && (
-                          <div className="space-y-3 bg-[#2E5A44]/5 p-4.5 rounded-3xl border border-[#2E5A44]/15 shadow-[0_4px_20px_rgba(46,90,68,0.02)] relative overflow-hidden mb-4">
-                            {/* Visual Cup SVG Dinamis di Samping */}
-                            <div className="flex items-center gap-4.5">
-                              <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
+                          <div className="space-y-3.5 bg-emerald-950/[0.04] p-4.5 rounded-3xl border border-emerald-800/15 shadow-sm relative overflow-hidden mb-4">
+                            {/* Visual Cup SVG Dinamis & Pertanyaan Ramah */}
+                            <div className="flex items-center gap-4">
+                              <div className="relative w-18 h-18 flex items-center justify-center shrink-0">
                                 <MatchaCupVisualizer level={matchaLevel} />
                               </div>
-                              <div className="flex-1 space-y-1 w-full text-left">
-                                <h3 className="text-sm font-black text-gray-900 flex items-center justify-start gap-1">
-                                  <span>Kepekatan Matcha</span> 🍵
+                              <div className="flex-1 space-y-1 text-left">
+                                <h3 className="text-xs sm:text-sm font-black text-stone-900 leading-snug">
+                                  Kamu suka matcha seperti apa?
                                 </h3>
-                                <p className="text-[10px] text-muted-foreground font-semibold leading-normal">
-                                  Sesuaikan intensitas bubuk chasen matcha murni pilihanmu.
+                                <p className="text-[10px] text-stone-500 font-medium leading-relaxed">
+                                  Pilih yang terasa matcha-nya kuat atau lebih ringan (Gratis).
                                 </p>
-                                <div className="mt-1 flex items-baseline justify-start gap-1.5">
-                                  <span className="text-xl font-black text-[#2E5A44] leading-none">{matchaLevel}</span>
-                                  <span className="text-[9px] text-[#8C6239] font-black uppercase tracking-wider bg-[#8C6239]/10 px-2 py-0.5 rounded-md leading-none">
-                                    {matchaLevel <= 3 && 'Mild Creamy 🥛'}
-                                    {matchaLevel >= 4 && matchaLevel <= 6 && 'Perfect Balance ⚖️'}
-                                    {matchaLevel >= 7 && matchaLevel <= 8 && 'Strong Shot ⚡'}
-                                    {matchaLevel >= 9 && 'Ceremonial Pure 🏆'}
-                                  </span>
+                                <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-emerald-700/10 border border-emerald-600/20 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                                  {matchaLevel <= 3 && '🍃 Ringan & Creamy'}
+                                  {matchaLevel >= 4 && matchaLevel <= 6 && '⚖️ Classic Balance'}
+                                  {matchaLevel >= 7 && matchaLevel <= 8 && '🍵 Bold Matcha'}
+                                  {matchaLevel >= 9 && '🏆 Pekat & Intens'}
                                 </div>
                               </div>
                             </div>
 
-                            {/* Range Slider */}
+                            {/* 4 Pilihan Cepat / Preset Button */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
+                              {[
+                                { level: 2, label: 'Ringan & Creamy', desc: 'Mild & Milky', icon: '🍃' },
+                                { level: 5, label: 'Classic Balance', desc: 'Seimbang', icon: '⚖️' },
+                                { level: 7, label: 'Bold Matcha', desc: 'Terasa Kuat', icon: '🍵' },
+                                { level: 10, label: 'Pekat & Intens', desc: 'Sangat Pekat', icon: '🏆' }
+                              ].map((opt) => {
+                                const isSelected = 
+                                  (opt.level === 2 && matchaLevel <= 3) ||
+                                  (opt.level === 5 && matchaLevel >= 4 && matchaLevel <= 6) ||
+                                  (opt.level === 7 && matchaLevel >= 7 && matchaLevel <= 8) ||
+                                  (opt.level === 10 && matchaLevel >= 9);
+                                return (
+                                  <button
+                                    key={opt.label}
+                                    type="button"
+                                    onClick={() => setMatchaLevel(opt.level)}
+                                    className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
+                                      isSelected
+                                        ? 'bg-emerald-800 text-white border-emerald-800 shadow-sm ring-2 ring-emerald-600/30'
+                                        : 'bg-white text-stone-700 border-stone-200 hover:border-emerald-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between w-full">
+                                      <span className="text-xs">{opt.icon}</span>
+                                      <span className="text-[9px] opacity-80 font-bold">+Rp 0</span>
+                                    </div>
+                                    <p className="text-[10px] font-bold mt-1 line-clamp-1 leading-tight">{opt.label}</p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {/* Range Slider Interaktif */}
                             <div className="pt-2 px-1 relative">
                               <input
                                 type="range"
@@ -752,23 +809,61 @@ export function ProductModal({
                                   WebkitAppearance: 'none',
                                 }}
                               />
-                              <div className="flex justify-between text-[8px] font-black text-[#A69F94] uppercase tracking-widest mt-1.5 px-0.5 select-none">
+                              <div className="flex justify-between text-[8px] font-black text-stone-400 uppercase tracking-widest mt-1.5 px-0.5 select-none">
                                 <span>Mild</span>
                                 <span>Medium</span>
                                 <span>Strong</span>
-                                <span>Pure</span>
+                                <span>Intense</span>
                               </div>
                             </div>
                           </div>
                         )}
-                        {/* Ukuran */}
+
+                        {/* Opsi Espresso Shot (Khusus Americano & Kopi) */}
+                        {isAmericanoOrCoffee && (
+                          <div className="space-y-2.5 bg-amber-900/[0.04] p-4 rounded-2xl border border-amber-900/15 text-left mb-4">
+                            <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wider flex items-center justify-between">
+                              <span>☕ Pilihan Espresso Shot</span>
+                            </h3>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[
+                                { name: 'Single Shot', price: 0, label: 'Single Shot (Standar)' },
+                                { name: 'Double Shot', price: 5000, label: 'Double Shot (+Rp 5.000)' }
+                              ].map((sh) => {
+                                const isSelected = shot === sh.name;
+                                return (
+                                  <button
+                                    key={sh.name}
+                                    type="button"
+                                    onClick={() => {
+                                      setShot(sh.name);
+                                      setShotPrice(sh.price);
+                                    }}
+                                    className={`p-3 rounded-xl border text-left transition-all ${
+                                      isSelected
+                                        ? 'bg-[#4A2E18] text-white border-[#4A2E18] shadow-sm'
+                                        : 'bg-white text-stone-700 border-stone-200 hover:border-amber-300'
+                                    }`}
+                                  >
+                                    <p className="text-xs font-bold">{sh.name}</p>
+                                    <p className={`text-[10px] mt-0.5 font-semibold ${isSelected ? 'text-amber-200' : 'text-stone-400'}`}>
+                                      {sh.price > 0 ? `+${formatRupiah(sh.price)}` : 'Termasuk'}
+                                    </p>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ukuran Gelas (Cup Size) */}
                         {hasSizeOption && (
-                          <div>
+                          <div className="text-left">
                             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2.5">
-                              Ukuran
+                              Ukuran Gelas (Cup Size)
                             </h3>
                             <div className="flex gap-2 flex-wrap">
-                              {product.modifiers?.sizes?.map((sz: any) => (
+                              {availableSizes.map((sz: any) => (
                                 <button
                                   key={sz.name}
                                   type="button"
@@ -776,11 +871,11 @@ export function ProductModal({
                                     setSize(sz.name);
                                     setSizePrice(sz.price);
                                   }}
-                                  className={`px-4 py-2 rounded-full text-sm font-medium 
-                                    transition-all touch-target border
+                                  className={`px-4 py-2 rounded-2xl text-xs font-bold 
+                                    transition-all touch-target border cursor-pointer
                                     ${
                                       size === sz.name
-                                        ? 'bg-brand-700 text-white border-brand-700 shadow-sm'
+                                        ? 'bg-stone-900 text-white border-stone-900 shadow-sm'
                                         : 'bg-card text-foreground border-border hover:border-brand-400'
                                     }`}
                                 >

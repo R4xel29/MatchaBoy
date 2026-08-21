@@ -90,9 +90,15 @@ export default function PaymentFailedClient({ order }: { order: any }) {
           )}
 
           <button
-            onClick={() => router.push('/')}
+            onClick={() => {
+              if (order?.id?.startsWith('SPMB') || order?.orderType === 'DINE_IN') {
+                router.push('/spmb');
+              } else {
+                router.push('/');
+              }
+            }}
             disabled={loading}
-            className="w-full py-4 bg-white hover:bg-gray-50 text-gray-750 border border-gray-250 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs shadow-sm"
+            className="w-full py-4 bg-white hover:bg-gray-50 text-gray-750 border border-gray-250 font-bold rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs shadow-sm cursor-pointer"
           >
             <Home className="w-4 h-4 text-gray-450" />
             <span>Kembali ke Halaman Utama</span>
