@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
@@ -607,18 +607,33 @@ export function AdminSidebar({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const prevPendingCountRef = useRef(0);
+  const globalAlarmAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const fetchPendingCount = useCallback(async () => {
     try {
       const res = await fetch('/api/cashier/orders/pending-count');
       const data = await res.json();
-      setPendingCount(data.count || 0);
+      const newCount = data.count || 0;
+
+      // If new order arrived while NOT on the orders page, play alarm chime
+      if (newCount > prevPendingCountRef.current && prevPendingCountRef.current !== 0 && pathname !== '/admin/cashier/orders') {
+        try {
+          if (!globalAlarmAudioRef.current) {
+            globalAlarmAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+          }
+          globalAlarmAudioRef.current.play().catch(() => {});
+        } catch {}
+      }
+
+      prevPendingCountRef.current = newCount;
+      setPendingCount(newCount);
     } catch {}
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     fetchPendingCount();
-    const interval = setInterval(fetchPendingCount, 30000); // Every 30 seconds
+    const interval = setInterval(fetchPendingCount, 6000); // Check every 6 seconds
     return () => clearInterval(interval);
   }, [fetchPendingCount]);
 

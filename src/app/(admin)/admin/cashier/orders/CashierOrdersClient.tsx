@@ -29,13 +29,18 @@ import {
   Smartphone,
   Monitor,
   RefreshCw,
-  Sun,
-  Moon,
-  Lock,
-  Unlock,
   UtensilsCrossed,
   ArrowRight,
-  Flame
+  Sparkles,
+  Copy,
+  ExternalLink,
+  Flame,
+  AlertTriangle,
+  User,
+  CreditCard,
+  Banknote,
+  Send,
+  Printer
 } from 'lucide-react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 import { useToast } from '@/components/ui/Toast';
@@ -58,6 +63,8 @@ interface OrderData {
   address?: string;
   paymentMethod: string;
   total: number;
+  subtotal?: number;
+  deliveryFee?: number;
   status: string;
   cancelReason?: string | null;
   createdAt: string;
@@ -78,8 +85,8 @@ interface Props {
 }
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
-  DELIVERY: 'Delivery',
-  PICKUP: 'Pickup',
+  DELIVERY: 'Delivery (Kurir)',
+  PICKUP: 'Pickup (Ambil Sendiri)',
   DINE_IN: 'Dine In (Meja)',
 };
 
@@ -91,146 +98,231 @@ const ORDER_TYPE_ICONS: Record<string, React.ElementType> = {
 
 type TabType = 'antrian' | 'selesai';
 
-export default function CashierOrdersClient({ initialOrders }: Props) {
+const formatWhatsAppNumber = (phone: string) => {
+  let cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.startsWith('08')) {
+    cleaned = '62' + cleaned.substring(1);
+  } else if (cleaned.startsWith('8')) {
+    cleaned = '62' + cleaned;
+  }
+  return cleaned;
+};
+
+const getWhatsAppTemplate = (order: OrderData) => {
+  const orderIdShort = order.id.slice(0, 8).toUpperCase();
+  const itemsText = order.items
+    .map((item) => `- ${item.qty}x ${item.product.name} (${formatRupiah(item.price * item.qty)})`)
+    .join('\n');
+  const totalAmount = formatRupiah(order.total);
+    
+  return `Halo ${order.customerName},
+
+Kami dari *Arum Seduh* ingin mengonfirmasi pesanan Anda:
+
+*ID Pesanan:* #${orderIdShort}
+*Status:* ${order.status}
+*Metode Pembayaran:* ${order.paymentMethod}
+*Tipe Pesanan:* ${order.orderType === 'PICKUP' ? 'Ambil Sendiri (Pickup)' : order.orderType === 'DINE_IN' ? `Dine In (${order.tableNumber || 'Meja'})` : 'Pengiriman (Delivery)'}
+
+*Rincian Pesanan:*
+${itemsText}
+
+*Total:* ${totalAmount}
+
+Jika ada pertanyaan atau pesanan Anda sudah siap, staf kami akan segera melayani. Terima kasih!`;
+};
+
+const shouldTriggerAlarm = (order: OrderData, leadTimeMin: number) => {
+  if (order.status !== 'PENDING' && order.status !== 'PENDING_PAYMENT') {
+    return false;
+  }
+  if (order.orderType !== 'PICKUP') {
+    return true;
+  }
+  if (!order.pickupDate || !order.pickupTime) {
+    return true;
+  }
+  try {
+    const scheduledDate = new Date(order.pickupDate);
+    const [hours, minutes] = order.pickupTime.split(':').map(Number);
+    scheduledDate.setHours(hours, minutes, 0, 0);
+    const timeDiffMinutes = (scheduledDate.getTime() - Date.now()) / (1000 * 60);
+    return timeDiffMinutes <= leadTimeMin;
+  } catch {
+    return true;
+  }
+};
+
+export default function CashierOrdersClient({ initialOrders, storeLat, storeLng, initialPickupAlarmLeadTime }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
 
   const [orders, setOrders] = useState<OrderData[]>(initialOrders);
   const [activeTab, setActiveTab] = useState<TabType>('antrian');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<string>('ALL');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [sourceFilter, setSourceFilter] = useState('ALL');
+  const [tableFilter, setTableFilter] = useState('ALL');
+  const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(initialPickupAlarmLeadTime);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
-  // Kitchen Display features merged
-  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
-  const [isWakeLockActive, setIsWakeLockActive] = useState(false);
-  const [wakeLockSupported, setWakeLockSupported] = useState(false);
-  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+  // Read orders & Continuous Audio Alarm
+  const [readOrderIds, setReadOrderIds] = useState<string[]>([]);
+  const [isAudioBlocked, setIsAudioBlocked] = useState(false);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Courier Assignment Modal
-  const [selectedOrderForCourier, setSelectedOrderForCourier] = useState<OrderData | null>(null);
+  // Modals
+  const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
+  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState('Bukti Pembayaran Palsu / Dibatalkan Pelanggan');
+  const [customReason, setCustomReason] = useState('');
   const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
+  const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
 
-  // Web Audio Context & Wake Lock refs
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const wakeLockSentinelRef = useRef<any>(null);
-  const knownOrderIdsRef = useRef<Set<string>>(new Set(initialOrders.map(o => o.id)));
-
-  // Dual-tone kitchen chime sound
-  const playKitchenBell = useCallback(() => {
-    if (!isAudioEnabled) return;
-    try {
-      if (!audioContextRef.current) {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          audioContextRef.current = new AudioCtx();
-        }
-      }
-
-      const ctx = audioContextRef.current;
-      if (!ctx) return;
-
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
-
-      const now = ctx.currentTime;
-      const osc1 = ctx.createOscillator();
-      const gain1 = ctx.createGain();
-      osc1.type = 'sine';
-      osc1.frequency.setValueAtTime(1046.5, now); // C6
-      gain1.gain.setValueAtTime(0.8, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
-      osc1.connect(gain1);
-      gain1.connect(ctx.destination);
-      osc1.start(now);
-      osc1.stop(now + 1.0);
-
-      const osc2 = ctx.createOscillator();
-      const gain2 = ctx.createGain();
-      osc2.type = 'triangle';
-      osc2.frequency.setValueAtTime(1318.51, now + 0.15); // E6
-      gain2.gain.setValueAtTime(0.6, now + 0.15);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
-      osc2.connect(gain2);
-      gain2.connect(ctx.destination);
-      osc2.start(now + 0.15);
-      osc2.stop(now + 1.2);
-    } catch (e) {
-      console.warn('Audio chime failed:', e);
-    }
-  }, [isAudioEnabled]);
-
-  // Screen Wake Lock API
+  // Load read order IDs on mount
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'wakeLock' in navigator) {
-      setWakeLockSupported(true);
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('cashier_read_orders');
+      if (saved) {
+        try {
+          setReadOrderIds(JSON.parse(saved));
+        } catch {}
+      }
     }
   }, []);
 
-  const toggleWakeLock = async () => {
-    if (!wakeLockSupported) return;
-    try {
-      if (!isWakeLockActive) {
-        wakeLockSentinelRef.current = await (navigator as any).wakeLock.request('screen');
-        setIsWakeLockActive(true);
-        showToast('Layar akan tetap menyala', 'success');
-      } else {
-        if (wakeLockSentinelRef.current) {
-          await wakeLockSentinelRef.current.release();
-          wakeLockSentinelRef.current = null;
-        }
-        setIsWakeLockActive(false);
-        showToast('Wake lock dinonaktifkan', 'info');
+  // Mark selected order as read
+  const markOrderAsRead = (orderId: string) => {
+    setReadOrderIds((prev) => {
+      if (prev.includes(orderId)) return prev;
+      const next = [...prev, orderId];
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('cashier_read_orders', JSON.stringify(next));
       }
-    } catch (err) {
-      console.error('Wake lock error:', err);
-    }
+      return next;
+    });
   };
 
-  // Poll orders every 4 seconds
+  useEffect(() => {
+    if (selectedOrder) {
+      markOrderAsRead(selectedOrder.id);
+    }
+  }, [selectedOrder]);
+
+  // Split active vs done orders
+  const ACTIVE_STATUSES = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'ON_DELIVERY'];
+  const DONE_STATUSES = ['COMPLETED', 'DELIVERED', 'CANCELLED'];
+
+  const antrianOrders = useMemo(() => {
+    return orders.filter(o => ACTIVE_STATUSES.includes(o.status));
+  }, [orders]);
+
+  const selesaiOrders = useMemo(() => {
+    return orders.filter(o => DONE_STATUSES.includes(o.status));
+  }, [orders]);
+
+  // Distinct unread pending orders
+  const unreadPendingOrders = useMemo(() => {
+    return antrianOrders.filter(o => shouldTriggerAlarm(o, pickupAlarmLeadTime) && !readOrderIds.includes(o.id));
+  }, [antrianOrders, pickupAlarmLeadTime, readOrderIds]);
+
+  const hasUnreadOrders = unreadPendingOrders.length > 0;
+
+  // Continuous Audio Alarm playback (Mixkit continuous ring)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (hasUnreadOrders && !isAudioMuted) {
+      if (!alarmAudioRef.current) {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        audio.loop = true;
+        alarmAudioRef.current = audio;
+      }
+
+      alarmAudioRef.current.play()
+        .then(() => setIsAudioBlocked(false))
+        .catch((err) => {
+          console.warn('Continuous alarm playback blocked by browser user-interaction policy:', err);
+          setIsAudioBlocked(true);
+        });
+    } else {
+      if (alarmAudioRef.current) {
+        alarmAudioRef.current.pause();
+        alarmAudioRef.current.currentTime = 0;
+      }
+    }
+
+    return () => {
+      if (alarmAudioRef.current) {
+        alarmAudioRef.current.pause();
+      }
+    };
+  }, [hasUnreadOrders, isAudioMuted]);
+
+  // Unmute / enable audio user gesture
+  const handleEnableAudio = () => {
+    if (!alarmAudioRef.current) {
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      audio.loop = true;
+      alarmAudioRef.current = audio;
+    }
+    alarmAudioRef.current.play()
+      .then(() => {
+        setIsAudioBlocked(false);
+        showToast('Suara alarm diaktifkan', 'success');
+      })
+      .catch(() => showToast('Gagal memutar audio di peramban ini', 'error'));
+  };
+
+  const handleDismissAllAlarms = () => {
+    const allPendingIds = antrianOrders.map(o => o.id);
+    setReadOrderIds(allPendingIds);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('cashier_read_orders', JSON.stringify(allPendingIds));
+    }
+    if (alarmAudioRef.current) {
+      alarmAudioRef.current.pause();
+      alarmAudioRef.current.currentTime = 0;
+    }
+    showToast('Alarm pesanan telah dimatikan', 'info');
+  };
+
+  // Realtime Polling (Every 4 seconds)
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await fetch('/api/cashier/orders');
+      const res = await fetch(`/api/cashier/orders?format=json&t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+      });
       if (res.ok) {
         const data = await res.json();
-        const incoming = Array.isArray(data) ? data : data.orders || [];
-
-        // Detect brand new pending orders
-        const hasNewPending = incoming.some((o: OrderData) => 
-          !knownOrderIdsRef.current.has(o.id) && 
-          (o.status === 'PENDING' || o.status === 'PENDING_PAYMENT')
-        );
-
-        if (hasNewPending) {
-          playKitchenBell();
-          showToast('🔔 Pesanan baru masuk!', 'info');
-        }
-
-        incoming.forEach((o: OrderData) => knownOrderIdsRef.current.add(o.id));
-        setOrders(incoming);
+        if (data.orders) setOrders(data.orders);
+        if (data.pickupAlarmLeadTime !== undefined) setPickupAlarmLeadTime(data.pickupAlarmLeadTime);
       }
     } catch (err) {
-      console.error('Error polling cashier orders:', err);
+      console.error('Error fetching cashier orders:', err);
     }
-  }, [playKitchenBell, showToast]);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(fetchOrders, 4000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
-  const handleRefresh = async () => {
+  const handleManualRefresh = async () => {
     setIsRefreshing(true);
     await fetchOrders();
     setIsRefreshing(false);
+    showToast('Daftar pesanan diperbarui', 'info');
   };
 
-  // Update order status stepper
+  // Update order status
   const handleUpdateStatus = async (orderId: string, nextStatus: string) => {
-    setLoadingOrderId(orderId);
+    setIsUpdating(orderId);
+    markOrderAsRead(orderId);
     try {
       const res = await fetch(`/api/cashier/orders/${orderId}`, {
         method: 'PATCH',
@@ -248,39 +340,63 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
     } catch (err: any) {
       showToast(err.message, 'error');
     } finally {
-      setLoadingOrderId(null);
+      setIsUpdating(null);
     }
   };
 
-  // Item checklist toggle
-  const toggleItemCheck = (orderItemId: string) => {
-    setCheckedItems(prev => ({
-      ...prev,
-      [orderItemId]: !prev[orderItemId]
-    }));
+  // Handle Order Cancellation
+  const handleConfirmCancel = async () => {
+    if (!cancelOrderId) return;
+    setIsUpdating(cancelOrderId);
+    try {
+      const finalReason = cancelReason === 'Lainnya' ? customReason : cancelReason;
+      const res = await fetch(`/api/orders/${cancelOrderId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: finalReason || 'Dibatalkan oleh kasir' })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Gagal membatalkan pesanan');
+      }
+
+      showToast('Pesanan berhasil dibatalkan', 'success');
+      setOrders(prev => prev.map(o => o.id === cancelOrderId ? { ...o, status: 'CANCELLED', cancelReason: finalReason } : o));
+      setIsCancelModalOpen(false);
+      setCancelOrderId(null);
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setIsUpdating(null);
+    }
   };
 
-  // Filtered orders
+  // Filtered orders computation
+  const uniqueTableNumbers = useMemo(() => {
+    const numbers = new Set<string>();
+    orders.forEach((o) => {
+      if (o.tableNumber) numbers.add(o.tableNumber);
+    });
+    return Array.from(numbers).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
-    return orders.filter((order) => {
-      // Tab filter
-      const isCompleted = ['COMPLETED', 'DELIVERED', 'CANCELLED'].includes(order.status);
-      if (activeTab === 'antrian' && isCompleted) return false;
-      if (activeTab === 'selesai' && !isCompleted) return false;
+    const baseList = activeTab === 'antrian' ? antrianOrders : selesaiOrders;
 
-      // Status filter
-      if (selectedStatusFilter !== 'ALL' && order.status !== selectedStatusFilter) {
-        return false;
-      }
+    return baseList.filter((order) => {
+      // Type filter
+      if (typeFilter !== 'ALL' && order.orderType !== typeFilter) return false;
 
-      // Order type filter
-      if (selectedType !== 'ALL' && order.orderType !== selectedType) {
-        return false;
-      }
+      // Source filter
+      if (sourceFilter !== 'ALL' && (order.source || 'POS') !== sourceFilter) return false;
+
+      // Table filter
+      if (tableFilter !== 'ALL' && order.tableNumber !== tableFilter) return false;
 
       // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      if (search.trim()) {
+        const q = search.toLowerCase();
         const matchesId = order.id.toLowerCase().includes(q);
         const matchesName = order.customerName.toLowerCase().includes(q);
         const matchesPhone = order.customerPhone.toLowerCase().includes(q);
@@ -293,16 +409,13 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
 
       return true;
     });
-  }, [orders, activeTab, selectedStatusFilter, selectedType, searchQuery]);
+  }, [activeTab, antrianOrders, selesaiOrders, typeFilter, sourceFilter, tableFilter, search]);
 
-  // Counts
-  const antrianCount = useMemo(() => {
-    return orders.filter(o => !['COMPLETED', 'DELIVERED', 'CANCELLED'].includes(o.status)).length;
-  }, [orders]);
-
-  const selesaiCount = useMemo(() => {
-    return orders.filter(o => ['COMPLETED', 'DELIVERED', 'CANCELLED'].includes(o.status)).length;
-  }, [orders]);
+  // Metrics
+  const totalAntreanCount = antrianOrders.length;
+  const preparingCount = antrianOrders.filter(o => o.status === 'PREPARING').length;
+  const readyCount = antrianOrders.filter(o => o.status === 'READY').length;
+  const selesaiTodayCount = selesaiOrders.filter(o => o.status === 'COMPLETED' || o.status === 'DELIVERED').length;
 
   const formatElapsed = (createdAtStr: string) => {
     const elapsedSecs = Math.floor((Date.now() - new Date(createdAtStr).getTime()) / 1000);
@@ -310,136 +423,230 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
     if (mins < 1) return 'Baru saja';
     if (mins < 60) return `${mins} mnt lalu`;
     const hours = Math.floor(mins / 60);
-    return `${hours} jam ${mins % 60} mnt lalu`;
+    return `${hours} jam ${mins % 60} mnt`;
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#1C1917] p-4 sm:p-6 lg:p-8 space-y-6">
+    <div className="min-h-screen bg-[#FAF9F6] text-[#1C1917] p-4 sm:p-6 lg:p-8 space-y-6 font-sans">
       
-      {/* Top Header Bar */}
-      <div className="bg-white/80 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] text-[11px] font-bold tracking-wide">
-            <ChefHat className="w-3.5 h-3.5" />
-            <span>Kitchen & POS Live Orders</span>
+      {/* Top Header & Metrics Dashboard */}
+      <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[11px] font-bold tracking-wide">
+              <ChefHat className="w-3.5 h-3.5 text-orange-600" />
+              <span>Arum Seduh Live Kitchen & POS</span>
+            </div>
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
+              Pesanan Hari Ini
+            </h1>
+            <p className="text-xs text-stone-500">
+              Pantau antrean pesanan masuk, status hidangan meja, dan proses transaksi secara langsung
+            </p>
           </div>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 mt-1">
-            Pesanan Hari Ini
-          </h1>
-          <p className="text-xs text-stone-500 mt-0.5">
-            Pantau dan kelola antrean pesanan dapur & meja secara realtime
-          </p>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Audio Alarm Toggle */}
+            <button
+              type="button"
+              onClick={() => setIsAudioMuted(!isAudioMuted)}
+              className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold border flex items-center gap-2 transition-all cursor-pointer ${
+                !isAudioMuted
+                  ? 'bg-orange-50 text-orange-800 border-orange-200 shadow-sm'
+                  : 'bg-stone-50 text-stone-400 border-stone-200'
+              }`}
+              title="Toggle Suara Alarm"
+            >
+              {!isAudioMuted ? <Volume2 className="w-4 h-4 text-orange-600" /> : <VolumeX className="w-4 h-4 text-stone-400" />}
+              <span>{!isAudioMuted ? 'Alarm Aktif' : 'Alarm Mute'}</span>
+            </button>
+
+            {/* Refresh */}
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-orange-500/20 disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Segarkan</span>
+            </button>
+          </div>
         </div>
 
-        {/* Live Controls: Audio chime, Wake Lock, Refresh */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {/* Audio Chime Toggle */}
-          <button
-            onClick={() => setIsAudioEnabled(!isAudioEnabled)}
-            className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
-              isAudioEnabled
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-sm'
-                : 'bg-stone-50 text-stone-500 border-stone-200'
-            }`}
-            title="Lonceng Suara Pesanan Baru"
-          >
-            {isAudioEnabled ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4" />}
-            <span>{isAudioEnabled ? 'Suara ON' : 'Suara Mute'}</span>
-          </button>
-
-          {/* Screen Wake Lock */}
-          {wakeLockSupported && (
-            <button
-              onClick={toggleWakeLock}
-              className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
-                isWakeLockActive
-                  ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm'
-                  : 'bg-stone-50 text-stone-500 border-stone-200'
-              }`}
-              title="Cegah layar redup / mati"
-            >
-              <Smartphone className="w-4 h-4" />
-              <span>{isWakeLockActive ? 'Layar Terjaga' : 'Auto-Sleep'}</span>
-            </button>
-          )}
-
-          {/* Refresh Button */}
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="px-4 py-2.5 rounded-2xl bg-[#2E5A44] hover:bg-[#234533] text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Segarkan</span>
-          </button>
+        {/* Live Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 pt-2 border-t border-stone-100">
+          <div className="bg-stone-50/70 p-4 rounded-2xl border border-stone-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Antrean Aktif</p>
+            <p className="font-serif text-2xl font-bold text-stone-900 mt-1">{totalAntreanCount}</p>
+          </div>
+          <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Sedang Dimasak</p>
+            <p className="font-serif text-2xl font-bold text-amber-900 mt-1">{preparingCount}</p>
+          </div>
+          <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Siap Saji</p>
+            <p className="font-serif text-2xl font-bold text-blue-900 mt-1">{readyCount}</p>
+          </div>
+          <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Selesai Hari Ini</p>
+            <p className="font-serif text-2xl font-bold text-emerald-900 mt-1">{selesaiTodayCount}</p>
+          </div>
         </div>
       </div>
 
-      {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      {/* Flashing Continuous Alarm Banner */}
+      <AnimatePresence>
+        {hasUnreadOrders && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-5 rounded-3xl bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 text-white shadow-xl shadow-orange-500/25 flex flex-col md:flex-row items-center justify-between gap-4 border-2 border-white/20 animate-pulse"
+          >
+            <div className="flex items-center gap-3.5 text-left">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white shrink-0 border border-white/30">
+                <Bell className="w-6 h-6 animate-bounce" />
+              </div>
+              <div>
+                <h3 className="font-serif font-bold text-lg leading-tight">
+                  Ada {unreadPendingOrders.length} Pesanan Baru Masuk!
+                </h3>
+                <p className="text-xs text-white/90 mt-0.5">
+                  Alarm akan terus berbunyi hingga Anda membuka detail pesanan atau mematikan alarm.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0 w-full md:w-auto">
+              {isAudioBlocked && (
+                <button
+                  onClick={handleEnableAudio}
+                  className="px-4 py-2.5 rounded-2xl bg-white text-orange-700 font-bold text-xs hover:bg-orange-50 shadow transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Volume2 className="w-4 h-4" /> Buka Kunci Audio
+                </button>
+              )}
+              <button
+                onClick={handleDismissAllAlarms}
+                className="flex-1 md:flex-none px-5 py-2.5 rounded-2xl bg-stone-900/80 hover:bg-stone-900 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow"
+              >
+                <Check className="w-4 h-4" />
+                <span>Matikan Alarm</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Tabs, Search, & Filters Bar */}
+      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-stone-200 shadow-sm space-y-4">
         
-        {/* Main Tabs: Antrian vs Selesai */}
-        <div className="flex gap-2 p-1 bg-stone-200/60 rounded-2xl shrink-0">
-          <button
-            onClick={() => setActiveTab('antrian')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'antrian'
-                ? 'bg-white text-[#2E5A44] shadow-sm'
-                : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <span>Antrean Aktif</span>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-              activeTab === 'antrian' ? 'bg-[#2E5A44] text-white' : 'bg-stone-300 text-stone-700'
-            }`}>
-              {antrianCount}
-            </span>
-          </button>
+        {/* Row 1: Antrean vs Selesai Tabs & Search */}
+        <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <div className="flex gap-2 p-1 bg-stone-100 rounded-2xl shrink-0">
+            <button
+              onClick={() => setActiveTab('antrian')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'antrian'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <span>Antrean Aktif</span>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                activeTab === 'antrian' ? 'bg-white text-orange-700' : 'bg-stone-200 text-stone-700'
+              }`}>
+                {totalAntreanCount}
+              </span>
+            </button>
 
-          <button
-            onClick={() => setActiveTab('selesai')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === 'selesai'
-                ? 'bg-white text-stone-900 shadow-sm'
-                : 'text-stone-600 hover:text-stone-900'
-            }`}
-          >
-            <span>Riwayat Selesai</span>
-            <span className="px-2 py-0.5 rounded-full bg-stone-300 text-stone-700 text-[10px] font-black">
-              {selesaiCount}
-            </span>
-          </button>
-        </div>
+            <button
+              onClick={() => setActiveTab('selesai')}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === 'selesai'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <span>Riwayat Selesai</span>
+              <span className="px-2 py-0.5 rounded-full bg-stone-200 text-stone-700 text-[10px] font-black">
+                {selesaiOrders.length}
+              </span>
+            </button>
+          </div>
 
-        {/* Search Input & Order Type Filters */}
-        <div className="flex flex-col sm:flex-row gap-2.5 items-center flex-1 max-w-xl">
-          <div className="relative w-full">
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-md">
             <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Cari ID, nama pemesan, meja, antrean..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9.5 pr-4 py-2.5 rounded-2xl bg-white border border-stone-200 text-xs font-medium focus:outline-none focus:border-[#2E5A44] shadow-sm"
+              placeholder="Cari ID pesanan, nama pemesan, meja, antrean..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-stone-50 border border-stone-200 text-xs font-medium focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all"
             />
           </div>
+        </div>
 
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="w-full sm:w-auto px-3.5 py-2.5 rounded-2xl bg-white border border-stone-200 text-xs font-bold focus:outline-none focus:border-[#2E5A44] cursor-pointer shadow-sm"
-          >
-            <option value="ALL">Semua Tipe</option>
-            <option value="DINE_IN">Dine-In (Meja)</option>
-            <option value="PICKUP">Pickup (Ambil)</option>
-            <option value="DELIVERY">Delivery (Kurir)</option>
-          </select>
+        {/* Row 2: Channel Pills & Table Selector Filter */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-stone-100">
+          {/* Channel Filters */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            {[
+              { key: 'ALL', label: 'Semua Kanal' },
+              { key: 'SPMB', label: 'SPMB Meja' },
+              { key: 'POS', label: 'Kasir POS' },
+              { key: 'APP', label: 'Aplikasi' },
+              { key: 'WHATSAPP', label: 'WhatsApp' },
+            ].map((ch) => (
+              <button
+                key={ch.key}
+                onClick={() => setSourceFilter(ch.key)}
+                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap transition-all border cursor-pointer ${
+                  sourceFilter === ch.key
+                    ? 'bg-orange-50 border-orange-300 text-orange-700 shadow-sm'
+                    : 'bg-white border-stone-200 text-stone-600 hover:border-stone-400'
+                }`}
+              >
+                {ch.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Dropdown Filters */}
+          <div className="flex items-center gap-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-xs font-bold text-stone-700 focus:outline-none focus:border-orange-500 cursor-pointer"
+            >
+              <option value="ALL">Semua Tipe</option>
+              <option value="DINE_IN">Dine In (Meja)</option>
+              <option value="PICKUP">Pickup (Ambil)</option>
+              <option value="DELIVERY">Delivery (Kurir)</option>
+            </select>
+
+            {uniqueTableNumbers.length > 0 && (
+              <select
+                value={tableFilter}
+                onChange={(e) => setTableFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl bg-stone-50 border border-stone-200 text-xs font-bold text-stone-700 focus:outline-none focus:border-orange-500 cursor-pointer"
+              >
+                <option value="ALL">Semua Meja</option>
+                {uniqueTableNumbers.map((tbl) => (
+                  <option key={tbl} value={tbl}>Meja {tbl}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Orders Grid / Kitchen Kanban Cards */}
+      {/* Orders Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filteredOrders.map((order) => {
+          const isUnread = shouldTriggerAlarm(order, pickupAlarmLeadTime) && !readOrderIds.includes(order.id);
           const TypeIcon = ORDER_TYPE_ICONS[order.orderType] || Coffee;
           const isPending = order.status === 'PENDING' || order.status === 'PENDING_PAYMENT';
           const isPreparing = order.status === 'PREPARING';
@@ -454,45 +661,50 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
             <motion.div
               key={order.id}
               layout
-              initial={{ opacity: 0, scale: 0.95 }}
+              initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
-              className={`bg-white rounded-3xl border overflow-hidden shadow-sm flex flex-col justify-between transition-all ${
-                isLate
+              onClick={() => markOrderAsRead(order.id)}
+              className={`bg-white rounded-3xl border overflow-hidden shadow-sm flex flex-col justify-between transition-all text-left ${
+                isUnread
+                  ? 'ring-4 ring-orange-500/30 border-orange-500 shadow-lg'
+                  : isLate
                   ? 'border-rose-400 ring-2 ring-rose-300/40'
-                  : isPending
-                  ? 'border-amber-300'
-                  : isPreparing
-                  ? 'border-blue-300'
-                  : isReady
-                  ? 'border-emerald-400 ring-2 ring-emerald-300/40'
-                  : 'border-stone-200'
+                  : 'border-stone-200 hover:border-orange-300'
               }`}
             >
               {/* Card Header */}
-              <div className="p-4 bg-[#FAF7F2] border-b border-stone-100 flex items-start justify-between gap-2">
+              <div className="p-4 bg-[#FAF9F6] border-b border-stone-100 flex items-start justify-between gap-2">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     {order.queueNumber ? (
-                      <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-lg bg-[#2E5A44] text-white">
+                      <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm">
                         {order.queueNumber}
                       </span>
                     ) : (
-                      <span className="font-mono font-bold text-xs text-stone-500">
+                      <span className="font-mono font-bold text-xs text-stone-500 bg-white border border-stone-200 px-2 py-0.5 rounded-lg">
                         #{order.id.slice(0, 8).toUpperCase()}
                       </span>
                     )}
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-white border border-stone-200 text-stone-700 text-[10px] font-bold">
-                      <TypeIcon className="w-3 h-3 text-[#2E5A44]" />
+
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-white border border-stone-200 text-stone-700 text-[10px] font-bold">
+                      <TypeIcon className="w-3 h-3 text-orange-600" />
                       {ORDER_TYPE_LABELS[order.orderType] || order.orderType}
                     </span>
+
+                    {order.source && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-200/70 text-stone-600">
+                        {order.source}
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="font-serif font-bold text-base text-stone-900 leading-tight">
                     {order.customerName}
                   </h3>
+
                   {order.tableNumber && (
-                    <p className="text-xs font-bold text-[#2E5A44]">
-                      📍 {order.tableNumber}
+                    <p className="text-xs font-bold text-orange-700 flex items-center gap-1">
+                      <UtensilsCrossed className="w-3 h-3" /> {order.tableNumber}
                     </p>
                   )}
                 </div>
@@ -510,119 +722,129 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
                 </div>
               </div>
 
-              {/* Dish Items Checklist */}
+              {/* Items List */}
               <div className="p-4 space-y-2 flex-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                  Daftar Pesanan ({order.items.reduce((acc, i) => acc + i.qty, 0)} item)
-                </p>
-                
                 <div className="space-y-1.5">
-                  {order.items.map((item) => {
-                    const isChecked = checkedItems[item.id] || false;
-                    return (
-                      <div
-                        key={item.id}
-                        onClick={() => toggleItemCheck(item.id)}
-                        className={`p-2.5 rounded-2xl border transition-all flex items-start justify-between gap-3 cursor-pointer select-none ${
-                          isChecked
-                            ? 'bg-emerald-50/60 border-emerald-300 opacity-60 line-through'
-                            : 'bg-stone-50/70 border-stone-200/80 hover:bg-stone-100/80'
-                        }`}
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <div className={`w-4 h-4 rounded-md border mt-0.5 flex items-center justify-center ${
-                            isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-stone-300 bg-white'
-                          }`}>
-                            {isChecked && <Check className="w-3 h-3" />}
-                          </div>
-                          <div>
-                            <p className="font-bold text-xs text-stone-900 leading-tight">
-                              <span className="font-black text-[#2E5A44] mr-1">{item.qty}x</span>
-                              {item.product.name}
-                            </p>
-                            {item.modifiers && (
-                              <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">
-                                {item.modifiers}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <span className="text-[11px] font-bold text-stone-700 shrink-0">
-                          {formatRupiah(item.price * item.qty)}
-                        </span>
+                  {order.items.map((item) => (
+                    <div key={item.id} className="p-2.5 rounded-2xl border border-stone-100 bg-stone-50/50 flex items-start justify-between gap-3 text-xs">
+                      <div>
+                        <p className="font-bold text-stone-900 leading-tight">
+                          <span className="text-orange-600 font-black mr-1">{item.qty}x</span>
+                          {item.product.name}
+                        </p>
+                        {item.modifiers && (
+                          <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">
+                            {item.modifiers}
+                          </p>
+                        )}
                       </div>
-                    );
-                  })}
+                      <span className="font-bold text-stone-700 shrink-0">
+                        {formatRupiah(item.price * item.qty)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
 
                 {order.notes && (
                   <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-medium mt-2">
-                    📝 <span className="font-bold">Catatan:</span> {order.notes}
+                    <span className="font-bold">Catatan:</span> {order.notes}
                   </div>
                 )}
               </div>
 
-              {/* Card Footer & Stepper Status Actions */}
-              <div className="p-4 bg-stone-50 border-t border-stone-100 space-y-3">
+              {/* Card Footer & Stepper */}
+              <div className="p-4 bg-[#FAF9F6] border-t border-stone-100 space-y-3">
                 <div className="flex items-center justify-between text-xs font-bold">
                   <span className="text-stone-500">Total Tagihan</span>
-                  <span className="text-sm font-serif font-black text-[#2E5A44]">
+                  <span className="text-base font-serif font-black text-orange-600">
                     {formatRupiah(order.total)}
                   </span>
                 </div>
 
-                {/* 1-Tap Status Progress Stepper */}
+                {/* 1-Tap Quick Action Stepper */}
                 {!isCompleted && !isCancelled && (
-                  <div className="grid grid-cols-3 gap-1.5 pt-1">
-                    {/* Step 1: PENDING */}
+                  <div className="grid grid-cols-3 gap-1.5">
                     <button
                       onClick={() => handleUpdateStatus(order.id, 'PREPARING')}
-                      disabled={loadingOrderId === order.id}
+                      disabled={isUpdating === order.id}
                       className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                         isPending
-                          ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-300/50'
+                          ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
                           : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
                       }`}
                     >
-                      🍳 Masak
+                      Masak
                     </button>
 
-                    {/* Step 2: PREPARING */}
                     <button
                       onClick={() => handleUpdateStatus(order.id, 'READY')}
-                      disabled={loadingOrderId === order.id}
+                      disabled={isUpdating === order.id}
                       className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                         isPreparing
-                          ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300/50'
+                          ? 'bg-blue-600 text-white shadow-sm'
                           : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
                       }`}
                     >
-                      ✨ Siap Saji
+                      Siap Saji
                     </button>
 
-                    {/* Step 3: READY / COMPLETED */}
                     <button
                       onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
-                      disabled={loadingOrderId === order.id}
+                      disabled={isUpdating === order.id}
                       className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
                         isReady
-                          ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300/50'
+                          ? 'bg-emerald-600 text-white shadow-sm'
                           : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
                       }`}
                     >
-                      ✅ Selesai
+                      Selesai
                     </button>
                   </div>
                 )}
 
-                {/* Completed / Cancelled Status Badge */}
+                {/* Completed / Cancelled Status Indicator */}
                 {(isCompleted || isCancelled) && (
                   <div className={`w-full py-2 rounded-xl text-center text-xs font-bold ${
-                    isCompleted ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                    isCompleted ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'
                   }`}>
-                    {isCompleted ? '✅ Pesanan Selesai' : '❌ Pesanan Dibatalkan'}
+                    {isCompleted ? 'Pesanan Selesai' : 'Pesanan Dibatalkan'}
                   </div>
                 )}
+
+                {/* Secondary Action Toolbar: Details, WhatsApp, Cancel */}
+                <div className="flex items-center gap-1.5 pt-1">
+                  <button
+                    onClick={() => setSelectedOrder(order)}
+                    className="flex-1 py-2 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Rincian
+                  </button>
+
+                  {order.customerPhone && order.customerPhone !== '-' && (
+                    <a
+                      href={`https://wa.me/${formatWhatsAppNumber(order.customerPhone)}?text=${encodeURIComponent(getWhatsAppTemplate(order))}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 rounded-xl border border-stone-200 bg-white hover:bg-emerald-50 hover:border-emerald-300 text-emerald-700 transition-all"
+                      title="Kirim Pesan WhatsApp"
+                    >
+                      <MessageCircle className="w-4 h-4" />
+                    </a>
+                  )}
+
+                  {!isCompleted && !isCancelled && (
+                    <button
+                      onClick={() => {
+                        setCancelOrderId(order.id);
+                        setIsCancelModalOpen(true);
+                      }}
+                      className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 transition-all cursor-pointer"
+                      title="Batalkan Pesanan"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           );
@@ -630,12 +852,205 @@ export default function CashierOrdersClient({ initialOrders }: Props) {
 
         {filteredOrders.length === 0 && (
           <div className="col-span-full py-16 text-center text-stone-400 bg-white rounded-3xl border border-stone-200 p-8">
-            <ChefHat className="w-12 h-12 mx-auto mb-2 text-stone-300" />
+            <UtensilsCrossed className="w-12 h-12 mx-auto mb-2 text-stone-300" />
             <p className="font-serif font-bold text-base text-stone-700">Tidak ada pesanan ditemukan</p>
-            <p className="text-xs text-stone-400 mt-1">Semua pesanan saat ini sudah selesai atau sesuai filter.</p>
+            <p className="text-xs text-stone-400 mt-1">Semua pesanan sesuai filter saat ini sudah selesai atau kosong.</p>
           </div>
         )}
       </div>
+
+      {/* Detail Order Inspection Modal */}
+      <AnimatePresence>
+        {selectedOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+              onClick={() => setSelectedOrder(null)}
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative z-10 border border-stone-200 max-h-[90vh] flex flex-col text-left space-y-4"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div>
+                  <h3 className="font-serif font-bold text-lg text-stone-900">
+                    Rincian Pesanan #{selectedOrder.id.slice(0, 8).toUpperCase()}
+                  </h3>
+                  <p className="text-xs text-stone-500 font-medium">{ORDER_TYPE_LABELS[selectedOrder.orderType]} • {new Date(selectedOrder.createdAt).toLocaleString('id-ID')}</p>
+                </div>
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50 cursor-pointer"
+                >
+                  <X className="w-4 h-4 text-stone-500" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+                {/* Customer Info */}
+                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-stone-500">Nama Pemesan</span>
+                    <span className="text-stone-900">{selectedOrder.customerName}</span>
+                  </div>
+                  {selectedOrder.tableNumber && (
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-stone-500">Lokasi Duduk</span>
+                      <span className="text-orange-700">{selectedOrder.tableNumber}</span>
+                    </div>
+                  )}
+                  {selectedOrder.customerPhone && selectedOrder.customerPhone !== '-' && (
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-stone-500">Nomor Telepon</span>
+                      <span className="text-stone-900">{selectedOrder.customerPhone}</span>
+                    </div>
+                  )}
+                  {selectedOrder.address && (
+                    <div className="flex items-start justify-between text-xs font-bold gap-3 pt-1 border-t border-stone-200">
+                      <span className="text-stone-500">Alamat / Meja</span>
+                      <span className="text-stone-900 text-right">{selectedOrder.address}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Items */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Item Dipesan</p>
+                  <div className="space-y-1.5">
+                    {selectedOrder.items.map((item) => (
+                      <div key={item.id} className="p-3 rounded-2xl border border-stone-100 bg-stone-50 flex items-start justify-between gap-3 text-xs">
+                        <div>
+                          <p className="font-bold text-stone-900">{item.qty}x {item.product.name}</p>
+                          {item.modifiers && <p className="text-[11px] text-stone-500 mt-0.5">{item.modifiers}</p>}
+                        </div>
+                        <span className="font-bold text-stone-800">{formatRupiah(item.price * item.qty)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Totals */}
+                <div className="p-4 rounded-2xl bg-orange-50/50 border border-orange-200 space-y-1.5 text-xs font-bold">
+                  <div className="flex justify-between text-stone-600">
+                    <span>Subtotal</span>
+                    <span>{formatRupiah(selectedOrder.subtotal || selectedOrder.total)}</span>
+                  </div>
+                  {selectedOrder.deliveryFee ? (
+                    <div className="flex justify-between text-stone-600">
+                      <span>Ongkir</span>
+                      <span>{formatRupiah(selectedOrder.deliveryFee)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between text-sm text-orange-700 pt-2 border-t border-orange-200 font-serif font-black">
+                    <span>Total Tagihan</span>
+                    <span>{formatRupiah(selectedOrder.total)}</span>
+                  </div>
+                </div>
+
+                {/* Payment Proof */}
+                {selectedOrder.paymentProofUrl && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Bukti Pembayaran</p>
+                    <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-stone-200">
+                      <Image src={selectedOrder.paymentProofUrl} alt="Bukti Bayar" fill className="object-cover" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Actions */}
+              <div className="pt-3 border-t border-stone-100 flex gap-2">
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="flex-1 py-3 rounded-xl border border-stone-200 font-bold text-xs text-stone-700 hover:bg-stone-50 cursor-pointer"
+                >
+                  Tutup
+                </button>
+                {selectedOrder.customerPhone && selectedOrder.customerPhone !== '-' && (
+                  <a
+                    href={`https://wa.me/${formatWhatsAppNumber(selectedOrder.customerPhone)}?text=${encodeURIComponent(getWhatsAppTemplate(selectedOrder))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-orange-500/20"
+                  >
+                    <MessageCircle className="w-4 h-4" /> Buka WhatsApp
+                  </a>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Cancel Modal */}
+      <AnimatePresence>
+        {isCancelModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+              onClick={() => setIsCancelModalOpen(false)}
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-stone-200 space-y-4"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto shadow-inner">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="font-serif font-bold text-lg text-stone-900">Batalkan Pesanan</h3>
+              <p className="text-xs text-stone-500">Pilih alasan pembatalan pesanan ini:</p>
+
+              <select
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-xs font-bold text-stone-800"
+              >
+                <option value="Bukti Pembayaran Palsu / Dibatalkan Pelanggan">Bukti Pembayaran Palsu / Dibatalkan Pelanggan</option>
+                <option value="Stok Habis">Stok Bahan Habis</option>
+                <option value="Pelanggan Tidak Merespons">Pelanggan Tidak Merespons</option>
+                <option value="Lainnya">Alasan Lainnya</option>
+              </select>
+
+              {cancelReason === 'Lainnya' && (
+                <input
+                  type="text"
+                  placeholder="Tulis alasan pembatalan..."
+                  value={customReason}
+                  onChange={(e) => setCustomReason(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-200 text-xs font-medium"
+                />
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => setIsCancelModalOpen(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-50"
+                >
+                  Kembali
+                </button>
+                <button
+                  onClick={handleConfirmCancel}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md"
+                >
+                  Ya, Batalkan
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

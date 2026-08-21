@@ -529,12 +529,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
     }
   };
 
-  const getMatchaCharge = (level?: number) => {
-    if (!level) return 0;
-    if (level === 7 || level === 8) return 1000;
-    if (level >= 9) return 2000;
-    return 0;
-  };
+  const getMatchaCharge = (level?: number) => 0;
 
   const addToCart = (
     product: POSProduct,
@@ -763,7 +758,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white border border-orange-600 text-xs font-bold shadow-md transition-all active:scale-[0.97]"
         >
           <Monitor className="w-4 h-4 text-white" />
-          Layar Monitor 2 🖥️
+          Layar Monitor 2 
         </button>
       </div>
 
@@ -775,7 +770,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
           {!customerName.trim() && (
             <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between text-xs text-amber-900 shadow-sm animate-pulse">
               <span className="font-semibold flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-amber-600 text-white font-black flex items-center justify-center text-[11px] shrink-0">1</span>
+                <span className="w-5 h-5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white font-black flex items-center justify-center text-[11px] shrink-0">1</span>
                 Isi <strong>Nama Pelanggan</strong> atau <strong>Scan Member</strong> di kolom kanan terlebih dahulu sebelum memilih produk.
               </span>
             </div>
@@ -790,7 +785,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 placeholder="Cari produk..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
               />
             </div>
           </div>
@@ -801,7 +796,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
               onClick={() => setCategoryFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                 categoryFilter === 'all'
-                  ? 'bg-amber-600 text-white shadow-sm'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
                   : 'bg-white border border-border/40 text-muted-foreground hover:bg-muted/60'
               }`}
             >
@@ -813,7 +808,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 onClick={() => setCategoryFilter(cat.id)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   categoryFilter === cat.id
-                    ? 'bg-amber-600 text-white shadow-sm'
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
                     : 'bg-white border border-border/40 text-muted-foreground hover:bg-muted/60'
                 }`}
               >
@@ -831,7 +826,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 className={`group bg-white rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all duration-200 overflow-hidden text-left relative ${
                   product.isSoldOut
                     ? 'opacity-60 border-slate-200 cursor-not-allowed bg-slate-50'
-                    : 'hover:shadow-md hover:border-amber-300 border-border/40'
+                    : 'hover:shadow-md hover:border-orange-300 border-border/40'
                 }`}
               >
                 <div className="relative aspect-square bg-muted/30 overflow-hidden">
@@ -866,7 +861,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   <p className="text-[13px] font-semibold text-foreground line-clamp-1">{product.name}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{product.categoryName}</p>
                   <div className="flex items-center justify-between mt-1">
-                    <p className="text-sm font-bold text-amber-700">{formatRupiah(product.price)}</p>
+                    <p className="text-sm font-bold text-orange-600">{formatRupiah(product.price)}</p>
                     {product.isSoldOut && (
                       <span className="text-[10px] font-bold text-rose-600">Habis</span>
                     )}
@@ -891,7 +886,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   onClick={() => setOrderType(type)}
                   className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                     orderType === type
-                      ? 'bg-amber-600 text-white shadow-sm'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
                       : 'text-muted-foreground hover:bg-muted/60'
                   }`}
                 >
@@ -911,7 +906,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   <button
                     type="button"
                     onClick={() => setShowTableManagerModal(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold hover:bg-amber-100 transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 text-orange-600 text-[10px] font-bold hover:bg-amber-100 transition-colors"
                   >
                     <Coffee className="w-3 h-3" /> Meja
                   </button>
@@ -933,7 +928,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   Nama Pelanggan <span className="text-red-500">*</span>
                 </label>
                 {!customerName.trim() ? (
-                  <span className="text-[10px] font-extrabold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300 animate-pulse">
+                  <span className="text-[10px] font-extrabold text-orange-600 bg-amber-100/80 px-2 py-0.5 rounded-md border border-orange-300 animate-pulse">
                     Langkah 1: Isi Nama / Scan Member
                   </span>
                 ) : (
@@ -950,8 +945,8 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   placeholder="Isi nama pelanggan..."
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  className={`w-full pl-10 pr-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all font-medium ${
-                    !customerName.trim() ? 'bg-amber-50/50 border-amber-300/80' : 'bg-muted/30 border-border/40'
+                  className={`w-full pl-10 pr-3 py-2.5 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all font-medium ${
+                    !customerName.trim() ? 'bg-amber-50/50 border-orange-300/80' : 'bg-muted/30 border-border/40'
                   }`}
                 />
               </div>
@@ -1002,7 +997,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   placeholder="Cari no. HP member (opsional)..."
                   value={customerPhone}
                   onChange={(e) => handlePhoneChange(e.target.value)}
-                  className="w-full pl-9 pr-8 py-2 text-xs bg-muted/20 border border-border/30 rounded-xl focus:outline-none focus:ring-1 focus:ring-amber-500/20 text-muted-foreground"
+                  className="w-full pl-9 pr-8 py-2 text-xs bg-muted/20 border border-border/30 rounded-xl focus:outline-none focus:ring-1 focus:ring-orange-500/20 text-muted-foreground"
                 />
                 {phoneLookupLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-amber-600" />}
               </div>
@@ -1014,7 +1009,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 rows={2}
-                className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all resize-none"
+                className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all resize-none"
               />
             )}
 
@@ -1025,7 +1020,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                   <select
                     value={selectedTable}
                     onChange={(e) => setSelectedTable(e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
+                    className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
                   >
                     <option value="">Pilih Nomor Meja</option>
                     {activeTables.map((t) => (
@@ -1052,7 +1047,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                     max={20}
                     value={posPeopleCount}
                     onChange={(e) => setPosPeopleCount(Math.max(1, parseInt(e.target.value) || 1))}
-                    className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
+                    className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
                   />
                 </div>
               </div>
@@ -1063,7 +1058,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
               placeholder="Catatan (opsional)"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all"
+              className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all"
             />
 
             {/* Tumbler Toggle - Only for Pickup/Dine-in and Registered Member */}
@@ -1132,7 +1127,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                         {item.iceLevel} · {item.sugarLevel}
                         {item.addOns.length > 0 && ` · +${item.addOns.map((a) => a.name).join(', ')}`}
                       </p>
-                      <p className="text-xs font-bold text-amber-700 mt-0.5">{formatRupiah(item.totalPrice)}</p>
+                      <p className="text-xs font-bold text-orange-600 mt-0.5">{formatRupiah(item.totalPrice)}</p>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <button
@@ -1170,7 +1165,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                         onClick={() => setPaymentMethod(method as 'CASH' | 'QRIS')}
                         className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all ${
                           paymentMethod === method
-                            ? 'bg-amber-600 text-white shadow-md scale-[1.02]'
+                            ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md scale-[1.02]'
                             : 'bg-muted/50 text-muted-foreground hover:bg-muted'
                         }`}
                       >
@@ -1211,7 +1206,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                         setPaymentMethod('CASH');
                         setIsQrisConfirmed(false);
                       }}
-                      className="w-full py-2 px-3 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 border border-amber-300 shadow-sm"
+                      className="w-full py-2 px-3 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 border border-orange-300 shadow-sm"
                     >
                       💵 Pelanggan Ganti ke Tunai (Batalkan QRIS)
                     </button>
@@ -1228,7 +1223,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 {/* Total */}
                 <div className="flex justify-between items-center pt-1">
                   <span className="text-sm font-semibold text-foreground">Total Pembayaran</span>
-                  <span className="text-xl font-black text-amber-700">{formatRupiah(totalPayable)}</span>
+                  <span className="text-xl font-black text-orange-600">{formatRupiah(totalPayable)}</span>
                 </div>
 
                 {/* Submit */}
@@ -1286,7 +1281,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-heading font-bold text-lg">{modifierProduct.name}</h3>
-                    <p className="text-sm text-amber-700 font-semibold">{formatRupiah(modifierProduct.price)}</p>
+                    <p className="text-sm text-orange-600 font-semibold">{formatRupiah(modifierProduct.price)}</p>
                   </div>
                   <button onClick={() => setModifierProduct(null)} className="p-1.5 hover:bg-muted rounded-lg">
                     <X className="w-5 h-5" />
@@ -1330,7 +1325,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                             type="button"
                             onClick={() => setActiveStep('SWEETNESS')}
                             className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 ${
-                              activeStep === 'SWEETNESS' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
+                              activeStep === 'SWEETNESS' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-200'
                             }`}
                           >
                             🍯 Manis
@@ -1491,7 +1486,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                           }}
                           className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                             modSugar === level || (level === 'Biasa' && modSugar === 'Normal Sugar') || (level === 'Less' && modSugar === 'Less Sugar')
-                              ? 'bg-amber-600 text-white shadow-sm'
+                              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
                               : 'bg-white border border-border/60 text-foreground hover:bg-muted'
                           }`}
                         >
@@ -1551,11 +1546,11 @@ export default function CashierPOSClient({ products, categories }: Props) {
                             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all ${
                               selected
                                 ? 'border-amber-500 bg-amber-50'
-                                : 'border-border/40 hover:border-amber-300'
+                                : 'border-border/40 hover:border-orange-300'
                             }`}
                           >
                             <span className="text-sm font-medium">{addOn.name}</span>
-                            <span className="text-xs font-semibold text-amber-700">+{formatRupiah(addOn.price)}</span>
+                            <span className="text-xs font-semibold text-orange-600">+{formatRupiah(addOn.price)}</span>
                           </button>
                         );
                       })}
@@ -1614,7 +1609,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
             >
               <div className="p-5 border-b border-border/30 bg-gradient-to-r from-amber-50 to-amber-100/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-600 flex items-center justify-center">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 flex items-center justify-center">
                     <QrCode className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -1697,7 +1692,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                             .finally(() => setQrLoading(false));
                         }}
                           disabled={!qrInput.trim() || qrLoading}
-                          className="flex-1 py-2.5 rounded-xl bg-amber-600 text-white font-semibold text-sm disabled:opacity-50">
+                          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold text-sm disabled:opacity-50">
                           Cari Pelanggan
                         </button>
                       )}
@@ -1715,7 +1710,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
                     <h4 className="font-bold text-lg text-foreground mb-1">Poin Berhasil Ditambahkan!</h4>
                     <p className="text-sm text-muted-foreground">Order dihubungkan ke akun {qrCustomer?.name}</p>
                     <button onClick={() => { setShowQRModal(false); setShowSuccess(true); setTimeout(() => setShowSuccess(false), 3000); }}
-                      className="mt-4 px-6 py-2.5 rounded-xl bg-amber-600 text-white font-semibold text-sm">
+                      className="mt-4 px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold text-sm">
                       Selesai
                     </button>
                   </motion.div>

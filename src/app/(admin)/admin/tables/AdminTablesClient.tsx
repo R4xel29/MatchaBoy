@@ -275,11 +275,11 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
         };
       default:
         return {
-          bg: 'bg-emerald-500/10',
+          bg: 'bg-orange-500/10',
           border: 'border-emerald-600',
-          text: 'text-emerald-800',
+          text: 'text-orange-700',
           label: 'Tersedia',
-          dot: 'bg-emerald-500'
+          dot: 'bg-orange-500'
         };
     }
   };
@@ -321,7 +321,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
       {/* Header & Stats Banner */}
       <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] text-[11px] font-bold tracking-wide">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#F97316]/10 text-[#F97316] text-[11px] font-bold tracking-wide">
             <Layers className="w-3.5 h-3.5" />
             <span>Dine-In Management</span>
           </div>
@@ -340,7 +340,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
             className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm ${
               isEditMode
                 ? 'bg-amber-600 text-white ring-2 ring-amber-400/50'
-                : 'bg-[#2E5A44] text-white hover:bg-[#234533]'
+                : 'bg-[#F97316] text-white hover:bg-[#EA580C]'
             }`}
           >
             <Move className="w-4 h-4" />
@@ -361,11 +361,11 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
         </div>
         <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Total Kapasitas</p>
-          <p className="font-serif text-2xl font-bold text-emerald-800 mt-1">{totalCapacity} Kursi</p>
+          <p className="font-serif text-2xl font-bold text-orange-700 mt-1">{totalCapacity} Kursi</p>
         </div>
         <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
           <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Okupansi Meja</p>
-          <p className="font-serif text-2xl font-bold text-[#2E5A44] mt-1">{occupancyPercent}%</p>
+          <p className="font-serif text-2xl font-bold text-[#F97316] mt-1">{occupancyPercent}%</p>
         </div>
       </div>
 
@@ -413,7 +413,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                         onClick={() => handleUpdateStatus(st)}
                         className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-[#2E5A44] text-white border-[#2E5A44] shadow-sm'
+                            ? 'bg-[#F97316] text-white border-[#F97316] shadow-sm'
                             : 'bg-stone-50 text-stone-700 border-stone-200 hover:border-stone-400'
                         }`}
                       >
@@ -437,14 +437,14 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                 </div>
                 <div className="space-y-0.5 w-full">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">URL QR Code Meja</p>
-                  <p className="text-xs font-mono font-bold text-[#2E5A44] truncate max-w-full">
+                  <p className="text-xs font-mono font-bold text-[#F97316] truncate max-w-full">
                     {getStoreUrl(selectedTable.number)}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleDownloadQR}
-                  className="w-full py-2.5 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  className="w-full py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Download className="w-3.5 h-3.5" /> Unduh QR Meja
                 </button>
@@ -481,7 +481,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
           {/* Form Tambah / Edit Meja */}
           <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4 text-left">
             <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-2">
-              <Plus className="w-4 h-4 text-[#2E5A44]" />
+              <Plus className="w-4 h-4 text-[#F97316]" />
               <span>{isEditForm ? 'Edit Detail Meja' : 'Tambah Meja Baru'}</span>
             </h3>
 
@@ -496,7 +496,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   required
                   value={formNumber}
                   onChange={(e) => setFormNumber(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#2E5A44]"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#F97316]"
                 />
               </div>
 
@@ -511,7 +511,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                     max={20}
                     value={formCapacity}
                     onChange={(e) => setFormCapacity(parseInt(e.target.value) || 2)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#2E5A44]"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#F97316]"
                   />
                 </div>
 
@@ -522,7 +522,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   <select
                     value={formShape}
                     onChange={(e) => setFormShape(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#2E5A44]"
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#F97316]"
                   >
                     <option value="RECTANGLE">Persegi</option>
                     <option value="ROUND">Bulat</option>
@@ -533,7 +533,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  className="flex-1 py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+                  className="flex-1 py-3 rounded-xl bg-[#F97316] hover:bg-[#EA580C] text-white font-bold text-xs shadow-md transition-all cursor-pointer"
                 >
                   {isEditForm ? 'Simpan Perubahan' : 'Tambah Meja'}
                 </button>
@@ -555,8 +555,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
         <div className="lg:col-span-8 space-y-4">
           <div className="flex items-center justify-between px-2">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-              <span className="text-xs font-bold uppercase tracking-wider text-[#2E5A44]">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-ping" />
+              <span className="text-xs font-bold uppercase tracking-wider text-[#F97316]">
                 Arum Seduh Cafe Blueprint Canvas
               </span>
             </div>
@@ -574,7 +574,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
             ref={canvasRef}
             className="relative w-full aspect-[4/3] rounded-3xl bg-[#FAF7F2] border-2 border-stone-300 shadow-xl overflow-hidden min-h-[460px] select-none"
             style={{
-              backgroundImage: 'radial-gradient(#2E5A44 1px, transparent 1px)',
+              backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
               backgroundSize: '24px 24px'
             }}
           >
@@ -605,7 +605,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                       : 'w-28 h-20 rounded-2xl'
                   } flex flex-col items-center justify-center border-2 shadow-md ${
                     isSelected 
-                      ? 'ring-4 ring-[#2E5A44] shadow-xl scale-110 z-30 bg-[#2E5A44] text-white border-[#2E5A44]' 
+                      ? 'ring-4 ring-[#F97316] shadow-xl scale-110 z-30 bg-[#F97316] text-white border-[#F97316]' 
                       : `${statusStyle.bg} ${statusStyle.border} ${statusStyle.text} bg-white hover:scale-105 z-10`
                   }`}
                 >

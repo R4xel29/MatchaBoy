@@ -1000,7 +1000,7 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Pop-up Pemilihan Nomor Kursi */}
+      {/* Pop-up Pemilihan Nomor Kursi (Top-Down Visual Table Layout) */}
       <AnimatePresence>
         {showSeatModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1016,40 +1016,119 @@ export default function SpmbClient({
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center"
+              className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center"
             >
-              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
-                <Armchair className="w-6 h-6" />
+              <div className="flex items-center justify-between w-full pb-3 border-b border-stone-100">
+                <div className="text-left">
+                  <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-1.5">
+                    <UtensilsCrossed className="w-4 h-4 text-orange-600" />
+                    <span>Pilih Tempat Duduk Anda</span>
+                  </h3>
+                  <p className="text-[11px] text-stone-500">Ketuk kursi fisik yang Anda duduki di Meja {tableNumber}</p>
+                </div>
+                <button
+                  onClick={() => setShowSeatModal(false)}
+                  className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50 cursor-pointer"
+                >
+                  <X className="w-4 h-4 text-stone-500" />
+                </button>
               </div>
 
-              <h3 className="font-serif font-bold text-lg text-stone-900">
-                Meja {tableNumber}
-              </h3>
-              <p className="text-xs text-stone-500 leading-relaxed mt-1 mb-5">
-                Di kursi mana Anda duduk saat ini? Pilih nomor kursi Anda:
-              </p>
+              {/* Top-Down Single Table Visual Canvas */}
+              <div className="my-5 relative w-full aspect-square max-w-[280px] bg-[#FAF9F6] rounded-3xl border-2 border-stone-200 p-3 flex items-center justify-center shadow-inner select-none">
+                
+                {/* Background Grid Accent */}
+                <div 
+                  className="absolute inset-0 opacity-15 pointer-events-none rounded-3xl"
+                  style={{
+                    backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
+                    backgroundSize: '14px 14px'
+                  }}
+                />
 
-              <div className="grid grid-cols-2 gap-2.5 w-full mb-5">
+                {/* Central Dining Table Graphic */}
+                <div className="w-32 h-32 rounded-2xl bg-gradient-to-br from-amber-50 to-orange-100 border-2 border-amber-300 shadow-sm flex flex-col items-center justify-center p-2 z-10">
+                  <span className="font-serif font-black text-sm text-stone-900">MEJA {tableNumber}</span>
+                  <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
+                    {currentTableCapacity} Kursi
+                  </span>
+                  <span className="text-[8px] text-stone-400 mt-1 font-medium">Arum Seduh</span>
+                </div>
+
+                {/* Surrounding Chairs Positioned Top-Down */}
                 {Array.from({ length: currentTableCapacity }).map((_, idx) => {
                   const sLabel = (idx + 1).toString();
                   const isSelected = seatNumber === sLabel;
+                  
+                  // Compute positions around table based on capacity
+                  let posStyle: React.CSSProperties = {};
+                  let positionName = `Kursi ${sLabel}`;
+                  
+                  if (currentTableCapacity <= 2) {
+                    if (idx === 0) {
+                      posStyle = { top: '8px', left: '50%', transform: 'translateX(-50%)' };
+                      positionName = 'Kursi Depan (1)';
+                    } else {
+                      posStyle = { bottom: '8px', left: '50%', transform: 'translateX(-50%)' };
+                      positionName = 'Kursi Belakang (2)';
+                    }
+                  } else if (currentTableCapacity === 4) {
+                    if (idx === 0) {
+                      posStyle = { top: '8px', left: '50%', transform: 'translateX(-50%)' };
+                      positionName = 'Kursi Depan (1)';
+                    } else if (idx === 1) {
+                      posStyle = { right: '8px', top: '50%', transform: 'translateY(-50%)' };
+                      positionName = 'Kursi Kanan (2)';
+                    } else if (idx === 2) {
+                      posStyle = { bottom: '8px', left: '50%', transform: 'translateX(-50%)' };
+                      positionName = 'Kursi Belakang (3)';
+                    } else {
+                      posStyle = { left: '8px', top: '50%', transform: 'translateY(-50%)' };
+                      positionName = 'Kursi Kiri (4)';
+                    }
+                  } else {
+                    // For 6+ chairs: distribute circularly
+                    const angle = (idx / currentTableCapacity) * 2 * Math.PI - Math.PI / 2;
+                    const radius = 105; // px from center
+                    posStyle = {
+                      top: `calc(50% + ${Math.sin(angle) * radius}px)`,
+                      left: `calc(50% + ${Math.cos(angle) * radius}px)`,
+                      transform: 'translate(-50%, -50%)'
+                    };
+                    positionName = `Kursi ${sLabel}`;
+                  }
 
                   return (
                     <button
                       key={sLabel}
                       type="button"
                       onClick={() => setSeatNumber(sLabel)}
-                      className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                      style={posStyle}
+                      title={positionName}
+                      className={`absolute p-2 rounded-2xl border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-20 ${
                         isSelected
-                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20 ring-2 ring-orange-400'
-                          : 'bg-stone-50 text-stone-800 border-stone-200 hover:border-stone-400'
+                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/30 scale-110 shadow-lg shadow-orange-500/40'
+                          : 'bg-white text-stone-700 border-stone-300 hover:border-orange-400 hover:scale-105 shadow-sm'
                       }`}
                     >
-                      <Armchair className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-stone-400'}`} />
-                      <span className="font-serif font-bold text-xs">Kursi {sLabel}</span>
+                      <Armchair className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-orange-600'}`} />
+                      <span className="font-serif font-black text-[10px] mt-0.5 leading-none">{sLabel}</span>
                     </button>
                   );
                 })}
+              </div>
+
+              {/* Selection Summary */}
+              <div className="w-full p-3 bg-orange-50/70 rounded-2xl border border-orange-200 mb-4 flex items-center justify-between text-xs">
+                <div className="text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-orange-800">Kursi Dipilih</p>
+                  <p className="font-serif font-bold text-stone-900 mt-0.5">
+                    Meja {tableNumber} • Kursi Nomor {seatNumber}
+                  </p>
+                </div>
+                <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-sm">
+                  <Check className="w-4 h-4" />
+                </div>
               </div>
 
               <button
@@ -1057,7 +1136,7 @@ export default function SpmbClient({
                 onClick={() => setShowSeatModal(false)}
                 className="w-full py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer"
               >
-                Konfirmasi Kursi {seatNumber}
+                Konfirmasi Kursi Nomor {seatNumber}
               </button>
             </motion.div>
           </div>
