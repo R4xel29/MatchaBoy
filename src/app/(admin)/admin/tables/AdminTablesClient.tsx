@@ -6,7 +6,7 @@ import { useToast } from '@/components/ui/Toast';
 import { 
   Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, 
   Users, Armchair, Sparkles, X, Circle, Square, RotateCw, Settings, UtensilsCrossed,
-  ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Sliders, Compass
+  ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Sliders, Compass, LayoutGrid
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -24,36 +24,95 @@ interface DiningTable {
   updatedAt: Date;
 }
 
-interface CustomChair {
+export interface CustomChair {
   id: string;
   label: string;
-  angle: number; // in degrees (0 - 360)
+  x: number; // relative pixel offset from table center
+  y: number; // relative pixel offset from table center
 }
 
-// Compute default chair angles based on capacity & shape
-const getDefaultChairs = (capacity: number, shape: string): CustomChair[] => {
+// Compute default chair coordinates without clipping the table
+export const getDefaultChairs = (capacity: number, shape: string): CustomChair[] => {
   const cap = Math.max(1, capacity);
-  return Array.from({ length: cap }).map((_, idx) => {
-    let angle = (idx / cap) * 360 - 90;
-    if (shape === 'RECTANGLE') {
-      if (cap === 2) {
-        angle = idx === 0 ? -90 : 90; // Top and Bottom
-      } else if (cap === 4) {
-        // Top, Right, Bottom, Left
-        const angles = [-90, 0, 90, 180];
-        angle = angles[idx % 4];
-      } else if (cap === 6) {
-        // 2 Top, 2 Bottom, 1 Left, 1 Right
-        const angles = [-120, -60, 0, 60, 120, 180];
-        angle = angles[idx % 6];
+  if (shape === 'ROUND') {
+    const radius = 66; // outside 88px circle
+    return Array.from({ length: cap }).map((_, idx) => {
+      const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
+      return {
+        id: `chair-${idx + 1}`,
+        label: (idx + 1).toString(),
+        x: Math.round(Math.cos(angle) * radius),
+        y: Math.round(Math.sin(angle) * radius)
+      };
+    });
+  } else {
+    // RECTANGLE TABLE (table is ~120px wide, ~80px tall)
+    // Chairs placed cleanly outside: Top (y=-56), Bottom (y=56), Left (x=-78), Right (x=78)
+    if (cap === 2) {
+      return [
+        { id: 'chair-1', label: '1', x: 0, y: -56 },
+        { id: 'chair-2', label: '2', x: 0, y: 56 }
+      ];
+    } else if (cap === 4) {
+      return [
+        { id: 'chair-1', label: '1', x: 0, y: -56 },
+        { id: 'chair-2', label: '2', x: 78, y: 0 },
+        { id: 'chair-3', label: '3', x: 0, y: 56 },
+        { id: 'chair-4', label: '4', x: -78, y: 0 }
+      ];
+    } else if (cap === 6) {
+      return [
+        { id: 'chair-1', label: '1', x: -32, y: -56 },
+        { id: 'chair-2', label: '2', x: 32, y: -56 },
+        { id: 'chair-3', label: '3', x: 78, y: 0 },
+        { id: 'chair-4', label: '4', x: 32, y: 56 },
+        { id: 'chair-5', label: '5', x: -32, y: 56 },
+        { id: 'chair-6', label: '6', x: -78, y: 0 }
+      ];
+    } else if (cap === 8) {
+      return [
+        { id: 'chair-1', label: '1', x: -40, y: -56 },
+        { id: 'chair-2', label: '2', x: 0, y: -56 },
+        { id: 'chair-3', label: '3', x: 40, y: -56 },
+        { id: 'chair-4', label: '4', x: 78, y: 0 },
+        { id: 'chair-5', label: '5', x: 40, y: 56 },
+        { id: 'chair-6', label: '6', x: 0, y: 56 },
+        { id: 'chair-7', label: '7', x: -40, y: 56 },
+        { id: 'chair-8', label: '8', x: -78, y: 0 }
+      ];
+    } else {
+      // General layout
+      const topCount = Math.max(1, Math.ceil(cap * 0.35));
+      const sideCount = Math.max(1, Math.floor((cap - topCount * 2) / 2));
+      const list: CustomChair[] = [];
+      let cIdx = 1;
+
+      // Top row
+      for (let i = 0; i < topCount && cIdx <= cap; i++) {
+        const xOffset = topCount === 1 ? 0 : -45 + (90 / (topCount - 1)) * i;
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: -56 });
+        cIdx++;
       }
+      // Right col
+      for (let i = 0; i < sideCount && cIdx <= cap; i++) {
+        const yOffset = sideCount === 1 ? 0 : -20 + (40 / (sideCount - 1)) * i;
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: 78, y: Math.round(yOffset) });
+        cIdx++;
+      }
+      // Bottom row
+      for (let i = 0; i < topCount && cIdx <= cap; i++) {
+        const xOffset = topCount === 1 ? 0 : 45 - (90 / (topCount - 1)) * i;
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: 56 });
+        cIdx++;
+      }
+      // Left col
+      while (cIdx <= cap) {
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: -78, y: 0 });
+        cIdx++;
+      }
+      return list.slice(0, cap);
     }
-    return {
-      id: `chair-${idx + 1}`,
-      label: (idx + 1).toString(),
-      angle: (angle + 360) % 360
-    };
-  });
+  }
 };
 
 export default function AdminTablesClient({ initialTables }: { initialTables: DiningTable[] }) {
@@ -75,19 +134,19 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   const [selectedChairIdx, setSelectedChairIdx] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Canvas Dragging ref for floor plan
+  // Floor Plan Canvas Dragging Ref
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ tableId: string; startX: number; startY: number } | null>(null);
 
-  // Chair Dragging in Studio
+  // Chair 2D Dragging in Studio
   const studioCanvasRef = useRef<HTMLDivElement>(null);
-  const chairDragInfo = useRef<{ chairIdx: number } | null>(null);
+  const chairDragInfo = useRef<{ chairIdx: number; startMouseX: number; startMouseY: number; startChairX: number; startChairY: number } | null>(null);
 
   const selectedTable = useMemo(() => {
     return tables.find(t => t.id === selectedTableId) || null;
   }, [tables, selectedTableId]);
 
-  // Load custom chair configurations from localStorage
+  // Load custom chair configurations
   const getTableChairs = useCallback((table: DiningTable): CustomChair[] => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(`arum_chairs_table_${table.id}`);
@@ -127,39 +186,64 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
     setCustomChairs(getDefaultChairs(editCapacity, newShape));
   };
 
-  // Preset placements
-  const applyPresetPlacement = (presetType: 'OPPOSITE' | 'FOUR_SIDES' | 'RADIAL' | 'LEFT_RIGHT') => {
-    if (presetType === 'OPPOSITE') {
-      // Half Top, Half Bottom
+  // Preset placements: Kotak 4 Sisi, Atas-Bawah, Kiri-Kanan, Melingkar Orbital
+  const applyPresetPlacement = (presetType: 'FOUR_SIDES' | 'OPPOSITE' | 'LEFT_RIGHT' | 'ORBITAL') => {
+    if (presetType === 'FOUR_SIDES') {
+      setCustomChairs(getDefaultChairs(editCapacity, 'RECTANGLE'));
+    } else if (presetType === 'OPPOSITE') {
       const half = Math.ceil(editCapacity / 2);
-      setCustomChairs(prev => prev.map((c, i) => ({
-        ...c,
-        angle: i < half ? 270 : 90 // 270 is Top, 90 is Bottom
-      })));
-    } else if (presetType === 'FOUR_SIDES') {
-      const sides = [270, 0, 90, 180]; // Top, Right, Bottom, Left
-      setCustomChairs(prev => prev.map((c, i) => ({
-        ...c,
-        angle: sides[i % 4]
-      })));
+      const list: CustomChair[] = [];
+      for (let i = 0; i < editCapacity; i++) {
+        const isTop = i < half;
+        const colIdx = isTop ? i : i - half;
+        const totalInRow = isTop ? half : (editCapacity - half);
+        const xOffset = totalInRow === 1 ? 0 : -45 + (90 / Math.max(1, totalInRow - 1)) * colIdx;
+        list.push({
+          id: `chair-${i + 1}`,
+          label: (i + 1).toString(),
+          x: Math.round(xOffset),
+          y: isTop ? -56 : 56
+        });
+      }
+      setCustomChairs(list);
     } else if (presetType === 'LEFT_RIGHT') {
       const half = Math.ceil(editCapacity / 2);
-      setCustomChairs(prev => prev.map((c, i) => ({
-        ...c,
-        angle: i < half ? 180 : 0 // 180 is Left, 0 is Right
-      })));
+      const list: CustomChair[] = [];
+      for (let i = 0; i < editCapacity; i++) {
+        const isLeft = i < half;
+        const rowIdx = isLeft ? i : i - half;
+        const totalInCol = isLeft ? half : (editCapacity - half);
+        const yOffset = totalInCol === 1 ? 0 : -25 + (50 / Math.max(1, totalInCol - 1)) * rowIdx;
+        list.push({
+          id: `chair-${i + 1}`,
+          label: (i + 1).toString(),
+          x: isLeft ? -78 : 78,
+          y: Math.round(yOffset)
+        });
+      }
+      setCustomChairs(list);
     } else {
-      // Radial 360
+      // Orbital 360°
       setCustomChairs(getDefaultChairs(editCapacity, 'ROUND'));
     }
     showToast('Tata letak kursi diterapkan', 'info');
   };
 
-  // Chair drag in Studio Canvas
+  // Free 2D Chair drag in Studio Canvas
   const handleStartChairDrag = (e: React.MouseEvent | React.TouchEvent, idx: number) => {
     e.stopPropagation();
     setSelectedChairIdx(idx);
-    chairDragInfo.current = { chairIdx: idx };
+
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+
+    chairDragInfo.current = {
+      chairIdx: idx,
+      startMouseX: clientX,
+      startMouseY: clientY,
+      startChairX: customChairs[idx].x,
+      startChairY: customChairs[idx].y
+    };
 
     window.addEventListener('mousemove', handleChairDragging);
     window.addEventListener('mouseup', handleEndChairDrag);
@@ -168,22 +252,22 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   };
 
   const handleChairDragging = (e: MouseEvent | TouchEvent) => {
-    if (!chairDragInfo.current || !studioCanvasRef.current) return;
-    const rect = studioCanvasRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-
+    if (!chairDragInfo.current) return;
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-    const deltaX = clientX - centerX;
-    const deltaY = clientY - centerY;
+    const deltaX = clientX - chairDragInfo.current.startMouseX;
+    const deltaY = clientY - chairDragInfo.current.startMouseY;
 
-    let rad = Math.atan2(deltaY, deltaX);
-    let deg = (rad * (180 / Math.PI) + 360) % 360;
+    const newX = Math.round(chairDragInfo.current.startChairX + deltaX);
+    const newY = Math.round(chairDragInfo.current.startChairY + deltaY);
+
+    // Clamp within canvas boundary
+    const clampedX = Math.max(-125, Math.min(125, newX));
+    const clampedY = Math.max(-125, Math.min(125, newY));
 
     const idx = chairDragInfo.current.chairIdx;
-    setCustomChairs(prev => prev.map((c, i) => i === idx ? { ...c, angle: Math.round(deg) } : c));
+    setCustomChairs(prev => prev.map((c, i) => i === idx ? { ...c, x: clampedX, y: clampedY } : c));
   };
 
   const handleEndChairDrag = () => {
@@ -343,8 +427,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-    const xPercent = Math.max(8, Math.min(92, ((clientX - rect.left) / rect.width) * 100));
-    const yPercent = Math.max(8, Math.min(92, ((clientY - rect.top) / rect.height) * 100));
+    const xPercent = Math.max(10, Math.min(90, ((clientX - rect.left) / rect.width) * 100));
+    const yPercent = Math.max(10, Math.min(90, ((clientY - rect.top) / rect.height) * 100));
 
     setTables(prev => prev.map(t => {
       if (t.id === dragInfo.current?.tableId) {
@@ -435,7 +519,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
               Denah Ruangan & Studio Kursi
             </h1>
             <p className="text-xs text-stone-500">
-              Kursi fisik langsung terlihat di sekeliling meja pada denah utama. Klik meja mana pun untuk menggeser posisi kursi!
+              Kursi fisik terletak rapi di sekeliling meja tanpa tertutup. Klik meja mana pun untuk menggeser posisi kursi secara bebas!
             </p>
           </div>
 
@@ -518,13 +602,13 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
         </div>
       </div>
 
-      {/* Blueprint Floor Plan Canvas with Visible Surrounding Chairs */}
+      {/* Blueprint Floor Plan Canvas with Visible Surrounding Chairs (Unclipped & Beautifully Placed) */}
       <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4 text-left">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
             <span className="text-xs font-bold uppercase tracking-wider text-orange-700">
-              Denah Ruangan Kafe (Posisi Meja & Kursi Fisik Terlihat)
+              Denah Ruangan Kafe (Posisi Meja & Kursi Fisik Terlihat Bersih)
             </span>
           </div>
           <div className="flex items-center gap-4 text-xs font-semibold text-stone-500">
@@ -538,14 +622,14 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
         {/* The Blueprint Canvas */}
         <div
           ref={canvasRef}
-          className="relative w-full aspect-[16/9] min-h-[500px] rounded-3xl bg-[#FAF7F2] border-2 border-stone-300 shadow-inner overflow-hidden select-none cursor-default"
+          className="relative w-full aspect-[16/9] min-h-[520px] rounded-3xl bg-[#FAF7F2] border-2 border-stone-300 shadow-inner overflow-hidden select-none cursor-default"
           style={{
             backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
             backgroundSize: '24px 24px'
           }}
         >
           <div className="absolute top-4 left-6 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none">
-            [Denah Skala 1:25 • Klik meja untuk membuka Studio Pengaturan Kursi]
+            [Denah Skala 1:25 • Klik meja untuk membuka Studio Pengaturan Kursi Bebas]
           </div>
 
           {tables.map((table) => {
@@ -572,7 +656,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   className={`relative flex flex-col items-center justify-center border-2 transition-all shadow-md ${
                     isRound 
                       ? 'w-24 h-24 rounded-full' 
-                      : 'w-32 h-24 rounded-2xl'
+                      : 'w-32 h-20 rounded-2xl'
                   } ${
                     isSelected 
                       ? 'ring-4 ring-orange-500/40 shadow-xl scale-105 z-30 bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white' 
@@ -585,7 +669,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                     {isRound ? 'Bulat' : 'Kotak'}
                   </span>
 
-                  <span className="font-serif font-bold text-sm sm:text-base leading-tight mt-0.5">
+                  <span className="font-serif font-bold text-sm leading-tight mt-0.5">
                     Meja {table.number}
                   </span>
 
@@ -603,23 +687,18 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   )}
                 </div>
 
-                {/* PHYSICAL CHAIRS RENDERED AROUND THE TABLE PERIMETER */}
+                {/* PHYSICAL CHAIRS POSITIONED CLEANLY AROUND THE PERIMETER */}
                 {tableChairs.map((chair) => {
-                  const rad = (chair.angle * Math.PI) / 180;
-                  const radius = isRound ? 56 : 64; // Distance from center
-                  const chairX = Math.cos(rad) * radius;
-                  const chairY = Math.sin(rad) * radius;
-
                   return (
                     <div
                       key={chair.id}
                       style={{
-                        transform: `translate(${chairX}px, ${chairY}px)`,
+                        transform: `translate(${chair.x}px, ${chair.y}px)`,
                       }}
                       title={`Meja ${table.number} - Kursi ${chair.label}`}
-                      className="absolute w-6 h-6 rounded-lg bg-white border-2 border-stone-300 text-stone-700 shadow-sm flex items-center justify-center text-[9px] font-black pointer-events-none z-10"
+                      className="absolute w-6 h-6 rounded-lg bg-white border-2 border-orange-300 text-orange-700 shadow-sm flex items-center justify-center text-[9px] font-black pointer-events-none z-10"
                     >
-                      <Armchair className="w-3 h-3 text-orange-600" />
+                      <Armchair className="w-3.5 h-3.5 text-orange-600" />
                     </div>
                   );
                 })}
@@ -635,7 +714,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
         </div>
       </div>
 
-      {/* DEDICATED TABLE & CHAIR STUDIO MODAL (INTERACTIVE DRAG CHAIRS) */}
+      {/* DEDICATED TABLE & CHAIR STUDIO MODAL (FREE 2D DRAG & RECTANGULAR/ORBITAL MODES) */}
       <AnimatePresence>
         {isStudioOpen && selectedTable && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -651,7 +730,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl w-full max-w-3xl p-6 sm:p-8 shadow-2xl relative z-10 border border-stone-200 max-h-[92vh] flex flex-col text-left space-y-5"
+              className="bg-white rounded-3xl w-full max-w-4xl p-6 sm:p-8 shadow-2xl relative z-10 border border-stone-200 max-h-[92vh] flex flex-col text-left space-y-5"
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
@@ -661,11 +740,11 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                       Studio Meja {selectedTable.number}
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-xs font-bold">
-                      {editShape === 'ROUND' ? 'Meja Bulat' : 'Meja Kotak'}
+                      {editShape === 'ROUND' ? 'Meja Bulat (Orbital)' : 'Meja Kotak (Persegi)'}
                     </span>
                   </div>
                   <p className="text-xs text-stone-500">
-                    Geser langsung kursi di kanvas untuk mengatur posisinya, atau gunakan tombol preset penataan kursi
+                    Tarik dan tempatkan kursi secara bebas 2D di sekeliling meja, atau gunakan preset tata letak kotak & orbital
                   </p>
                 </div>
 
@@ -677,7 +756,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                 </button>
               </div>
 
-              {/* Studio Body: Left Settings & Right Interactive Visual Drag Canvas */}
+              {/* Studio Body: Left Settings & Right Interactive 2D Visual Drag Canvas */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start overflow-y-auto pr-1">
                 
                 {/* Left Column: Shape, Capacity, Presets */}
@@ -756,40 +835,40 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                     </div>
                   </div>
 
-                  {/* Preset Penataan Kursi Otomatis */}
-                  <div className="space-y-1.5 p-3 rounded-2xl bg-orange-50/60 border border-orange-200">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-orange-900 flex items-center gap-1">
-                      <Compass className="w-3.5 h-3.5 text-orange-600" />
-                      <span>Preset Penataan Kursi Cepat</span>
+                  {/* Preset Penataan Kursi Otomatis (Kotak vs Orbital) */}
+                  <div className="space-y-1.5 p-3.5 rounded-2xl bg-orange-50/70 border border-orange-200">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-orange-950 flex items-center gap-1">
+                      <LayoutGrid className="w-3.5 h-3.5 text-orange-600" />
+                      <span>Preset Penataan Kursi (1-Klik)</span>
                     </label>
                     <div className="grid grid-cols-2 gap-1.5 pt-1">
                       <button
                         type="button"
+                        onClick={() => applyPresetPlacement('FOUR_SIDES')}
+                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
+                      >
+                        4 Sisi Kotak
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => applyPresetPlacement('OPPOSITE')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/50 cursor-pointer text-center"
+                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
                       >
                         Atas & Bawah
                       </button>
                       <button
                         type="button"
-                        onClick={() => applyPresetPlacement('FOUR_SIDES')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/50 cursor-pointer text-center"
-                      >
-                        4 Sisi Rata
-                      </button>
-                      <button
-                        type="button"
                         onClick={() => applyPresetPlacement('LEFT_RIGHT')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/50 cursor-pointer text-center"
+                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
                       >
                         Kiri & Kanan
                       </button>
                       <button
                         type="button"
-                        onClick={() => applyPresetPlacement('RADIAL')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/50 cursor-pointer text-center"
+                        onClick={() => applyPresetPlacement('ORBITAL')}
+                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
                       >
-                        Melingkar 360°
+                        Orbital (Melingkar)
                       </button>
                     </div>
                   </div>
@@ -842,24 +921,28 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   </div>
                 </div>
 
-                {/* Right Column: High-Res Interactive Drag & Drop Chair Studio */}
+                {/* Right Column: High-Res Interactive 2D Free-Form Chair Studio */}
                 <div className="md:col-span-7 bg-[#FAF7F2] rounded-3xl border-2 border-stone-200 p-6 flex flex-col items-center justify-center space-y-4">
                   <div className="text-center">
                     <p className="text-[11px] font-bold text-orange-800 uppercase tracking-wider">
-                      Kanvas Interaktif Studio Kursi
+                      Kanvas Interaktif Studio Kursi Bebas (2D Free-Form)
                     </p>
                     <p className="text-[10px] text-stone-500">
-                      Tarik atau geser kursi (lingkaran oranye) secara bebas di sekeliling meja
+                      Tarik kursi ke posisi mana pun di kanvas. Kursi tidak akan tertutup meja.
                     </p>
                   </div>
 
                   {/* Interactive Drag Canvas */}
                   <div
                     ref={studioCanvasRef}
-                    className="relative w-72 h-72 bg-white rounded-3xl border-2 border-stone-300 shadow-inner flex items-center justify-center select-none"
+                    className="relative w-80 h-80 bg-white rounded-3xl border-2 border-stone-300 shadow-inner flex items-center justify-center select-none"
                   >
-                    {/* Visual Placement Guide Orbit */}
-                    <div className="absolute w-52 h-52 rounded-full border border-dashed border-orange-300 pointer-events-none" />
+                    {/* Visual Placement Guide: Box Guide if Rectangle, Circle Guide if Round */}
+                    {editShape === 'ROUND' ? (
+                      <div className="absolute w-56 h-56 rounded-full border-2 border-dashed border-orange-300 pointer-events-none" />
+                    ) : (
+                      <div className="absolute w-60 h-48 rounded-2xl border-2 border-dashed border-orange-300 pointer-events-none" />
+                    )}
 
                     {/* Central Table Graphic */}
                     {editShape === 'ROUND' ? (
@@ -870,7 +953,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                         </span>
                       </div>
                     ) : (
-                      <div className="w-32 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
+                      <div className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
                         <span className="font-serif font-black text-xs text-stone-900">MEJA {editNumber}</span>
                         <span className="text-[8px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-0.5">
                           {editCapacity} Kursi
@@ -878,12 +961,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                       </div>
                     )}
 
-                    {/* INTERACTIVE DRAGGABLE CHAIRS */}
+                    {/* INTERACTIVE 2D DRAGGABLE CHAIRS */}
                     {customChairs.map((chair, idx) => {
-                      const rad = (chair.angle * Math.PI) / 180;
-                      const radius = editShape === 'ROUND' ? 105 : 105;
-                      const chairX = Math.cos(rad) * radius;
-                      const chairY = Math.sin(rad) * radius;
                       const isSelected = selectedChairIdx === idx;
 
                       return (
@@ -892,7 +971,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                           onMouseDown={(e) => handleStartChairDrag(e, idx)}
                           onTouchStart={(e) => handleStartChairDrag(e, idx)}
                           style={{
-                            transform: `translate(${chairX}px, ${chairY}px)`,
+                            transform: `translate(${chair.x}px, ${chair.y}px)`,
                             touchAction: 'none'
                           }}
                           title={`Klik & Tarik Kursi ${chair.label}`}
@@ -909,8 +988,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                     })}
                   </div>
 
-                  <p className="text-[11px] font-medium text-stone-600 text-center bg-stone-100 px-3 py-1.5 rounded-xl border border-stone-200">
-                    Posisi kursi yang Anda atur akan otomatis tersinkronisasi ke tampilan denah kasir & SPMB pelanggan.
+                  <p className="text-[11px] font-medium text-stone-600 text-center bg-stone-100 px-3.5 py-1.5 rounded-xl border border-stone-200">
+                    Posisi kursi yang Anda geser akan langsung tampil persis sama di denah kasir & SPMB pelanggan.
                   </p>
                 </div>
               </div>

@@ -989,23 +989,55 @@ export default function SpmbClient({
                         )}
                       </button>
 
-                      {/* Surrounding Visible Mini Chairs */}
+                      {/* Surrounding Visible Mini Chairs (Unclipped & Properly Spaced) */}
                       {Array.from({ length: cap }).map((_, idx) => {
-                        const angle = isRound
-                          ? (idx / cap) * 2 * Math.PI - Math.PI / 2
-                          : cap === 2
-                          ? idx === 0 ? -Math.PI / 2 : Math.PI / 2
-                          : [-Math.PI / 2, 0, Math.PI / 2, Math.PI][idx % 4];
+                        let cX = 0;
+                        let cY = 0;
 
-                        const radius = isRound ? 46 : 52;
-                        const cX = Math.cos(angle) * radius;
-                        const cY = Math.sin(angle) * radius;
+                        if (isRound) {
+                          const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
+                          const radius = 52;
+                          cX = Math.cos(angle) * radius;
+                          cY = Math.sin(angle) * radius;
+                        } else {
+                          // Clean rectangular perimeter spacing
+                          if (cap === 2) {
+                            cX = 0;
+                            cY = idx === 0 ? -46 : 46;
+                          } else if (cap === 4) {
+                            const positions = [
+                              { x: 0, y: -46 },
+                              { x: 58, y: 0 },
+                              { x: 0, y: 46 },
+                              { x: -58, y: 0 },
+                            ];
+                            const p = positions[idx % 4];
+                            cX = p.x;
+                            cY = p.y;
+                          } else if (cap === 6) {
+                            const positions = [
+                              { x: -25, y: -46 },
+                              { x: 25, y: -46 },
+                              { x: 58, y: 0 },
+                              { x: 25, y: 46 },
+                              { x: -25, y: 46 },
+                              { x: -58, y: 0 },
+                            ];
+                            const p = positions[idx % 6];
+                            cX = p.x;
+                            cY = p.y;
+                          } else {
+                            const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
+                            cX = Math.cos(angle) * 58;
+                            cY = Math.sin(angle) * 48;
+                          }
+                        }
 
                         return (
                           <div
                             key={idx}
                             style={{ transform: `translate(${cX}px, ${cY}px)` }}
-                            className="absolute w-4 h-4 rounded-full bg-white border border-stone-300 shadow-xs flex items-center justify-center pointer-events-none z-10"
+                            className="absolute w-4 h-4 rounded-full bg-white border border-orange-300 shadow-xs flex items-center justify-center pointer-events-none z-10"
                           >
                             <Armchair className="w-2.5 h-2.5 text-orange-600" />
                           </div>
