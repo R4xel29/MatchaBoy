@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingBag, Trash2, Plus, Minus, User, MapPin, 
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
-  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Armchair, Sparkles
+  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Armchair, Sparkles,
+  Flame, Clock, AlertTriangle
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
@@ -403,12 +404,12 @@ export default function SpmbClient({
                   ${activeOrderStatus.status === 'COMPLETED' ? 'bg-stone-100 text-stone-700' : ''}
                   ${activeOrderStatus.status === 'CANCELLED' ? 'bg-rose-50 text-rose-700 border border-rose-200' : ''}
                 `}>
-                  {activeOrderStatus.status === 'PENDING' && '⏳ Pesanan Diterima'}
-                  {activeOrderStatus.status === 'PENDING_PAYMENT' && '💳 Menunggu Pembayaran'}
-                  {activeOrderStatus.status === 'PREPARING' && '🍳 Sedang Disiapkan'}
-                  {activeOrderStatus.status === 'READY' && '✨ Pesanan Siap!'}
-                  {activeOrderStatus.status === 'COMPLETED' && '✅ Selesai'}
-                  {activeOrderStatus.status === 'CANCELLED' && '❌ Dibatalkan'}
+                  {activeOrderStatus.status === 'PENDING' && 'Pesanan Diterima'}
+                  {activeOrderStatus.status === 'PENDING_PAYMENT' && 'Menunggu Pembayaran'}
+                  {activeOrderStatus.status === 'PREPARING' && 'Sedang Disiapkan'}
+                  {activeOrderStatus.status === 'READY' && 'Pesanan Siap'}
+                  {activeOrderStatus.status === 'COMPLETED' && 'Selesai'}
+                  {activeOrderStatus.status === 'CANCELLED' && 'Dibatalkan'}
                 </span>
               </div>
             </div>
@@ -447,7 +448,7 @@ export default function SpmbClient({
             {isOrderOver20Min && (
               <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="text-xl">⏱️</span>
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0"><Clock className="w-4 h-4" /></div>
                   <div>
                     <p className="text-xs font-bold text-amber-950">Pesanan belum selesai lebih dari 20 menit?</p>
                     <p className="text-[11px] text-amber-800 font-medium">Silakan hubungi kasir atau barista kami untuk konfirmasi langsung.</p>
@@ -530,7 +531,7 @@ export default function SpmbClient({
                 {/* Badges */}
                 {promo && !isSoldOut ? (
                   <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-600 text-white shadow-sm">
-                    🔥 Promo
+                    Promo
                   </span>
                 ) : product.badge && (
                   <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm ${
@@ -557,7 +558,7 @@ export default function SpmbClient({
                       }`}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-4xl">🍵</div>
+                    <div className="w-full h-full flex items-center justify-center"><UtensilsCrossed className="w-8 h-8 text-stone-300" /></div>
                   )}
                 </div>
 
@@ -868,7 +869,7 @@ export default function SpmbClient({
 
                   {errorMsg && (
                     <div className="p-3 bg-rose-50 text-rose-700 rounded-2xl text-xs font-medium text-left border border-rose-200">
-                      ⚠️ {errorMsg}
+                       {errorMsg}
                     </div>
                   )}
 

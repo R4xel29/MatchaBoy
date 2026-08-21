@@ -761,7 +761,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   <Leaf className="w-4 h-4 text-emerald-300" />
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-emerald-300">Eco Order 🌍</p>
+                  <p className="text-xs font-bold text-emerald-300">Eco Order</p>
                   <p className="text-[10px] text-emerald-200/70">Menggunakan tumbler/wadah sendiri</p>
                 </div>
               </div>
@@ -864,7 +864,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   onClick={() => setShowReviewModal(true)}
                   className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-xs shadow-md shadow-orange-500/20 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 mx-auto"
                 >
-                  <span>✍ Ulas & Upload Foto Matcha</span>
+                  <span>Ulas Produk & Unggah Foto</span>
                 </button>
               </div>
             </div>
@@ -1061,7 +1061,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         {isSpmb && !['COMPLETED', 'READY', 'CANCELLED'].includes(currentStatus) && (
           <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl">⏱️</span>
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0"><Clock className="w-4 h-4" /></div>
               <div>
                 <p className="text-xs font-bold text-amber-950">Pesanan belum selesai lebih dari 20 menit?</p>
                 <p className="text-[11px] text-amber-800/90 font-medium">Silakan hubungi kasir atau barista kami via WhatsApp.</p>
@@ -1240,7 +1240,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               <div className="px-5 py-4 border-b border-border/50 flex items-center justify-between bg-muted/40 shrink-0">
                 <div className="text-left">
                   <h3 className="font-heading font-bold text-sm text-foreground flex items-center gap-1.5">
-                    <span>Penilaian Pesanan</span> 🌟
+                    <span>Penilaian Pesanan</span>
                   </h3>
                   <p className="text-[10px] text-muted-foreground font-semibold mt-0.5">
                     Berikan ulasan Anda tentang produk yang dibeli
@@ -1264,7 +1264,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 {cooldown?.cooldownActive ? (
                   <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1 text-center">
                     <p className="font-bold flex items-center justify-center gap-1.5">
-                      ⏳ Cooldown Ulasan Aktif
+                      Cooldown Ulasan Aktif
                     </p>
                     <p className="text-amber-700 leading-normal">
                       Anda hanya dapat menulis ulasan sekali setiap 3 hari untuk menjaga kualitas ulasan dan mencegah penyalahgunaan poin.

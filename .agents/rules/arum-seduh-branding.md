@@ -1,5 +1,5 @@
 ---
-description: Pedoman nama brand resmi Arum Seduh dan palet warna Orange-Kuning Amber
+description: Pedoman nama brand resmi Arum Seduh, palet warna Orange-Kuning Amber, dan larangan emoji default
 globs: *
 always_on: true
 ---
@@ -18,3 +18,7 @@ always_on: true
      - Warna Background Lembut: `bg-orange-50` / `bg-amber-50/80`
      - Border Aksen: `border-orange-300` / `border-amber-300`
      - Tombol Primer: `bg-orange-500 hover:bg-orange-600` atau `bg-gradient-to-r from-orange-500 to-amber-500` dengan teks putih.
+
+3. **Larangan Penggunaan Emoji Default (Clean Vector Icons Only)**:
+   - **DILARANG** menggunakan emoji default sistem operasi (seperti 🍵, 🍳, ⏱️, 📝, ⏳, 🌟, ❌, 👤, ✍, 🔥, ✅, ⚠️) langsung di dalam tombol, badge, status tracker, modal, atau teks antarmuka.
+   - **WAJIB** menggunakan ikon vektor SVG/Lucide React yang bersih, proporsional, dan elegan (contoh: `Coffee`, `Sparkles`, `Clock`, `FileText`, `CheckCircle2`, `AlertCircle`, `User`, `ChefHat`, `ShoppingBag`, `UtensilsCrossed`, `Star`, `Flame`).
