@@ -942,49 +942,76 @@ export default function SpmbClient({
                   const isOccupied = t.status === 'OCCUPIED';
                   const xPos = t.x !== undefined ? t.x : 50;
                   const yPos = t.y !== undefined ? t.y : 50;
-
                   const isRound = t.shape === 'ROUND';
+                  const cap = t.capacity || 2;
 
                   return (
-                    <button
+                    <div
                       key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setTableNumber(t.number.toString());
-                        setShowTableModal(false);
-                        setShowSeatModal(true);
-                      }}
                       style={{
                         position: 'absolute',
-                        left: `${Math.max(5, Math.min(85, xPos))}%`,
-                        top: `${Math.max(5, Math.min(85, yPos))}%`,
+                        left: `${Math.max(8, Math.min(92, xPos))}%`,
+                        top: `${Math.max(8, Math.min(92, yPos))}%`,
                         transform: 'translate(-50%, -50%)'
                       }}
-                      className={`border-2 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer ${
-                        isRound ? 'w-20 h-20 rounded-full p-2' : 'w-24 h-20 rounded-2xl p-2.5'
-                      } ${
-                        isCurrent
-                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-transparent ring-4 ring-orange-400/40 scale-110 z-20 shadow-orange-500/30'
-                          : isOccupied
-                          ? 'bg-blue-50 text-blue-900 border-blue-200 hover:border-blue-400 z-10'
-                          : 'bg-white text-stone-800 border-stone-300 hover:border-orange-400 hover:scale-105 z-10'
-                      }`}
+                      className="absolute flex items-center justify-center z-10"
                     >
-                      <span className="text-[8px] font-bold uppercase tracking-wider opacity-80">
-                        {isRound ? 'Bulat' : 'Kotak'}
-                      </span>
-                      <span className="font-serif font-bold text-xs sm:text-sm leading-tight">
-                        Meja {t.number}
-                      </span>
-                      <span className={`text-[9px] font-semibold mt-0.5 ${isCurrent ? 'text-white/90' : 'text-stone-400'}`}>
-                        {t.capacity || 2} Kursi
-                      </span>
-                      {isCurrent && (
-                        <span className="text-[8px] bg-white/20 px-1.5 py-0.2 rounded mt-0.5 font-bold">
-                          Meja Anda
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTableNumber(t.number.toString());
+                          setShowTableModal(false);
+                          setShowSeatModal(true);
+                        }}
+                        className={`border-2 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer ${
+                          isRound ? 'w-20 h-20 rounded-full p-2' : 'w-24 h-20 rounded-2xl p-2.5'
+                        } ${
+                          isCurrent
+                            ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-transparent ring-4 ring-orange-400/40 scale-110 z-30 shadow-orange-500/30'
+                            : isOccupied
+                            ? 'bg-blue-50 text-blue-900 border-blue-200 hover:border-blue-400 z-20'
+                            : 'bg-white text-stone-800 border-stone-300 hover:border-orange-400 hover:scale-105 z-20'
+                        }`}
+                      >
+                        <span className="text-[8px] font-bold uppercase tracking-wider opacity-80">
+                          {isRound ? 'Bulat' : 'Kotak'}
                         </span>
-                      )}
-                    </button>
+                        <span className="font-serif font-bold text-xs sm:text-sm leading-tight">
+                          Meja {t.number}
+                        </span>
+                        <span className={`text-[9px] font-semibold mt-0.5 ${isCurrent ? 'text-white/90' : 'text-stone-400'}`}>
+                          {cap} Kursi
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[8px] bg-white/20 px-1.5 py-0.2 rounded mt-0.5 font-bold">
+                            Meja Anda
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Surrounding Visible Mini Chairs */}
+                      {Array.from({ length: cap }).map((_, idx) => {
+                        const angle = isRound
+                          ? (idx / cap) * 2 * Math.PI - Math.PI / 2
+                          : cap === 2
+                          ? idx === 0 ? -Math.PI / 2 : Math.PI / 2
+                          : [-Math.PI / 2, 0, Math.PI / 2, Math.PI][idx % 4];
+
+                        const radius = isRound ? 46 : 52;
+                        const cX = Math.cos(angle) * radius;
+                        const cY = Math.sin(angle) * radius;
+
+                        return (
+                          <div
+                            key={idx}
+                            style={{ transform: `translate(${cX}px, ${cY}px)` }}
+                            className="absolute w-4 h-4 rounded-full bg-white border border-stone-300 shadow-xs flex items-center justify-center pointer-events-none z-10"
+                          >
+                            <Armchair className="w-2.5 h-2.5 text-orange-600" />
+                          </div>
+                        );
+                      })}
+                    </div>
                   );
                 })}
               </div>
