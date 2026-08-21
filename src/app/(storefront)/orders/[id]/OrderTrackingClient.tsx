@@ -278,7 +278,7 @@ function ProductReviewForm({
           )}
           <div>
             <p className="text-xs font-bold text-gray-805">{item.name}</p>
-            <p className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+            <p className="text-[10px] text-orange-600 font-semibold flex items-center gap-1">
               ✓ Ulasan berhasil dikirim
             </p>
           </div>
@@ -392,7 +392,7 @@ function ProductReviewForm({
         <button
           type="submit"
           disabled={isSubmitting || uploadingImage}
-          className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-[11px] font-bold transition-all flex items-center gap-1.5"
+          className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-brand-700 disabled:opacity-50 text-white text-[11px] font-bold transition-all flex items-center gap-1.5"
         >
           {isSubmitting ? (
             <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
@@ -695,7 +695,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
             <h1 className="font-heading font-bold text-base">Detail Pesanan</h1>
             <button
               onClick={handleCopy}
-              className="flex items-center gap-1 text-xs text-brand-600 hover:underline"
+              className="flex items-center gap-1 text-xs text-orange-600 hover:underline"
             >
               {orderId.slice(0, 8).toUpperCase()}
               {copied ? (
@@ -716,7 +716,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           className={`rounded-2xl text-white p-5 relative overflow-hidden ${
-            currentStatus === 'CANCELLED' ? 'bg-gradient-to-r from-slate-600 to-slate-700' : 'gradient-brand'
+            currentStatus === 'CANCELLED' ? 'bg-gradient-to-r from-slate-600 to-slate-700' : 'bg-gradient-to-r from-orange-500 to-amber-500'
           }`}
         >
           <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-white/5 -mr-10 -mt-10" />
@@ -729,7 +729,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   <OrderTypeIcon className="w-5 h-5" />
                   <span className="text-sm font-bold uppercase">{currentStatus.replace('_', ' ')}</span>
                 </div>
-                <p className="text-brand-200 text-xs font-semibold">
+                <p className="text-orange-100 text-xs font-semibold">
                   {getOrderTypeLabel(order.orderType, isSpmb)}
                 </p>
               </div>
@@ -748,7 +748,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               </div>
               <div className="flex-1">
                 <p className="text-sm font-semibold">{getOrderTypeLabel(order.orderType, isSpmb)}</p>
-                <p className="text-xs text-brand-200">
+                <p className="text-xs text-orange-100">
                   {isSpmb ? 'Diantar langsung ke meja Anda' : order.orderType === 'DELIVERY' ? 'Diantar ke alamat Anda' : 'Ambil di toko'}
                 </p>
               </div>
@@ -786,9 +786,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                     className={`w-8 h-8 rounded-full flex items-center justify-center border-2 
                       ${
                         step.completed
-                          ? 'bg-brand-600 border-brand-600'
+                          ? 'bg-orange-500 border-orange-500'
                           : step.active
-                          ? 'bg-brand-100 border-brand-600 animate-pulse'
+                          ? 'bg-orange-50 border-orange-500 animate-pulse'
                           : 'bg-card border-border'
                       }`}
                   >
@@ -797,7 +797,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                         step.completed
                           ? 'text-white'
                           : step.active
-                          ? 'text-brand-700'
+                          ? 'text-orange-600'
                           : 'text-muted-foreground'
                       }`}
                     />
@@ -805,7 +805,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   {i < steps.length - 1 && (
                     <div
                       className={`w-0.5 h-8 ${
-                        step.completed ? 'bg-brand-600' : 'bg-border'
+                        step.completed ? 'bg-orange-500' : 'bg-border'
                       }`}
                     />
                   )}
@@ -840,9 +840,9 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           {isFinished && (
             <div className="space-y-4 animate-in fade-in slide-in-from-bottom-5 duration-500">
               <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
-                <Check className="w-8 h-8 text-emerald-600 mx-auto mb-2" />
-                <p className="text-sm font-bold text-emerald-800">Pesanan Selesai!</p>
-                <p className="text-xs text-emerald-600 mt-0.5">Terima kasih telah memesan di Matchaboy</p>
+                <Check className="w-8 h-8 text-orange-600 mx-auto mb-2" />
+                <p className="text-sm font-bold text-orange-900">Pesanan Selesai!</p>
+                <p className="text-xs text-orange-600 mt-0.5">Terima kasih telah memesan di Arum Seduh</p>
               </div>
               {/* MATCHA MOMEN CARD - DISABLED (Coming Soon)
               <SocialShareCard
@@ -862,7 +862,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 <button
                   type="button"
                   onClick={() => setShowReviewModal(true)}
-                  className="px-5 py-2.5 rounded-xl gradient-brand text-white font-bold text-xs shadow-md shadow-brand-700/10 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 mx-auto"
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-xs shadow-md shadow-orange-500/20 hover:shadow-lg hover:-translate-y-0.5 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 mx-auto"
                 >
                   <span>✍ Ulas & Upload Foto Matcha</span>
                 </button>
@@ -918,7 +918,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               )}
               <div className="flex justify-between text-sm font-bold pt-1.5 border-t border-border/30">
                 <span>Total</span>
-                <span className="text-brand-700">{formatRupiah(order.total)}</span>
+                <span className="text-orange-600">{formatRupiah(order.total)}</span>
               </div>
             </div>
           </div>
@@ -928,7 +928,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         {(order.orderType === 'DELIVERY' || order.id.startsWith('SPMB')) && order.address && (
           <section className="rounded-2xl bg-card border border-border/50 px-4 py-3">
             <div className="flex items-start gap-3">
-              <MapPin className="w-4 h-4 text-brand-600 mt-0.5 shrink-0" />
+              <MapPin className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
                   Alamat Pengiriman
@@ -1008,7 +1008,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         {order.id.startsWith('SPMB') && !['COMPLETED', 'CANCELLED', 'PENDING_PAYMENT'].includes(currentStatus) && (
           <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3 shadow-sm animate-in fade-in slide-in-from-bottom-3">
             <div className="flex items-start gap-2.5">
-              <Check className="w-5 h-5 text-emerald-600 mt-0.5 shrink-0" />
+              <Check className="w-5 h-5 text-orange-600 mt-0.5 shrink-0" />
               <div className="text-left">
                 <p className="text-xs font-bold text-emerald-900 uppercase tracking-wider mb-0.5">
                   Konfirmasi Diterima
@@ -1024,10 +1024,10 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
             
             <div 
               ref={swipeContainerRef}
-              className="w-full relative overflow-hidden bg-emerald-100 border border-emerald-300 rounded-full p-1 h-14 shadow-inner flex items-center select-none"
+              className="w-full relative overflow-hidden bg-emerald-100 border border-orange-300 rounded-full p-1 h-14 shadow-inner flex items-center select-none"
             >
               <motion.div 
-                className="absolute left-1 top-1 bottom-1 bg-emerald-600 rounded-full"
+                className="absolute left-1 top-1 bottom-1 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full"
                 style={{ width: swipeBgWidth }}
               />
               
@@ -1035,7 +1035,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 className="absolute inset-0 flex items-center justify-center pointer-events-none"
                 style={{ opacity: swipeTextOpacity }}
               >
-                <span className="font-extrabold text-emerald-800 text-xs uppercase tracking-wider">Geser untuk Diterima</span>
+                <span className="font-extrabold text-orange-900 text-xs uppercase tracking-wider">Geser untuk Diterima</span>
               </motion.div>
 
               <motion.div
@@ -1045,7 +1045,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 dragMomentum={false}
                 onDragEnd={handleSwipeDragEnd}
                 style={{ x: swipeX }}
-                className="w-12 h-12 rounded-full bg-white border border-emerald-300 flex items-center justify-center text-emerald-600 shadow-md cursor-grab active:cursor-grabbing z-10 shrink-0"
+                className="w-12 h-12 rounded-full bg-white border border-orange-300 flex items-center justify-center text-orange-600 shadow-md cursor-grab active:cursor-grabbing z-10 shrink-0"
               >
                 {isConfirming ? (
                   <RefreshCw className="w-5 h-5 animate-spin text-emerald-500" />
@@ -1071,7 +1071,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               href={`https://wa.me/${order.adminWhatsApp || ''}?text=${encodeURIComponent(`Halo admin/kasir, saya mau menanyakan pesanan ${order.id} untuk ${order.address || 'Meja'} yang belum selesai.`)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold shrink-0 inline-flex items-center gap-1.5 transition-all shadow-sm"
+              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-[11px] font-bold shrink-0 inline-flex items-center gap-1.5 transition-all shadow-sm"
             >
               <MessageCircle className="w-3.5 h-3.5" /> Hubungi Kasir via WA
             </a>
@@ -1202,7 +1202,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               className="w-full max-w-sm bg-card rounded-2xl shadow-xl overflow-hidden"
             >
               <div className="p-6 text-center">
-                <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-emerald-100 text-orange-600 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Check className="w-8 h-8" />
                 </div>
                 <h3 className="text-lg font-bold text-foreground mb-2">Pesanan Dibatalkan</h3>
@@ -1216,7 +1216,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                       router.push('/spmb');
                     }
                   }}
-                  className="w-full py-3 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700 transition-colors"
+                  className="w-full py-3 px-4 rounded-xl bg-orange-500 text-white font-semibold text-sm hover:bg-brand-700 transition-colors"
                 >
                   {isSpmb ? 'Kembali ke Menu Meja (SPMB)' : 'Tutup'}
                 </button>

@@ -491,7 +491,7 @@ export function ProductModal({
             {/* Scrollable Content Area */}
             <div className="overflow-y-auto flex-1 w-full pb-safe">
               {/* Product Image */}
-              <div className="relative w-full aspect-[16/10] bg-brand-50 mx-auto shrink-0">
+              <div className="relative w-full aspect-[16/10] bg-orange-50 mx-auto shrink-0">
                 <Image
                   src={product.image}
                   alt={product.name}
@@ -543,7 +543,7 @@ export function ProductModal({
                             {formatRupiah(product.modifiers.originalPrice)}
                           </span>
                         )}
-                        <span className="font-bold text-lg text-brand-700">
+                        <span className="font-bold text-lg text-orange-700">
                           {formatRupiah(product.price)}
                         </span>
                       </>
@@ -552,16 +552,16 @@ export function ProductModal({
                 </div>
 
                 {isSoldOut ? (
-                  <div className="bg-brand-50/50 border border-brand-100 rounded-2xl p-5 space-y-4">
+                  <div className="bg-orange-50/50 border border-brand-100 rounded-2xl p-5 space-y-4">
                     <div className="text-center space-y-1.5">
-                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-brand-100 text-brand-700 text-lg mb-1">
+                      <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-orange-100 text-orange-700 text-lg mb-1">
                         🍵
                       </span>
                       <h3 className="font-heading font-bold text-base text-foreground">
                         Stok Sedang Habis
                       </h3>
                       <p className="text-xs text-muted-foreground max-w-xs mx-auto leading-relaxed">
-                        Dapatkan notifikasi WhatsApp segera setelah <strong>{product.name}</strong> tersedia kembali di Matchaboy!
+                        Dapatkan notifikasi WhatsApp segera setelah <strong>{product.name}</strong> tersedia kembali di Arum Seduh!
                       </p>
                     </div>
 
@@ -612,7 +612,7 @@ export function ProductModal({
                         <button
                           type="submit"
                           disabled={subLoading}
-                          className="w-full py-3.5 px-6 mt-3 rounded-xl gradient-brand text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+                          className="w-full py-3.5 px-6 mt-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-semibold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
                         >
                           {subLoading ? (
                             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -634,7 +634,7 @@ export function ProductModal({
                             <div key={group.id} className="space-y-3">
                               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex justify-between">
                                 <span>{group.name}</span>
-                                <span className="text-[10px] text-brand-700 font-semibold">(Pilih 1)</span>
+                                <span className="text-[10px] text-orange-700 font-semibold">(Pilih 1)</span>
                               </h3>
 
                               {/* Options list */}
@@ -649,7 +649,7 @@ export function ProductModal({
                                         onClick={() => handleSelectOption(group.id, option)}
                                         className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all hover:border-brand-400
                                           ${isSelected 
-                                            ? 'border-brand-600 bg-brand-50/50 shadow-[0_2px_8px_rgba(139,92,26,0.06)]' 
+                                            ? 'border-brand-600 bg-orange-50/50 shadow-[0_2px_8px_rgba(139,92,26,0.06)]' 
                                             : 'border-border bg-card'
                                           }`}
                                       >
@@ -667,11 +667,11 @@ export function ProductModal({
                                         <div className="flex-1 min-w-0">
                                           <p className="text-xs font-bold text-foreground line-clamp-1">{option.name}</p>
                                           {option.priceAdjustment > 0 && (
-                                            <p className="text-[10px] text-brand-700 font-semibold mt-0.5">+{formatRupiah(option.priceAdjustment)}</p>
+                                            <p className="text-[10px] text-orange-700 font-semibold mt-0.5">+{formatRupiah(option.priceAdjustment)}</p>
                                           )}
                                         </div>
                                         <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0
-                                          ${isSelected ? 'bg-brand-600 border-brand-600' : 'border-border bg-white'}`}
+                                          ${isSelected ? 'bg-orange-500 border-brand-600' : 'border-border bg-white'}`}
                                         >
                                           {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                                         </div>
@@ -679,7 +679,7 @@ export function ProductModal({
 
                                       {/* Inline options for selected drinks inside combo */}
                                       {isSelected && optProduct && (
-                                        <div className="mt-1.5 ml-2 p-2.5 rounded-lg bg-brand-50/20 border border-brand-100/40 space-y-2">
+                                        <div className="mt-1.5 ml-2 p-2.5 rounded-lg bg-orange-50/20 border border-brand-100/40 space-y-2">
                                           {/* Ice Selector */}
                                           {optProduct.modifiers?.iceLevel && optProduct.modifiers.iceLevel.length > 0 && (
                                             <div>
@@ -692,7 +692,7 @@ export function ProductModal({
                                                     onClick={() => handleOptionIceChange(group.id, ice as IceLevel)}
                                                     className={`px-2 py-1 rounded-full text-[10px] font-semibold border transition-all
                                                       ${selected.iceLevel === ice
-                                                        ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                                                        ? 'bg-orange-500 text-white border-brand-600 shadow-sm'
                                                         : 'bg-white text-muted-foreground border-border/80 hover:border-brand-400'
                                                       }`}
                                                   >
@@ -715,7 +715,7 @@ export function ProductModal({
                                                     onClick={() => handleOptionSugarChange(group.id, sugar as SugarLevel)}
                                                     className={`px-2 py-1 rounded-full text-[10px] font-semibold border transition-all
                                                       ${selected.sugarLevel === sugar
-                                                        ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                                                        ? 'bg-orange-500 text-white border-brand-600 shadow-sm'
                                                         : 'bg-white text-muted-foreground border-border/80 hover:border-brand-400'
                                                       }`}
                                                   >
@@ -976,7 +976,7 @@ export function ProductModal({
                                       px-4 py-3 rounded-xl border transition-all touch-target
                                       ${
                                         isSelected
-                                          ? 'border-brand-600 bg-brand-50'
+                                          ? 'border-brand-600 bg-orange-50'
                                           : 'border-border bg-card hover:border-brand-300'
                                       }`}
                                   >
@@ -998,7 +998,7 @@ export function ProductModal({
                                         {addOn.name}
                                       </span>
                                     </div>
-                                    <span className="text-sm text-brand-600 font-medium">
+                                    <span className="text-sm text-orange-600 font-medium">
                                       +{formatRupiah(addOn.price)}
                                     </span>
                                   </button>
@@ -1058,7 +1058,7 @@ export function ProductModal({
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
                           className="w-9 h-9 flex items-center justify-center rounded-lg 
                             bg-card shadow-sm text-foreground touch-target
-                            hover:bg-brand-50 transition-colors"
+                            hover:bg-orange-50 transition-colors"
                           aria-label="Decrease quantity"
                         >
                           <Minus className="w-3.5 h-3.5" />
@@ -1071,7 +1071,7 @@ export function ProductModal({
                           onClick={() => setQuantity(quantity + 1)}
                           className="w-9 h-9 flex items-center justify-center rounded-lg 
                             bg-card shadow-sm text-foreground touch-target
-                            hover:bg-brand-50 transition-colors"
+                            hover:bg-orange-50 transition-colors"
                           aria-label="Increase quantity"
                         >
                           <Plus className="w-3.5 h-3.5" />
@@ -1083,9 +1083,9 @@ export function ProductModal({
                         whileTap={{ scale: 0.97 }}
                         onClick={handleAddToCart}
                         className="flex-1 py-3.5 px-6 rounded-xl 
-                          gradient-brand text-white 
+                          bg-gradient-to-r from-orange-500 to-amber-500 text-white 
                           font-semibold text-sm
-                          shadow-lg shadow-brand-700/20
+                          shadow-lg shadow-orange-500/20
                           active:shadow-md
                           transition-shadow"
                       >
@@ -1097,7 +1097,7 @@ export function ProductModal({
                     {/* Reviews Section */}
                     <div className="border-t border-border/60 pt-5 mt-6 space-y-4 text-left">
                       <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                        <MessageSquare className="w-4 h-4 text-brand-600" />
+                        <MessageSquare className="w-4 h-4 text-orange-600" />
                         Ulasan Pelanggan ({reviews.length})
                       </h3>
                       
@@ -1128,12 +1128,12 @@ export function ProductModal({
                                         />
                                       </div>
                                     ) : (
-                                      <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-brand-800">
+                                      <div className="w-6 h-6 rounded-full bg-brand-200 flex items-center justify-center text-[10px] font-bold text-orange-800">
                                         {(rev.user?.name?.[0] || 'U').toUpperCase()}
                                       </div>
                                     )}
                                     <div>
-                                      <p className="text-xs font-bold text-foreground">{rev.user?.name || 'Pelanggan Matchaboy'}</p>
+                                      <p className="text-xs font-bold text-foreground">{rev.user?.name || 'Pelanggan Arum Seduh'}</p>
                                       <p className="text-[9px] text-muted-foreground">{new Date(rev.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                                     </div>
                                   </div>

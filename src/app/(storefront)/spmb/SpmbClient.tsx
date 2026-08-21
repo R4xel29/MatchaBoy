@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingBag, Trash2, Plus, Minus, User, MapPin, 
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
-  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Armchair
+  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Armchair, Sparkles
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
@@ -37,7 +37,6 @@ export default function SpmbClient({
   operationalDays,
   disabledDates
 }: SpmbClientProps) {
-  // Read URL query parameter ?table=...
   const searchParams = useSearchParams();
   const tableParam = searchParams.get('table');
 
@@ -48,7 +47,7 @@ export default function SpmbClient({
   const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string }>>([]);
   const [loadingTables, setLoadingTables] = useState<boolean>(false);
 
-  // Modals for Table Layout & Seat Selection
+  // Modals
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
   const [showSeatModal, setShowSeatModal] = useState<boolean>(false);
 
@@ -65,7 +64,7 @@ export default function SpmbClient({
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Form State - STRICTLY 2 PAYMENT OPTIONS: 'QRIS' or 'COD' (Tunai di Kasir). Phone is removed for SPMB.
+  // Form State - Clean 2 payment methods, no phone required for SPMB
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'QRIS' | 'COD'>('QRIS');
@@ -75,11 +74,11 @@ export default function SpmbClient({
   const [errorMsg, setErrorMsg] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  // Realtime Active Order Status Tracking
+  // Realtime Active Order Tracking
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [activeOrderStatus, setActiveOrderStatus] = useState<any>(null);
 
-  // QRIS Payment Modal state
+  // QRIS Payment Modal
   const [showQrisModal, setShowQrisModal] = useState(false);
   const [qrisQrContent, setQrisQrContent] = useState('');
   const [qrisOrderId, setQrisOrderId] = useState('');
@@ -98,7 +97,6 @@ export default function SpmbClient({
             const clean = tableParam.trim();
             setTableNumber(clean);
             setIsTableLocked(true);
-            // Prompt seat selection if user scanned QR
             setShowSeatModal(true);
           } else if (data.length > 0 && !tableNumber) {
             setTableNumber(data[0].number.toString());
@@ -109,14 +107,13 @@ export default function SpmbClient({
       .finally(() => setLoadingTables(false));
   }, [tableParam]);
 
-  // Current selected table object
   const currentTableObj = useMemo(() => {
     return activeTables.find(t => t.number.toString() === tableNumber.toString()) || null;
   }, [activeTables, tableNumber]);
 
   const currentTableCapacity = currentTableObj?.capacity || 4;
 
-  // 2. Read saved active order ID from local storage on mount
+  // 2. Read saved active order ID from local storage
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedId = localStorage.getItem('spmb_active_order_id');
@@ -126,7 +123,7 @@ export default function SpmbClient({
     }
   }, []);
 
-  // 3. Realtime Order Status Polling (every 3 seconds)
+  // 3. Realtime Order Status Polling
   useEffect(() => {
     if (!activeOrderId) {
       setActiveOrderStatus(null);
@@ -175,7 +172,6 @@ export default function SpmbClient({
     return () => clearInterval(interval);
   }, [showQrisModal, qrisOrderId, qrisPaymentPaid]);
 
-  // Check if active order is taking more than 20 minutes
   const isOrderOver20Min = useMemo(() => {
     if (!activeOrderStatus?.createdAt) return false;
     const created = new Date(activeOrderStatus.createdAt).getTime();
@@ -184,7 +180,6 @@ export default function SpmbClient({
     return diffMinutes >= 20 && !['READY', 'COMPLETED', 'CANCELLED'].includes(activeOrderStatus.status);
   }, [activeOrderStatus]);
 
-  // Filtered Products
   const filteredProducts = useMemo(() => {
     if (selectedCategory === 'all') return products;
     return products.filter((p) => p.category === selectedCategory);
@@ -198,7 +193,7 @@ export default function SpmbClient({
 
   const validateForm = () => {
     if (!tableNumber || !tableNumber.trim()) {
-      setErrorMsg('Nomor meja wajib dipilih atau diisi.');
+      setErrorMsg('Nomor meja wajib dipilih.');
       return false;
     }
     if (!name || name.trim().length < 2) {
@@ -213,7 +208,7 @@ export default function SpmbClient({
     e.preventDefault();
     if (!validateForm()) return;
     if (cartItems.length === 0) {
-      setErrorMsg('Keranjang belanja Anda kosong.');
+      setErrorMsg('Keranjang belanja Anda masih kosong.');
       return;
     }
     setShowConfirmModal(true);
@@ -261,7 +256,7 @@ export default function SpmbClient({
 
       const payload = {
         name,
-        phone: '-', // No phone required for SPMB temporarily
+        phone: '-',
         tableNumber: `${tableNumber.trim()} (Kursi ${seatNumber})`,
         orderType: 'DINE_IN',
         address: fullTableLabel,
@@ -277,7 +272,6 @@ export default function SpmbClient({
       });
 
       if (!res.ok) {
-        // Fallback to /api/checkout/spmb
         res = await fetch('/api/checkout/spmb', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -290,7 +284,6 @@ export default function SpmbClient({
         throw new Error(data.error || 'Gagal memproses pesanan.');
       }
 
-      // Save active order ID for realtime status tracking
       if (typeof window !== 'undefined') {
         localStorage.setItem('spmb_active_order_id', data.orderId);
       }
@@ -320,26 +313,27 @@ export default function SpmbClient({
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF7F2] text-[#1C1917] pb-32 font-sans selection:bg-[#2E5A44]/20 selection:text-[#2E5A44]">
-      {/* Top Ambient Subtle Glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-64 bg-gradient-to-b from-[#2E5A44]/10 via-[#FAF7F2]/40 to-transparent pointer-events-none" />
+    <div className="min-h-screen bg-[#FAF9F6] text-[#1C1917] pb-32 font-sans selection:bg-orange-500/20 selection:text-orange-700">
+      {/* Top Ambient Glow in Arum Seduh Orange-Amber */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-56 bg-gradient-to-b from-orange-500/10 via-amber-500/5 to-transparent pointer-events-none" />
 
       {/* Main Container */}
-      <div className="relative z-10 max-w-5xl mx-auto px-4 pt-6 sm:pt-10">
+      <div className="relative z-10 max-w-5xl mx-auto px-4 pt-6 sm:pt-8">
         
-        {/* Editorial Zen Header */}
-        <header className="mb-6 sm:mb-8 text-left bg-white/80 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-stone-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        {/* Editorial Header */}
+        <header className="mb-6 bg-white/90 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-stone-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-left">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2E5A44]/10 border border-[#2E5A44]/20 text-[#2E5A44] text-[11px] font-bold tracking-wide">
-                <UtensilsCrossed className="w-3.5 h-3.5" />
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 border border-orange-200/80 text-orange-700 text-[11px] font-bold tracking-wide">
+                <UtensilsCrossed className="w-3.5 h-3.5 text-orange-600" />
                 <span>Self-Service Dine-In</span>
               </div>
-              <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-stone-900">
+              <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-stone-900 flex items-center gap-2">
                 Arum Seduh
+                <span className="w-2 h-2 rounded-full bg-orange-500 inline-block" />
               </h1>
               <p className="text-xs sm:text-sm text-stone-600 max-w-lg leading-relaxed">
-                Pesan hidangan & minuman matcha favorit langsung dari meja Anda. Pesanan akan diantarkan langsung ke meja setelah siap.
+                Pesan hidangan & minuman matcha autentik langsung dari meja Anda. Pesanan akan diantarkan setelah siap disajikan.
               </p>
             </div>
 
@@ -352,26 +346,26 @@ export default function SpmbClient({
                   setShowSeatModal(true);
                 }
               }}
-              className="shrink-0 p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200 flex items-center gap-4 cursor-pointer hover:border-[#2E5A44]/40 transition-all group shadow-sm"
+              className="shrink-0 p-4 rounded-2xl bg-stone-50/80 border border-stone-200 flex items-center gap-4 cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-all group shadow-sm"
             >
-              <div className="w-12 h-12 rounded-xl bg-[#2E5A44] text-white flex items-center justify-center font-serif text-xl font-bold shadow-sm group-hover:scale-105 transition-transform">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-serif text-xl font-bold shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
                 {tableNumber || '—'}
               </div>
               <div className="text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
                   <span>Lokasi Duduk</span>
-                  {!isTableLocked && <span className="text-[9px] text-[#2E5A44] font-bold">(Ganti)</span>}
+                  {!isTableLocked && <span className="text-[9px] text-orange-600 font-bold">(Ganti)</span>}
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="font-serif font-bold text-stone-900 text-sm sm:text-base">
                     Meja {tableNumber || '—'} <span className="text-xs text-stone-500 font-sans font-normal">• Kursi {seatNumber}</span>
                   </span>
                   {isTableLocked ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-100 text-orange-800 text-[10px] font-bold border border-orange-200">
                       <Lock className="w-2.5 h-2.5" /> QR
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10px] font-bold">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-200/70 text-stone-700 text-[10px] font-bold">
                       <Grid className="w-2.5 h-2.5" /> Denah
                     </span>
                   )}
@@ -390,7 +384,7 @@ export default function SpmbClient({
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#2E5A44]/10 text-[#2E5A44] flex items-center justify-center font-bold">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center font-bold">
                   <UtensilsCrossed className="w-5 h-5" />
                 </div>
                 <div>
@@ -419,11 +413,11 @@ export default function SpmbClient({
               </div>
             </div>
 
-            {/* 3-Step Simple Progress Bar for SPMB */}
+            {/* 3-Step Simple Progress Bar */}
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className={`p-3 rounded-2xl border transition-all ${
                 ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'].includes(activeOrderStatus.status)
-                  ? 'bg-[#2E5A44]/10 border-[#2E5A44] text-[#2E5A44] font-bold'
+                  ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold'
                   : 'bg-stone-50 border-stone-200 text-stone-400'
               }`}>
                 <p className="text-[9px] uppercase tracking-wider font-bold">Langkah 1</p>
@@ -432,7 +426,7 @@ export default function SpmbClient({
 
               <div className={`p-3 rounded-2xl border transition-all ${
                 ['PREPARING', 'READY', 'COMPLETED'].includes(activeOrderStatus.status)
-                  ? 'bg-[#2E5A44]/10 border-[#2E5A44] text-[#2E5A44] font-bold'
+                  ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold'
                   : 'bg-stone-50 border-stone-200 text-stone-400'
               }`}>
                 <p className="text-[9px] uppercase tracking-wider font-bold">Langkah 2</p>
@@ -441,7 +435,7 @@ export default function SpmbClient({
 
               <div className={`p-3 rounded-2xl border transition-all ${
                 ['READY', 'COMPLETED'].includes(activeOrderStatus.status)
-                  ? 'bg-emerald-100 border-emerald-600 text-emerald-900 font-bold shadow-sm'
+                  ? 'bg-emerald-50 border-emerald-500 text-emerald-900 font-bold shadow-sm'
                   : 'bg-stone-50 border-stone-200 text-stone-400'
               }`}>
                 <p className="text-[9px] uppercase tracking-wider font-bold">Langkah 3</p>
@@ -451,19 +445,19 @@ export default function SpmbClient({
 
             {/* 20-Minute Alert Notification */}
             {isOrderOver20Min && (
-              <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in">
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="text-xl">⏱️</span>
                   <div>
                     <p className="text-xs font-bold text-amber-950">Pesanan belum selesai lebih dari 20 menit?</p>
-                    <p className="text-[11px] text-amber-800/90 font-medium">Silakan hubungi kasir atau barista kami untuk konfirmasi langsung.</p>
+                    <p className="text-[11px] text-amber-800 font-medium">Silakan hubungi kasir atau barista kami untuk konfirmasi langsung.</p>
                   </div>
                 </div>
                 <a
                   href={`https://wa.me/${botNumber || ''}?text=${encodeURIComponent(`Halo Arum Seduh, saya ingin menanyakan pesanan Meja ${activeOrderStatus.tableNumber || tableNumber} dengan ID ${activeOrderStatus.id} yang belum selesai.`)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3.5 py-2 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white text-[11px] font-bold shrink-0 inline-flex items-center gap-1.5 transition-all shadow-sm"
+                  className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-[11px] font-bold shrink-0 inline-flex items-center gap-1.5 transition-all shadow-sm"
                 >
                   <MessageCircle className="w-3.5 h-3.5" /> Hubungi Kasir via WA
                 </a>
@@ -473,7 +467,7 @@ export default function SpmbClient({
             <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-stone-100">
               <button
                 onClick={() => window.location.href = `/orders/${activeOrderStatus.id}`}
-                className="flex-1 py-2.5 rounded-xl bg-[#2E5A44] text-white text-xs font-bold hover:bg-[#234533] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold hover:from-orange-600 hover:to-amber-600 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
               >
                 <ExternalLink className="w-3.5 h-3.5" /> Lihat Rincian Pesanan
               </button>
@@ -497,11 +491,11 @@ export default function SpmbClient({
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.slug)}
-              className={`px-4 py-2 rounded-full text-xs font-bold tracking-wide shrink-0 transition-all border
-                ${selectedCategory === cat.slug
-                  ? 'bg-[#2E5A44] text-white border-[#2E5A44] shadow-sm'
+              className={`px-4 py-2 rounded-full text-xs font-bold tracking-wide shrink-0 transition-all border ${
+                selectedCategory === cat.slug
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20'
                   : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
-                }`}
+              }`}
             >
               {cat.name}
             </button>
@@ -522,8 +516,9 @@ export default function SpmbClient({
                 whileHover={isSoldOut ? {} : { y: -3 }}
                 transition={{ duration: 0.2 }}
                 onClick={() => handleProductClick(product)}
-                className={`bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col group relative transition-all
-                  ${isSoldOut ? 'opacity-65 cursor-not-allowed' : 'cursor-pointer hover:shadow-md hover:border-[#2E5A44]/40'}`}
+                className={`bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col group relative transition-all ${
+                  isSoldOut ? 'opacity-65 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:shadow-orange-500/5 hover:border-orange-300'
+                }`}
               >
                 {/* Promo Overlay */}
                 {promo && !isSoldOut && (
@@ -532,17 +527,17 @@ export default function SpmbClient({
                   </div>
                 )}
 
-                {/* Badge (Promo / Best Seller / New) */}
+                {/* Badges */}
                 {promo && !isSoldOut ? (
                   <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-600 text-white shadow-sm">
                     🔥 Promo
                   </span>
                 ) : product.badge && (
-                  <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm
-                    ${product.badge === 'best-seller' ? 'bg-[#8C6239] text-white' : ''}
-                    ${product.badge === 'new' ? 'bg-[#2E5A44] text-white' : ''}
-                    ${product.badge === 'sold-out' ? 'bg-stone-400 text-white' : ''}
-                  `}>
+                  <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm ${
+                    product.badge === 'best-seller' ? 'bg-[#8C6239] text-white' : ''
+                  }${product.badge === 'new' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white' : ''}${
+                    product.badge === 'sold-out' ? 'bg-stone-400 text-white' : ''
+                  }`}>
                     {product.badge === 'best-seller' && 'Best Seller'}
                     {product.badge === 'new' && 'Baru'}
                     {product.badge === 'sold-out' && 'Habis'}
@@ -550,15 +545,16 @@ export default function SpmbClient({
                 )}
 
                 {/* Product Image */}
-                <div className="relative w-full aspect-square bg-[#FAF7F2] overflow-hidden">
+                <div className="relative w-full aspect-square bg-[#FAF9F6] overflow-hidden">
                   {product.image ? (
                     <Image
                       src={product.image}
                       alt={product.name}
                       fill
                       sizes="(max-width: 768px) 50vw, 25vw"
-                      className={`object-cover group-hover:scale-105 transition-transform duration-300
-                        ${isSoldOut ? 'grayscale opacity-60' : ''}`}
+                      className={`object-cover group-hover:scale-105 transition-transform duration-300 ${
+                        isSoldOut ? 'grayscale opacity-60' : ''
+                      }`}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-4xl">🍵</div>
@@ -568,7 +564,7 @@ export default function SpmbClient({
                 {/* Product Info */}
                 <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between text-left">
                   <div className="space-y-1">
-                    <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-[#2E5A44] transition-colors line-clamp-1">
+                    <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-orange-600 transition-colors line-clamp-1">
                       {product.name}
                     </h3>
                     <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed">
@@ -583,13 +579,13 @@ export default function SpmbClient({
                           {formatRupiah(originalPrice)}
                         </span>
                       )}
-                      <span className="font-bold text-xs sm:text-sm text-[#2E5A44]">
+                      <span className="font-bold text-xs sm:text-sm text-orange-600">
                         {formatRupiah(displayPrice)}
                       </span>
                     </div>
                     
                     {!isSoldOut && (
-                      <span className="w-7 h-7 rounded-xl bg-stone-100 text-stone-700 flex items-center justify-center text-xs font-bold group-hover:bg-[#2E5A44] group-hover:text-white transition-all shadow-sm">
+                      <span className="w-7 h-7 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center text-xs font-bold group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:to-amber-500 group-hover:text-white transition-all shadow-sm">
                         +
                       </span>
                     )}
@@ -603,30 +599,30 @@ export default function SpmbClient({
 
       {/* Floating Bottom Cart Bar */}
       {cartItems.length > 0 && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md bg-[#1C1917] text-white rounded-3xl p-3.5 shadow-2xl border border-stone-800 flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md bg-stone-900 text-white rounded-3xl p-3.5 shadow-2xl border border-stone-800 flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-200">
           <div className="flex items-center gap-3 pl-1">
-            <div className="w-10 h-10 rounded-2xl bg-[#2E5A44] flex items-center justify-center relative shadow-inner">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center relative shadow-inner">
               <ShoppingBag className="w-5 h-5 text-white" />
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-amber-400 text-stone-950 font-black text-[10px] flex items-center justify-center border-2 border-stone-900">
+              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white text-orange-700 font-black text-[10px] flex items-center justify-center border-2 border-stone-900 shadow">
                 {cartItems.reduce((acc, i) => acc + i.quantity, 0)}
               </span>
             </div>
             <div className="text-left">
-              <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Total</p>
+              <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Total Tagihan</p>
               <p className="text-sm font-serif font-bold text-white mt-0.5">{formatRupiah(totalPrice)}</p>
             </div>
           </div>
           
           <button
             onClick={() => setIsCartOpen(true)}
-            className="px-4 py-2.5 rounded-2xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs tracking-wide transition-all flex items-center gap-1.5 cursor-pointer shadow-md"
+            className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs tracking-wide transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-orange-500/20"
           >
             Lihat Pesanan <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
 
-      {/* Cart & Checkout Slide-Over Panel */}
+      {/* Clean Figma-Grade Cart & Checkout Slide-Over Panel */}
       <AnimatePresence>
         {isCartOpen && (
           <>
@@ -634,7 +630,7 @@ export default function SpmbClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 cursor-pointer"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 cursor-pointer"
               onClick={() => setIsCartOpen(false)}
             />
 
@@ -642,13 +638,15 @@ export default function SpmbClient({
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 240 }}
               className="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl z-50 flex flex-col"
             >
               {/* Drawer Header */}
-              <div className="p-5 border-b border-stone-100 flex items-center justify-between bg-[#FAF7F2] shrink-0">
-                <div className="flex items-center gap-2 text-left">
-                  <UtensilsCrossed className="w-5 h-5 text-[#2E5A44]" />
+              <div className="p-5 border-b border-stone-100 flex items-center justify-between bg-stone-50/60 shrink-0">
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
+                    <UtensilsCrossed className="w-4 h-4" />
+                  </div>
                   <div>
                     <h2 className="font-serif font-bold text-base text-stone-900">Pesanan Meja</h2>
                     <p className="text-[11px] text-stone-500 font-medium">Meja {tableNumber || '—'} • Kursi {seatNumber}</p>
@@ -664,11 +662,15 @@ export default function SpmbClient({
 
               {/* Drawer Scrollable Content */}
               <div className="flex-1 overflow-y-auto p-5 space-y-5">
+                
                 {/* Cart Items List */}
                 <div className="space-y-2.5">
-                  <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider text-left">Menu yang Dipesan</h3>
+                  <h3 className="text-[11px] font-bold text-stone-400 uppercase tracking-wider text-left">
+                    Menu yang Dipesan ({cartItems.reduce((acc, i) => acc + i.quantity, 0)} item)
+                  </h3>
+
                   {cartItems.map((item) => (
-                    <div key={item.id} className="flex gap-3 p-3 rounded-2xl border border-stone-100 bg-[#FAF7F2]/50 hover:bg-[#FAF7F2] transition-colors items-start">
+                    <div key={item.id} className="flex gap-3 p-3 rounded-2xl border border-stone-100 bg-stone-50/50 hover:bg-stone-50 transition-colors items-start">
                       {item.image && (
                         <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-100 shrink-0">
                           <Image src={item.image} alt={item.name} fill className="object-cover" />
@@ -681,7 +683,7 @@ export default function SpmbClient({
                           {(item as any).shot && ` | ${(item as any).shot}`}
                           {item.addOns && item.addOns.length > 0 && ` | ${item.addOns.map((a) => a.name).join(', ')}`}
                         </p>
-                        <p className="text-xs font-bold text-[#2E5A44] mt-1.5">{formatRupiah(item.totalPrice)}</p>
+                        <p className="text-xs font-bold text-orange-600 mt-1.5">{formatRupiah(item.totalPrice)}</p>
                       </div>
                       
                       <div className="flex flex-col items-end gap-2 shrink-0">
@@ -692,17 +694,17 @@ export default function SpmbClient({
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                         
-                        <div className="flex items-center gap-1.5 border border-stone-200 bg-white rounded-lg p-0.5 shrink-0">
+                        <div className="flex items-center gap-1.5 border border-stone-200 bg-white rounded-xl p-0.5 shrink-0">
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="p-1 text-stone-500 hover:bg-stone-50 rounded cursor-pointer"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded-lg cursor-pointer"
                           >
                             <Minus className="w-2.5 h-2.5" />
                           </button>
                           <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="p-1 text-stone-500 hover:bg-stone-50 rounded cursor-pointer"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded-lg cursor-pointer"
                           >
                             <Plus className="w-2.5 h-2.5" />
                           </button>
@@ -714,26 +716,29 @@ export default function SpmbClient({
 
                 <hr className="border-stone-100" />
 
-                {/* Form Informasi Pemesan */}
+                {/* Clean Form Input */}
                 <form onSubmit={handlePreSubmit} className="space-y-4">
-                  <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider text-left">Informasi Pemesan</h3>
+                  <h3 className="text-[11px] font-bold text-stone-400 uppercase tracking-wider text-left">
+                    Informasi Pemesan
+                  </h3>
 
                   {/* Lokasi Meja & Kursi */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center justify-between">
-                      <span className="flex items-center gap-1">
-                        <UtensilsCrossed className="w-3 h-3 text-[#2E5A44]" /> Meja & Kursi (Dine-In)
-                      </span>
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+                        <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
+                        <span>Meja & Kursi</span>
+                      </label>
                       {!isTableLocked && (
                         <button
                           type="button"
                           onClick={() => setShowTableModal(true)}
-                          className="text-[#2E5A44] font-bold text-[10px] underline hover:text-[#1c382a] cursor-pointer"
+                          className="text-orange-600 font-bold text-[11px] hover:underline cursor-pointer"
                         >
-                          Lihat Denah Meja
+                          Buka Denah Meja
                         </button>
                       )}
-                    </label>
+                    </div>
 
                     <div className="grid grid-cols-2 gap-2">
                       <button
@@ -741,72 +746,80 @@ export default function SpmbClient({
                         onClick={() => {
                           if (!isTableLocked) setShowTableModal(true);
                         }}
-                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-bold text-left flex items-center justify-between ${
+                        className={`px-3.5 py-3 rounded-2xl border text-xs font-bold text-left flex items-center justify-between transition-all ${
                           isTableLocked 
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                            : 'bg-[#FAF7F2]/50 border-stone-200 text-stone-800 hover:border-[#2E5A44]'
+                            ? 'bg-orange-50/50 border-orange-200 text-orange-950'
+                            : 'bg-stone-50/70 border-stone-200 text-stone-800 hover:border-orange-400'
                         }`}
                       >
-                        <span>Meja {tableNumber || '—'}</span>
-                        {isTableLocked ? (
-                          <span className="text-[9px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                        <div>
+                          <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Nomor Meja</p>
+                          <p className="text-xs font-bold mt-0.5">Meja {tableNumber || '—'}</p>
+                        </div>
+                        {isTableLocked && (
+                          <span className="text-[9px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
                             <Lock className="w-2.5 h-2.5" /> QR
                           </span>
-                        ) : (
-                          <span className="text-[9px] text-stone-400 font-normal">Ganti</span>
                         )}
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setShowSeatModal(true)}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 text-stone-800 font-bold text-left flex items-center justify-between hover:border-[#2E5A44] cursor-pointer"
+                        className="px-3.5 py-3 rounded-2xl border border-stone-200 bg-stone-50/70 text-stone-800 text-left flex items-center justify-between hover:border-orange-400 transition-all cursor-pointer"
                       >
-                        <span>Kursi {seatNumber}</span>
-                        <span className="text-[9px] text-[#2E5A44] font-normal">Pilih Kursi</span>
+                        <div>
+                          <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Posisi Kursi</p>
+                          <p className="text-xs font-bold text-stone-900 mt-0.5">Kursi {seatNumber}</p>
+                        </div>
+                        <span className="text-[10px] text-orange-600 font-bold">Pilih</span>
                       </button>
                     </div>
                   </div>
 
                   {/* Nama Pemesan */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
-                      <User className="w-3 h-3 text-[#2E5A44]" /> Nama Pemesan
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Nama Pemesan</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Contoh: Budi"
+                      placeholder="Masukkan nama Anda (misal: Budi)"
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
+                      className="w-full px-4 py-3 rounded-2xl border border-stone-200 bg-stone-50/50 text-xs font-medium focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all placeholder:text-stone-400"
                     />
                   </div>
 
-                  {/* Catatan Khusus */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-[#2E5A44]" /> Catatan Tambahan (Opsional)
+                  {/* Catatan Tambahan */}
+                  <div className="space-y-1.5 text-left">
+                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Catatan Tambahan (Opsional)</span>
                     </label>
                     <textarea
-                      placeholder="Contoh: Kurangi es, tanpa sedotan"
+                      placeholder="Contoh: Less ice, jangan pakai sedotan"
                       rows={2}
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44] resize-none"
+                      className="w-full px-4 py-3 rounded-2xl border border-stone-200 bg-stone-50/50 text-xs font-medium focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all resize-none placeholder:text-stone-400"
                     />
                   </div>
 
-                  {/* STRICTLY 2 PAYMENT METHODS: QRIS & TUNAI */}
+                  {/* Clean Radio Option: QRIS & Tunai */}
                   <div className="space-y-2 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
-                      <CreditCard className="w-3 h-3 text-[#2E5A44]" /> Metode Pembayaran
+                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Metode Pembayaran</span>
                     </label>
+
                     <div className="grid grid-cols-2 gap-2.5">
-                      {/* Option 1: QRIS */}
-                      <label className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all text-center ${
+                      {/* QRIS */}
+                      <label className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-2 ${
                         paymentMethod === 'QRIS'
-                          ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold shadow-sm'
+                          ? 'border-orange-500 bg-orange-50/50 text-orange-900 shadow-sm ring-2 ring-orange-500/20'
                           : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
                       }`}>
                         <input
@@ -816,19 +829,21 @@ export default function SpmbClient({
                           onChange={() => setPaymentMethod('QRIS')}
                           className="hidden"
                         />
-                        <div className="w-8 h-8 rounded-full bg-[#2E5A44]/10 flex items-center justify-center text-[#2E5A44]">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          paymentMethod === 'QRIS' ? 'bg-orange-500 text-white shadow-sm' : 'bg-stone-100 text-stone-600'
+                        }`}>
                           <CreditCard className="w-4 h-4" />
                         </div>
                         <div>
                           <p className="text-xs font-bold">QRIS</p>
-                          <p className="text-[10px] text-stone-400 font-medium mt-0.5">Scan & Bayar Otomatis</p>
+                          <p className="text-[10px] text-stone-400 font-medium">BCA, GoPay, Dana, dll</p>
                         </div>
                       </label>
 
-                      {/* Option 2: Tunai di Kasir */}
-                      <label className={`flex flex-col items-center justify-center gap-2 p-3.5 rounded-2xl border cursor-pointer transition-all text-center ${
+                      {/* Tunai */}
+                      <label className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-2 ${
                         paymentMethod === 'COD'
-                          ? 'border-[#2E5A44] bg-[#2E5A44]/5 text-[#2E5A44] font-bold shadow-sm'
+                          ? 'border-orange-500 bg-orange-50/50 text-orange-900 shadow-sm ring-2 ring-orange-500/20'
                           : 'border-stone-200 bg-white text-stone-600 hover:border-stone-300'
                       }`}>
                         <input
@@ -838,19 +853,21 @@ export default function SpmbClient({
                           onChange={() => setPaymentMethod('COD')}
                           className="hidden"
                         />
-                        <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-stone-700">
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                          paymentMethod === 'COD' ? 'bg-orange-500 text-white shadow-sm' : 'bg-stone-100 text-stone-600'
+                        }`}>
                           <Banknote className="w-4 h-4" />
                         </div>
                         <div>
                           <p className="text-xs font-bold">Tunai</p>
-                          <p className="text-[10px] text-stone-400 font-medium mt-0.5">Bayar di Kasir</p>
+                          <p className="text-[10px] text-stone-400 font-medium">Bayar di Kasir</p>
                         </div>
                       </label>
                     </div>
                   </div>
 
                   {errorMsg && (
-                    <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs font-medium text-left">
+                    <div className="p-3 bg-rose-50 text-rose-700 rounded-2xl text-xs font-medium text-left border border-rose-200">
                       ⚠️ {errorMsg}
                     </div>
                   )}
@@ -858,11 +875,11 @@ export default function SpmbClient({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-3.5 rounded-2xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-3 disabled:opacity-50"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Memproses...
+                        <Loader2 className="w-4 h-4 animate-spin" /> Memproses Pesanan...
                       </>
                     ) : (
                       `Kirim Pesanan (${formatRupiah(totalPrice)})`
@@ -875,7 +892,7 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Pop-up Floor Plan Denah Meja Interaktif */}
+      {/* Pop-up Floor Plan Denah Meja */}
       <AnimatePresence>
         {showTableModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -883,7 +900,7 @@ export default function SpmbClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
               onClick={() => setShowTableModal(false)}
             />
 
@@ -896,7 +913,7 @@ export default function SpmbClient({
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
                 <div>
                   <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-2">
-                    <Grid className="w-4 h-4 text-[#2E5A44]" />
+                    <Grid className="w-4 h-4 text-orange-600" />
                     <span>Denah Tata Letak Meja</span>
                   </h3>
                   <p className="text-[11px] text-stone-500">Pilih meja yang Anda tempati di ruangan kafe</p>
@@ -910,16 +927,15 @@ export default function SpmbClient({
               </div>
 
               {/* Floor Plan Canvas */}
-              <div className="my-4 relative w-full aspect-[4/3] rounded-2xl bg-[#FAF7F2] border-2 border-stone-300 overflow-hidden shadow-inner flex items-center justify-center select-none">
+              <div className="my-4 relative w-full aspect-[4/3] rounded-2xl bg-[#FAF9F6] border-2 border-stone-200 overflow-hidden shadow-inner flex items-center justify-center select-none">
                 <div 
                   className="absolute inset-0 opacity-20 pointer-events-none"
                   style={{
-                    backgroundImage: 'radial-gradient(#2E5A44 1px, transparent 1px)',
-                    backgroundSize: '16px 16px'
+                    backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
+                    backgroundSize: '18px 18px'
                   }}
                 />
 
-                {/* Table Items */}
                 {activeTables.map((t) => {
                   const isCurrent = tableNumber === t.number.toString();
                   const isOccupied = t.status === 'OCCUPIED';
@@ -943,16 +959,16 @@ export default function SpmbClient({
                       }}
                       className={`p-3 rounded-2xl border-2 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer ${
                         isCurrent
-                          ? 'bg-[#2E5A44] text-white border-[#2E5A44] ring-4 ring-emerald-500/30 scale-110 z-20'
+                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-transparent ring-4 ring-orange-400/40 scale-110 z-20 shadow-orange-500/30'
                           : isOccupied
-                          ? 'bg-amber-50 text-amber-900 border-amber-300 hover:border-amber-500 z-10'
-                          : 'bg-white text-stone-800 border-stone-300 hover:border-[#2E5A44] hover:scale-105 z-10'
+                          ? 'bg-blue-50 text-blue-900 border-blue-200 hover:border-blue-400 z-10'
+                          : 'bg-white text-stone-800 border-stone-300 hover:border-orange-400 hover:scale-105 z-10'
                       }`}
                     >
                       <span className="font-serif font-bold text-xs sm:text-sm">
                         Meja {t.number}
                       </span>
-                      <span className={`text-[9px] font-semibold mt-0.5 ${isCurrent ? 'text-emerald-200' : 'text-stone-400'}`}>
+                      <span className={`text-[9px] font-semibold mt-0.5 ${isCurrent ? 'text-white/90' : 'text-stone-400'}`}>
                         {t.capacity || 2} Kursi
                       </span>
                       {isCurrent && (
@@ -965,16 +981,15 @@ export default function SpmbClient({
                 })}
               </div>
 
-              {/* Legend & Action */}
               <div className="flex items-center justify-between text-[11px] text-stone-500 pt-2 border-t border-stone-100">
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#2E5A44]" /> Meja Anda</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meja Anda</span>
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-white border border-stone-300" /> Tersedia</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowTableModal(false)}
-                  className="px-4 py-2 rounded-xl bg-[#2E5A44] text-white font-bold text-xs cursor-pointer shadow-sm"
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-xs cursor-pointer shadow-sm"
                 >
                   Pilih Meja {tableNumber}
                 </button>
@@ -984,7 +999,7 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Pop-up Pemilihan Nomor Kursi (Seat Selector) */}
+      {/* Pop-up Pemilihan Nomor Kursi */}
       <AnimatePresence>
         {showSeatModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -992,7 +1007,7 @@ export default function SpmbClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
               onClick={() => setShowSeatModal(false)}
             />
 
@@ -1002,7 +1017,7 @@ export default function SpmbClient({
               exit={{ scale: 0.95, y: 15 }}
               className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center"
             >
-              <div className="w-12 h-12 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
                 <Armchair className="w-6 h-6" />
               </div>
 
@@ -1025,7 +1040,7 @@ export default function SpmbClient({
                       onClick={() => setSeatNumber(sLabel)}
                       className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
                         isSelected
-                          ? 'bg-[#2E5A44] text-white border-[#2E5A44] shadow-md ring-2 ring-emerald-500/30'
+                          ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20 ring-2 ring-orange-400'
                           : 'bg-stone-50 text-stone-800 border-stone-200 hover:border-stone-400'
                       }`}
                     >
@@ -1039,7 +1054,7 @@ export default function SpmbClient({
               <button
                 type="button"
                 onClick={() => setShowSeatModal(false)}
-                className="w-full py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer"
+                className="w-full py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer"
               >
                 Konfirmasi Kursi {seatNumber}
               </button>
@@ -1048,7 +1063,7 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Confirmation Modal Overlay */}
+      {/* Confirmation Modal */}
       <AnimatePresence>
         {showConfirmModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1056,7 +1071,7 @@ export default function SpmbClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm"
               onClick={() => setShowConfirmModal(false)}
             />
             
@@ -1066,7 +1081,7 @@ export default function SpmbClient({
               exit={{ scale: 0.95, y: 10 }}
               className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-stone-200"
             >
-              <div className="w-12 h-12 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
                 <UtensilsCrossed className="w-6 h-6" />
               </div>
               <h3 className="font-serif font-bold text-lg text-stone-900 mb-1">Konfirmasi Pesanan Meja</h3>
@@ -1083,7 +1098,7 @@ export default function SpmbClient({
                 </button>
                 <button
                   onClick={executeCheckout}
-                  className="flex-1 py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer"
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer"
                 >
                   Ya, Kirim
                 </button>
@@ -1104,7 +1119,7 @@ export default function SpmbClient({
         allProducts={products}
       />
 
-      {/* Dynamic QRIS Payment Modal with Download Feature */}
+      {/* Dynamic QRIS Payment Modal */}
       <AnimatePresence>
         {showQrisModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1112,7 +1127,7 @@ export default function SpmbClient({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
               onClick={() => {
                 if (!qrisPaymentPaid) {
                   setShowQrisModal(false);
@@ -1126,7 +1141,6 @@ export default function SpmbClient({
               exit={{ scale: 0.95, y: 15 }}
               className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 text-center border border-stone-200 flex flex-col items-center"
             >
-              {/* Close Button */}
               {!qrisPaymentPaid && (
                 <button
                   onClick={() => setShowQrisModal(false)}
@@ -1167,15 +1181,15 @@ export default function SpmbClient({
                     />
                   </div>
 
-                  <div className="mt-3 px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-100 w-full text-center">
-                    <p className="text-[10px] text-emerald-700 font-bold">
+                  <div className="mt-3 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-100 w-full text-center">
+                    <p className="text-[10px] text-orange-700 font-bold">
                       Scan QR dengan BCA, GoPay, OVO, ShopeePay, Dana, dll.
                     </p>
                   </div>
 
                   <div className="mt-3 text-center">
                     <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Total Tagihan</p>
-                    <p className="text-xl font-serif font-bold text-[#2E5A44] mt-0.5">
+                    <p className="text-xl font-serif font-bold text-orange-600 mt-0.5">
                       {formatRupiah(qrisTotal)}
                     </p>
                   </div>
@@ -1191,7 +1205,7 @@ export default function SpmbClient({
                   </button>
 
                   <div className="mt-4 w-full flex items-center justify-center gap-2 text-xs text-stone-500 font-bold">
-                    <Loader2 className="w-4 h-4 animate-spin text-[#2E5A44]" />
+                    <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
                     <span>Menunggu verifikasi pembayaran...</span>
                   </div>
 
