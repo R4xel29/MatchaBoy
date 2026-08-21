@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
@@ -15,8 +15,10 @@ import {
   ListFilter,
   CheckCircle2,
   AlertCircle,
-  UserPlus,
   Bell,
+  BellOff,
+  Volume2,
+  VolumeX,
   X,
   Eye,
   MapPin,
@@ -25,10 +27,19 @@ import {
   Coffee,
   Store,
   Smartphone,
-  Monitor
+  Monitor,
+  RefreshCw,
+  Sun,
+  Moon,
+  Lock,
+  Unlock,
+  UtensilsCrossed,
+  ArrowRight,
+  Flame
 } from 'lucide-react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 import { useToast } from '@/components/ui/Toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface OrderItem {
   id: string;
@@ -69,1151 +80,562 @@ interface Props {
 const ORDER_TYPE_LABELS: Record<string, string> = {
   DELIVERY: 'Delivery',
   PICKUP: 'Pickup',
-  DINE_IN: 'Dine In',
+  DINE_IN: 'Dine In (Meja)',
 };
 
 const ORDER_TYPE_ICONS: Record<string, React.ElementType> = {
   DELIVERY: Truck,
   PICKUP: ShoppingBag,
-  DINE_IN: Coffee,
+  DINE_IN: UtensilsCrossed,
 };
 
 type TabType = 'antrian' | 'selesai';
 
-const formatWhatsAppNumber = (phone: string) => {
-  let cleaned = phone.replace(/[^0-9]/g, '');
-  if (cleaned.startsWith('08')) {
-    cleaned = '62' + cleaned.substring(1);
-  } else if (cleaned.startsWith('8')) {
-    cleaned = '62' + cleaned;
-  }
-  return cleaned;
-};
-
-const getWhatsAppTemplate = (order: any) => {
-  const orderIdShort = order.id.slice(0, 8).toUpperCase();
-  const itemsText = order.items
-    .map((item: any) => `- ${item.qty}x ${item.product.name}`)
-    .join('\n');
-  const totalAmount = new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(order.total);
-    
-  return `Halo ${order.customerName},
-
-Kami dari *Matchaboy* ingin mengonfirmasi pesanan Anda dengan detail sebagai berikut:
-
-*ID Pesanan:* #${orderIdShort}
-*Status:* ${order.status}
-*Metode Pembayaran:* ${order.paymentMethod}
-*Tipe Pesanan:* ${order.orderType === 'PICKUP' ? 'Ambil Sendiri' : 'Pengiriman'}
-
-*Rincian Pesanan:*
-${itemsText}
-
-*Total:* ${totalAmount}
-
-Jika ada pertanyaan atau perubahan, silakan kabari kami ya. Terima kasih! 🍵`;
-};
-
-const shouldTriggerAlarm = (order: OrderData, leadTimeMin: number) => {
-  if (order.status !== 'PENDING' && order.status !== 'PENDING_PAYMENT') {
-    return false;
-  }
-  if (order.orderType !== 'PICKUP') {
-    return true; // immediate alarm
-  }
-  if (!order.pickupDate || !order.pickupTime) {
-    return true; // immediate alarm if timing is unspecified
-  }
-  try {
-    const scheduledDate = new Date(order.pickupDate);
-    const [hours, minutes] = order.pickupTime.split(':').map(Number);
-    scheduledDate.setHours(hours, minutes, 0, 0);
-    
-    const timeDiffMinutes = (scheduledDate.getTime() - Date.now()) / (1000 * 60);
-    return timeDiffMinutes <= leadTimeMin;
-  } catch (err) {
-    console.error('Error parsing pickup time for alarm:', err);
-    return true;
-  }
-};
-
-export default function CashierOrdersClient({ initialOrders, storeLat, storeLng, initialPickupAlarmLeadTime }: Props) {
-  const { showToast } = useToast();
+export default function CashierOrdersClient({ initialOrders }: Props) {
   const router = useRouter();
-  const [search, setSearch] = useState('');
+  const { showToast } = useToast();
+
+  const [orders, setOrders] = useState<OrderData[]>(initialOrders);
   const [activeTab, setActiveTab] = useState<TabType>('antrian');
-  const [typeFilter, setTypeFilter] = useState('ALL');
-  const [tableFilter, setTableFilter] = useState('ALL');
-  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('ALL');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadingOrderId, setLoadingOrderId] = useState<string | null>(null);
 
-  const [orders, setOrders] = useState(initialOrders);
-  const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(initialPickupAlarmLeadTime);
+  // Kitchen Display features merged
+  const [isAudioEnabled, setIsAudioEnabled] = useState(true);
+  const [isWakeLockActive, setIsWakeLockActive] = useState(false);
+  const [wakeLockSupported, setWakeLockSupported] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
 
-  const uniqueTableNumbers = useMemo(() => {
-    const numbers = new Set<string>();
-    orders.forEach((o) => {
-      if (o.tableNumber) {
-        numbers.add(o.tableNumber);
-      }
-    });
-    return Array.from(numbers).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  }, [orders]);
-
-  // Cancellation Modal State
-  const [isCancelModalOpen, setIsCancelModalOpen] = useState(false);
-  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
-  const [cancelReason, setCancelReason] = useState('Bukti Pembayaran Palsu');
-  const [customReason, setCustomReason] = useState('');
-
-  // Courier Selection State
+  // Courier Assignment Modal
+  const [selectedOrderForCourier, setSelectedOrderForCourier] = useState<OrderData | null>(null);
   const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
-  const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
 
-  // Detail Modal State
-  const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
+  // Web Audio Context & Wake Lock refs
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const wakeLockSentinelRef = useRef<any>(null);
+  const knownOrderIdsRef = useRef<Set<string>>(new Set(initialOrders.map(o => o.id)));
 
-  // Unread orders & alarm sound states
-  const [readOrderIds, setReadOrderIds] = useState<string[]>([]);
-  const [isAudioBlocked, setIsAudioBlocked] = useState(false);
-  const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Load read order IDs on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('cashier_read_orders');
-      if (saved) {
-        try {
-          setReadOrderIds(JSON.parse(saved));
-        } catch {
-          // Ignore
+  // Dual-tone kitchen chime sound
+  const playKitchenBell = useCallback(() => {
+    if (!isAudioEnabled) return;
+    try {
+      if (!audioContextRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          audioContextRef.current = new AudioCtx();
         }
       }
+
+      const ctx = audioContextRef.current;
+      if (!ctx) return;
+
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(1046.5, now); // C6
+      gain1.gain.setValueAtTime(0.8, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 1.0);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 1.0);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(1318.51, now + 0.15); // E6
+      gain2.gain.setValueAtTime(0.6, now + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.15);
+      osc2.stop(now + 1.2);
+    } catch (e) {
+      console.warn('Audio chime failed:', e);
+    }
+  }, [isAudioEnabled]);
+
+  // Screen Wake Lock API
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'wakeLock' in navigator) {
+      setWakeLockSupported(true);
     }
   }, []);
 
-  // Mark selected order as read when opened
-  useEffect(() => {
-    if (selectedOrder) {
-      setReadOrderIds(prev => {
-        if (prev.includes(selectedOrder.id)) return prev;
-        const next = [...prev, selectedOrder.id];
-        localStorage.setItem('cashier_read_orders', JSON.stringify(next));
-        return next;
-      });
-    }
-  }, [selectedOrder]);
-
-  // Sync when server-side initialOrders changes (e.g. after manual action)
-  useEffect(() => {
-    setOrders(initialOrders);
-  }, [initialOrders]);
-
-  // Split orders by tab
-  const ACTIVE_STATUSES = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'ON_DELIVERY'];
-  const DONE_STATUSES = ['COMPLETED', 'DELIVERED', 'CANCELLED'];
-
-  const antrianOrders = orders.filter(o => ACTIVE_STATUSES.includes(o.status));
-  const selesaiOrders = orders.filter(o => DONE_STATUSES.includes(o.status));
-
-  // Lightweight client-side polling (no router.refresh = no full server recompile)
-  const prevAntrianCount = useRef(antrianOrders.length);
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/cashier/orders?format=json&t=${Date.now()}`, {
-          cache: 'no-store',
-          headers: {
-            'Pragma': 'no-cache',
-            'Cache-Control': 'no-cache'
-          }
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.orders) setOrders(data.orders);
-          if (data.pickupAlarmLeadTime !== undefined) setPickupAlarmLeadTime(data.pickupAlarmLeadTime);
-        }
-      } catch {}
-    }, 10000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const hasUnreadOrders = antrianOrders.some(
-    o => shouldTriggerAlarm(o, pickupAlarmLeadTime) && !readOrderIds.includes(o.id)
-  );
-
-  // Continuous alarm playback effect
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    if (hasUnreadOrders) {
-      if (!alarmAudioRef.current) {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-        audio.loop = true;
-        alarmAudioRef.current = audio;
-      }
-
-      alarmAudioRef.current.play()
-        .then(() => {
-          setIsAudioBlocked(false);
-        })
-        .catch(e => {
-          console.log('Continuous alarm blocked by browser:', e);
-          setIsAudioBlocked(true);
-        });
-    } else {
-      if (alarmAudioRef.current) {
-        alarmAudioRef.current.pause();
-        alarmAudioRef.current.currentTime = 0;
-      }
-    }
-
-    return () => {
-      if (alarmAudioRef.current) {
-        alarmAudioRef.current.pause();
-      }
-    };
-  }, [hasUnreadOrders, readOrderIds]);
-
-  useEffect(() => {
-    // If new orders are detected in the queue, we can still trigger visual updates
-    if (antrianOrders.length > prevAntrianCount.current) {
-      router.refresh();
-    }
-    prevAntrianCount.current = antrianOrders.length;
-  }, [antrianOrders.length]);
-
-  // State variables moved to top
-
-  const [sourceFilter, setSourceFilter] = useState('ALL');
-
-  const channelStats = useMemo(() => {
-    let pos = 0;
-    let app = 0;
-    let wa = 0;
-    let spmb = 0;
-
-    orders.forEach((o) => {
-      if (o.source === 'POS') {
-        pos++;
-      } else if (o.source === 'WA') {
-        wa++;
-      } else if (o.source === 'SPMB') {
-        spmb++;
+  const toggleWakeLock = async () => {
+    if (!wakeLockSupported) return;
+    try {
+      if (!isWakeLockActive) {
+        wakeLockSentinelRef.current = await (navigator as any).wakeLock.request('screen');
+        setIsWakeLockActive(true);
+        showToast('Layar akan tetap menyala', 'success');
       } else {
-        app++;
+        if (wakeLockSentinelRef.current) {
+          await wakeLockSentinelRef.current.release();
+          wakeLockSentinelRef.current = null;
+        }
+        setIsWakeLockActive(false);
+        showToast('Wake lock dinonaktifkan', 'info');
       }
-    });
+    } catch (err) {
+      console.error('Wake lock error:', err);
+    }
+  };
 
-    return { pos, app, wa, spmb };
+  // Poll orders every 4 seconds
+  const fetchOrders = useCallback(async () => {
+    try {
+      const res = await fetch('/api/cashier/orders');
+      if (res.ok) {
+        const data = await res.json();
+        const incoming = Array.isArray(data) ? data : data.orders || [];
+
+        // Detect brand new pending orders
+        const hasNewPending = incoming.some((o: OrderData) => 
+          !knownOrderIdsRef.current.has(o.id) && 
+          (o.status === 'PENDING' || o.status === 'PENDING_PAYMENT')
+        );
+
+        if (hasNewPending) {
+          playKitchenBell();
+          showToast('🔔 Pesanan baru masuk!', 'info');
+        }
+
+        incoming.forEach((o: OrderData) => knownOrderIdsRef.current.add(o.id));
+        setOrders(incoming);
+      }
+    } catch (err) {
+      console.error('Error polling cashier orders:', err);
+    }
+  }, [playKitchenBell, showToast]);
+
+  useEffect(() => {
+    const interval = setInterval(fetchOrders, 4000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchOrders();
+    setIsRefreshing(false);
+  };
+
+  // Update order status stepper
+  const handleUpdateStatus = async (orderId: string, nextStatus: string) => {
+    setLoadingOrderId(orderId);
+    try {
+      const res = await fetch(`/api/cashier/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Gagal mengubah status pesanan');
+      }
+
+      showToast(`Status pesanan diubah ke ${nextStatus}`, 'success');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    } finally {
+      setLoadingOrderId(null);
+    }
+  };
+
+  // Item checklist toggle
+  const toggleItemCheck = (orderItemId: string) => {
+    setCheckedItems(prev => ({
+      ...prev,
+      [orderItemId]: !prev[orderItemId]
+    }));
+  };
+
+  // Filtered orders
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      // Tab filter
+      const isCompleted = ['COMPLETED', 'DELIVERED', 'CANCELLED'].includes(order.status);
+      if (activeTab === 'antrian' && isCompleted) return false;
+      if (activeTab === 'selesai' && !isCompleted) return false;
+
+      // Status filter
+      if (selectedStatusFilter !== 'ALL' && order.status !== selectedStatusFilter) {
+        return false;
+      }
+
+      // Order type filter
+      if (selectedType !== 'ALL' && order.orderType !== selectedType) {
+        return false;
+      }
+
+      // Search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesId = order.id.toLowerCase().includes(q);
+        const matchesName = order.customerName.toLowerCase().includes(q);
+        const matchesPhone = order.customerPhone.toLowerCase().includes(q);
+        const matchesTable = order.tableNumber?.toLowerCase().includes(q);
+        const matchesQueue = order.queueNumber?.toLowerCase().includes(q);
+        if (!matchesId && !matchesName && !matchesPhone && !matchesTable && !matchesQueue) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [orders, activeTab, selectedStatusFilter, selectedType, searchQuery]);
+
+  // Counts
+  const antrianCount = useMemo(() => {
+    return orders.filter(o => !['COMPLETED', 'DELIVERED', 'CANCELLED'].includes(o.status)).length;
   }, [orders]);
 
-  const currentOrders = activeTab === 'antrian' ? antrianOrders : selesaiOrders;
+  const selesaiCount = useMemo(() => {
+    return orders.filter(o => ['COMPLETED', 'DELIVERED', 'CANCELLED'].includes(o.status)).length;
+  }, [orders]);
 
-  const filteredOrders = currentOrders.filter((o) => {
-    const matchesSearch =
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.customerName.toLowerCase().includes(search.toLowerCase());
-    const matchesType = typeFilter === 'ALL' || o.orderType === typeFilter;
-    const matchesTable = tableFilter === 'ALL' || o.tableNumber === tableFilter;
-    
-    let matchesSource = true;
-    if (sourceFilter === 'POS') matchesSource = o.source === 'POS';
-    else if (sourceFilter === 'WA') matchesSource = o.source === 'WA';
-    else if (sourceFilter === 'SPMB') matchesSource = o.source === 'SPMB';
-    else if (sourceFilter === 'APP') matchesSource = o.source !== 'POS' && o.source !== 'WA' && o.source !== 'SPMB';
-
-    return matchesSearch && matchesType && matchesTable && matchesSource;
-  });
-
-  const getNextStatus = (status: string, orderType: string, paymentMethod?: string, paymentProofUrl?: string | null) => {
-    if (status === 'PENDING_PAYMENT' && ['QRIS', 'TRANSFER'].includes(paymentMethod || '') && !paymentProofUrl) {
-      return 'PENDING';
-    }
-    if (orderType === 'DELIVERY') {
-      const map: Record<string, string> = {
-        PENDING: 'PREPARING',
-        PENDING_PAYMENT: 'PREPARING',
-        PREPARING: 'READY',
-      };
-      return map[status];
-    } else {
-      const map: Record<string, string> = {
-        PENDING: 'PREPARING',
-        PENDING_PAYMENT: 'PREPARING',
-        PREPARING: 'READY',
-        READY: 'COMPLETED',
-      };
-      return map[status];
-    }
-  };
-
-  const advanceStatus = async (orderId: string, nextStatus: string) => {
-    if (!nextStatus) return;
-    setIsUpdating(orderId);
-    try {
-      const res = await fetch(`/api/cashier/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: nextStatus }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      router.refresh();
-      showToast('Status pesanan berhasil diperbarui', 'success');
-    } catch {
-      showToast('Error updating order', 'error');
-    } finally {
-      setIsUpdating(null);
-    }
-  };
-
-  const handleCancelOrder = async (orderId: string, reason: string) => {
-    setIsUpdating(orderId);
-    try {
-      const res = await fetch(`/api/cashier/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'CANCELLED', reason }),
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed');
-      }
-      setSelectedOrder(null);
-      router.refresh();
-      showToast('Pesanan berhasil dibatalkan', 'success');
-    } catch (err: any) {
-      showToast(err.message || 'Gagal membatalkan pesanan', 'error');
-    } finally {
-      setIsUpdating(null);
-    }
-  };
-
-  const handleAssignDriver = async (driverId: string) => {
-    if (!selectedOrderIdForCourier) return;
-    try {
-      const res = await fetch(`/api/admin/orders/${selectedOrderIdForCourier}/assign`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ driverId }),
-      });
-      if (!res.ok) throw new Error('Failed to assign driver');
-      router.refresh();
-      showToast('Kurir berhasil ditugaskan', 'success');
-    } catch (err) {
-      console.error(err);
-      showToast('Gagal menugaskan kurir', 'error');
-    }
-  };
-
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'COMPLETED':
-      case 'DELIVERED':
-        return 'bg-emerald-50 text-emerald-700';
-      case 'READY':
-        return 'bg-blue-50 text-blue-700';
-      case 'PREPARING':
-        return 'bg-amber-50 text-amber-700';
-      case 'ON_DELIVERY':
-        return 'bg-violet-50 text-violet-700';
-      case 'ASSIGNED':
-        return 'bg-cyan-50 text-cyan-700';
-      case 'PENDING_PAYMENT':
-        return 'bg-orange-50 text-orange-700';
-      case 'CANCELLED':
-        return 'bg-red-50 text-red-700';
-      default:
-        return 'bg-slate-100 text-slate-600';
-    }
-  };
-
-  const getTypeStyle = (type: string) => {
-    switch (type) {
-      case 'PICKUP':
-        return 'bg-purple-50 text-purple-700';
-      case 'DELIVERY':
-        return 'bg-sky-50 text-sky-700';
-      case 'DINE_IN':
-        return 'bg-amber-50 text-amber-700';
-      default:
-        return 'bg-slate-100 text-slate-600';
-    }
+  const formatElapsed = (createdAtStr: string) => {
+    const elapsedSecs = Math.floor((Date.now() - new Date(createdAtStr).getTime()) / 1000);
+    const mins = Math.floor(elapsedSecs / 60);
+    if (mins < 1) return 'Baru saja';
+    if (mins < 60) return `${mins} mnt lalu`;
+    const hours = Math.floor(mins / 60);
+    return `${hours} jam ${mins % 60} mnt lalu`;
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Pesanan Hari Ini</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          {orders.length} pesanan · Total {formatRupiah(orders.reduce((s, o) => s + o.total, 0))}
-        </p>
-      </div>
-
-      {isAudioBlocked && hasUnreadOrders && (
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm animate-in fade-in duration-300">
-          <div className="flex items-center gap-2.5">
-            <Bell className="w-5 h-5 text-red-600 animate-bounce shrink-0" />
-            <div>
-              <p className="text-xs font-bold text-red-950">Ada Pesanan Belum Dibuka!</p>
-              <p className="text-[11px] text-red-700 leading-relaxed">Browser memblokir pemutaran alarm otomatis. Klik tombol di samping untuk mengaktifkan alarm suara.</p>
-            </div>
+    <div className="min-h-screen bg-[#FAF7F2] text-[#1C1917] p-4 sm:p-6 lg:p-8 space-y-6">
+      
+      {/* Top Header Bar */}
+      <div className="bg-white/80 backdrop-blur-md rounded-3xl p-5 sm:p-6 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] text-[11px] font-bold tracking-wide">
+            <ChefHat className="w-3.5 h-3.5" />
+            <span>Kitchen & POS Live Orders</span>
           </div>
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 mt-1">
+            Pesanan Hari Ini
+          </h1>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Pantau dan kelola antrean pesanan dapur & meja secara realtime
+          </p>
+        </div>
+
+        {/* Live Controls: Audio chime, Wake Lock, Refresh */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Audio Chime Toggle */}
           <button
-            onClick={() => {
-              if (alarmAudioRef.current) {
-                alarmAudioRef.current.play()
-                  .then(() => setIsAudioBlocked(false))
-                  .catch(err => console.log('Play retry failed:', err));
-              } else {
-                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-                audio.loop = true;
-                alarmAudioRef.current = audio;
-                audio.play()
-                  .then(() => setIsAudioBlocked(false))
-                  .catch(err => console.log('Init play failed:', err));
-              }
-            }}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl active:scale-[0.98] transition-all shrink-0 shadow-sm"
+            onClick={() => setIsAudioEnabled(!isAudioEnabled)}
+            className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+              isAudioEnabled
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-sm'
+                : 'bg-stone-50 text-stone-500 border-stone-200'
+            }`}
+            title="Lonceng Suara Pesanan Baru"
           >
-            Aktifkan Suara
+            {isAudioEnabled ? <Volume2 className="w-4 h-4 text-emerald-600" /> : <VolumeX className="w-4 h-4" />}
+            <span>{isAudioEnabled ? 'Suara ON' : 'Suara Mute'}</span>
+          </button>
+
+          {/* Screen Wake Lock */}
+          {wakeLockSupported && (
+            <button
+              onClick={toggleWakeLock}
+              className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                isWakeLockActive
+                  ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm'
+                  : 'bg-stone-50 text-stone-500 border-stone-200'
+              }`}
+              title="Cegah layar redup / mati"
+            >
+              <Smartphone className="w-4 h-4" />
+              <span>{isWakeLockActive ? 'Layar Terjaga' : 'Auto-Sleep'}</span>
+            </button>
+          )}
+
+          {/* Refresh Button */}
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="px-4 py-2.5 rounded-2xl bg-[#2E5A44] hover:bg-[#234533] text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>Segarkan</span>
           </button>
         </div>
-      )}
-
-      {/* Headline Saluran Pemesanan Summary */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <button
-          type="button"
-          onClick={() => setSourceFilter(prev => prev === 'POS' ? 'ALL' : 'POS')}
-          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
-            sourceFilter === 'POS'
-              ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-[1.02]'
-              : 'bg-white border-amber-200/70 hover:border-amber-400 text-slate-800 shadow-sm hover:shadow'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'POS' ? 'text-amber-100' : 'text-amber-700'}`}>
-              Kasir (POS)
-            </span>
-            <Store className={`w-4 h-4 ${sourceFilter === 'POS' ? 'text-white' : 'text-amber-600'}`} />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-xl font-black">{channelStats.pos}</span>
-            <span className={`text-[10px] font-semibold ${sourceFilter === 'POS' ? 'text-amber-100' : 'text-slate-500'}`}>
-              pesanan
-            </span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSourceFilter(prev => prev === 'APP' ? 'ALL' : 'APP')}
-          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
-            sourceFilter === 'APP'
-              ? 'bg-sky-600 text-white border-sky-700 shadow-md scale-[1.02]'
-              : 'bg-white border-sky-200/70 hover:border-sky-400 text-slate-800 shadow-sm hover:shadow'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'APP' ? 'text-sky-100' : 'text-sky-700'}`}>
-              Aplikasi
-            </span>
-            <Smartphone className={`w-4 h-4 ${sourceFilter === 'APP' ? 'text-white' : 'text-sky-600'}`} />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-xl font-black">{channelStats.app}</span>
-            <span className={`text-[10px] font-semibold ${sourceFilter === 'APP' ? 'text-sky-100' : 'text-slate-500'}`}>
-              pesanan
-            </span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSourceFilter(prev => prev === 'WA' ? 'ALL' : 'WA')}
-          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
-            sourceFilter === 'WA'
-              ? 'bg-emerald-600 text-white border-emerald-700 shadow-md scale-[1.02]'
-              : 'bg-white border-emerald-200/70 hover:border-emerald-400 text-slate-800 shadow-sm hover:shadow'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'WA' ? 'text-emerald-100' : 'text-emerald-700'}`}>
-              Bot WhatsApp
-            </span>
-            <MessageCircle className={`w-4 h-4 ${sourceFilter === 'WA' ? 'text-white' : 'text-emerald-600'}`} />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-xl font-black">{channelStats.wa}</span>
-            <span className={`text-[10px] font-semibold ${sourceFilter === 'WA' ? 'text-emerald-100' : 'text-slate-500'}`}>
-              pesanan
-            </span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setSourceFilter(prev => prev === 'SPMB' ? 'ALL' : 'SPMB')}
-          className={`p-3.5 rounded-2xl border text-left transition-all duration-200 cursor-pointer ${
-            sourceFilter === 'SPMB'
-              ? 'bg-indigo-600 text-white border-indigo-700 shadow-md scale-[1.02]'
-              : 'bg-white border-indigo-200/70 hover:border-indigo-400 text-slate-800 shadow-sm hover:shadow'
-          }`}
-        >
-          <div className="flex items-center justify-between mb-1.5">
-            <span className={`text-[11px] font-extrabold uppercase tracking-wider ${sourceFilter === 'SPMB' ? 'text-indigo-100' : 'text-indigo-700'}`}>
-              SPMB (Self Service)
-            </span>
-            <Monitor className={`w-4 h-4 ${sourceFilter === 'SPMB' ? 'text-white' : 'text-indigo-600'}`} />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-xl font-black">{channelStats.spmb}</span>
-            <span className={`text-[10px] font-semibold ${sourceFilter === 'SPMB' ? 'text-indigo-100' : 'text-slate-500'}`}>
-              pesanan
-            </span>
-          </div>
-        </button>
       </div>
 
-      {/* Tabs: Antrian / Selesai */}
-      <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
-        <button
-          onClick={() => setActiveTab('antrian')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'antrian'
-              ? 'bg-white text-amber-700 shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <AlertCircle className="w-4 h-4" />
-          Antrian
-          {antrianOrders.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold min-w-[20px] text-center">
-              {antrianOrders.length}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('selesai')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-            activeTab === 'selesai'
-              ? 'bg-white text-emerald-700 shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <CheckCircle2 className="w-4 h-4" />
-          Selesai Hari Ini
-          <span className="text-[10px] text-muted-foreground">({selesaiOrders.length})</span>
-        </button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-          <input
-            type="text"
-            placeholder="Cari pesanan..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-          />
-        </div>
-        <select
-          value={sourceFilter}
-          onChange={(e) => setSourceFilter(e.target.value)}
-          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)] font-medium"
-        >
-          <option value="ALL">Semua Saluran</option>
-          <option value="POS">Kasir (POS)</option>
-          <option value="APP">Aplikasi (App/Web)</option>
-          <option value="WA">Bot WhatsApp</option>
-          <option value="SPMB">SPMB (Self Service)</option>
-        </select>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-        >
-          <option value="ALL">Semua Tipe</option>
-          <option value="PICKUP">Pickup</option>
-          <option value="DELIVERY">Delivery</option>
-          <option value="DINE_IN">Dine In</option>
-        </select>
-
-        {uniqueTableNumbers.length > 0 && (
-          <select
-            value={tableFilter}
-            onChange={(e) => setTableFilter(e.target.value)}
-            className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+      {/* Filter Tabs & Search Bar */}
+      <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+        
+        {/* Main Tabs: Antrian vs Selesai */}
+        <div className="flex gap-2 p-1 bg-stone-200/60 rounded-2xl shrink-0">
+          <button
+            onClick={() => setActiveTab('antrian')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'antrian'
+                ? 'bg-white text-[#2E5A44] shadow-sm'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
           >
-            <option value="ALL">Semua Meja</option>
-            {uniqueTableNumbers.map((num) => (
-              <option key={num} value={num}>
-                Meja {num}
-              </option>
-            ))}
+            <span>Antrean Aktif</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeTab === 'antrian' ? 'bg-[#2E5A44] text-white' : 'bg-stone-300 text-stone-700'
+            }`}>
+              {antrianCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('selesai')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              activeTab === 'selesai'
+                ? 'bg-white text-stone-900 shadow-sm'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <span>Riwayat Selesai</span>
+            <span className="px-2 py-0.5 rounded-full bg-stone-300 text-stone-700 text-[10px] font-black">
+              {selesaiCount}
+            </span>
+          </button>
+        </div>
+
+        {/* Search Input & Order Type Filters */}
+        <div className="flex flex-col sm:flex-row gap-2.5 items-center flex-1 max-w-xl">
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Cari ID, nama pemesan, meja, antrean..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9.5 pr-4 py-2.5 rounded-2xl bg-white border border-stone-200 text-xs font-medium focus:outline-none focus:border-[#2E5A44] shadow-sm"
+            />
+          </div>
+
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="w-full sm:w-auto px-3.5 py-2.5 rounded-2xl bg-white border border-stone-200 text-xs font-bold focus:outline-none focus:border-[#2E5A44] cursor-pointer shadow-sm"
+          >
+            <option value="ALL">Semua Tipe</option>
+            <option value="DINE_IN">Dine-In (Meja)</option>
+            <option value="PICKUP">Pickup (Ambil)</option>
+            <option value="DELIVERY">Delivery (Kurir)</option>
           </select>
-        )}
+        </div>
       </div>
 
-      {/* Order Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        {filteredOrders.length === 0 ? (
-          <div className="col-span-full py-16 text-center text-muted-foreground/50 bg-white rounded-2xl border border-border/40">
-            <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">
-              {activeTab === 'antrian' ? 'Tidak ada pesanan dalam antrian' : 'Belum ada pesanan selesai'}
-            </p>
-          </div>
-        ) : (
-          filteredOrders.map((order) => {
-            const TypeIcon = ORDER_TYPE_ICONS[order.orderType] || Package;
-            return (
-              <div
-                key={order.id}
-                className="bg-white rounded-2xl border border-border/40 shadow-[0_1px_2px_rgba(0,0,0,0.03)] hover:shadow-md transition-all duration-300 overflow-hidden"
-              >
-                <div className="p-4">
-                  {/* Top row */}
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold text-amber-700">
+      {/* Orders Grid / Kitchen Kanban Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {filteredOrders.map((order) => {
+          const TypeIcon = ORDER_TYPE_ICONS[order.orderType] || Coffee;
+          const isPending = order.status === 'PENDING' || order.status === 'PENDING_PAYMENT';
+          const isPreparing = order.status === 'PREPARING';
+          const isReady = order.status === 'READY';
+          const isCompleted = order.status === 'COMPLETED' || order.status === 'DELIVERED';
+          const isCancelled = order.status === 'CANCELLED';
+
+          const elapsedSecs = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 1000);
+          const isLate = elapsedSecs > 20 * 60 && !isCompleted && !isCancelled;
+
+          return (
+            <motion.div
+              key={order.id}
+              layout
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`bg-white rounded-3xl border overflow-hidden shadow-sm flex flex-col justify-between transition-all ${
+                isLate
+                  ? 'border-rose-400 ring-2 ring-rose-300/40'
+                  : isPending
+                  ? 'border-amber-300'
+                  : isPreparing
+                  ? 'border-blue-300'
+                  : isReady
+                  ? 'border-emerald-400 ring-2 ring-emerald-300/40'
+                  : 'border-stone-200'
+              }`}
+            >
+              {/* Card Header */}
+              <div className="p-4 bg-[#FAF7F2] border-b border-stone-100 flex items-start justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    {order.queueNumber ? (
+                      <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-lg bg-[#2E5A44] text-white">
+                        {order.queueNumber}
+                      </span>
+                    ) : (
+                      <span className="font-mono font-bold text-xs text-stone-500">
                         #{order.id.slice(0, 8).toUpperCase()}
                       </span>
-                      {order.queueNumber && (
-                        <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 font-extrabold text-[11px] rounded-lg border border-amber-200 uppercase shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-                          {order.queueNumber}
-                        </span>
-                      )}
-                      {order.tableNumber && (
-                        <span className="px-2.5 py-0.5 bg-rose-100 text-rose-800 font-extrabold text-[11px] rounded-lg border border-rose-250 uppercase shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-                          Meja {order.tableNumber}
-                        </span>
-                      )}
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                        order.source === 'SPMB' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm' :
-                        order.source === 'WA' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm' :
-                        order.source === 'POS' ? 'bg-amber-50 text-amber-700 border border-amber-100 shadow-sm' :
-                        'bg-sky-50 text-sky-700 border border-sky-100 shadow-sm'
-                      }`}>
-                        {order.source === 'SPMB' ? `SPMB (Self Service)${order.pickupTime ? `: ${order.pickupTime}` : ''}` : 
-                         order.source === 'WA' ? 'Bot WhatsApp' : 
-                         order.source === 'POS' ? 'Kasir (POS)' : 'Aplikasi'}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getTypeStyle(order.orderType)}`}>
-                        <TypeIcon className="w-3 h-3 inline mr-0.5 -mt-0.5" />
-                        {ORDER_TYPE_LABELS[order.orderType]}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getStatusStyle(order.status)}`}>
-                        {order.status.replace('_', ' ')}
-                      </span>
-                      {order.paymentProofUrl && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">
-                          📸 Bukti Ada
-                        </span>
-                      )}
-                      {(order.status === 'PENDING' || order.status === 'PENDING_PAYMENT') && !readOrderIds.includes(order.id) && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-red-50 text-red-700 border border-red-200 animate-pulse flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping shrink-0" />
-                          Belum Dibuka
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {order.orderType === 'PICKUP' && order.pickupDate && order.pickupTime ? (
-                        <span className="text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-100">
-                          Ambil: {new Date(order.pickupDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })} {order.pickupTime}
-                        </span>
-                      ) : (
-                        new Date(order.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-                      )}
-                    </span>
-                  </div>
-
-                  {/* Customer + Items */}
-                  <div className="space-y-2 cursor-pointer hover:bg-slate-50/50 p-2 -mx-2 rounded-xl transition-colors" onClick={() => setSelectedOrder(order)}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-[13px] font-semibold text-foreground">{order.customerName}</p>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <p className="text-[10px] text-muted-foreground">{order.customerPhone}</p>
-                          <a
-                            href={`https://wa.me/${formatWhatsAppNumber(order.customerPhone)}?text=${encodeURIComponent(getWhatsAppTemplate(order))}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center justify-center p-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors border border-emerald-100/50 shadow-sm"
-                            onClick={(e) => e.stopPropagation()}
-                            title="Hubungi via WhatsApp"
-                          >
-                            <MessageCircle className="w-3 h-3 text-emerald-600" />
-                          </a>
-                        </div>
-                      </div>
-                      <span className="text-sm font-bold text-foreground">{formatRupiah(order.total)}</span>
-                    </div>
-                    <div className="space-y-0.5">
-                      {order.items.slice(0, 3).map((item) => (
-                        <div key={item.id} className="text-[12px] text-muted-foreground">
-                          <span>{item.qty}× {item.product.name}</span>
-                          {item.modifiers && (
-                            <span className="text-[10px] text-muted-foreground/80 italic ml-1.5 block pl-3">
-                              ({item.modifiers})
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                      {order.items.length > 3 && (
-                        <p className="text-[11px] text-muted-foreground/60">
-                          +{order.items.length - 3} item lainnya
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/30">
-                      <div className="flex flex-col">
-                        <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Metode Pembayaran</span>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[11px] font-medium text-foreground">
-                            {order.paymentMethod === 'QRIS' ? 'QRIS (Doku)' :
-                             order.paymentMethod === 'COD' ? 'Bayar di Tempat (COD)' :
-                             order.paymentMethod === 'CASH' ? 'Tunai (Kasir)' :
-                             order.paymentMethod === 'TRANSFER' ? 'Transfer Bank' : order.paymentMethod}
-                          </span>
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                            order.status === 'PENDING_PAYMENT' 
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200' 
-                              : ['CANCELLED'].includes(order.status)
-                              ? 'bg-gray-100 text-gray-700 border border-gray-250'
-                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          }`}>
-                            {order.status === 'PENDING_PAYMENT' ? 'Belum Bayar' : ['CANCELLED'].includes(order.status) ? 'Batal' : 'Lunas/Diterima'}
-                          </span>
-                        </div>
-                      </div>
-                      <button className="text-[11px] font-medium text-amber-600 flex items-center gap-1 hover:text-amber-700">
-                        <Eye className="w-3.5 h-3.5" />
-                        Detail Pesanan
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Actions — only for active orders */}
-                {activeTab === 'antrian' && (
-                  <div className="px-4 py-3 bg-muted/20 border-t border-border/30 flex gap-2">
-                    {order.orderType === 'DELIVERY' && order.status === 'READY' ? (
-                      <button
-                        onClick={() => {
-                          setSelectedOrderIdForCourier(order.id);
-                          setIsCourierModalOpen(true);
-                        }}
-                        className="flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 text-white font-semibold text-xs hover:opacity-90 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        Tugaskan Kurir
-                      </button>
-                    ) : getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl) ? (
-                      (() => {
-                        const nextStatus = getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl)!;
-                        const isAcceptPayment = nextStatus === 'PENDING';
-                        return (
-                          <button
-                            onClick={() => advanceStatus(order.id, nextStatus)}
-                            disabled={isUpdating === order.id}
-                            className={`flex-[2] py-2.5 px-4 rounded-xl bg-gradient-to-r ${
-                              isAcceptPayment 
-                                ? 'from-emerald-600 to-emerald-500' 
-                                : 'from-amber-600 to-amber-500'
-                            } text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5`}
-                          >
-                            {isUpdating === order.id ? (
-                              'Mengupdate...'
-                            ) : (
-                              <>
-                                {order.status === 'PREPARING' && <ChefHat className="w-3.5 h-3.5" />}
-                                {order.status === 'READY' && <Check className="w-3.5 h-3.5" />}
-                                {isAcceptPayment ? 'Terima Pembayaran' : `Ubah ke → ${nextStatus.replace('_', ' ')}`}
-                              </>
-                            )}
-                          </button>
-                        );
-                      })()
-                    ) : (
-                       <div className="flex-1 text-center text-xs text-muted-foreground py-1">
-                          Menunggu kurir...
-                       </div>
                     )}
-                    
-                    <button
-                      onClick={() => {
-                        setCancelOrderId(order.id);
-                        setCancelReason('Bukti Pembayaran Palsu');
-                        setCustomReason('');
-                        setIsCancelModalOpen(true);
-                      }}
-                      className="px-3 py-2.5 rounded-xl border border-red-200 bg-red-50 text-red-600 font-semibold text-xs hover:bg-red-100 transition-all shadow-sm flex items-center justify-center gap-1 active:scale-[0.98]"
-                      title="Batalkan Pesanan"
-                    >
-                      <X className="w-3.5 h-3.5 shrink-0" />
-                      <span>Batal</span>
-                    </button>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-white border border-stone-200 text-stone-700 text-[10px] font-bold">
+                      <TypeIcon className="w-3 h-3 text-[#2E5A44]" />
+                      {ORDER_TYPE_LABELS[order.orderType] || order.orderType}
+                    </span>
                   </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
 
-      <CourierSelectModal
-        isOpen={isCourierModalOpen}
-        onClose={() => {
-          setIsCourierModalOpen(false);
-          setSelectedOrderIdForCourier(null);
-        }}
-        onSelectDriver={handleAssignDriver}
-        orderId={selectedOrderIdForCourier || ''}
-      />
-
-      {/* Cancellation Confirmation Modal */}
-      {isCancelModalOpen && cancelOrderId && (
-        <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 sm:p-6" onClick={() => setIsCancelModalOpen(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-            <div className="p-5 border-b border-border/40 flex justify-between items-start bg-slate-50/50">
-              <div>
-                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-red-600" />
-                  Batalkan Pesanan
-                </h3>
-                <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
-                  #{cancelOrderId.slice(0, 8).toUpperCase()}
-                </p>
-              </div>
-              <button 
-                onClick={() => setIsCancelModalOpen(false)}
-                className="p-1.5 text-muted-foreground hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4">
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Apakah Anda yakin ingin membatalkan pesanan ini? Poin, voucher, dan stok bahan (jika ada) akan dikembalikan secara otomatis.
-              </p>
-
-              <div className="space-y-2">
-                <label className="text-xs font-semibold text-foreground">Alasan Pembatalan</label>
-                <div className="grid grid-cols-1 gap-2">
-                  {[
-                    'Bukti Pembayaran Palsu',
-                    'Stok Bahan Habis',
-                    'Pelanggan Minta Batal',
-                    'Lainnya'
-                  ].map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setCancelReason(r)}
-                      className={`w-full py-2.5 px-3 rounded-xl border text-left text-xs font-semibold transition-all ${
-                        cancelReason === r
-                          ? 'border-red-500 bg-red-50/50 text-red-700 shadow-sm'
-                          : 'border-border/60 hover:bg-slate-50 text-foreground'
-                      }`}
-                    >
-                      {r}
-                    </button>
-                  ))}
+                  <h3 className="font-serif font-bold text-base text-stone-900 leading-tight">
+                    {order.customerName}
+                  </h3>
+                  {order.tableNumber && (
+                    <p className="text-xs font-bold text-[#2E5A44]">
+                      📍 {order.tableNumber}
+                    </p>
+                  )}
                 </div>
-              </div>
 
-              {cancelReason === 'Lainnya' && (
-                <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-200">
-                  <label className="text-xs font-semibold text-foreground">Tulis Alasan Manual</label>
-                  <textarea
-                    value={customReason}
-                    onChange={(e) => setCustomReason(e.target.value)}
-                    placeholder="Contoh: Toko tutup lebih awal / kendala operasional"
-                    rows={3}
-                    className="w-full p-3 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="p-5 border-t border-border/40 bg-slate-50/50 flex gap-3">
-              <button
-                onClick={() => setIsCancelModalOpen(false)}
-                className="flex-1 py-2.5 rounded-xl border border-border/60 text-xs font-semibold hover:bg-slate-100 transition-colors"
-              >
-                Kembali
-              </button>
-              <button
-                onClick={async () => {
-                  const finalReason = cancelReason === 'Lainnya' ? (customReason.trim() || 'Lainnya') : cancelReason;
-                  await handleCancelOrder(cancelOrderId, finalReason);
-                  setIsCancelModalOpen(false);
-                }}
-                disabled={isUpdating === cancelOrderId || (cancelReason === 'Lainnya' && !customReason.trim())}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm active:scale-[0.98] flex items-center justify-center"
-              >
-                {isUpdating === cancelOrderId ? 'Memproses...' : 'Ya, Batalkan'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Detail Modal */}
-      {selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 sm:p-6" onClick={() => setSelectedOrder(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="p-4 sm:p-5 border-b border-border/40 flex justify-between items-start bg-slate-50/50">
-              <div>
-                <h2 className="text-lg font-bold font-heading text-foreground">Detail Pesanan</h2>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <p className="text-sm font-mono text-amber-700 font-semibold">#{selectedOrder.id.toUpperCase()}</p>
-                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
-                    selectedOrder.source === 'SPMB' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm' :
-                    selectedOrder.source === 'WA' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm' :
-                    selectedOrder.source === 'POS' ? 'bg-amber-50 text-amber-700 border border-amber-100 shadow-sm' :
-                    'bg-sky-50 text-sky-700 border border-sky-100 shadow-sm'
+                <div className="text-right space-y-1">
+                  <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    isLate ? 'bg-rose-100 text-rose-800 animate-pulse font-black' : 'bg-stone-200 text-stone-700'
                   }`}>
-                    {selectedOrder.source === 'SPMB' ? `SPMB (Self Service)` : 
-                     selectedOrder.source === 'WA' ? 'Bot WhatsApp' : 
-                     selectedOrder.source === 'POS' ? 'Kasir (POS)' : 'Aplikasi'}
+                    <Clock className="w-2.5 h-2.5" />
+                    {formatElapsed(order.createdAt)}
                   </span>
-                  {selectedOrder.queueNumber && (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-extrabold text-[11px] rounded-lg border border-amber-200 uppercase">
-                      Antrean: {selectedOrder.queueNumber}
-                    </span>
-                  )}
-                  {selectedOrder.orderType === 'PICKUP' && selectedOrder.pickupDate && selectedOrder.pickupTime && (
-                    <span className="px-2 py-0.5 bg-purple-50 text-purple-700 font-bold text-[11px] rounded-lg border border-purple-150">
-                      Waktu Ambil: {new Date(selectedOrder.pickupDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })} pukul {selectedOrder.pickupTime}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <button onClick={() => setSelectedOrder(null)} className="p-2 text-muted-foreground hover:bg-slate-100 rounded-full transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-6">
-              {selectedOrder.status === 'CANCELLED' && (
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-xs text-red-700 font-semibold space-y-1">
-                  <div className="flex items-center gap-1.5 font-bold uppercase">
-                    🚫 Pesanan Dibatalkan
-                  </div>
-                  <p className="text-red-650">
-                    Alasan: {selectedOrder.cancelReason || 'Tidak ada alasan khusus'}
+                  <p className="text-[10px] font-bold text-stone-400">
+                    {order.paymentMethod}
                   </p>
                 </div>
-              )}
-
-              {/* Customer Info */}
-              <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-0.5">Pelanggan</p>
-                    <p className="text-sm font-semibold text-foreground">{selectedOrder.customerName}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xs text-muted-foreground">{selectedOrder.customerPhone}</p>
-                      <a
-                        href={`https://wa.me/${formatWhatsAppNumber(selectedOrder.customerPhone)}?text=${encodeURIComponent(getWhatsAppTemplate(selectedOrder))}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors text-[10px] font-bold uppercase tracking-wider border border-emerald-100 shadow-sm"
-                      >
-                        <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>WA</span>
-                      </a>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-0.5">Tipe Pesanan</p>
-                    <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${getTypeStyle(selectedOrder.orderType)}`}>
-                      {ORDER_TYPE_LABELS[selectedOrder.orderType] || selectedOrder.orderType}
-                    </span>
-                    {selectedOrder.tableNumber && (
-                      <p className="text-xs font-semibold text-foreground mt-1">Meja: {selectedOrder.tableNumber}</p>
-                    )}
-                  </div>
-                </div>
-
-                {(selectedOrder.orderType === 'DELIVERY' || selectedOrder.source === 'SPMB') && selectedOrder.address && (
-                  <div className="pt-2 border-t border-border/20">
-                    <p className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      Alamat Pengiriman
-                    </p>
-                    <p className="text-[13px] text-foreground leading-relaxed">
-                      {selectedOrder.address.split('(')[0].trim()}
-                    </p>
-                    {(() => {
-                      const match = selectedOrder.address.match(/\(([^,]+),\s*([^)]+)\)/);
-                      if (match) {
-                        const lat = match[1].trim();
-                        const lng = match[2].trim();
-                        return (
-                          <>
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-semibold hover:bg-blue-100 transition-colors"
-                          >
-                            <MapPin className="w-3.5 h-3.5" />
-                            Buka di Google Maps
-                          </a>
-                          <div className="mt-3 w-full h-64 rounded-xl overflow-hidden border border-border/40 shadow-inner">
-                            <iframe
-                              width="100%"
-                              height="100%"
-                              style={{ border: 0 }}
-                              loading="lazy"
-                              allowFullScreen
-                              referrerPolicy="no-referrer-when-downgrade"
-                              src={`https://maps.google.com/maps?saddr=${storeLat},${storeLng}&daddr=${lat},${lng}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                            ></iframe>
-                          </div>
-                        </>
-                      );
-                    }
-                    return null;
-                  })()}
-                </div>
-              )}
-
-              {selectedOrder.notes && (
-                <div className="bg-amber-50/50 border border-amber-200/60 rounded-xl p-3 text-xs text-amber-900 leading-relaxed">
-                  <span className="font-bold">Catatan Pesanan:</span> {selectedOrder.notes}
-                </div>
-              )}
               </div>
 
-              {/* Payment Proof for Cashier review */}
-              {selectedOrder.paymentProofUrl && (
-                <div className="bg-emerald-50/50 rounded-xl p-4 border border-emerald-150 space-y-3">
-                  <h3 className="text-sm font-bold text-emerald-950 flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-emerald-700" />
-                    {selectedOrder.paymentProofUrl === '/verified-cashier.svg' ? 'Status Pembayaran' : 'Bukti Pembayaran (Sudah Diunggah)'}
-                  </h3>
-                  <div className="relative w-full aspect-[4/3] max-w-[280px] mx-auto rounded-xl overflow-hidden border border-emerald-200 bg-white group shadow-sm">
-                    <img 
-                      src={selectedOrder.paymentProofUrl} 
-                      alt="Bukti Pembayaran" 
-                      className={`w-full h-full ${selectedOrder.paymentProofUrl === '/verified-cashier.svg' ? 'object-contain p-2' : 'object-cover group-hover:scale-[1.02]'} transition-all duration-300`}
-                    />
-                    {selectedOrder.paymentProofUrl !== '/verified-cashier.svg' && (
-                      <a 
-                        href={selectedOrder.paymentProofUrl} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-xs font-bold transition-opacity gap-1 cursor-pointer"
+              {/* Dish Items Checklist */}
+              <div className="p-4 space-y-2 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                  Daftar Pesanan ({order.items.reduce((acc, i) => acc + i.qty, 0)} item)
+                </p>
+                
+                <div className="space-y-1.5">
+                  {order.items.map((item) => {
+                    const isChecked = checkedItems[item.id] || false;
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleItemCheck(item.id)}
+                        className={`p-2.5 rounded-2xl border transition-all flex items-start justify-between gap-3 cursor-pointer select-none ${
+                          isChecked
+                            ? 'bg-emerald-50/60 border-emerald-300 opacity-60 line-through'
+                            : 'bg-stone-50/70 border-stone-200/80 hover:bg-stone-100/80'
+                        }`}
                       >
-                        <ImageIcon className="w-5 h-5 text-white" />
-                        <span>Buka Ukuran Penuh</span>
-                      </a>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Order Items */}
-              <div>
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <Package className="w-4 h-4 text-muted-foreground" />
-                  Daftar Pesanan
-                </h3>
-                <div className="space-y-3">
-                  {selectedOrder.items.map((item) => (
-                    <div key={item.id} className="flex justify-between items-center gap-4 pb-3 border-b border-border/40 last:border-0 last:pb-0">
-                      <div className="flex items-center gap-3">
-                        {/* Product Image */}
-                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100 border border-border/20 relative shrink-0">
-                          {item.product.image ? (
-                            <Image
-                              src={item.product.image}
-                              alt={item.product.name}
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Package className="w-5 h-5 text-muted-foreground/30" />
-                            </div>
-                          )}
-                          <div className="absolute top-0 right-0 bg-amber-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-bl-lg">
-                            {item.qty}x
+                        <div className="flex items-start gap-2.5">
+                          <div className={`w-4 h-4 rounded-md border mt-0.5 flex items-center justify-center ${
+                            isChecked ? 'bg-emerald-600 border-emerald-600 text-white' : 'border-stone-300 bg-white'
+                          }`}>
+                            {isChecked && <Check className="w-3 h-3" />}
                           </div>
-                        </div>
-                        
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">{item.product.name}</p>
-                          <p className="text-[11px] text-muted-foreground">{formatRupiah(item.price)}</p>
-                          {item.modifiers && (
-                            <p className="text-[10.5px] text-muted-foreground italic mt-0.5">
-                              {item.modifiers}
+                          <div>
+                            <p className="font-bold text-xs text-stone-900 leading-tight">
+                              <span className="font-black text-[#2E5A44] mr-1">{item.qty}x</span>
+                              {item.product.name}
                             </p>
-                          )}
+                            {item.modifiers && (
+                              <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">
+                                {item.modifiers}
+                              </p>
+                            )}
+                          </div>
                         </div>
+                        <span className="text-[11px] font-bold text-stone-700 shrink-0">
+                          {formatRupiah(item.price * item.qty)}
+                        </span>
                       </div>
-                      <p className="text-sm font-bold text-foreground">{formatRupiah(item.price * item.qty)}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-              </div>
-            </div>
 
-            <div className="p-4 sm:p-5 border-t border-border/40 bg-slate-50/50">
-              <div className="flex justify-between items-center mb-4">
-                <p className="text-sm font-medium text-muted-foreground">Total Pembayaran</p>
-                <p className="text-lg font-bold text-foreground">{formatRupiah(selectedOrder.total)}</p>
-              </div>
-              <div className="flex gap-3">
-                {selectedOrder.status === 'PENDING_PAYMENT' && ['QRIS', 'TRANSFER'].includes(selectedOrder.paymentMethod) && !selectedOrder.paymentProofUrl && (
-                  <button
-                    onClick={async () => {
-                      await advanceStatus(selectedOrder.id, 'PENDING');
-                      setSelectedOrder(null);
-                    }}
-                    disabled={isUpdating === selectedOrder.id}
-                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 text-white text-sm font-semibold hover:opacity-90 transition-all disabled:opacity-50"
-                  >
-                    {isUpdating === selectedOrder.id ? 'Memproses...' : 'Terima Pembayaran'}
-                  </button>
+                {order.notes && (
+                  <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-medium mt-2">
+                    📝 <span className="font-bold">Catatan:</span> {order.notes}
+                  </div>
                 )}
-                {ACTIVE_STATUSES.includes(selectedOrder.status) && (
-                  <button
-                    onClick={() => {
-                      setCancelOrderId(selectedOrder.id);
-                      setCancelReason('Bukti Pembayaran Palsu');
-                      setCustomReason('');
-                      setIsCancelModalOpen(true);
-                    }}
-                    className="flex-1 py-2.5 rounded-xl bg-red-50 text-red-600 border border-red-200 text-sm font-semibold hover:bg-red-100 transition-colors"
-                  >
-                    Batalkan Pesanan
-                  </button>
-                )}
-                <button onClick={() => setSelectedOrder(null)} className="flex-1 py-2.5 rounded-xl border border-border/60 text-sm font-semibold hover:bg-slate-50 transition-colors">
-                  Tutup
-                </button>
               </div>
-            </div>
+
+              {/* Card Footer & Stepper Status Actions */}
+              <div className="p-4 bg-stone-50 border-t border-stone-100 space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className="text-stone-500">Total Tagihan</span>
+                  <span className="text-sm font-serif font-black text-[#2E5A44]">
+                    {formatRupiah(order.total)}
+                  </span>
+                </div>
+
+                {/* 1-Tap Status Progress Stepper */}
+                {!isCompleted && !isCancelled && (
+                  <div className="grid grid-cols-3 gap-1.5 pt-1">
+                    {/* Step 1: PENDING */}
+                    <button
+                      onClick={() => handleUpdateStatus(order.id, 'PREPARING')}
+                      disabled={loadingOrderId === order.id}
+                      className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                        isPending
+                          ? 'bg-amber-500 text-white shadow-sm ring-2 ring-amber-300/50'
+                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
+                      }`}
+                    >
+                      🍳 Masak
+                    </button>
+
+                    {/* Step 2: PREPARING */}
+                    <button
+                      onClick={() => handleUpdateStatus(order.id, 'READY')}
+                      disabled={loadingOrderId === order.id}
+                      className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                        isPreparing
+                          ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-300/50'
+                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
+                      }`}
+                    >
+                      ✨ Siap Saji
+                    </button>
+
+                    {/* Step 3: READY / COMPLETED */}
+                    <button
+                      onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
+                      disabled={loadingOrderId === order.id}
+                      className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                        isReady
+                          ? 'bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-300/50'
+                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
+                      }`}
+                    >
+                      ✅ Selesai
+                    </button>
+                  </div>
+                )}
+
+                {/* Completed / Cancelled Status Badge */}
+                {(isCompleted || isCancelled) && (
+                  <div className={`w-full py-2 rounded-xl text-center text-xs font-bold ${
+                    isCompleted ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                  }`}>
+                    {isCompleted ? '✅ Pesanan Selesai' : '❌ Pesanan Dibatalkan'}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          );
+        })}
+
+        {filteredOrders.length === 0 && (
+          <div className="col-span-full py-16 text-center text-stone-400 bg-white rounded-3xl border border-stone-200 p-8">
+            <ChefHat className="w-12 h-12 mx-auto mb-2 text-stone-300" />
+            <p className="font-serif font-bold text-base text-stone-700">Tidak ada pesanan ditemukan</p>
+            <p className="text-xs text-stone-400 mt-1">Semua pesanan saat ini sudah selesai atau sesuai filter.</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

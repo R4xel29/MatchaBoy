@@ -474,9 +474,10 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     }
   }, []);
 
+  const isSpmb = order.id.startsWith('SPMB') || order.orderType === 'DINE_IN';
   const [copied, setCopied] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(order.status);
-  const isFinished = ['COMPLETED', 'DELIVERED'].includes(currentStatus);
+  const isFinished = ['COMPLETED', 'DELIVERED'].includes(currentStatus) || (isSpmb && ['COMPLETED', 'READY'].includes(currentStatus));
   const [cancelReasonState, setCancelReasonState] = useState<string | null>(order.cancelReason || null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const statusRef = useRef(currentStatus);
@@ -509,12 +510,13 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     if (isFinished) {
       checkReviewCooldown();
       
+      const hasDismissed = typeof window !== 'undefined' && localStorage.getItem(`review_dismissed_${order.id}`);
       const hasUnsubmitted = order.items.some(item => item.productId && !submittedReviews[item.productId]);
-      if (hasUnsubmitted) {
+      if (hasUnsubmitted && !hasDismissed) {
         setShowReviewModal(true);
       }
     }
-  }, [isFinished, checkReviewCooldown, order.items, submittedReviews]);
+  }, [isFinished, checkReviewCooldown, order.items, order.id, submittedReviews]);
 
   useEffect(() => {
     if (remainingTime <= 0) return;
@@ -643,7 +645,6 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
     }
   };
 
-  const isSpmb = order.id.startsWith('SPMB');
   const OrderTypeIcon = getOrderTypeIcon(order.orderType, isSpmb);
   const steps = getOrderSteps(order.orderType, currentStatus, isSpmb);
 
@@ -1246,7 +1247,12 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowReviewModal(false)}
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem(`review_dismissed_${order.id}`, 'true');
+                    }
+                    setShowReviewModal(false);
+                  }}
                   className="w-8 h-8 rounded-full bg-muted flex items-center justify-center hover:bg-border transition-colors text-muted-foreground hover:text-foreground"
                 >
                   <X className="w-4 h-4" />

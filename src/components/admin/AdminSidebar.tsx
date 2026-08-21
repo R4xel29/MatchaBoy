@@ -58,7 +58,6 @@ import Image from 'next/image';
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
-  { label: 'Layar Dapur HP', href: '/admin/kitchen', icon: ChefHat },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
   { label: 'Laba Rugi', href: '/admin/reports/profit', icon: BarChart4 },
   { label: 'Penjualan', href: '/admin/reports', icon: BarChart3 },
@@ -129,7 +128,6 @@ const CASHIER_ITEMS = [
   { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
   { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
-  { label: 'Shift', href: '/admin/cashier/shift', icon: Clock },
 ];
 
 function NavItem({ 

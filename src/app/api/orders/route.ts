@@ -85,12 +85,16 @@ export async function POST(req: Request) {
       throw new ValidationError('Keranjang kosong');
     }
 
-    if (!body.name || !body.phone) {
-      throw new ValidationError('Nama dan nomor HP wajib diisi');
+    if (!body.name) {
+      throw new ValidationError('Nama pemesan wajib diisi');
     }
 
     const orderType = body.orderType || 'DINE_IN';
     const tableNumber = body.tableNumber || null;
+
+    if (orderType !== 'DINE_IN' && !body.phone) {
+      throw new ValidationError('Nomor HP wajib diisi');
+    }
 
     if (orderType === 'DINE_IN' && !tableNumber) {
       throw new ValidationError('Nomor meja wajib dipilih untuk pesanan Dine-In');
@@ -171,7 +175,7 @@ export async function POST(req: Request) {
     }
 
     const queueNumber = `DIN-${await getNextQueueSequence('DINE_IN')}`;
-    const cleanPhone = body.phone.replace(/[^0-9]/g, '');
+    const cleanPhone = body.phone ? body.phone.replace(/[^0-9]/g, '') : '-';
 
     const formattedAddress = tableNumber 
       ? (tableNumber.toString().toLowerCase().includes('meja') ? tableNumber : `Meja ${tableNumber}`) 

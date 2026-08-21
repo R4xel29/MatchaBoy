@@ -5,9 +5,9 @@ import { useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  ShoppingBag, Trash2, Plus, Minus, User, Phone, MapPin, Clock, 
+  ShoppingBag, Trash2, Plus, Minus, User, MapPin, 
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
-  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check
+  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Armchair
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
@@ -41,11 +41,16 @@ export default function SpmbClient({
   const searchParams = useSearchParams();
   const tableParam = searchParams.get('table');
 
-  // Table State
+  // Table & Seat State
   const [tableNumber, setTableNumber] = useState<string>('');
+  const [seatNumber, setSeatNumber] = useState<string>('1');
   const [isTableLocked, setIsTableLocked] = useState<boolean>(false);
-  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; status?: string }>>([]);
+  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string }>>([]);
   const [loadingTables, setLoadingTables] = useState<boolean>(false);
+
+  // Modals for Table Layout & Seat Selection
+  const [showTableModal, setShowTableModal] = useState<boolean>(false);
+  const [showSeatModal, setShowSeatModal] = useState<boolean>(false);
 
   // Cart State
   const cartItems = useCartStore((s) => s.items);
@@ -60,9 +65,8 @@ export default function SpmbClient({
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // Form State - STRICTLY 2 PAYMENT OPTIONS: 'QRIS' or 'COD' (Tunai di Kasir)
+  // Form State - STRICTLY 2 PAYMENT OPTIONS: 'QRIS' or 'COD' (Tunai di Kasir). Phone is removed for SPMB.
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'QRIS' | 'COD'>('QRIS');
   
@@ -84,27 +88,33 @@ export default function SpmbClient({
 
   // 1. Initialize table parameter or fetch active tables
   useEffect(() => {
-    if (tableParam) {
-      const clean = tableParam.trim();
-      setTableNumber(clean);
-      setIsTableLocked(true);
-    } else {
-      setIsTableLocked(false);
-      setLoadingTables(true);
-      fetch('/api/tables/active')
-        .then((res) => res.json())
-        .then((data) => {
-          if (Array.isArray(data)) {
-            setActiveTables(data);
-            if (data.length > 0 && !tableNumber) {
-              setTableNumber(data[0].number.toString());
-            }
+    setLoadingTables(true);
+    fetch('/api/tables/active')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setActiveTables(data);
+          if (tableParam) {
+            const clean = tableParam.trim();
+            setTableNumber(clean);
+            setIsTableLocked(true);
+            // Prompt seat selection if user scanned QR
+            setShowSeatModal(true);
+          } else if (data.length > 0 && !tableNumber) {
+            setTableNumber(data[0].number.toString());
           }
-        })
-        .catch((err) => console.error('Error fetching active tables:', err))
-        .finally(() => setLoadingTables(false));
-    }
+        }
+      })
+      .catch((err) => console.error('Error fetching active tables:', err))
+      .finally(() => setLoadingTables(false));
   }, [tableParam]);
+
+  // Current selected table object
+  const currentTableObj = useMemo(() => {
+    return activeTables.find(t => t.number.toString() === tableNumber.toString()) || null;
+  }, [activeTables, tableNumber]);
+
+  const currentTableCapacity = currentTableObj?.capacity || 4;
 
   // 2. Read saved active order ID from local storage on mount
   useEffect(() => {
@@ -195,12 +205,6 @@ export default function SpmbClient({
       setErrorMsg('Nama pemesan minimal 2 karakter.');
       return false;
     }
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const phoneRegex = /^(\+62|62|0)8[0-9]{8,15}$/;
-    if (!phoneRegex.test(cleanPhone)) {
-      setErrorMsg('Format nomor WhatsApp tidak valid (contoh: 081234567890).');
-      return false;
-    }
     setErrorMsg('');
     return true;
   };
@@ -252,20 +256,18 @@ export default function SpmbClient({
         matchaLevel: (item as any).matchaLevel
       }));
 
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
-      const formattedTableNumber = tableNumber.trim();
-
+      const fullTableLabel = `Meja ${tableNumber.trim()} (Kursi ${seatNumber})`;
       const backendPaymentMethod = paymentMethod === 'QRIS' ? 'QRIS_INSTAN' : 'COD';
 
       const payload = {
         name,
-        phone: cleanPhone,
-        tableNumber: formattedTableNumber,
+        phone: '-', // No phone required for SPMB temporarily
+        tableNumber: `${tableNumber.trim()} (Kursi ${seatNumber})`,
         orderType: 'DINE_IN',
-        address: `Meja ${formattedTableNumber}`,
+        address: fullTableLabel,
         paymentMethod: backendPaymentMethod,
         items: itemsPayload,
-        notes: notes || undefined
+        notes: notes ? `[Kursi: ${seatNumber}] ${notes}` : `[Kursi: ${seatNumber}]`
       };
 
       let res = await fetch('/api/orders', {
@@ -307,7 +309,6 @@ export default function SpmbClient({
         } else if (data.paymentUrl) {
           window.location.href = data.paymentUrl;
         } else {
-          // Direct fallback to order tracking
           window.location.href = `/orders/${data.orderId}`;
         }
       }
@@ -342,46 +343,39 @@ export default function SpmbClient({
               </p>
             </div>
 
-            {/* Table Badge & Quick Selector */}
-            <div className="shrink-0 p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-[#2E5A44] text-white flex items-center justify-center font-serif text-xl font-bold shadow-sm">
+            {/* Table & Seat Interactive Badge */}
+            <div 
+              onClick={() => {
+                if (!isTableLocked) {
+                  setShowTableModal(true);
+                } else {
+                  setShowSeatModal(true);
+                }
+              }}
+              className="shrink-0 p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200 flex items-center gap-4 cursor-pointer hover:border-[#2E5A44]/40 transition-all group shadow-sm"
+            >
+              <div className="w-12 h-12 rounded-xl bg-[#2E5A44] text-white flex items-center justify-center font-serif text-xl font-bold shadow-sm group-hover:scale-105 transition-transform">
                 {tableNumber || '—'}
               </div>
               <div className="text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Nomor Meja</p>
-                {isTableLocked ? (
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="font-serif font-bold text-stone-900 text-base">Meja {tableNumber}</span>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
+                  <span>Lokasi Duduk</span>
+                  {!isTableLocked && <span className="text-[9px] text-[#2E5A44] font-bold">(Ganti)</span>}
+                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="font-serif font-bold text-stone-900 text-sm sm:text-base">
+                    Meja {tableNumber || '—'} <span className="text-xs text-stone-500 font-sans font-normal">• Kursi {seatNumber}</span>
+                  </span>
+                  {isTableLocked ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
-                      <Lock className="w-2.5 h-2.5" /> QR Code
+                      <Lock className="w-2.5 h-2.5" /> QR
                     </span>
-                  </div>
-                ) : (
-                  <div className="mt-1">
-                    {activeTables.length > 0 ? (
-                      <select
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
-                        className="bg-white text-stone-900 font-bold text-xs px-3 py-1.5 rounded-lg border border-stone-300 focus:outline-none focus:border-[#2E5A44] cursor-pointer"
-                      >
-                        <option value="">-- Pilih Meja --</option>
-                        {activeTables.map((t) => (
-                          <option key={t.id} value={t.number}>
-                            Meja {t.number}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        placeholder="Contoh: 3"
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
-                        className="bg-white text-stone-900 font-bold text-xs px-2.5 py-1 rounded-lg border border-stone-300 w-20 text-center"
-                      />
-                    )}
-                  </div>
-                )}
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-[10px] font-bold">
+                      <Grid className="w-2.5 h-2.5" /> Denah
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -401,7 +395,7 @@ export default function SpmbClient({
                 </div>
                 <div>
                   <h3 className="font-bold text-sm text-stone-900">
-                    Status Pesanan {activeOrderStatus.tableNumber ? `Meja ${activeOrderStatus.tableNumber}` : ''}
+                    Status Pesanan {activeOrderStatus.tableNumber ? `${activeOrderStatus.tableNumber}` : ''}
                   </h3>
                   <p className="text-[11px] font-mono text-stone-400">ID: {activeOrderStatus.id}</p>
                 </div>
@@ -479,7 +473,7 @@ export default function SpmbClient({
             <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-stone-100">
               <button
                 onClick={() => window.location.href = `/orders/${activeOrderStatus.id}`}
-                className="flex-1 py-2.5 rounded-xl bg-[#2E5A44] text-white text-xs font-bold hover:bg-[#234533] transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 rounded-xl bg-[#2E5A44] text-white text-xs font-bold hover:bg-[#234533] transition-all flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5" /> Lihat Rincian Pesanan
               </button>
@@ -489,7 +483,7 @@ export default function SpmbClient({
                   setActiveOrderId(null);
                   setActiveOrderStatus(null);
                 }}
-                className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-xs font-bold hover:bg-stone-50 transition-all"
+                className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-xs font-bold hover:bg-stone-50 transition-all cursor-pointer"
               >
                 Pesan Menu Baru
               </button>
@@ -657,12 +651,12 @@ export default function SpmbClient({
                   <UtensilsCrossed className="w-5 h-5 text-[#2E5A44]" />
                   <div>
                     <h2 className="font-serif font-bold text-base text-stone-900">Pesanan Meja</h2>
-                    <p className="text-[11px] text-stone-500 font-medium">Meja {tableNumber || '—'}</p>
+                    <p className="text-[11px] text-stone-500 font-medium">Meja {tableNumber || '—'} • Kursi {seatNumber}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsCartOpen(false)}
-                  className="w-8 h-8 rounded-full border border-stone-200 bg-white flex items-center justify-center hover:bg-stone-50 transition-colors"
+                  className="w-8 h-8 rounded-full border border-stone-200 bg-white flex items-center justify-center hover:bg-stone-50 transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4 text-stone-500" />
                 </button>
@@ -693,7 +687,7 @@ export default function SpmbClient({
                       <div className="flex flex-col items-end gap-2 shrink-0">
                         <button
                           onClick={() => removeItem(item.id)}
-                          className="text-stone-300 hover:text-rose-500 transition-colors"
+                          className="text-stone-300 hover:text-rose-500 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -701,14 +695,14 @@ export default function SpmbClient({
                         <div className="flex items-center gap-1.5 border border-stone-200 bg-white rounded-lg p-0.5 shrink-0">
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="p-1 text-stone-500 hover:bg-stone-50 rounded"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded cursor-pointer"
                           >
                             <Minus className="w-2.5 h-2.5" />
                           </button>
                           <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
                           <button
                             onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="p-1 text-stone-500 hover:bg-stone-50 rounded"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded cursor-pointer"
                           >
                             <Plus className="w-2.5 h-2.5" />
                           </button>
@@ -724,42 +718,54 @@ export default function SpmbClient({
                 <form onSubmit={handlePreSubmit} className="space-y-4">
                   <h3 className="text-xs font-bold text-stone-400 uppercase tracking-wider text-left">Informasi Pemesan</h3>
 
-                  {/* Nomor Meja */}
+                  {/* Lokasi Meja & Kursi */}
                   <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
-                      <UtensilsCrossed className="w-3 h-3 text-[#2E5A44]" /> Nomor Meja (Dine-In)
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <UtensilsCrossed className="w-3 h-3 text-[#2E5A44]" /> Meja & Kursi (Dine-In)
+                      </span>
+                      {!isTableLocked && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTableModal(true)}
+                          className="text-[#2E5A44] font-bold text-[10px] underline hover:text-[#1c382a] cursor-pointer"
+                        >
+                          Lihat Denah Meja
+                        </button>
+                      )}
                     </label>
-                    {isTableLocked ? (
-                      <div className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 font-bold flex items-center justify-between">
-                        <span>Meja {tableNumber}</span>
-                        <span className="text-[10px] text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <Lock className="w-2.5 h-2.5" /> Terkunci
-                        </span>
-                      </div>
-                    ) : activeTables.length > 0 ? (
-                      <select
-                        required
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isTableLocked) setShowTableModal(true);
+                        }}
+                        className={`w-full px-3.5 py-2.5 text-xs rounded-xl border font-bold text-left flex items-center justify-between ${
+                          isTableLocked 
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                            : 'bg-[#FAF7F2]/50 border-stone-200 text-stone-800 hover:border-[#2E5A44]'
+                        }`}
                       >
-                        <option value="">-- Pilih Meja --</option>
-                        {activeTables.map((t) => (
-                          <option key={t.id} value={t.number}>
-                            Meja {t.number}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        placeholder="Contoh: 3"
-                        required
-                        value={tableNumber}
-                        onChange={(e) => setTableNumber(e.target.value)}
-                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
-                      />
-                    )}
+                        <span>Meja {tableNumber || '—'}</span>
+                        {isTableLocked ? (
+                          <span className="text-[9px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5" /> QR
+                          </span>
+                        ) : (
+                          <span className="text-[9px] text-stone-400 font-normal">Ganti</span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowSeatModal(true)}
+                        className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 text-stone-800 font-bold text-left flex items-center justify-between hover:border-[#2E5A44] cursor-pointer"
+                      >
+                        <span>Kursi {seatNumber}</span>
+                        <span className="text-[9px] text-[#2E5A44] font-normal">Pilih Kursi</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Nama Pemesan */}
@@ -773,21 +779,6 @@ export default function SpmbClient({
                       required
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
-                    />
-                  </div>
-
-                  {/* Nomor WhatsApp */}
-                  <div className="space-y-1 text-left">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1">
-                      <Phone className="w-3 h-3 text-[#2E5A44]" /> Nomor WhatsApp
-                    </label>
-                    <input
-                      type="tel"
-                      placeholder="Contoh: 081234567890"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
                       className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/50 focus:outline-none focus:border-[#2E5A44]"
                     />
                   </div>
@@ -884,6 +875,179 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
+      {/* Pop-up Floor Plan Denah Meja Interaktif */}
+      <AnimatePresence>
+        {showTableModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              onClick={() => setShowTableModal(false)}
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative z-10 border border-stone-200 max-h-[90vh] flex flex-col text-left"
+            >
+              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+                <div>
+                  <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-2">
+                    <Grid className="w-4 h-4 text-[#2E5A44]" />
+                    <span>Denah Tata Letak Meja</span>
+                  </h3>
+                  <p className="text-[11px] text-stone-500">Pilih meja yang Anda tempati di ruangan kafe</p>
+                </div>
+                <button
+                  onClick={() => setShowTableModal(false)}
+                  className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50 cursor-pointer"
+                >
+                  <X className="w-4 h-4 text-stone-500" />
+                </button>
+              </div>
+
+              {/* Floor Plan Canvas */}
+              <div className="my-4 relative w-full aspect-[4/3] rounded-2xl bg-[#FAF7F2] border-2 border-stone-300 overflow-hidden shadow-inner flex items-center justify-center select-none">
+                <div 
+                  className="absolute inset-0 opacity-20 pointer-events-none"
+                  style={{
+                    backgroundImage: 'radial-gradient(#2E5A44 1px, transparent 1px)',
+                    backgroundSize: '16px 16px'
+                  }}
+                />
+
+                {/* Table Items */}
+                {activeTables.map((t) => {
+                  const isCurrent = tableNumber === t.number.toString();
+                  const isOccupied = t.status === 'OCCUPIED';
+                  const xPos = t.x !== undefined ? t.x : 50;
+                  const yPos = t.y !== undefined ? t.y : 50;
+
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setTableNumber(t.number.toString());
+                        setShowTableModal(false);
+                        setShowSeatModal(true);
+                      }}
+                      style={{
+                        position: 'absolute',
+                        left: `${Math.max(5, Math.min(85, xPos))}%`,
+                        top: `${Math.max(5, Math.min(85, yPos))}%`,
+                        transform: 'translate(-50%, -50%)'
+                      }}
+                      className={`p-3 rounded-2xl border-2 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer ${
+                        isCurrent
+                          ? 'bg-[#2E5A44] text-white border-[#2E5A44] ring-4 ring-emerald-500/30 scale-110 z-20'
+                          : isOccupied
+                          ? 'bg-amber-50 text-amber-900 border-amber-300 hover:border-amber-500 z-10'
+                          : 'bg-white text-stone-800 border-stone-300 hover:border-[#2E5A44] hover:scale-105 z-10'
+                      }`}
+                    >
+                      <span className="font-serif font-bold text-xs sm:text-sm">
+                        Meja {t.number}
+                      </span>
+                      <span className={`text-[9px] font-semibold mt-0.5 ${isCurrent ? 'text-emerald-200' : 'text-stone-400'}`}>
+                        {t.capacity || 2} Kursi
+                      </span>
+                      {isCurrent && (
+                        <span className="text-[8px] bg-white/20 px-1.5 py-0.2 rounded mt-1 font-bold">
+                          Meja Anda
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Legend & Action */}
+              <div className="flex items-center justify-between text-[11px] text-stone-500 pt-2 border-t border-stone-100">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#2E5A44]" /> Meja Anda</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-white border border-stone-300" /> Tersedia</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTableModal(false)}
+                  className="px-4 py-2 rounded-xl bg-[#2E5A44] text-white font-bold text-xs cursor-pointer shadow-sm"
+                >
+                  Pilih Meja {tableNumber}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Pop-up Pemilihan Nomor Kursi (Seat Selector) */}
+      <AnimatePresence>
+        {showSeatModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
+              onClick={() => setShowSeatModal(false)}
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] flex items-center justify-center mx-auto mb-3">
+                <Armchair className="w-6 h-6" />
+              </div>
+
+              <h3 className="font-serif font-bold text-lg text-stone-900">
+                Meja {tableNumber}
+              </h3>
+              <p className="text-xs text-stone-500 leading-relaxed mt-1 mb-5">
+                Di kursi mana Anda duduk saat ini? Pilih nomor kursi Anda:
+              </p>
+
+              <div className="grid grid-cols-2 gap-2.5 w-full mb-5">
+                {Array.from({ length: currentTableCapacity }).map((_, idx) => {
+                  const sLabel = (idx + 1).toString();
+                  const isSelected = seatNumber === sLabel;
+
+                  return (
+                    <button
+                      key={sLabel}
+                      type="button"
+                      onClick={() => setSeatNumber(sLabel)}
+                      className={`p-3.5 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                        isSelected
+                          ? 'bg-[#2E5A44] text-white border-[#2E5A44] shadow-md ring-2 ring-emerald-500/30'
+                          : 'bg-stone-50 text-stone-800 border-stone-200 hover:border-stone-400'
+                      }`}
+                    >
+                      <Armchair className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-stone-400'}`} />
+                      <span className="font-serif font-bold text-xs">Kursi {sLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowSeatModal(false)}
+                className="w-full py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer"
+              >
+                Konfirmasi Kursi {seatNumber}
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Confirmation Modal Overlay */}
       <AnimatePresence>
         {showConfirmModal && (
@@ -907,19 +1071,19 @@ export default function SpmbClient({
               </div>
               <h3 className="font-serif font-bold text-lg text-stone-900 mb-1">Konfirmasi Pesanan Meja</h3>
               <p className="text-xs text-stone-600 leading-relaxed mb-5">
-                Pesanan akan dibuat untuk <span className="font-bold text-stone-900">Meja ${tableNumber}</span> atas nama <span className="font-bold text-stone-900">${name}</span>.
+                Pesanan akan dibuat untuk <span className="font-bold text-stone-900">Meja ${tableNumber} (Kursi ${seatNumber})</span> atas nama <span className="font-bold text-stone-900">${name}</span>.
               </p>
 
               <div className="flex gap-2.5">
                 <button
                   onClick={() => setShowConfirmModal(false)}
-                  className="flex-1 py-3 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs uppercase tracking-wider hover:bg-stone-50 transition-all"
+                  className="flex-1 py-3 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs uppercase tracking-wider hover:bg-stone-50 transition-all cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   onClick={executeCheckout}
-                  className="flex-1 py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all"
+                  className="flex-1 py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs uppercase tracking-wider shadow-md transition-all cursor-pointer"
                 >
                   Ya, Kirim
                 </button>
@@ -966,7 +1130,7 @@ export default function SpmbClient({
               {!qrisPaymentPaid && (
                 <button
                   onClick={() => setShowQrisModal(false)}
-                  className="absolute top-4 right-4 w-8 h-8 rounded-full border border-stone-200 bg-white flex items-center justify-center hover:bg-stone-50 transition-colors"
+                  className="absolute top-4 right-4 w-8 h-8 rounded-full border border-stone-200 bg-white flex items-center justify-center hover:bg-stone-50 transition-colors cursor-pointer"
                 >
                   <X className="w-4 h-4 text-stone-500" />
                 </button>
@@ -1035,7 +1199,7 @@ export default function SpmbClient({
                     onClick={() => {
                       window.location.href = `/orders/${qrisOrderId}`;
                     }}
-                    className="w-full mt-3 py-2 text-stone-500 hover:text-stone-800 text-[11px] font-semibold underline"
+                    className="w-full mt-3 py-2 text-stone-500 hover:text-stone-800 text-[11px] font-semibold underline cursor-pointer"
                   >
                     Buka Rincian Pesanan
                   </button>

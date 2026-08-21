@@ -86,11 +86,14 @@ export interface CartItem {
     sugarLevel: SugarLevel;
     size?: string;
     sizePrice?: number;
+    shot?: string;
+    shotPrice?: number;
     addOns: AddOn[];
-    totalPrice: number;  // (basePrice + sizePrice + addOns) * quantity
+    totalPrice: number;  // (basePrice + sizePrice + addOns + shotPrice) * quantity
     isBundle?: boolean;
     bundleSelections?: SelectedBundleItem[];
-    matchaLevel?: number; // 1-10
+    matchaLevel?: number; // 1-10 (Free standard)
+    hasTumbler?: boolean;
 }
 
 // ── Location & Delivery Types ───────────────────────────────

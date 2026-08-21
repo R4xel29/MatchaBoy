@@ -33,10 +33,14 @@ function calculateSecureItemPrice(item: any, dbProduct: any) {
         secureItemPrice += secureBundleAdjustments;
     } else {
         let secureSizePrice = 0
-        if (item.size && item.size !== 'Normal' && dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
-            const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
-            if (validSize) {
-                secureSizePrice = validSize.price
+        if (item.size && item.size !== 'Normal' && item.size !== 'Regular') {
+            if (dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
+                const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size)
+                if (validSize) {
+                    secureSizePrice = validSize.price
+                }
+            } else if (item.size === 'Large') {
+                secureSizePrice = 3000
             }
         }
 
@@ -50,17 +54,16 @@ function calculateSecureItemPrice(item: any, dbProduct: any) {
             }
         }
 
-        let matchaLevelAdjustment = 0
-        if (item.matchaLevel !== undefined && item.matchaLevel !== null) {
-            const mLevel = Number(item.matchaLevel)
-            if (mLevel === 7 || mLevel === 8) {
-                matchaLevelAdjustment = 1000
-            } else if (mLevel === 9 || mLevel === 10) {
-                matchaLevelAdjustment = 2000
-            }
+        // Shot adjustment for Americano / Coffee
+        let shotAdjustment = 0
+        if (item.shot === 'Double Shot' || item.shot === 'Double') {
+            shotAdjustment = 5000
         }
 
-        secureItemPrice += secureSizePrice + addOnsTotal + matchaLevelAdjustment;
+        // Matcha level customization is FREE (+Rp 0)
+        const matchaLevelAdjustment = 0
+
+        secureItemPrice += secureSizePrice + addOnsTotal + shotAdjustment + matchaLevelAdjustment;
     }
     return secureItemPrice;
 }

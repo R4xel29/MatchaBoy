@@ -87,14 +87,14 @@ export async function POST(req: Request) {
       throw new ValidationError('Keranjang kosong');
     }
 
-    if (!body.name || !body.phone) {
-      throw new ValidationError('Nama dan nomor HP wajib diisi');
+    if (!body.name) {
+      throw new ValidationError('Nama pemesan wajib diisi');
     }
 
-    if (body.phone !== 'SPMB-PENDING') {
+    if (body.phone && body.phone !== 'SPMB-PENDING' && body.phone !== '-') {
       const cleanPhone = body.phone.replace(/^SPMB-PENDING_/, '');
       const phoneRegex = /^(\+62|62|0)8[0-9]{8,15}$/;
-      if (!phoneRegex.test(cleanPhone)) {
+      if (cleanPhone.length > 5 && !phoneRegex.test(cleanPhone)) {
         throw new ValidationError('Format nomor HP tidak valid');
       }
     }

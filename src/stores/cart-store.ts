@@ -29,7 +29,8 @@ function generateCartItemId(
     bundleSelections?: any[],
     size?: string,
     matchaLevel?: number,
-    hasTumbler?: boolean
+    hasTumbler?: boolean,
+    shot?: string
 ): string {
     if (isBundle && bundleSelections) {
         const selectionSignature = bundleSelections
@@ -41,7 +42,8 @@ function generateCartItemId(
     const addOnIds = addOns.map((a) => a.id).sort().join(',');
     const mLevel = matchaLevel !== undefined ? `__m${matchaLevel}` : '';
     const tumbler = hasTumbler ? `__tumbler` : '';
-    return `${productId}__${iceLevel}__${sugarLevel}__${size || 'Normal'}__${addOnIds}${mLevel}${tumbler}`;
+    const shotSig = shot ? `__${shot}` : '';
+    return `${productId}__${iceLevel}__${sugarLevel}__${size || 'Normal'}__${addOnIds}${mLevel}${tumbler}${shotSig}`;
 }
 
 function calcItemTotal(item: { 
@@ -52,22 +54,18 @@ function calcItemTotal(item: {
     bundleSelections?: any[];
     sizePrice?: number;
     matchaLevel?: number;
+    shot?: string;
+    shotPrice?: number;
 }): number {
     if (item.isBundle && item.bundleSelections) {
         const adjustments = item.bundleSelections.reduce((sum, a) => sum + (a.priceAdjustment || 0), 0);
         return (item.basePrice + adjustments) * item.quantity;
     }
-    const addOnTotal = item.addOns.reduce((sum, a) => sum + a.price, 0);
+    const addOnTotal = item.addOns ? item.addOns.reduce((sum, a) => sum + a.price, 0) : 0;
     const sizeAdj = item.sizePrice || 0;
-    let matchaAdj = 0;
-    if (item.matchaLevel !== undefined) {
-        if (item.matchaLevel === 7 || item.matchaLevel === 8) {
-            matchaAdj = 1000;
-        } else if (item.matchaLevel === 9 || item.matchaLevel === 10) {
-            matchaAdj = 2000;
-        }
-    }
-    return (item.basePrice + sizeAdj + addOnTotal + matchaAdj) * item.quantity;
+    const shotAdj = item.shotPrice !== undefined ? item.shotPrice : (item.shot === 'Double Shot' || item.shot === 'Double' ? 5000 : 0);
+    const matchaAdj = 0; // Standardized: all matcha levels are Free (+Rp 0)
+    return (item.basePrice + sizeAdj + addOnTotal + shotAdj + matchaAdj) * item.quantity;
 }
 
 export const useCartStore = create<CartState>()(
@@ -87,7 +85,8 @@ export const useCartStore = create<CartState>()(
                     item.bundleSelections,
                     item.size,
                     (item as any).matchaLevel,
-                    (item as any).hasTumbler
+                    (item as any).hasTumbler,
+                    (item as any).shot
                 );
 
                 set((state) => {
@@ -127,7 +126,8 @@ export const useCartStore = create<CartState>()(
                     item.bundleSelections,
                     item.size,
                     (item as any).matchaLevel,
-                    (item as any).hasTumbler
+                    (item as any).hasTumbler,
+                    (item as any).shot
                 );
 
                 set((state) => {

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useToast } from '@/components/ui/Toast';
 import { 
-  Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, Users
+  Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, Users, Armchair, Sparkles
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface DiningTable {
   id: string;
@@ -33,8 +34,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   const [formShape, setFormShape] = useState('RECTANGLE');
   const [formStatus, setFormStatus] = useState('AVAILABLE');
   
-  // Interactive mode
-  const [isEditMode, setIsEditMode] = useState(false); // Design Mode vs Monitor Mode
+  // Interactive mode: Design Mode (Drag) vs Monitor Mode (Live Status)
+  const [isEditMode, setIsEditMode] = useState(false);
   
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ tableId: string; startX: number; startY: number } | null>(null);
@@ -89,8 +90,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
           number: formNumber,
           capacity: formCapacity,
           shape: formShape,
-          x: 50,
-          y: 50
+          x: 45,
+          y: 45
         })
       });
 
@@ -152,136 +153,50 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
       showToast('Meja berhasil dihapus', 'success');
       setTables(prev => prev.filter(t => t.id !== selectedTableId));
       setSelectedTableId(null);
+      resetForm();
     } catch (err: any) {
       showToast(err.message, 'error');
     }
   };
 
-  // Manual status toggling in Monitor Mode
-  const handleUpdateStatus = async (status: string) => {
+  // Update status quick toggle
+  const handleUpdateStatus = async (newStatus: string) => {
     if (!selectedTableId) return;
-
     try {
       const res = await fetch(`/api/admin/tables/${selectedTableId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status: newStatus })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal mengubah status');
-
-      setTables(prev => prev.map(t => t.id === selectedTableId ? data : t));
-      showToast(`Status meja ${data.number} diubah menjadi ${status}`, 'success');
+      if (!res.ok) throw new Error('Gagal mengubah status');
+      setTables(prev => prev.map(t => t.id === selectedTableId ? { ...t, status: newStatus } : t));
+      showToast(`Status diubah ke ${newStatus}`, 'success');
     } catch (err: any) {
       showToast(err.message, 'error');
     }
   };
 
-  const handleQuickCapacityChange = async (diff: number) => {
-    if (!selectedTableId || !selectedTable) return;
-    const newCapacity = Math.min(20, Math.max(1, selectedTable.capacity + diff));
+  // Save table position
+  const saveTablePosition = async (tableId: string, x: number, y: number) => {
     try {
-      const res = await fetch(`/api/admin/tables/${selectedTableId}`, {
+      await fetch(`/api/admin/tables/${tableId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          capacity: newCapacity
-        })
+        body: JSON.stringify({ x: Math.round(x), y: Math.round(y) })
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal mengubah kapasitas');
-
-      showToast(`Kapasitas meja diubah menjadi ${newCapacity}`, 'success');
-      setTables(prev => prev.map(t => t.id === selectedTableId ? data : t));
-    } catch (err: any) {
-      showToast(err.message, 'error');
+    } catch (err) {
+      console.error('Failed to save table coordinates:', err);
     }
   };
 
-  const renderChairs = (capacity: number, occupiedSeats: number, shape: string) => {
-    const chairs = [];
-    const isRound = shape === 'ROUND';
-    
-    if (isRound) {
-      const radius = 38; // px dari pusat
-      for (let i = 0; i < capacity; i++) {
-        const angle = (i * 2 * Math.PI) / capacity - Math.PI / 2;
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius;
-        const isOccupied = i < occupiedSeats;
-        chairs.push(
-          <div
-            key={`chair-${i}`}
-            style={{
-              position: 'absolute',
-              left: `calc(50% + ${x}px - 5px)`,
-              top: `calc(50% + ${y}px - 5px)`,
-            }}
-            className={`w-2.5 h-2.5 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
-              isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
-            }`}
-          />
-        );
-      }
-    } else {
-      const topCount = Math.ceil(capacity / 2);
-      const bottomCount = Math.floor(capacity / 2);
-      let chairIndex = 0;
-      
-      // Kursi atas
-      for (let i = 0; i < topCount; i++) {
-        const leftPercent = topCount === 1 ? 50 : 12 + (i * 76) / (topCount - 1);
-        const isOccupied = chairIndex < occupiedSeats;
-        chairIndex++;
-        chairs.push(
-          <div
-            key={`chair-top-${i}`}
-            style={{
-              position: 'absolute',
-              left: `${leftPercent}%`,
-              top: '-12px',
-              transform: 'translateX(-50%)',
-            }}
-            className={`w-2.5 h-2.5 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
-              isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
-            }`}
-          />
-        );
-      }
-      
-      // Kursi bawah
-      for (let i = 0; i < bottomCount; i++) {
-        const leftPercent = bottomCount === 1 ? 50 : 12 + (i * 76) / (bottomCount - 1);
-        const isOccupied = chairIndex < occupiedSeats;
-        chairIndex++;
-        chairs.push(
-          <div
-            key={`chair-bottom-${i}`}
-            style={{
-              position: 'absolute',
-              left: `${leftPercent}%`,
-              bottom: '-12px',
-              transform: 'translateX(-50%)',
-            }}
-            className={`w-2.5 h-2.5 rounded-full border border-slate-900 shadow-sm transition-all duration-300 ${
-              isOccupied ? 'bg-rose-500' : 'bg-emerald-400'
-            }`}
-          />
-        );
-      }
-    }
-    return chairs;
-  };
-
-  // Drag operations
+  // Drag handlers
   const handleStartDrag = (e: React.MouseEvent | React.TouchEvent, tableId: string) => {
-    if (!isEditMode) return;
+    if (!isEditMode) {
+      setSelectedTableId(tableId);
+      return;
+    }
     e.stopPropagation();
-
-    // Prevent scrolling on mobile touch
-    if (e.cancelable) e.preventDefault();
 
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
@@ -294,7 +209,6 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
 
     setSelectedTableId(tableId);
 
-    // Register document listeners
     document.addEventListener('mousemove', handleDragMove);
     document.addEventListener('mouseup', handleDragEnd);
     document.addEventListener('touchmove', handleDragMove, { passive: false });
@@ -310,427 +224,417 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
 
     const canvasRect = canvasRef.current.getBoundingClientRect();
 
-    // Calculate relative percentage coordinates
     let xPercent = ((clientX - canvasRect.left) / canvasRect.width) * 100;
     let yPercent = ((clientY - canvasRect.top) / canvasRect.height) * 100;
 
-    // Constrain position between 0% and 92% to stay in bounds
-    xPercent = Math.min(Math.max(0, xPercent), 92);
-    yPercent = Math.min(Math.max(0, yPercent), 92);
+    xPercent = Math.min(Math.max(5, xPercent), 90);
+    yPercent = Math.min(Math.max(5, yPercent), 90);
 
-    // Update local coordinates instantly for smooth rendering
-    setTables(prev => prev.map(t => {
-      if (t.id === tableId) {
-        return { ...t, x: Math.round(xPercent), y: Math.round(yPercent) };
-      }
-      return t;
-    }));
+    setTables(prev => prev.map(t => t.id === tableId ? { ...t, x: xPercent, y: yPercent } : t));
   };
 
-  const handleDragEnd = async () => {
-    if (!dragInfo.current) return;
-    const { tableId } = dragInfo.current;
+  const handleDragEnd = () => {
+    if (dragInfo.current) {
+      const current = tables.find(t => t.id === dragInfo.current?.tableId);
+      if (current) {
+        saveTablePosition(current.id, current.x, current.y);
+      }
+    }
     dragInfo.current = null;
-
-    // Unregister document listeners
     document.removeEventListener('mousemove', handleDragMove);
     document.removeEventListener('mouseup', handleDragEnd);
     document.removeEventListener('touchmove', handleDragMove);
     document.removeEventListener('touchend', handleDragEnd);
-
-    // Persist new coordinates
-    const finalTable = tables.find(t => t.id === tableId);
-    if (!finalTable) return;
-
-    try {
-      const res = await fetch(`/api/admin/tables/${tableId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          x: finalTable.x,
-          y: finalTable.y
-        })
-      });
-
-      if (!res.ok) throw new Error('Gagal menyimpan posisi');
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
   };
 
-  // QR Code download
-  const handleDownloadQR = () => {
-    if (!selectedTable) return;
-    const qrCanvas = document.getElementById(`qr-canvas-${selectedTable.id}`) as HTMLCanvasElement;
-    if (!qrCanvas) return;
-
-    const url = qrCanvas.toDataURL('image/png');
-    const link = document.createElement('a');
-    link.download = `QR_Meja_${selectedTable.number}.png`;
-    link.href = url;
-    link.click();
-  };
-
-  // Color map helper
   const getStatusColor = (status: string) => {
-    switch (status.toUpperCase()) {
-      case 'AVAILABLE':
-        return {
-          bg: 'bg-emerald-500 hover:bg-emerald-600',
-          border: 'border-emerald-600',
-          text: 'text-emerald-50',
-          label: 'Tersedia',
-          dot: 'bg-emerald-400'
-        };
+    switch (status) {
       case 'OCCUPIED':
         return {
-          bg: 'bg-rose-500 hover:bg-rose-600',
-          border: 'border-rose-600',
-          text: 'text-rose-50',
+          bg: 'bg-blue-500/10',
+          border: 'border-blue-500',
+          text: 'text-blue-700',
           label: 'Terisi',
-          dot: 'bg-rose-400'
+          dot: 'bg-blue-500'
         };
       case 'BILLING':
         return {
-          bg: 'bg-amber-500 hover:bg-amber-600',
-          border: 'border-amber-600',
-          text: 'text-amber-50',
+          bg: 'bg-amber-500/10',
+          border: 'border-amber-500',
+          text: 'text-amber-700',
           label: 'Billing',
-          dot: 'bg-amber-400'
+          dot: 'bg-amber-500'
         };
       case 'CLEANING':
         return {
-          bg: 'bg-yellow-400 hover:bg-yellow-500',
-          border: 'border-yellow-500',
-          text: 'text-yellow-950',
+          bg: 'bg-stone-500/10',
+          border: 'border-stone-400',
+          text: 'text-stone-700',
           label: 'Pembersihan',
-          dot: 'bg-yellow-600'
+          dot: 'bg-stone-400'
         };
       default:
         return {
-          bg: 'bg-gray-500 hover:bg-gray-600',
-          border: 'border-gray-600',
-          text: 'text-gray-50',
-          label: 'Unknown',
-          dot: 'bg-gray-400'
+          bg: 'bg-emerald-500/10',
+          border: 'border-emerald-600',
+          text: 'text-emerald-800',
+          label: 'Tersedia',
+          dot: 'bg-emerald-500'
         };
     }
   };
 
-  // Get dynamic domain or origin
   const getStoreUrl = (tableNum: string) => {
-    if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/spmb?table=${encodeURIComponent(tableNum)}`;
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/spmb?table=${tableNum}`;
+    }
+    return `https://arum-seduh.com/spmb?table=${tableNum}`;
   };
 
+  const handleDownloadQR = () => {
+    if (!selectedTable) return;
+    try {
+      const canvas = document.getElementById(`qr-canvas-${selectedTable.id}`) as HTMLCanvasElement;
+      if (!canvas) return;
+      const url = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `QR_Meja_${selectedTable.number}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(`QR Code Meja ${selectedTable.number} berhasil diunduh`, 'success');
+    } catch (e) {
+      showToast('Gagal mengunduh QR Code', 'error');
+    }
+  };
+
+  // Stats
+  const totalTables = tables.length;
+  const occupiedCount = tables.filter(t => t.status === 'OCCUPIED').length;
+  const totalCapacity = tables.reduce((sum, t) => sum + (t.capacity || 0), 0);
+  const occupancyPercent = totalTables > 0 ? Math.round((occupiedCount / totalTables) * 100) : 0;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+    <div className="min-h-screen bg-[#FAF7F2] text-[#1C1917] p-4 sm:p-6 lg:p-8 space-y-6">
       
-      {/* LEFT: Controls & Sidebar */}
-      <div className="lg:col-span-4 space-y-6">
-        
-        {/* Toggle Mode */}
-        <div className="bg-card rounded-[2rem] border border-border p-4 flex gap-2">
+      {/* Header & Stats Banner */}
+      <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#2E5A44]/10 text-[#2E5A44] text-[11px] font-bold tracking-wide">
+            <Layers className="w-3.5 h-3.5" />
+            <span>Dine-In Management</span>
+          </div>
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 mt-1">
+            Denah Tata Letak Meja & Kursi
+          </h1>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Atur tata letak meja visual, unduh QR code meja, dan pantau status meja realtime
+          </p>
+        </div>
+
+        {/* Mode Toggle: Design Mode vs Live Monitor */}
+        <div className="flex items-center gap-3">
           <button
-            onClick={() => { setIsEditMode(false); resetForm(); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-bold transition-all ${
-              !isEditMode 
-                ? 'bg-primary text-primary-foreground shadow-md' 
-                : 'hover:bg-muted text-muted-foreground'
-            }`}
-          >
-            <Eye className="w-4 h-4" />
-            <span>Mode Monitor</span>
-          </button>
-          <button
-            onClick={() => { setIsEditMode(true); }}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-bold transition-all ${
-              isEditMode 
-                ? 'bg-[#B48A5E] text-white shadow-md' 
-                : 'hover:bg-muted text-[#B48A5E]'
+            onClick={() => setIsEditMode(!isEditMode)}
+            className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm ${
+              isEditMode
+                ? 'bg-amber-600 text-white ring-2 ring-amber-400/50'
+                : 'bg-[#2E5A44] text-white hover:bg-[#234533]'
             }`}
           >
             <Move className="w-4 h-4" />
-            <span>Mode Desain</span>
+            <span>{isEditMode ? 'Mode Geser Meja (ON)' : 'Ubah Posisi Meja'}</span>
           </button>
         </div>
+      </div>
 
-        {/* Selected Table details */}
-        {selectedTable ? (
-          <div className="bg-card rounded-[2rem] border border-border p-6 shadow-sm space-y-5 animate-pulse-once">
-            <div className="flex justify-between items-start">
-              <div>
-                <h2 className="font-serif font-black text-xl text-foreground">Meja {selectedTable.number}</h2>
-                <div className="flex items-center gap-3 mt-1.5">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span>Kapasitas: {selectedTable.capacity} Kursi</span>
-                  </span>
-                  <div className="flex items-center gap-1 bg-muted p-0.5 rounded-lg border border-border">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickCapacityChange(-1)}
-                      disabled={selectedTable.capacity <= 1}
-                      className="w-5 h-5 rounded hover:bg-background text-foreground flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50"
-                      title="Kurangi Kursi"
-                    >
-                      -
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickCapacityChange(1)}
-                      disabled={selectedTable.capacity >= 20}
-                      className="w-5 h-5 rounded hover:bg-background text-foreground flex items-center justify-center text-xs font-bold transition-all disabled:opacity-50"
-                      title="Tambah Kursi"
-                    >
-                      +
-                    </button>
-                  </div>
+      {/* Live Metrics Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Total Meja</p>
+          <p className="font-serif text-2xl font-bold text-stone-900 mt-1">{totalTables}</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Meja Terisi</p>
+          <p className="font-serif text-2xl font-bold text-blue-700 mt-1">{occupiedCount}</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Total Kapasitas</p>
+          <p className="font-serif text-2xl font-bold text-emerald-800 mt-1">{totalCapacity} Kursi</p>
+        </div>
+        <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-sm">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">Okupansi Meja</p>
+          <p className="font-serif text-2xl font-bold text-[#2E5A44] mt-1">{occupancyPercent}%</p>
+        </div>
+      </div>
+
+      {/* Main Grid: Left Editor Panel & Right Floor Plan Canvas */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* Left Side: Table Details & Actions */}
+        <div className="lg:col-span-4 space-y-4">
+          {selectedTable ? (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-5 text-left"
+            >
+              <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+                <div>
+                  <h3 className="font-serif font-bold text-xl text-stone-900">
+                    Meja {selectedTable.number}
+                  </h3>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Kapasitas {selectedTable.capacity} Kursi • {selectedTable.shape === 'ROUND' ? 'Meja Bulat' : 'Meja Persegi'}
+                  </p>
                 </div>
+                <button
+                  onClick={() => setSelectedTableId(null)}
+                  className="text-stone-400 hover:text-stone-600 text-xs font-bold"
+                >
+                  Tutup
+                </button>
               </div>
-              <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5 ${
-                getStatusColor(selectedTable.status).text
-              } ${getStatusColor(selectedTable.status).bg}`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${getStatusColor(selectedTable.status).dot} animate-pulse`} />
-                <span>{getStatusColor(selectedTable.status).label}</span>
-              </div>
-            </div>
 
-            {/* Quick Status toggle in Monitor Mode */}
-            {!isEditMode && (
+              {/* Status Selector */}
               <div className="space-y-2">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Ubah Status Meja</span>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                  Status Meja
+                </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {['AVAILABLE', 'OCCUPIED', 'BILLING', 'CLEANING'].map((status) => {
-                    const isSelected = selectedTable.status === status;
-                    const details = getStatusColor(status);
+                  {['AVAILABLE', 'OCCUPIED', 'BILLING', 'CLEANING'].map((st) => {
+                    const isSelected = selectedTable.status === st;
+                    const stColor = getStatusColor(st);
                     return (
                       <button
-                        key={status}
-                        onClick={() => handleUpdateStatus(status)}
-                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold transition-all ${
-                          isSelected 
-                            ? 'border-transparent text-white bg-slate-900 shadow-sm' 
-                            : 'bg-background hover:bg-muted text-foreground border-border'
+                        key={st}
+                        type="button"
+                        onClick={() => handleUpdateStatus(st)}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#2E5A44] text-white border-[#2E5A44] shadow-sm'
+                            : 'bg-stone-50 text-stone-700 border-stone-200 hover:border-stone-400'
                         }`}
                       >
-                        <span className={`w-2 h-2 rounded-full ${details.dot}`} />
-                        <span>{details.label}</span>
+                        <span className={`w-2 h-2 rounded-full ${isSelected ? 'bg-white' : stColor.dot}`} />
+                        <span>{stColor.label}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
-            )}
 
-            {/* Edit / Delete / QR Code buttons */}
-            <div className="border-t border-border pt-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setIsEditForm(true)}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-muted hover:bg-muted/80 text-foreground text-xs font-bold border border-border"
-                >
-                  <Edit2 className="w-4 h-4" />
-                  <span>Edit Meja</span>
-                </button>
-                <button
-                  onClick={handleDeleteTable}
-                  className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 hover:bg-red-100 text-red-650 text-xs font-bold border border-red-200"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Hapus Meja</span>
-                </button>
-              </div>
-
-              {/* QR Code generator */}
-              <div className="bg-muted/40 rounded-2xl p-4 flex flex-col items-center text-center gap-3">
-                <div className="bg-white p-2 rounded-xl border border-border">
+              {/* QR Code & Direct Link */}
+              <div className="p-4 rounded-2xl bg-[#FAF7F2] border border-stone-200 flex flex-col items-center text-center space-y-3">
+                <div className="bg-white p-2 rounded-2xl border border-stone-200 shadow-sm">
                   <QRCodeCanvas
                     id={`qr-canvas-${selectedTable.id}`}
                     value={getStoreUrl(selectedTable.number)}
-                    size={130}
+                    size={140}
                     level="H"
                   />
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">URL Scan Meja</p>
-                  <p className="text-[11px] font-medium text-foreground truncate max-w-[200px]">
+                <div className="space-y-0.5 w-full">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">URL QR Code Meja</p>
+                  <p className="text-xs font-mono font-bold text-[#2E5A44] truncate max-w-full">
                     {getStoreUrl(selectedTable.number)}
                   </p>
                 </div>
                 <button
+                  type="button"
                   onClick={handleDownloadQR}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-primary text-primary-foreground text-xs font-bold shadow-md"
+                  className="w-full py-2.5 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                 >
-                  <Download className="w-4 h-4" />
-                  <span>Unduh QR Code</span>
+                  <Download className="w-3.5 h-3.5" /> Unduh QR Meja
                 </button>
               </div>
-            </div>
 
-          </div>
-        ) : (
-          <div className="bg-card rounded-[2rem] border border-border p-6 shadow-sm text-center py-10 text-muted-foreground text-sm space-y-2">
-            <Move className="w-10 h-10 mx-auto text-muted-foreground/50 animate-bounce" />
-            <p className="font-medium">Pilih meja di denah atau buat meja baru</p>
-          </div>
-        )}
-
-        {/* CRUD Table Form */}
-        <div className="bg-card rounded-[2rem] border border-border p-6 shadow-sm space-y-4">
-          <h3 className="font-serif font-black text-base text-foreground flex items-center gap-2">
-            <Layers className="w-4.5 h-4.5 text-[#B48A5E]" />
-            <span>{isEditForm ? 'Edit Detail Meja' : 'Tambah Meja Baru'}</span>
-          </h3>
-
-          <form onSubmit={isEditForm ? handleUpdateTable : handleAddTable} className="space-y-4">
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 pl-1">Nomor / Label Meja</label>
-              <input
-                type="text"
-                value={formNumber}
-                onChange={e => setFormNumber(e.target.value)}
-                placeholder="Contoh: 1, 2A, Outdoor-3"
-                className="w-full px-4 py-3 rounded-2xl border border-input bg-background text-sm focus:outline-none focus:border-[#B48A5E]"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 pl-1">Kapasitas (Orang)</label>
-                <input
-                  type="number"
-                  value={formCapacity}
-                  onChange={e => setFormCapacity(parseInt(e.target.value) || 2)}
-                  min={1}
-                  max={20}
-                  className="w-full px-4 py-3 rounded-2xl border border-input bg-background text-sm focus:outline-none focus:border-[#B48A5E]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1.5 pl-1">Bentuk Meja</label>
-                <select
-                  value={formShape}
-                  onChange={e => setFormShape(e.target.value)}
-                  className="w-full px-4 py-3 rounded-2xl border border-input bg-background text-sm focus:outline-none focus:border-[#B48A5E]"
-                >
-                  <option value="RECTANGLE">Persegi</option>
-                  <option value="ROUND">Bulat</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="submit"
-                className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-xs shadow-md"
-              >
-                {isEditForm ? 'Simpan Perubahan' : 'Tambah Meja'}
-              </button>
-              {isEditForm && (
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-2 border-t border-stone-100">
                 <button
                   type="button"
-                  onClick={resetForm}
-                  className="px-4 py-3.5 rounded-2xl bg-muted text-foreground font-bold text-xs"
+                  onClick={() => setIsEditForm(true)}
+                  className="flex-1 py-2.5 rounded-xl border border-stone-200 text-stone-700 text-xs font-bold hover:bg-stone-50 cursor-pointer"
                 >
-                  Batal
+                  Edit Meja
                 </button>
-              )}
-            </div>
-          </form>
-        </div>
-
-      </div>
-
-      {/* RIGHT: Interative Floor Plan Grid */}
-      <div className="lg:col-span-8 space-y-4">
-        <div className="flex items-center justify-between px-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
-            <span className="text-xs font-black uppercase tracking-widest text-[#B48A5E]">Floor Plan Canvas</span>
-          </div>
-          <button
-            onClick={fetchTables}
-            className="text-xs font-black uppercase text-muted-foreground flex items-center gap-1.5 hover:text-foreground transition-colors cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Refresh</span>
-          </button>
-        </div>
-
-        {/* Floor plan container */}
-        <div
-          ref={canvasRef}
-          style={{
-            backgroundImage: `radial-gradient(rgba(56, 189, 248, 0.1) 1px, transparent 0)`,
-            backgroundSize: '24px 24px'
-          }}
-          className="relative w-full aspect-[4/3] rounded-[2.5rem] bg-slate-950 border-[3px] border-slate-900 shadow-2xl overflow-hidden min-h-[400px] select-none"
-        >
-          {/* Blueprint overlay label */}
-          <div className="absolute top-4 left-6 text-slate-800 text-[10px] font-mono tracking-widest uppercase pointer-events-none select-none">
-            [Matchaboy HQ Blueprint Grid Scale 1:20]
-          </div>
-
-          {tables.map((table) => {
-            const isSelected = selectedTableId === table.id;
-            const statusStyle = getStatusColor(table.status);
-            const isRound = table.shape === 'ROUND';
-
-            return (
-              <div
-                key={table.id}
-                onMouseDown={(e) => handleStartDrag(e, table.id)}
-                onTouchStart={(e) => handleStartDrag(e, table.id)}
-                style={{
-                  left: `${table.x}%`,
-                  top: `${table.y}%`,
-                  touchAction: 'none'
-                }}
-                className={`absolute transition-transform select-none ${
-                  isRound 
-                    ? 'w-16 h-16 rounded-full' 
-                    : 'w-24 h-16 rounded-2xl'
-                } flex flex-col items-center justify-center border-2 shadow-lg cursor-grab active:cursor-grabbing ${
-                  isSelected 
-                    ? 'ring-4 ring-amber-400 scale-[1.03]' 
-                    : 'scale-100'
-                } ${statusStyle.bg} ${statusStyle.border} ${statusStyle.text}`}
-              >
-                
-                {/* Table Number */}
-                <span className="font-serif font-black text-sm tracking-tight">
-                  T-{table.number}
-                </span>
-
-                {/* Capacity & Occupied visual */}
-                {renderChairs(table.capacity, table.occupiedSeats || 0, table.shape)}
-
-                {/* Capacity Label */}
-                <span className="text-[9px] opacity-80 mt-0.5 leading-none">
-                  👤 {table.occupiedSeats || 0}/{table.capacity}
-                </span>
-
-                {/* Drag Indicator Overlay */}
-                {isEditMode && (
-                  <div className="absolute top-1 right-1 opacity-70">
-                    <Move className="w-3.5 h-3.5" />
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={handleDeleteTable}
+                  className="px-4 py-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold hover:bg-rose-100 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-            );
-          })}
-
-          {tables.length === 0 && (
-            <div className="absolute inset-0 flex items-center justify-center text-center text-slate-700 font-mono text-sm leading-relaxed p-6 pointer-events-none">
-              [Canvas Kosong. Tambah meja di panel kiri dan seret posisinya.]
+            </motion.div>
+          ) : (
+            <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm text-center space-y-3">
+              <Armchair className="w-10 h-10 text-stone-300 mx-auto" />
+              <h3 className="font-serif font-bold text-base text-stone-800">Pilih Meja di Denah</h3>
+              <p className="text-xs text-stone-400">
+                Klik salah satu meja di denah untuk melihat status, mengunduh QR, atau mengubah informasi meja.
+              </p>
             </div>
           )}
 
-        </div>
-      </div>
+          {/* Form Tambah / Edit Meja */}
+          <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4 text-left">
+            <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-2">
+              <Plus className="w-4 h-4 text-[#2E5A44]" />
+              <span>{isEditForm ? 'Edit Detail Meja' : 'Tambah Meja Baru'}</span>
+            </h3>
 
+            <form onSubmit={isEditForm ? handleUpdateTable : handleAddTable} className="space-y-3.5">
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                  Nomor / Label Meja
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: 1, 2A, Outdoor-1"
+                  required
+                  value={formNumber}
+                  onChange={(e) => setFormNumber(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#2E5A44]"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                    Kapasitas Kursi
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={formCapacity}
+                    onChange={(e) => setFormCapacity(parseInt(e.target.value) || 2)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#2E5A44]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                    Bentuk Meja
+                  </label>
+                  <select
+                    value={formShape}
+                    onChange={(e) => setFormShape(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-200 bg-[#FAF7F2]/40 focus:outline-none focus:border-[#2E5A44]"
+                  >
+                    <option value="RECTANGLE">Persegi</option>
+                    <option value="ROUND">Bulat</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  className="flex-1 py-3 rounded-xl bg-[#2E5A44] hover:bg-[#234533] text-white font-bold text-xs shadow-md transition-all cursor-pointer"
+                >
+                  {isEditForm ? 'Simpan Perubahan' : 'Tambah Meja'}
+                </button>
+                {isEditForm && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="px-4 py-3 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-50 cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {/* Right Side: Visual Floor Plan Canvas */}
+        <div className="lg:col-span-8 space-y-4">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+              <span className="text-xs font-bold uppercase tracking-wider text-[#2E5A44]">
+                Arum Seduh Cafe Blueprint Canvas
+              </span>
+            </div>
+
+            <button
+              onClick={fetchTables}
+              className="text-xs font-bold text-stone-500 hover:text-stone-900 flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Segarkan Denah
+            </button>
+          </div>
+
+          {/* Architectural Canvas */}
+          <div
+            ref={canvasRef}
+            className="relative w-full aspect-[4/3] rounded-3xl bg-[#FAF7F2] border-2 border-stone-300 shadow-xl overflow-hidden min-h-[460px] select-none"
+            style={{
+              backgroundImage: 'radial-gradient(#2E5A44 1px, transparent 1px)',
+              backgroundSize: '24px 24px'
+            }}
+          >
+            {/* Blueprint Grid Overlay */}
+            <div className="absolute top-4 left-6 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none select-none">
+              [Scale 1:25 • Arum Seduh Indoor Cafe]
+            </div>
+
+            {tables.map((table) => {
+              const isSelected = selectedTableId === table.id;
+              const statusStyle = getStatusColor(table.status);
+              const isRound = table.shape === 'ROUND';
+
+              return (
+                <div
+                  key={table.id}
+                  onMouseDown={(e) => handleStartDrag(e, table.id)}
+                  onTouchStart={(e) => handleStartDrag(e, table.id)}
+                  style={{
+                    left: `${table.x}%`,
+                    top: `${table.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                    touchAction: 'none'
+                  }}
+                  className={`absolute transition-transform select-none cursor-pointer ${
+                    isRound 
+                      ? 'w-20 h-20 rounded-full' 
+                      : 'w-28 h-20 rounded-2xl'
+                  } flex flex-col items-center justify-center border-2 shadow-md ${
+                    isSelected 
+                      ? 'ring-4 ring-[#2E5A44] shadow-xl scale-110 z-30 bg-[#2E5A44] text-white border-[#2E5A44]' 
+                      : `${statusStyle.bg} ${statusStyle.border} ${statusStyle.text} bg-white hover:scale-105 z-10`
+                  }`}
+                >
+                  <span className="font-serif font-bold text-xs sm:text-sm">
+                    Meja {table.number}
+                  </span>
+                  <span className={`text-[9px] font-semibold mt-0.5 ${isSelected ? 'text-emerald-200' : 'opacity-70'}`}>
+                    {table.capacity} Kursi
+                  </span>
+
+                  {/* Move Icon indicator when in Edit Mode */}
+                  {isEditMode && (
+                    <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center shadow">
+                      <Move className="w-2.5 h-2.5" />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {tables.length === 0 && (
+              <div className="absolute inset-0 flex items-center justify-center text-center text-stone-400 font-mono text-xs p-6 pointer-events-none">
+                [Denah Kosong. Tambah meja melalui panel di sebelah kiri.]
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
     </div>
   );
 }
