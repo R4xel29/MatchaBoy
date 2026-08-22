@@ -87,6 +87,16 @@ export default function SpmbClient({
   const [qrisPaymentPaid, setQrisPaymentPaid] = useState(false);
 
   // 1. Initialize table parameter or fetch active tables
+  // 1. Immediately trigger seat modal and set table when tableParam exists from QR scan
+  useEffect(() => {
+    if (tableParam) {
+      const clean = tableParam.trim();
+      setTableNumber(clean);
+      setIsTableLocked(true);
+      setShowSeatModal(true);
+    }
+  }, [tableParam]);
+
   useEffect(() => {
     setLoadingTables(true);
     fetch('/api/tables/active')
@@ -893,10 +903,10 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Pop-up Floor Plan Denah Meja */}
+      {/* Pop-up Floor Plan Denah Meja (Identical 16:9 Scaling to Admin Canvas - No Collisions on Mobile) */}
       <AnimatePresence>
         {showTableModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -909,15 +919,15 @@ export default function SpmbClient({
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative z-10 border border-stone-200 max-h-[90vh] flex flex-col text-left"
+              className="bg-white rounded-3xl w-full max-w-2xl p-5 sm:p-6 shadow-2xl relative z-10 border border-stone-200 max-h-[90vh] flex flex-col text-left space-y-3"
             >
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
                 <div>
-                  <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-2">
+                  <h3 className="font-serif font-bold text-base sm:text-lg text-stone-900 flex items-center gap-2">
                     <Grid className="w-4 h-4 text-orange-600" />
-                    <span>Denah Tata Letak Meja</span>
+                    <span>Denah Tata Letak Meja Ruangan</span>
                   </h3>
-                  <p className="text-[11px] text-stone-500">Pilih meja yang Anda tempati di ruangan kafe</p>
+                  <p className="text-[11px] text-stone-500">Pilih meja tempat Anda duduk. Geser ke samping jika di layar HP.</p>
                 </div>
                 <button
                   onClick={() => setShowTableModal(false)}
@@ -927,125 +937,158 @@ export default function SpmbClient({
                 </button>
               </div>
 
-              {/* Floor Plan Canvas */}
-              <div className="my-4 relative w-full aspect-[4/3] rounded-2xl bg-[#FAF9F6] border-2 border-stone-200 overflow-hidden shadow-inner flex items-center justify-center select-none">
+              {/* Scrollable Container with exact 16:9 Blueprint Canvas */}
+              <div className="w-full overflow-x-auto overflow-y-hidden rounded-2xl border-2 border-stone-300 shadow-inner bg-[#FAF7F2] p-1 select-none">
                 <div 
-                  className="absolute inset-0 opacity-20 pointer-events-none"
+                  className="relative min-w-[540px] aspect-[16/9] w-full rounded-xl overflow-hidden"
                   style={{
                     backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
-                    backgroundSize: '18px 18px'
+                    backgroundSize: '20px 20px'
                   }}
-                />
+                >
+                  <div className="absolute top-3 left-4 text-stone-400 text-[9px] font-mono tracking-widest uppercase pointer-events-none">
+                    [Denah Arum Seduh • Geser & Ketuk Meja]
+                  </div>
 
-                {activeTables.map((t) => {
-                  const isCurrent = tableNumber === t.number.toString();
-                  const isOccupied = t.status === 'OCCUPIED';
-                  const xPos = t.x !== undefined ? t.x : 50;
-                  const yPos = t.y !== undefined ? t.y : 50;
-                  const isRound = t.shape === 'ROUND';
-                  const cap = t.capacity || 2;
+                  {activeTables.map((t) => {
+                    const isCurrent = tableNumber === t.number.toString();
+                    const isOccupied = t.status === 'OCCUPIED';
+                    const xPos = t.x !== undefined ? t.x : 50;
+                    const yPos = t.y !== undefined ? t.y : 50;
+                    const isRound = t.shape === 'ROUND';
+                    const cap = t.capacity || 2;
 
-                  return (
-                    <div
-                      key={t.id}
-                      style={{
-                        position: 'absolute',
-                        left: `${Math.max(8, Math.min(92, xPos))}%`,
-                        top: `${Math.max(8, Math.min(92, yPos))}%`,
-                        transform: 'translate(-50%, -50%)'
-                      }}
-                      className="absolute flex items-center justify-center z-10"
-                    >
+                    return (
+                      <div
+                        key={t.id}
+                        style={{
+                          position: 'absolute',
+                          left: `${Math.max(10, Math.min(90, xPos))}%`,
+                          top: `${Math.max(10, Math.min(90, yPos))}%`,
+                          transform: 'translate(-50%, -50%)'
+                        }}
+                        className="absolute flex items-center justify-center z-10"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTableNumber(t.number.toString());
+                            setShowTableModal(false);
+                            setShowSeatModal(true);
+                          }}
+                          className={`border-2 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer ${
+                            isRound ? 'w-20 h-20 rounded-full p-2' : 'w-28 h-18 rounded-2xl p-2'
+                          } ${
+                            isCurrent
+                              ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-transparent ring-4 ring-orange-400/40 scale-105 z-30 shadow-orange-500/30'
+                              : isOccupied
+                              ? 'bg-blue-50 text-blue-900 border-blue-200 hover:border-blue-400 z-20'
+                              : 'bg-white text-stone-800 border-stone-300 hover:border-orange-400 hover:scale-105 z-20'
+                          }`}
+                        >
+                          <span className="text-[7px] font-bold uppercase tracking-wider opacity-80">
+                            {isRound ? 'Bulat' : 'Kotak'}
+                          </span>
+                          <span className="font-serif font-bold text-xs sm:text-sm leading-tight">
+                            Meja {t.number}
+                          </span>
+                          <span className={`text-[8px] font-semibold mt-0.5 ${isCurrent ? 'text-white/90' : 'text-stone-400'}`}>
+                            {cap} Kursi
+                          </span>
+                          {isCurrent && (
+                            <span className="text-[7px] bg-white/20 px-1.5 py-0.2 rounded mt-0.5 font-bold">
+                              Meja Anda
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Surrounding Visible Mini Chairs (Unclipped & Beautifully Placed) */}
+                        {Array.from({ length: cap }).map((_, idx) => {
+                          let cX = 0;
+                          let cY = 0;
+
+                          if (isRound) {
+                            const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
+                            const radius = 52;
+                            cX = Math.cos(angle) * radius;
+                            cY = Math.sin(angle) * radius;
+                          } else {
+                            if (cap === 2) {
+                              cX = 0;
+                              cY = idx === 0 ? -44 : 44;
+                            } else if (cap === 4) {
+                              const positions = [
+                                { x: 0, y: -44 },
+                                { x: 64, y: 0 },
+                                { x: 0, y: 44 },
+                                { x: -64, y: 0 },
+                              ];
+                              const p = positions[idx % 4];
+                              cX = p.x;
+                              cY = p.y;
+                            } else if (cap === 6) {
+                              const positions = [
+                                { x: -28, y: -44 },
+                                { x: 28, y: -44 },
+                                { x: 64, y: 0 },
+                                { x: 28, y: 44 },
+                                { x: -28, y: 44 },
+                                { x: -64, y: 0 },
+                              ];
+                              const p = positions[idx % 6];
+                              cX = p.x;
+                              cY = p.y;
+                            } else {
+                              const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
+                              cX = Math.cos(angle) * 64;
+                              cY = Math.sin(angle) * 44;
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={idx}
+                              style={{ transform: `translate(${cX}px, ${cY}px)` }}
+                              className="absolute w-4 h-4 rounded-full bg-white border border-orange-300 shadow-xs flex items-center justify-center pointer-events-none z-10"
+                            >
+                              <Armchair className="w-2.5 h-2.5 text-orange-600" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Quick Table Grid List (Tap-Friendly for HP) */}
+              <div className="space-y-1.5 pt-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                  Atau Pilih Langsung dari Daftar Meja:
+                </p>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {activeTables.map((t) => {
+                    const isCur = tableNumber === t.number.toString();
+                    return (
                       <button
+                        key={t.id}
                         type="button"
                         onClick={() => {
                           setTableNumber(t.number.toString());
                           setShowTableModal(false);
                           setShowSeatModal(true);
                         }}
-                        className={`border-2 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer ${
-                          isRound ? 'w-20 h-20 rounded-full p-2' : 'w-24 h-20 rounded-2xl p-2.5'
-                        } ${
-                          isCurrent
-                            ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-transparent ring-4 ring-orange-400/40 scale-110 z-30 shadow-orange-500/30'
-                            : isOccupied
-                            ? 'bg-blue-50 text-blue-900 border-blue-200 hover:border-blue-400 z-20'
-                            : 'bg-white text-stone-800 border-stone-300 hover:border-orange-400 hover:scale-105 z-20'
+                        className={`px-3 py-2 rounded-xl border text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
+                          isCur
+                            ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-500 shadow-sm'
+                            : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
                         }`}
                       >
-                        <span className="text-[8px] font-bold uppercase tracking-wider opacity-80">
-                          {isRound ? 'Bulat' : 'Kotak'}
-                        </span>
-                        <span className="font-serif font-bold text-xs sm:text-sm leading-tight">
-                          Meja {t.number}
-                        </span>
-                        <span className={`text-[9px] font-semibold mt-0.5 ${isCurrent ? 'text-white/90' : 'text-stone-400'}`}>
-                          {cap} Kursi
-                        </span>
-                        {isCurrent && (
-                          <span className="text-[8px] bg-white/20 px-1.5 py-0.2 rounded mt-0.5 font-bold">
-                            Meja Anda
-                          </span>
-                        )}
+                        Meja {t.number} ({t.shape === 'ROUND' ? 'Bulat' : 'Kotak'})
                       </button>
-
-                      {/* Surrounding Visible Mini Chairs (Unclipped & Properly Spaced) */}
-                      {Array.from({ length: cap }).map((_, idx) => {
-                        let cX = 0;
-                        let cY = 0;
-
-                        if (isRound) {
-                          const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
-                          const radius = 52;
-                          cX = Math.cos(angle) * radius;
-                          cY = Math.sin(angle) * radius;
-                        } else {
-                          // Clean rectangular perimeter spacing
-                          if (cap === 2) {
-                            cX = 0;
-                            cY = idx === 0 ? -46 : 46;
-                          } else if (cap === 4) {
-                            const positions = [
-                              { x: 0, y: -46 },
-                              { x: 58, y: 0 },
-                              { x: 0, y: 46 },
-                              { x: -58, y: 0 },
-                            ];
-                            const p = positions[idx % 4];
-                            cX = p.x;
-                            cY = p.y;
-                          } else if (cap === 6) {
-                            const positions = [
-                              { x: -25, y: -46 },
-                              { x: 25, y: -46 },
-                              { x: 58, y: 0 },
-                              { x: 25, y: 46 },
-                              { x: -25, y: 46 },
-                              { x: -58, y: 0 },
-                            ];
-                            const p = positions[idx % 6];
-                            cX = p.x;
-                            cY = p.y;
-                          } else {
-                            const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
-                            cX = Math.cos(angle) * 58;
-                            cY = Math.sin(angle) * 48;
-                          }
-                        }
-
-                        return (
-                          <div
-                            key={idx}
-                            style={{ transform: `translate(${cX}px, ${cY}px)` }}
-                            className="absolute w-4 h-4 rounded-full bg-white border border-orange-300 shadow-xs flex items-center justify-center pointer-events-none z-10"
-                          >
-                            <Armchair className="w-2.5 h-2.5 text-orange-600" />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-stone-500 pt-2 border-t border-stone-100">
@@ -1088,9 +1131,22 @@ export default function SpmbClient({
                 const currentTableObj = activeTables.find(t => t.number.toString() === tableNumber);
                 const isRoundTable = currentTableObj?.shape === 'ROUND';
 
+                let savedChairs: Array<{ id: string; label: string; x: number; y: number }> | null = null;
+                if (typeof window !== 'undefined' && currentTableObj?.id) {
+                  const saved = localStorage.getItem(`arum_chairs_table_${currentTableObj.id}`);
+                  if (saved) {
+                    try {
+                      const parsed = JSON.parse(saved);
+                      if (Array.isArray(parsed) && parsed.length === currentTableCapacity) {
+                        savedChairs = parsed;
+                      }
+                    } catch {}
+                  }
+                }
+
                 return (
                   <>
-                    <div className="flex items-center justify-between w-full pb-3 border-b border-stone-100">
+                    <div className="flex items-center justify-between w-full pb-3 border-b border-stone-100 mb-2">
                       <div className="text-left">
                         <div className="flex items-center gap-2">
                           <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-1.5">
@@ -1111,8 +1167,17 @@ export default function SpmbClient({
                       </button>
                     </div>
 
+                    {isTableLocked && (
+                      <div className="w-full mb-3 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-300/60 text-orange-900 text-xs font-bold flex items-center gap-2 text-left">
+                        <span className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center shrink-0 text-xs font-black shadow-sm">
+                          {tableNumber}
+                        </span>
+                        <span>Tersambung di Meja {tableNumber} via QR Code. Tentukan nomor kursi Anda:</span>
+                      </div>
+                    )}
+
                     {/* Top-Down Visual Table Canvas */}
-                    <div className="my-5 relative w-full aspect-square max-w-[280px] bg-[#FAF9F6] rounded-3xl border-2 border-stone-200 p-3 flex items-center justify-center shadow-inner select-none">
+                    <div className="my-4 relative w-full aspect-square max-w-[280px] bg-[#FAF9F6] rounded-3xl border-2 border-stone-200 p-3 flex items-center justify-center shadow-inner select-none">
                       
                       {/* Background Grid Accent */}
                       <div 
@@ -1149,9 +1214,15 @@ export default function SpmbClient({
                         
                         let posStyle: React.CSSProperties = {};
                         let positionName = `Kursi ${sLabel}`;
-                        
-                        if (isRoundTable) {
-                          // Circular radial placement for round tables
+
+                        if (savedChairs && savedChairs[idx]) {
+                          // Use synchronized custom coordinates
+                          const sc = savedChairs[idx];
+                          posStyle = {
+                            transform: `translate(${sc.x}px, ${sc.y}px)`
+                          };
+                        } else if (isRoundTable) {
+                          // Circular radial placement
                           const angle = (idx / currentTableCapacity) * 2 * Math.PI - Math.PI / 2;
                           const radius = 100;
                           posStyle = {
@@ -1160,7 +1231,7 @@ export default function SpmbClient({
                             transform: 'translate(-50%, -50%)'
                           };
                         } else {
-                          // Rectangular placement for square/rectangular tables
+                          // Rectangular perimeter placement (Unblocked)
                           if (currentTableCapacity <= 2) {
                             if (idx === 0) {
                               posStyle = { top: '8px', left: '50%', transform: 'translateX(-50%)' };
@@ -1219,7 +1290,7 @@ export default function SpmbClient({
                       <div className="text-left">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-orange-800">Kursi Dipilih</p>
                         <p className="font-serif font-bold text-stone-900 mt-0.5">
-                          Meja {tableNumber} ({isRoundTable ? 'Bulat' : 'Kotak'}) • Kursi {seatNumber}
+                          Meja {tableNumber} ({isRoundTable ? 'Bulat' : 'Kotak'}) • Kursi Nomor {seatNumber}
                         </p>
                       </div>
                       <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-sm">
@@ -1229,7 +1300,9 @@ export default function SpmbClient({
 
                     <button
                       type="button"
-                      onClick={() => setShowSeatModal(false)}
+                      onClick={() => {
+                        setShowSeatModal(false);
+                      }}
                       className="w-full py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer"
                     >
                       Konfirmasi Kursi Nomor {seatNumber}
