@@ -198,8 +198,27 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
 
   // Helper to get chairs for a table
   const getTableChairs = useCallback((table: DiningTable): CustomChair[] => {
-    if (tableChairsMap[table.id] && tableChairsMap[table.id].length === table.capacity) {
+    if (tableChairsMap[table.id] && tableChairsMap[table.id].length > 0) {
       return tableChairsMap[table.id];
+    }
+    if (table.chairsJson) {
+      try {
+        const parsed = JSON.parse(table.chairsJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(`arum_chairs_table_${table.id}`);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        } catch {}
+      }
     }
     return getDefaultChairs(table.capacity || 4, table.shape || 'RECTANGLE');
   }, [tableChairsMap]);

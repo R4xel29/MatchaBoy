@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const tables = await prisma.diningTable.findMany({ orderBy: { number: 'asc' } }); console.log(JSON.stringify(tables, null, 2)); } main().finally(() => prisma.\());

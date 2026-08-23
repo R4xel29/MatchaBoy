@@ -6,7 +6,7 @@ import { LoadingScreen } from "@/components/ui/LoadingScreen"
 export const dynamic = 'force-dynamic'
 
 export default async function SpmbPage() {
-  const [categories, products, storeSettings] = await Promise.all([
+  const [categories, products, storeSettings, tables] = await Promise.all([
     prisma.category.findMany({
       orderBy: { createdAt: 'asc' }
     }),
@@ -19,7 +19,10 @@ export default async function SpmbPage() {
       },
       orderBy: { createdAt: 'desc' } // Newest first
     }),
-    prisma.storeSettings.findFirst()
+    prisma.storeSettings.findFirst(),
+    prisma.diningTable.findMany({
+      orderBy: { number: 'asc' }
+    })
   ])
 
   // Map Prisma 'Category' to the frontend 'Category' type format
@@ -68,6 +71,7 @@ export default async function SpmbPage() {
         spmbCloseTime={storeSettings?.spmbCloseTime || "16:00"}
         operationalDays={storeSettings?.operationalDays || "[0,1,2,3,4,5,6]"}
         disabledDates={storeSettings?.disabledDates || "[]"}
+        initialTables={tables}
       />
     </Suspense>
   )

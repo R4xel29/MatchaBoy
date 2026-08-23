@@ -27,6 +27,7 @@ interface SpmbClientProps {
   spmbCloseTime: string;
   operationalDays: string;
   disabledDates: string;
+  initialTables?: Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string; chairsJson?: string | null }>;
 }
 
 export default function SpmbClient({ 
@@ -37,7 +38,8 @@ export default function SpmbClient({
   spmbEndTime,
   spmbCloseTime,
   operationalDays,
-  disabledDates
+  disabledDates,
+  initialTables
 }: SpmbClientProps) {
   const searchParams = useSearchParams();
   const tableParam = searchParams.get('table');
@@ -46,7 +48,7 @@ export default function SpmbClient({
   const [tableNumber, setTableNumber] = useState<string>('');
   const [seatNumber, setSeatNumber] = useState<string>('1');
   const [isTableLocked, setIsTableLocked] = useState<boolean>(false);
-  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string; chairsJson?: string | null }>>([]);
+  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string; chairsJson?: string | null }>>(initialTables || []);
   const [loadingTables, setLoadingTables] = useState<boolean>(false);
 
   // Modals
@@ -1101,15 +1103,16 @@ export default function SpmbClient({
               className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center"
             >
               {(() => {
-                const currentTableObj = activeTables.find(t => t.number.toString() === tableNumber);
+                const currentTableObj = activeTables.find(t => t.number.toString().trim() === tableNumber.toString().trim()) || null;
                 const isRoundTable = currentTableObj?.shape === 'ROUND';
+                const currentTableCapacity = currentTableObj?.capacity || 4;
 
                 let savedChairs: CustomChair[] | null = null;
                 // 1. Try from database chairsJson (Synced from Admin Studio)
                 if (currentTableObj?.chairsJson) {
                   try {
                     const parsed = JSON.parse(currentTableObj.chairsJson);
-                    if (Array.isArray(parsed) && parsed.length === currentTableCapacity) {
+                    if (Array.isArray(parsed) && parsed.length > 0) {
                       savedChairs = parsed;
                     }
                   } catch {}
@@ -1120,14 +1123,14 @@ export default function SpmbClient({
                   if (saved) {
                     try {
                       const parsed = JSON.parse(saved);
-                      if (Array.isArray(parsed) && parsed.length === currentTableCapacity) {
+                      if (Array.isArray(parsed) && parsed.length > 0) {
                         savedChairs = parsed;
                       }
                     } catch {}
                   }
                 }
                 // 3. Fallback to default placement
-                if (!savedChairs) {
+                if (!savedChairs || savedChairs.length === 0) {
                   savedChairs = getDefaultChairs(currentTableCapacity, currentTableObj?.shape || 'RECTANGLE');
                 }
 
