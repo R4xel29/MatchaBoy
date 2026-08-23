@@ -44,6 +44,11 @@ export default function SpmbClient({
   const searchParams = useSearchParams();
   const tableParam = searchParams.get('table');
 
+  // Service Mode: DINE_IN (Makan di Tempat) vs PICKUP (Ambil Sendiri di Toko)
+  const [serviceMode, setServiceMode] = useState<'DINE_IN' | 'PICKUP'>('DINE_IN');
+  const [pickupTimeOption, setPickupTimeOption] = useState<string>('ASAP'); // 'ASAP', '30_MIN', '45_MIN', 'CUSTOM'
+  const [customPickupTime, setCustomPickupTime] = useState<string>('15:00');
+
   // Table & Seat State
   const [tableNumber, setTableNumber] = useState<string>('');
   const [seatNumber, setSeatNumber] = useState<string>('1');
@@ -96,6 +101,7 @@ export default function SpmbClient({
       const clean = tableParam.trim();
       setTableNumber(clean);
       setIsTableLocked(true);
+      setServiceMode('DINE_IN');
       setShowSeatModal(true);
     }
   }, [tableParam]);
@@ -272,18 +278,30 @@ export default function SpmbClient({
         matchaLevel: (item as any).matchaLevel
       }));
 
-      const fullTableLabel = `Meja ${tableNumber.trim()} (Kursi ${seatNumber})`;
       const backendPaymentMethod = paymentMethod === 'QRIS' ? 'QRIS_INSTAN' : 'COD';
+      
+      let pickupTimeStr = 'ASAP / 15-20 Menit';
+      if (pickupTimeOption === '30_MIN') pickupTimeStr = '30 Menit Lagi';
+      else if (pickupTimeOption === '45_MIN') pickupTimeStr = '45 Menit Lagi';
+      else if (pickupTimeOption === 'CUSTOM') pickupTimeStr = `Pukul ${customPickupTime}`;
+
+      const isPickUp = serviceMode === 'PICKUP';
+      const fullTableLabel = isPickUp 
+        ? 'Pick Up di Bar / Kasir Arum Seduh'
+        : `Meja ${tableNumber.trim()} (Kursi ${seatNumber})`;
 
       const payload = {
         name,
         phone: '-',
-        tableNumber: `${tableNumber.trim()} (Kursi ${seatNumber})`,
-        orderType: 'DINE_IN',
+        tableNumber: isPickUp ? null : `${tableNumber.trim()} (Kursi ${seatNumber})`,
+        orderType: serviceMode,
         address: fullTableLabel,
+        pickupTime: isPickUp ? pickupTimeStr : undefined,
         paymentMethod: backendPaymentMethod,
         items: itemsPayload,
-        notes: notes ? `[Kursi: ${seatNumber}] ${notes}` : `[Kursi: ${seatNumber}]`
+        notes: isPickUp 
+          ? (notes ? `[Pick Up: ${pickupTimeStr}] ${notes}` : `[Pick Up: ${pickupTimeStr}]`)
+          : (notes ? `[Kursi: ${seatNumber}] ${notes}` : `[Kursi: ${seatNumber}]`)
       };
 
       let res = await fetch('/api/orders', {
@@ -358,40 +376,79 @@ export default function SpmbClient({
               </p>
             </div>
 
-            {/* Table & Seat Interactive Badge */}
-            <div 
-              onClick={() => {
-                if (!isTableLocked) {
-                  setShowTableModal(true);
-                } else {
-                  setShowSeatModal(true);
-                }
-              }}
-              className="shrink-0 p-4 rounded-2xl bg-stone-50/80 border border-stone-200 flex items-center gap-4 cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-all group shadow-sm"
-            >
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-serif text-xl font-bold shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
-                {tableNumber || '—'}
+            {/* Service Mode Switcher & Location Badge */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+              {/* Segmented Mode Switcher */}
+              <div className="flex bg-stone-100 p-1 rounded-2xl border border-stone-200 shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => setServiceMode('DINE_IN')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    serviceMode === 'DINE_IN'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <UtensilsCrossed className="w-3.5 h-3.5" />
+                  <span>Dine In</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setServiceMode('PICKUP')}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    serviceMode === 'PICKUP'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Pick Up</span>
+                </button>
               </div>
-              <div className="text-left">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
-                  <span>Lokasi Duduk</span>
-                  {!isTableLocked && <span className="text-[9px] text-orange-600 font-bold">(Ganti)</span>}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="font-serif font-bold text-stone-900 text-sm sm:text-base">
-                    Meja {tableNumber || '—'} <span className="text-xs text-stone-500 font-sans font-normal">• Kursi {seatNumber}</span>
-                  </span>
-                  {isTableLocked ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-100 text-orange-800 text-[10px] font-bold border border-orange-200">
-                      <Lock className="w-2.5 h-2.5" /> QR
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-200/70 text-stone-700 text-[10px] font-bold">
-                      <Grid className="w-2.5 h-2.5" /> Denah
-                    </span>
-                  )}
+
+              {/* Dynamic Badge for Dine In vs Pick Up */}
+              {serviceMode === 'DINE_IN' ? (
+                <div 
+                  onClick={() => {
+                    if (!isTableLocked) {
+                      setShowTableModal(true);
+                    } else {
+                      setShowSeatModal(true);
+                    }
+                  }}
+                  className="p-3 sm:p-3.5 rounded-2xl bg-stone-50/90 border border-stone-200 flex items-center gap-3 cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-all group shadow-sm text-left"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-serif text-lg font-bold shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+                    {tableNumber || '—'}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-stone-400 flex items-center gap-1">
+                      <span>Makan di Tempat</span>
+                      {!isTableLocked && <span className="text-[9px] text-orange-600 font-bold">(Ganti)</span>}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="font-serif font-bold text-stone-900 text-xs sm:text-sm">
+                        Meja {tableNumber || '—'} <span className="text-[11px] text-stone-500 font-sans font-normal">• Kursi {seatNumber}</span>
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 flex items-center gap-3 shadow-sm text-left">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-white flex items-center justify-center font-bold shadow-md shadow-amber-500/20">
+                    <ShoppingBag className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-amber-800">
+                      Bawa Pulang / Takeaway
+                    </p>
+                    <p className="font-serif font-bold text-stone-900 text-xs sm:text-sm mt-0.5">
+                      Ambil di Kasir / Bar
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -760,60 +817,131 @@ export default function SpmbClient({
                     Informasi Pemesan
                   </h3>
 
-                  {/* Lokasi Meja & Kursi */}
+                  {/* Service Mode Selector in Drawer */}
                   <div className="space-y-1.5 text-left">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
-                        <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
-                        <span>Meja & Kursi</span>
-                      </label>
-                      {!isTableLocked && (
-                        <button
-                          type="button"
-                          onClick={() => setShowTableModal(true)}
-                          className="text-orange-600 font-bold text-[11px] hover:underline cursor-pointer"
-                        >
-                          Buka Denah Meja
-                        </button>
-                      )}
-                    </div>
-
+                    <label className="text-[11px] font-bold text-stone-700">
+                      Jenis Layanan
+                    </label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => {
-                          if (!isTableLocked) setShowTableModal(true);
-                        }}
-                        className={`px-3.5 py-3 rounded-2xl border text-xs font-bold text-left flex items-center justify-between transition-all ${
-                          isTableLocked 
-                            ? 'bg-orange-50/50 border-orange-200 text-orange-950'
-                            : 'bg-stone-50/70 border-stone-200 text-stone-800 hover:border-orange-400'
+                        onClick={() => setServiceMode('DINE_IN')}
+                        className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          serviceMode === 'DINE_IN'
+                            ? 'bg-orange-50 border-orange-500 text-orange-800 ring-2 ring-orange-500/20 shadow-sm'
+                            : 'bg-stone-50/70 border-stone-200 text-stone-600 hover:border-stone-400'
                         }`}
                       >
-                        <div>
-                          <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Nomor Meja</p>
-                          <p className="text-xs font-bold mt-0.5">Meja {tableNumber || '—'}</p>
-                        </div>
-                        {isTableLocked && (
-                          <span className="text-[9px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                            <Lock className="w-2.5 h-2.5" /> QR
-                          </span>
-                        )}
+                        <UtensilsCrossed className="w-4 h-4 text-orange-600" />
+                        <span>Makan di Tempat</span>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => setShowSeatModal(true)}
-                        className="px-3.5 py-3 rounded-2xl border border-stone-200 bg-stone-50/70 text-stone-800 text-left flex items-center justify-between hover:border-orange-400 transition-all cursor-pointer"
+                        onClick={() => setServiceMode('PICKUP')}
+                        className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          serviceMode === 'PICKUP'
+                            ? 'bg-orange-50 border-orange-500 text-orange-800 ring-2 ring-orange-500/20 shadow-sm'
+                            : 'bg-stone-50/70 border-stone-200 text-stone-600 hover:border-stone-400'
+                        }`}
                       >
-                        <div>
-                          <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Posisi Kursi</p>
-                          <p className="text-xs font-bold text-stone-900 mt-0.5">Kursi {seatNumber}</p>
-                        </div>
-                        <span className="text-[10px] text-orange-600 font-bold">Pilih</span>
+                        <ShoppingBag className="w-4 h-4 text-orange-600" />
+                        <span>Ambil Sendiri (Pick Up)</span>
                       </button>
                     </div>
                   </div>
+
+                  {/* Lokasi Meja & Kursi (Hanya jika Dine In) */}
+                  {serviceMode === 'DINE_IN' ? (
+                    <div className="space-y-1.5 text-left">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+                          <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
+                          <span>Meja & Kursi</span>
+                        </label>
+                        {!isTableLocked && (
+                          <button
+                            type="button"
+                            onClick={() => setShowTableModal(true)}
+                            className="text-orange-600 font-bold text-[11px] hover:underline cursor-pointer"
+                          >
+                            Buka Denah Meja
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isTableLocked) setShowTableModal(true);
+                          }}
+                          className={`px-3.5 py-3 rounded-2xl border text-xs font-bold text-left flex items-center justify-between transition-all ${
+                            isTableLocked 
+                              ? 'bg-orange-50/50 border-orange-200 text-orange-950'
+                              : 'bg-stone-50/70 border-stone-200 text-stone-800 hover:border-orange-400'
+                          }`}
+                        >
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Nomor Meja</p>
+                            <p className="text-xs font-bold mt-0.5">Meja {tableNumber || '—'}</p>
+                          </div>
+                          {isTableLocked && (
+                            <span className="text-[9px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                              <Lock className="w-2.5 h-2.5" /> QR
+                            </span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setShowSeatModal(true)}
+                          className="px-3.5 py-3 rounded-2xl border border-stone-200 bg-stone-50/70 text-stone-800 text-left flex items-center justify-between hover:border-orange-400 transition-all cursor-pointer"
+                        >
+                          <div>
+                            <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Posisi Kursi</p>
+                            <p className="text-xs font-bold text-stone-900 mt-0.5">Kursi {seatNumber}</p>
+                          </div>
+                          <span className="text-[10px] text-orange-600 font-bold">Pilih</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Pick Up Estimated Time Options */
+                    <div className="space-y-2 text-left p-3.5 bg-amber-50/60 rounded-2xl border border-amber-200">
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-700" />
+                        <label className="text-[11px] font-bold text-amber-950 uppercase tracking-wider">
+                          Estimasi Waktu Pengambilan
+                        </label>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5 pt-1">
+                        {[
+                          { id: 'ASAP', label: 'Segera (15-20 mnt)' },
+                          { id: '30_MIN', label: '30 Menit Lagi' },
+                          { id: '45_MIN', label: '45 Menit Lagi' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setPickupTimeOption(opt.id)}
+                            className={`py-2 px-1.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer text-center ${
+                              pickupTimeOption === opt.id
+                                ? 'bg-orange-500 text-white border-orange-500 shadow-sm'
+                                : 'bg-white text-stone-700 border-amber-200 hover:border-amber-400'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <p className="text-[10px] text-stone-600 pt-1">
+                        Pesanan akan langsung disiapkan di cup/kantong takeaway dan dapat Anda ambil di kasir/bar Arum Seduh.
+                      </p>
+                    </div>
+                  )}
 
                   {/* Nama Pemesan */}
                   <div className="space-y-1.5 text-left">

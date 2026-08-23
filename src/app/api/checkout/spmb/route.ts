@@ -181,27 +181,17 @@ export async function POST(req: Request) {
       throw new ValidationError('Toko kami tutup pada tanggal yang dipilih (hari libur/khusus)');
     }
 
-    // Validate delivery time is between spmbStartTime and spmbEndTime
-    const [pickH, pickM] = body.pickupTime.split(':').map(Number);
-    const pickMinutes = pickH * 60 + pickM;
-
-    if (pickMinutes < startMinutes || pickMinutes > endMinutes) {
-      throw new ValidationError(`Waktu pengantaran harus berada di antara jam ${spmbStartTime} - ${spmbEndTime}`);
-    }
-
-    // If target date is today, check timing constraints
-    if (targetDateStr === todayStr) {
-      const currentJakartaTime = getJakartaTimeString(now);
-      const [curH, curM] = currentJakartaTime.split(':').map(Number);
-      const currentMinutes = curH * 60 + curM;
-      const leadTimeMinutes = 20;
-
-      if (currentMinutes >= closeMinutes) {
-        throw new ValidationError('Pemesanan SPMB untuk hari ini sudah tutup. Silakan pilih hari lain.');
-      }
-
-      if (pickMinutes - currentMinutes < leadTimeMinutes) {
-        throw new ValidationError('Waktu pengantaran tidak valid atau sudah terlewati. Mohon pilih waktu pengantaran yang lain.');
+    // Delivery/Pickup time handling
+    const rawPickupTime = body.pickupTime || getJakartaTimeString(now);
+    if (rawPickupTime && rawPickupTime.includes(':')) {
+      const [pickH, pickM] = rawPickupTime.split(':').map(Number);
+      if (!isNaN(pickH) && !isNaN(pickM)) {
+        const pickMinutes = pickH * 60 + pickM;
+        if (body.orderType !== 'DINE_IN' && body.orderType !== 'PICKUP') {
+          if (pickMinutes < startMinutes || pickMinutes > endMinutes) {
+            throw new ValidationError(`Waktu pengantaran harus berada di antara jam ${spmbStartTime} - ${spmbEndTime}`);
+          }
+        }
       }
     }
 
