@@ -92,7 +92,7 @@ export default function StorefrontLayout({
     }
   }, [status, session?.user?.id, router]);
 
-  if (status === 'loading' || (status === 'authenticated' && !setupChecked)) {
+  if (pathname !== '/spmb' && (status === 'loading' || (status === 'authenticated' && !setupChecked))) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">

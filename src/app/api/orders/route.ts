@@ -221,6 +221,9 @@ export async function POST(req: Request) {
       }
     }
 
+    let paymentQrContent: string | null = null;
+    let paymentUrl: string | null = null;
+
     // Handle QRIS Payment Generation
     if (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') {
       const paymentSettings = await prisma.paymentSettings.findFirst();
@@ -239,15 +242,11 @@ export async function POST(req: Request) {
             });
 
             if (mcpResult.qrContent) {
-              await prisma.order.update({
-                where: { id: order.id },
-                data: { paymentQrContent: mcpResult.qrContent }
-              });
+              paymentQrContent = mcpResult.qrContent;
             }
           }
 
-          const currentOrder = await prisma.order.findUnique({ where: { id: order.id } });
-          if (!currentOrder?.paymentQrContent) {
+          if (!paymentQrContent) {
             const { createDokuCheckoutSession } = await import('@/lib/doku');
             const dokuResult = await createDokuCheckoutSession({
               clientId: paymentSettings.dokuClientId,
@@ -265,11 +264,19 @@ export async function POST(req: Request) {
             });
 
             if (dokuResult.url) {
-              await prisma.order.update({
-                where: { id: order.id },
-                data: { paymentUrl: dokuResult.url }
-              });
+              paymentUrl = dokuResult.url;
             }
+          }
+
+          // Single fast update if payment info generated
+          if (paymentQrContent || paymentUrl) {
+            await prisma.order.update({
+              where: { id: order.id },
+              data: {
+                paymentQrContent: paymentQrContent || undefined,
+                paymentUrl: paymentUrl || undefined
+              }
+            });
           }
         } catch (e) {
           console.error('[API ORDERS QRIS ERROR]', e);
@@ -277,18 +284,10 @@ export async function POST(req: Request) {
       }
     }
 
-    const finalOrder = await prisma.order.findUnique({
-      where: { id: order.id },
-      select: { paymentUrl: true, paymentQrContent: true }
-    });
-
-    // Admin Notification
-    try {
-      const { sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service');
-      await sendAdminNewOrderNotification(order.id);
-    } catch (e) {
-      console.error('[API ORDERS] Admin notification error:', e);
-    }
+    // Admin Notification (Async Non-Blocking Fire-and-Forget)
+    import('@/lib/whatsapp-service')
+      .then(({ sendAdminNewOrderNotification }) => sendAdminNewOrderNotification(order.id))
+      .catch((e) => console.error('[API ORDERS] Admin notification error:', e));
 
     return NextResponse.json({
       success: true,
@@ -296,8 +295,8 @@ export async function POST(req: Request) {
       queueNumber: order.queueNumber,
       total: secureTotal,
       status: order.status,
-      paymentUrl: finalOrder?.paymentUrl || undefined,
-      paymentQrContent: finalOrder?.paymentQrContent || undefined,
+      paymentUrl: paymentUrl || undefined,
+      paymentQrContent: paymentQrContent || undefined,
     });
   } catch (error) {
     logError(error, {

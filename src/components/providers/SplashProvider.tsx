@@ -22,13 +22,7 @@ export function SplashProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setIsMounted(true);
-    
-    // Check session storage so we only show the splash screen ONCE per browser session
-    const hasShownSplash = sessionStorage.getItem('arus_splash_shown');
-    
-    if (!hasShownSplash) {
-      setShowSplash(true);
-    }
+    // Instant load: no forced splash screen blocking on refresh or initial open
   }, []);
 
   const handleSplashFinished = () => {

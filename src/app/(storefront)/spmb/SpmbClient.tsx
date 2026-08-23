@@ -692,30 +692,67 @@ export default function SpmbClient({
         )}
       </div>
 
-      {/* Floating Bottom Cart Bar */}
-      {cartItems.length > 0 && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-40 w-[calc(100%-2rem)] max-w-md bg-stone-900 text-white rounded-3xl p-3.5 shadow-2xl border border-stone-800 flex items-center justify-between animate-in fade-in slide-in-from-bottom-4 duration-200">
-          <div className="flex items-center gap-3 pl-1">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center relative shadow-inner">
-              <ShoppingBag className="w-5 h-5 text-white" />
-              <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-white text-orange-700 font-black text-[10px] flex items-center justify-center border-2 border-stone-900 shadow">
-                {cartItems.reduce((acc, i) => acc + i.quantity, 0)}
-              </span>
-            </div>
-            <div className="text-left">
-              <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Total Tagihan</p>
-              <p className="text-sm font-serif font-bold text-white mt-0.5">{formatRupiah(totalPrice)}</p>
-            </div>
-          </div>
-          
-          <button
-            onClick={() => setIsCartOpen(true)}
-            className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs tracking-wide transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-orange-500/20"
+      {/* Floating Bottom Cart Bar (Modern Luxury Arus Design) */}
+      <AnimatePresence>
+        {cartItems.length > 0 && (
+          <motion.div
+            initial={{ y: 80, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 80, opacity: 0, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+            className="fixed bottom-4 sm:bottom-6 left-0 right-0 z-40 px-4 pointer-events-none"
           >
-            Lihat Pesanan <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
+            <div className="pointer-events-auto max-w-xl mx-auto bg-[#18120E]/95 backdrop-blur-xl text-[#FFFBF5] rounded-[1.75rem] p-3 sm:p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.45),0_0_0_1px_rgba(212,165,116,0.25)] border border-[#D4A574]/30 flex items-center justify-between gap-3 sm:gap-4 transition-all">
+              {/* Left: Bag icon + count badge + price + location badge */}
+              <div className="flex items-center gap-3 pl-1 min-w-0">
+                <div className="relative shrink-0">
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 flex items-center justify-center shadow-md shadow-orange-500/30">
+                    <ShoppingBag className="w-5 h-5 text-stone-950 stroke-[2.5]" />
+                  </div>
+                  <motion.span
+                    key={cartItems.reduce((acc, i) => acc + i.quantity, 0)}
+                    initial={{ scale: 0.5 }}
+                    animate={{ scale: 1 }}
+                    className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-white text-orange-700 font-black text-[10px] flex items-center justify-center border-2 border-[#18120E] shadow-sm"
+                  >
+                    {cartItems.reduce((acc, i) => acc + i.quantity, 0)}
+                  </motion.span>
+                </div>
+                
+                <div className="text-left min-w-0">
+                  <div className="flex items-center gap-1.5 text-[11px] text-[#EFDCA7] font-semibold truncate">
+                    {serviceMode === 'DINE_IN' ? (
+                      <>
+                        <UtensilsCrossed className="w-3 h-3 text-[#D4A574] shrink-0" />
+                        <span className="truncate">Meja {tableNumber || '—'} • Kursi {seatNumber}</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShoppingBag className="w-3 h-3 text-[#D4A574] shrink-0" />
+                        <span>Ambil Sendiri (Pick Up)</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-sm sm:text-base font-extrabold text-white mt-0.5 tracking-tight font-sans">
+                    {formatRupiah(totalPrice)}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Right: CTA Button */}
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
+                onClick={() => setIsCartOpen(true)}
+                className="px-4 sm:px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-stone-950 font-extrabold text-xs sm:text-sm tracking-wide transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-orange-500/25 shrink-0"
+              >
+                <span>Lihat Pesanan</span>
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Clean Figma-Grade Cart & Checkout Slide-Over Panel */}
       <AnimatePresence>
@@ -765,41 +802,60 @@ export default function SpmbClient({
                   </h3>
 
                   {cartItems.map((item) => (
-                    <div key={item.id} className="flex gap-3 p-3 rounded-2xl border border-stone-100 bg-stone-50/50 hover:bg-stone-50 transition-colors items-start">
+                    <div key={item.id} className="flex gap-3 p-3.5 rounded-2xl border border-stone-150 bg-stone-50/70 hover:bg-stone-50 transition-colors items-start">
                       {item.image && (
-                        <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-100 shrink-0">
+                        <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200/60">
                           <Image src={item.image} alt={item.name} fill className="object-cover" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0 text-left">
                         <h4 className="text-xs font-bold text-stone-900 line-clamp-1">{item.name}</h4>
-                        <p className="text-[10px] text-stone-500 mt-0.5 line-clamp-2 leading-relaxed">
-                          Size: {item.size || 'Normal'} | Ice: {item.iceLevel} | Sugar: {item.sugarLevel}
-                          {(item as any).shot && ` | ${(item as any).shot}`}
-                          {item.addOns && item.addOns.length > 0 && ` | ${item.addOns.map((a) => a.name).join(', ')}`}
-                        </p>
-                        <p className="text-xs font-bold text-orange-600 mt-1.5">{formatRupiah(item.totalPrice)}</p>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
+                            {item.size || 'Normal'}
+                          </span>
+                          <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
+                            {item.iceLevel}
+                          </span>
+                          <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
+                            {item.sugarLevel}
+                          </span>
+                          {(item as any).shot && (
+                            <span className="inline-block text-[9px] font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                              {(item as any).shot}
+                            </span>
+                          )}
+                          {item.addOns && item.addOns.length > 0 && item.addOns.map((a: any) => (
+                            <span key={a.id} className="inline-block text-[9px] font-semibold bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded">
+                              +{a.name}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-xs font-extrabold text-orange-600 mt-1.5">{formatRupiah(item.totalPrice)}</p>
                       </div>
                       
                       <div className="flex flex-col items-end gap-2 shrink-0">
                         <button
+                          type="button"
                           onClick={() => removeItem(item.id)}
-                          className="text-stone-300 hover:text-rose-500 transition-colors cursor-pointer"
+                          className="text-stone-300 hover:text-rose-500 transition-colors cursor-pointer p-1"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                         
-                        <div className="flex items-center gap-1.5 border border-stone-200 bg-white rounded-xl p-0.5 shrink-0">
+                        <div className="flex items-center gap-1.5 border border-stone-200 bg-white rounded-xl p-0.5 shrink-0 shadow-xs">
                           <button
+                            type="button"
                             onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                            className="p-1 text-stone-500 hover:bg-stone-50 rounded-lg cursor-pointer"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded-lg cursor-pointer transition-colors"
                           >
                             <Minus className="w-2.5 h-2.5" />
                           </button>
-                          <span className="text-xs font-bold w-4 text-center">{item.quantity}</span>
+                          <span className="text-xs font-bold w-4 text-center text-stone-800">{item.quantity}</span>
                           <button
+                            type="button"
                             onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                            className="p-1 text-stone-500 hover:bg-stone-50 rounded-lg cursor-pointer"
+                            className="p-1 text-stone-500 hover:bg-stone-50 rounded-lg cursor-pointer transition-colors"
                           >
                             <Plus className="w-2.5 h-2.5" />
                           </button>
@@ -1038,19 +1094,24 @@ export default function SpmbClient({
                     </div>
                   )}
 
-                  <button
+                  <motion.button
                     type="submit"
+                    whileTap={{ scale: 0.98 }}
                     disabled={isSubmitting}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-stone-950 font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Memproses Pesanan...
+                        <Loader2 className="w-4 h-4 animate-spin text-stone-950" /> Memproses Pesanan...
                       </>
                     ) : (
-                      `Kirim Pesanan (${formatRupiah(totalPrice)})`
+                      <>
+                        <span>Kirim Pesanan</span>
+                        <span className="opacity-80">•</span>
+                        <span>{formatRupiah(totalPrice)}</span>
+                      </>
                     )}
-                  </button>
+                  </motion.button>
                 </form>
               </div>
             </motion.div>

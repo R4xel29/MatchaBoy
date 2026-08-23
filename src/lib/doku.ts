@@ -130,6 +130,7 @@ export async function createDokuCheckoutSession(
         'Signature': signature,
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(3500),
     });
 
     const data = await response.json();
@@ -305,7 +306,8 @@ export async function createDokuMcpQrisPayment(
         'Authorization': authHeader,
         'Accept': 'application/json, text/event-stream'
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(3500)
     });
 
     if (!response.ok) {
