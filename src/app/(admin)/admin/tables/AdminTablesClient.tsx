@@ -6,9 +6,11 @@ import { useToast } from '@/components/ui/Toast';
 import { 
   Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, 
   Users, Armchair, Sparkles, X, Circle, Square, RotateCw, Settings, UtensilsCrossed,
-  ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Sliders, Compass, LayoutGrid
+  ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Sliders, Compass, LayoutGrid,
+  Printer
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import TableQrCardModal from './TableQrCardModal';
 
 interface DiningTable {
   id: string;
@@ -123,6 +125,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+  const [cardModalTableId, setCardModalTableId] = useState<string | null>(null);
   const [activeCanvasMode, setActiveCanvasMode] = useState<'VIEW' | 'MOVE_TABLE'>('VIEW');
 
   // Form / Studio editing values
@@ -563,6 +567,20 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
               <RefreshCw className="w-4 h-4" />
             </button>
 
+            {/* Cetak Kartu / Stiker Meja Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setCardModalTableId(null);
+                setIsCardModalOpen(true);
+              }}
+              className="px-3.5 py-2.5 rounded-2xl bg-white hover:bg-orange-50 text-orange-700 border border-orange-200 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+              title="Buka Generator Cetak Kartu Meja Template Resmi"
+            >
+              <Printer className="w-4 h-4 text-orange-600" />
+              <span>Cetak Stiker Meja (Template)</span>
+            </button>
+
             {/* Tambah Meja Button */}
             <button
               type="button"
@@ -902,7 +920,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   </div>
 
                   {/* QR Code Action */}
-                  <div className="p-3 rounded-2xl bg-[#FAF7F2] border border-stone-200 text-center">
+                  <div className="p-3.5 rounded-2xl bg-[#FAF7F2] border border-stone-200 text-center space-y-2">
                     <div className="hidden">
                       <QRCodeCanvas
                         id={`qr-canvas-${selectedTable.id}`}
@@ -913,10 +931,20 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                     </div>
                     <button
                       type="button"
-                      onClick={handleDownloadQR}
-                      className="w-full py-2 rounded-xl bg-white hover:bg-orange-50 border border-stone-200 hover:border-orange-300 text-orange-700 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                      onClick={() => {
+                        setCardModalTableId(selectedTable.id);
+                        setIsCardModalOpen(true);
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-orange-500/20"
                     >
-                      <Download className="w-3.5 h-3.5" /> Unduh QR Stiker Meja
+                      <Sparkles className="w-3.5 h-3.5" /> Cetak Kartu Meja {selectedTable.number} (Template)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDownloadQR}
+                      className="w-full py-1.5 rounded-lg text-stone-500 hover:text-stone-800 text-[11px] font-semibold transition-all flex items-center justify-center gap-1 cursor-pointer"
+                    >
+                      <Download className="w-3 h-3" /> Unduh Gambar QR Polos
                     </button>
                   </div>
                 </div>
@@ -1139,6 +1167,14 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
           </div>
         )}
       </AnimatePresence>
+
+      {/* TABLE QR CARD GENERATOR MODAL */}
+      <TableQrCardModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        tables={tables}
+        initialTableId={cardModalTableId}
+      />
     </div>
   );
 }
