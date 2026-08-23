@@ -2,9 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
+import jsPDF from 'jspdf';
 import { 
   X, Download, Printer, Sliders, RotateCcw, Image as ImageIcon,
-  ChevronLeft, ChevronRight, Sparkles, Check, Upload, Move, Eye, Layers, Copy
+  ChevronLeft, ChevronRight, Sparkles, Check, Upload, Move, Eye, Layers, Copy,
+  FileText, FileCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useToast } from '@/components/ui/Toast';
@@ -64,6 +66,8 @@ export default function TableQrCardModal({
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
+  const [isPdfGenerating, setIsPdfGenerating] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState({ current: 0, total: 0 });
   const [templateSrc, setTemplateSrc] = useState(DEFAULT_TEMPLATE_SRC);
   const [isDragging, setIsDragging] = useState<'QR' | 'NUM' | null>(null);
   const [printLayout, setPrintLayout] = useState<'A4_DUAL' | 'A6_SINGLE'>('A4_DUAL');
@@ -278,6 +282,72 @@ export default function TableQrCardModal({
       showToast('Gagal mengunduh kartu meja', 'error');
     } finally {
       setIsBatchGenerating(false);
+    }
+  };
+
+  // Download Combined Multi-page PDF (All Tables in 1 single PDF file)
+  const handleDownloadPdfAll = async () => {
+    if (tables.length === 0) return;
+
+    setIsPdfGenerating(true);
+    setPdfProgress({ current: 0, total: tables.length });
+
+    try {
+      // Dimensions matching the card ratio: 105mm x 151.4mm (standard standing banner size)
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [105, 151.4],
+        compress: true,
+      });
+
+      const canvas = document.createElement('canvas');
+
+      for (let i = 0; i < tables.length; i++) {
+        const table = tables[i];
+        setPdfProgress({ current: i + 1, total: tables.length });
+
+        await drawCardToCanvas(canvas, table.number, settings, templateSrc);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+        if (i > 0) {
+          doc.addPage([105, 151.4], 'portrait');
+        }
+
+        doc.addImage(dataUrl, 'JPEG', 0, 0, 105, 151.4, undefined, 'FAST');
+      }
+
+      doc.save(`Semua-Kartu-Meja-Arus-Arum-Seduh.pdf`);
+      showToast(`Berhasil membuat 1 file PDF untuk ${tables.length} meja!`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Gagal membuat file PDF', 'error');
+    } finally {
+      setIsPdfGenerating(false);
+    }
+  };
+
+  // Download Single Table PDF
+  const handleDownloadPdfSingle = async () => {
+    if (!currentTable) return;
+    try {
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [105, 151.4],
+        compress: true,
+      });
+
+      const canvas = document.createElement('canvas');
+      await drawCardToCanvas(canvas, currentTable.number, settings, templateSrc);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+
+      doc.addImage(dataUrl, 'JPEG', 0, 0, 105, 151.4, undefined, 'FAST');
+      doc.save(`Kartu-Meja-${currentTable.number}-Arus-Arum-Seduh.pdf`);
+      showToast(`PDF Meja ${currentTable.number} berhasil diunduh`, 'success');
+    } catch (err: any) {
+      console.error(err);
+      showToast('Gagal mengunduh PDF meja', 'error');
     }
   };
 
@@ -508,47 +578,93 @@ export default function TableQrCardModal({
             <div className="lg:col-span-6 space-y-5">
               
               {/* Main Action Buttons */}
-              <div className="bg-[#FAF7F2] p-5 rounded-3xl border border-stone-200 space-y-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-stone-400">
-                  Opsi Unduh & Cetak
-                </p>
+              <div className="bg-[#FAF7F2] p-5 rounded-3xl border border-stone-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                    Opsi Unduh & Cetak
+                  </p>
+                  <span className="text-[10px] font-bold text-orange-700 bg-orange-100/70 px-2 py-0.5 rounded-md">
+                    {tables.length} Meja Terdaftar
+                  </span>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {/* Download Single PNG */}
-                  <button
-                    type="button"
-                    onClick={handleDownloadSingle}
-                    className="p-3.5 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 transition-all cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Unduh Meja {currentTable.number} (HD PNG)</span>
-                  </button>
+                {/* Section: Semua Meja (1 File PDF & Batch) */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                    Unduh Semua Meja Sekaligus
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* PDF All-In-One (1 File PDF Gabungan) */}
+                    <button
+                      type="button"
+                      disabled={isPdfGenerating || isBatchGenerating}
+                      onClick={handleDownloadPdfAll}
+                      className="p-3.5 rounded-2xl bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-red-600/20 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <FileText className="w-4 h-4 text-white shrink-0" />
+                      <span className="truncate">
+                        {isPdfGenerating
+                          ? `Membuat PDF (${pdfProgress.current}/${pdfProgress.total})...`
+                          : `Unduh Semua (1 File PDF)`}
+                      </span>
+                    </button>
 
-                  {/* Download All Tables Batch */}
-                  <button
-                    type="button"
-                    disabled={isBatchGenerating}
-                    onClick={handleDownloadBatch}
-                    className="p-3.5 rounded-2xl bg-stone-900 hover:bg-black text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
-                  >
-                    <Layers className="w-4 h-4 text-orange-400" />
-                    <span>
-                      {isBatchGenerating 
-                        ? `Mengunduh (${batchProgress.current}/${batchProgress.total})...` 
-                        : `Unduh Semua Meja (${tables.length})`}
-                    </span>
-                  </button>
+                    {/* Batch PNG Terpisah */}
+                    <button
+                      type="button"
+                      disabled={isBatchGenerating || isPdfGenerating}
+                      onClick={handleDownloadBatch}
+                      className="p-3.5 rounded-2xl bg-stone-900 hover:bg-black text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      <Layers className="w-4 h-4 text-orange-400 shrink-0" />
+                      <span className="truncate">
+                        {isBatchGenerating 
+                          ? `Mengunduh (${batchProgress.current}/${batchProgress.total})...` 
+                          : `Unduh Semua (Batch PNG)`}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section: Meja Terpilih Saat Ini */}
+                <div className="space-y-2 pt-2 border-t border-stone-200/70">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                    Unduh Meja {currentTable.number} Saja
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Single HD PNG */}
+                    <button
+                      type="button"
+                      onClick={handleDownloadSingle}
+                      className="p-3 rounded-2xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Unduh PNG HD (Meja {currentTable.number})</span>
+                    </button>
+
+                    {/* Single PDF */}
+                    <button
+                      type="button"
+                      onClick={handleDownloadPdfSingle}
+                      className="p-3 rounded-2xl bg-white hover:bg-red-50 text-red-700 border border-red-200 font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-red-600" />
+                      <span>Unduh PDF (Meja {currentTable.number})</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Print Sheet Action */}
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="w-full p-3.5 rounded-2xl bg-white hover:bg-orange-50 border-2 border-stone-200 hover:border-orange-300 text-stone-800 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
-                >
-                  <Printer className="w-4 h-4 text-orange-600" />
-                  <span>Cetak Langsung / Simpan ke PDF (A4 Tent Card)</span>
-                </button>
+                <div className="pt-2 border-t border-stone-200/70">
+                  <button
+                    type="button"
+                    onClick={handlePrint}
+                    className="w-full p-3.5 rounded-2xl bg-white hover:bg-stone-50 border-2 border-stone-200 hover:border-stone-300 text-stone-800 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+                  >
+                    <Printer className="w-4 h-4 text-stone-700" />
+                    <span>Cetak Langsung (Browser Print Preview)</span>
+                  </button>
+                </div>
               </div>
 
               {/* SPMB Link Info */}
