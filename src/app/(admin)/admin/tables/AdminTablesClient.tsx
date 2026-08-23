@@ -57,30 +57,42 @@ export const getDefaultChairs = (capacity: number, shape: string): CustomChair[]
       ];
     } else if (cap === 4) {
       return [
-        { id: 'chair-1', label: '1', x: 0, y: -56 },
-        { id: 'chair-2', label: '2', x: 78, y: 0 },
-        { id: 'chair-3', label: '3', x: 0, y: 56 },
-        { id: 'chair-4', label: '4', x: -78, y: 0 }
+        { id: 'chair-1', label: '1', x: -78, y: 0 },
+        { id: 'chair-2', label: '2', x: 0, y: -56 },
+        { id: 'chair-3', label: '3', x: 78, y: 0 },
+        { id: 'chair-4', label: '4', x: 0, y: 56 }
       ];
     } else if (cap === 6) {
       return [
-        { id: 'chair-1', label: '1', x: -32, y: -56 },
-        { id: 'chair-2', label: '2', x: 32, y: -56 },
-        { id: 'chair-3', label: '3', x: 78, y: 0 },
-        { id: 'chair-4', label: '4', x: 32, y: 56 },
-        { id: 'chair-5', label: '5', x: -32, y: 56 },
-        { id: 'chair-6', label: '6', x: -78, y: 0 }
+        { id: 'chair-1', label: '1', x: -78, y: 0 },
+        { id: 'chair-2', label: '2', x: -32, y: -56 },
+        { id: 'chair-3', label: '3', x: 32, y: -56 },
+        { id: 'chair-4', label: '4', x: 78, y: 0 },
+        { id: 'chair-5', label: '5', x: 32, y: 56 },
+        { id: 'chair-6', label: '6', x: -32, y: 56 }
       ];
     } else if (cap === 8) {
       return [
-        { id: 'chair-1', label: '1', x: -40, y: -56 },
-        { id: 'chair-2', label: '2', x: 0, y: -56 },
-        { id: 'chair-3', label: '3', x: 40, y: -56 },
-        { id: 'chair-4', label: '4', x: 78, y: 0 },
-        { id: 'chair-5', label: '5', x: 40, y: 56 },
-        { id: 'chair-6', label: '6', x: 0, y: 56 },
-        { id: 'chair-7', label: '7', x: -40, y: 56 },
-        { id: 'chair-8', label: '8', x: -78, y: 0 }
+        { id: 'chair-1', label: '1', x: -78, y: 0 },
+        { id: 'chair-2', label: '2', x: -40, y: -56 },
+        { id: 'chair-3', label: '3', x: 0, y: -56 },
+        { id: 'chair-4', label: '4', x: 40, y: -56 },
+        { id: 'chair-5', label: '5', x: 78, y: 0 },
+        { id: 'chair-6', label: '6', x: 40, y: 56 },
+        { id: 'chair-7', label: '7', x: 0, y: 56 },
+        { id: 'chair-8', label: '8', x: -40, y: 56 }
+      ];
+    } else if (cap === 9) {
+      return [
+        { id: 'chair-1', label: '1', x: -78, y: 0 },
+        { id: 'chair-2', label: '2', x: -45, y: -56 },
+        { id: 'chair-3', label: '3', x: 0, y: -56 },
+        { id: 'chair-4', label: '4', x: 45, y: -56 },
+        { id: 'chair-5', label: '5', x: 78, y: 0 },
+        { id: 'chair-6', label: '6', x: 45, y: 56 },
+        { id: 'chair-7', label: '7', x: 15, y: 56 },
+        { id: 'chair-8', label: '8', x: -15, y: 56 },
+        { id: 'chair-9', label: '9', x: -45, y: 56 }
       ];
     } else {
       // General layout
@@ -89,6 +101,10 @@ export const getDefaultChairs = (capacity: number, shape: string): CustomChair[]
       const list: CustomChair[] = [];
       let cIdx = 1;
 
+      // Left col
+      list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: -78, y: 0 });
+      cIdx++;
+
       // Top row
       for (let i = 0; i < topCount && cIdx <= cap; i++) {
         const xOffset = topCount === 1 ? 0 : -45 + (90 / (topCount - 1)) * i;
@@ -96,20 +112,15 @@ export const getDefaultChairs = (capacity: number, shape: string): CustomChair[]
         cIdx++;
       }
       // Right col
-      for (let i = 0; i < sideCount && cIdx <= cap; i++) {
-        const yOffset = sideCount === 1 ? 0 : -20 + (40 / (sideCount - 1)) * i;
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: 78, y: Math.round(yOffset) });
+      if (cIdx <= cap) {
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: 78, y: 0 });
         cIdx++;
       }
       // Bottom row
-      for (let i = 0; i < topCount && cIdx <= cap; i++) {
-        const xOffset = topCount === 1 ? 0 : 45 - (90 / (topCount - 1)) * i;
+      const remaining = cap - cIdx + 1;
+      for (let i = 0; i < remaining && cIdx <= cap; i++) {
+        const xOffset = remaining === 1 ? 0 : 45 - (90 / Math.max(1, remaining - 1)) * i;
         list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: 56 });
-        cIdx++;
-      }
-      // Left col
-      while (cIdx <= cap) {
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: -78, y: 0 });
         cIdx++;
       }
       return list.slice(0, cap);
@@ -120,6 +131,7 @@ export const getDefaultChairs = (capacity: number, shape: string): CustomChair[]
 export default function AdminTablesClient({ initialTables }: { initialTables: DiningTable[] }) {
   const { showToast } = useToast();
   const [tables, setTables] = useState<DiningTable[]>(initialTables);
+  const [tableChairsMap, setTableChairsMap] = useState<Record<string, CustomChair[]>>({});
   
   // Studio & Selection States
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -138,6 +150,28 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   const [selectedChairIdx, setSelectedChairIdx] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Load custom chair configurations into state
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const map: Record<string, CustomChair[]> = {};
+      tables.forEach(t => {
+        const saved = localStorage.getItem(`arum_chairs_table_${t.id}`);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length === t.capacity) {
+              map[t.id] = parsed;
+            }
+          } catch {}
+        }
+        if (!map[t.id]) {
+          map[t.id] = getDefaultChairs(t.capacity || 4, t.shape || 'RECTANGLE');
+        }
+      });
+      setTableChairsMap(map);
+    }
+  }, [tables]);
+
   // Floor Plan Canvas Dragging Ref
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ tableId: string; startX: number; startY: number } | null>(null);
@@ -150,21 +184,13 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
     return tables.find(t => t.id === selectedTableId) || null;
   }, [tables, selectedTableId]);
 
-  // Load custom chair configurations
+  // Helper to get chairs for a table
   const getTableChairs = useCallback((table: DiningTable): CustomChair[] => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`arum_chairs_table_${table.id}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length === table.capacity) {
-            return parsed;
-          }
-        } catch {}
-      }
+    if (tableChairsMap[table.id] && tableChairsMap[table.id].length === table.capacity) {
+      return tableChairsMap[table.id];
     }
     return getDefaultChairs(table.capacity || 4, table.shape || 'RECTANGLE');
-  }, []);
+  }, [tableChairsMap]);
 
   // Open Studio for selected table
   const openStudio = (table: DiningTable) => {
@@ -350,10 +376,11 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memperbarui meja');
 
-      // Save custom chair positions to localStorage
+      // Save custom chair positions to localStorage and state
       if (typeof window !== 'undefined') {
         localStorage.setItem(`arum_chairs_table_${selectedTableId}`, JSON.stringify(customChairs));
       }
+      setTableChairsMap(prev => ({ ...prev, [selectedTableId]: customChairs }));
 
       showToast(`Pengaturan Meja ${editNumber} dan posisi kursi tersimpan!`, 'success');
       setTables(prev => prev.map(t => t.id === selectedTableId ? data : t));
@@ -714,9 +741,12 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                         transform: `translate(${chair.x}px, ${chair.y}px)`,
                       }}
                       title={`Meja ${table.number} - Kursi ${chair.label}`}
-                      className="absolute w-6 h-6 rounded-lg bg-white border-2 border-orange-300 text-orange-700 shadow-sm flex items-center justify-center text-[9px] font-black pointer-events-none z-10"
+                      className="absolute w-8 h-8 rounded-full bg-white border-2 border-orange-400 text-orange-700 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10"
                     >
                       <Armchair className="w-3.5 h-3.5 text-orange-600" />
+                      <span className="font-serif font-black text-[8px] leading-none text-stone-900 mt-0.5">
+                        {chair.label}
+                      </span>
                     </div>
                   );
                 })}
@@ -1003,14 +1033,14 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                             touchAction: 'none'
                           }}
                           title={`Klik & Tarik Kursi ${chair.label}`}
-                          className={`absolute w-10 h-10 rounded-2xl border-2 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center transition-transform z-30 shadow-md ${
+                          className={`absolute w-10 h-10 rounded-full border-2 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center transition-transform z-30 shadow-md ${
                             isSelected
                               ? 'bg-orange-500 text-white border-white ring-4 ring-orange-500/30 scale-110'
-                              : 'bg-white text-stone-800 border-orange-300 hover:scale-105'
+                              : 'bg-white text-stone-800 border-orange-400 hover:scale-105'
                           }`}
                         >
                           <Armchair className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-orange-600'}`} />
-                          <span className="font-serif font-black text-[9px] leading-none mt-0.5">{chair.label}</span>
+                          <span className={`font-serif font-black text-[9px] leading-none mt-0.5 ${isSelected ? 'text-white' : 'text-stone-900'}`}>{chair.label}</span>
                         </div>
                       );
                     })}
