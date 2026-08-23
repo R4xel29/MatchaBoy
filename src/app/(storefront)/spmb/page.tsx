@@ -1,7 +1,6 @@
 import { Suspense } from "react"
 import { prisma } from "@/lib/prisma"
 import SpmbClient from "./SpmbClient"
-import { LoadingScreen } from "@/components/ui/LoadingScreen"
 
 export const dynamic = 'force-dynamic'
 
@@ -16,6 +15,9 @@ export default async function SpmbPage() {
           { badge: null },
           { badge: { not: 'archived' } }
         ]
+      },
+      include: {
+        category: true
       },
       orderBy: { createdAt: 'desc' } // Newest first
     }),
@@ -53,6 +55,8 @@ export default async function SpmbPage() {
       price: p.price,
       image: p.image || undefined,
       category: p.categoryId,
+      categoryName: p.category?.name,
+      categorySlug: p.category?.slug,
       badge: p.badge as "new" | "best-seller" | "sold-out" | undefined,
       modifiers
     }
@@ -61,7 +65,14 @@ export default async function SpmbPage() {
   const botNumber = storeSettings?.whatsappNumber || "";
 
   return (
-    <Suspense fallback={<LoadingScreen isSplash={false} />}>
+    <Suspense fallback={
+      <div className="min-h-dvh flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 rounded-full border-2 border-brand-500/25 border-t-brand-500 animate-spin" />
+          <p className="text-xs font-medium text-muted-foreground tracking-wider uppercase">Memuat Menu...</p>
+        </div>
+      </div>
+    }>
       <SpmbClient 
         categories={mappedCategories} 
         products={mappedProducts}

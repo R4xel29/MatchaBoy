@@ -1,14 +1,12 @@
 'use client';
 
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
-
 export default function Loading() {
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-[#FFFBF5] dark:bg-[#1C1610] noise transition-colors duration-300">
-      {/* Dynamic Gold Backdrop Glow Aura */}
-      <div className="absolute w-[300px] h-[300px] rounded-full bg-brand-500/5 dark:bg-brand-500/2 blur-3xl pointer-events-none" />
-      
-      <LoadingScreen isSplash={false} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-xs transition-opacity">
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-9 h-9 rounded-full border-2 border-brand-500/25 border-t-brand-500 animate-spin" />
+        <p className="text-xs font-medium text-muted-foreground tracking-wider uppercase">Memuat...</p>
+      </div>
     </div>
   );
 }

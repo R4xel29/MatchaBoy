@@ -6,7 +6,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { AppHeader } from '@/components/storefront/AppHeader';
 import { BottomNav } from '@/components/storefront/BottomNav';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { PromoPopup } from '@/components/storefront/PromoPopup';
 import { MatchaVibesPlayer } from '@/components/storefront/MatchaVibesPlayer';
 
@@ -94,7 +93,14 @@ export default function StorefrontLayout({
   }, [status, session?.user?.id, router]);
 
   if (status === 'loading' || (status === 'authenticated' && !setupChecked)) {
-    return <LoadingScreen isSplash={false} />;
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-9 h-9 rounded-full border-2 border-brand-500/25 border-t-brand-500 animate-spin" />
+          <p className="text-xs font-medium text-muted-foreground tracking-wider uppercase">Memuat...</p>
+        </div>
+      </div>
+    );
   }
 
   return (

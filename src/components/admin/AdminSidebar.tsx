@@ -59,8 +59,9 @@ const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
-  { label: 'Laba Rugi', href: '/admin/reports/profit', icon: BarChart4 },
   { label: 'Penjualan', href: '/admin/reports', icon: BarChart3 },
+  { label: 'Laba Rugi', href: '/admin/reports/profit', icon: BarChart4 },
+  { label: 'Pengeluaran (Expenses)', href: '/admin/expenses', icon: Receipt },
 ];
 
 const PRODUCT_ITEMS = [
@@ -70,10 +71,6 @@ const PRODUCT_ITEMS = [
   { label: 'Promo Banners', href: '/admin/hero-banners', icon: ImageIcon },
   { label: 'Promo Popup', href: '/admin/promo-popups', icon: Megaphone },
   { label: 'Flash Sales', href: '/admin/flash-sales', icon: Flame },
-];
-
-const FINANCE_ITEMS = [
-  { label: 'Pengeluaran (Expenses)', href: '/admin/expenses', icon: Receipt },
 ];
 
 const USER_ITEMS = [
@@ -436,17 +433,6 @@ function SidebarContent({
               title="Manajemen Produk"
               icon={Package}
               items={PRODUCT_ITEMS}
-              pathname={pathname}
-              onNavigate={onNavigate}
-              pendingCount={pendingCount}
-              isCollapsed={isCollapsed}
-            />
-
-            {/* Keuangan Section */}
-            <CollapsibleSection
-              title="Keuangan"
-              icon={Receipt}
-              items={FINANCE_ITEMS}
               pathname={pathname}
               onNavigate={onNavigate}
               pendingCount={pendingCount}

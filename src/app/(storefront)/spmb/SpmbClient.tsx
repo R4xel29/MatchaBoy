@@ -195,9 +195,16 @@ export default function SpmbClient({
   }, [activeOrderStatus]);
 
   const filteredProducts = useMemo(() => {
-    if (selectedCategory === 'all') return products;
-    return products.filter((p) => p.category === selectedCategory);
-  }, [products, selectedCategory]);
+    if (!selectedCategory || selectedCategory === 'all') return products;
+    const targetCat = categories.find(c => c.id === selectedCategory || c.slug === selectedCategory);
+    return products.filter((p: any) => {
+      return (
+        p.category === selectedCategory ||
+        p.categorySlug === selectedCategory ||
+        (targetCat && (p.category === targetCat.id || p.categorySlug === targetCat.slug))
+      );
+    });
+  }, [products, selectedCategory, categories]);
 
   const handleProductClick = (product: Product) => {
     if (product.badge === 'sold-out') return;
@@ -501,114 +508,131 @@ export default function SpmbClient({
 
         {/* Category Navigation Pills */}
         <nav className="flex gap-2 overflow-x-auto pb-3 scrollbar-none select-none">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => setSelectedCategory(cat.slug)}
-              className={`px-4 py-2 rounded-full text-xs font-bold tracking-wide shrink-0 transition-all border ${
-                selectedCategory === cat.slug
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20'
-                  : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
-              }`}
-            >
-              {cat.name}
-            </button>
-          ))}
+          {categories.map((cat) => {
+            const isSelected = selectedCategory === cat.id || selectedCategory === cat.slug;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-4 py-2 rounded-full text-xs font-bold tracking-wide shrink-0 transition-all border cursor-pointer ${
+                  isSelected
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20'
+                    : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
+                }`}
+              >
+                {cat.name}
+              </button>
+            );
+          })}
         </nav>
 
         {/* Product Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4 mt-4">
-          {filteredProducts.map((product) => {
-            const isSoldOut = product.badge === 'sold-out';
-            const promo = getActivePromo(product);
-            const displayPrice = promo ? promo.promoPrice : product.price;
-            const originalPrice = promo ? product.price : (product.modifiers?.originalPrice || null);
+        {filteredProducts.length === 0 ? (
+          <div className="text-center py-16 px-4 bg-white rounded-3xl border border-stone-200 mt-4 shadow-sm">
+            <UtensilsCrossed className="w-10 h-10 text-stone-300 mx-auto mb-3" />
+            <p className="text-stone-700 font-bold text-sm">Tidak ada menu dalam kategori ini</p>
+            <p className="text-stone-400 text-xs mt-1">Silakan pilih kategori menu lainnya</p>
+            <button
+              onClick={() => setSelectedCategory('all')}
+              className="mt-4 px-4 py-2 rounded-full bg-orange-50 text-orange-600 text-xs font-bold hover:bg-orange-100 transition-colors cursor-pointer"
+            >
+              Lihat Semua Menu
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4 mt-4">
+            {filteredProducts.map((product) => {
+              const isSoldOut = product.badge === 'sold-out';
+              const promo = getActivePromo(product);
+              const displayPrice = promo ? promo.promoPrice : product.price;
+              const originalPrice = promo ? product.price : (product.modifiers?.originalPrice || null);
 
-            return (
-              <motion.div
-                key={product.id}
-                whileHover={isSoldOut ? {} : { y: -3 }}
-                transition={{ duration: 0.2 }}
-                onClick={() => handleProductClick(product)}
-                className={`bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col group relative transition-all ${
-                  isSoldOut ? 'opacity-65 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:shadow-orange-500/5 hover:border-orange-300'
-                }`}
-              >
-                {/* Promo Overlay */}
-                {promo && !isSoldOut && (
-                  <div className="absolute top-2.5 right-2.5 z-20">
-                    <PromoCountdown endDate={promo.endDate} compact />
-                  </div>
-                )}
-
-                {/* Badges */}
-                {promo && !isSoldOut ? (
-                  <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-600 text-white shadow-sm">
-                    Promo
-                  </span>
-                ) : product.badge && (
-                  <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm ${
-                    product.badge === 'best-seller' ? 'bg-[#8C6239] text-white' : ''
-                  }${product.badge === 'new' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white' : ''}${
-                    product.badge === 'sold-out' ? 'bg-stone-400 text-white' : ''
-                  }`}>
-                    {product.badge === 'best-seller' && 'Best Seller'}
-                    {product.badge === 'new' && 'Baru'}
-                    {product.badge === 'sold-out' && 'Habis'}
-                  </span>
-                )}
-
-                {/* Product Image */}
-                <div className="relative w-full aspect-square bg-[#FAF9F6] overflow-hidden">
-                  {product.image ? (
-                    <Image
-                      src={product.image}
-                      alt={product.name}
-                      fill
-                      sizes="(max-width: 768px) 50vw, 25vw"
-                      className={`object-cover group-hover:scale-105 transition-transform duration-300 ${
-                        isSoldOut ? 'grayscale opacity-60' : ''
-                      }`}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center"><UtensilsCrossed className="w-8 h-8 text-stone-300" /></div>
-                  )}
-                </div>
-
-                {/* Product Info */}
-                <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between text-left">
-                  <div className="space-y-1">
-                    <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-orange-600 transition-colors line-clamp-1">
-                      {product.name}
-                    </h3>
-                    <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed">
-                      {product.description}
-                    </p>
-                  </div>
-                  
-                  <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between">
-                    <div className="flex flex-col text-left">
-                      {originalPrice && originalPrice > displayPrice && (
-                        <span className="text-[10px] text-stone-400 line-through leading-none mb-0.5">
-                          {formatRupiah(originalPrice)}
-                        </span>
-                      )}
-                      <span className="font-bold text-xs sm:text-sm text-orange-600">
-                        {formatRupiah(displayPrice)}
-                      </span>
+              return (
+                <motion.div
+                  key={product.id}
+                  whileHover={isSoldOut ? {} : { y: -3 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => handleProductClick(product)}
+                  className={`bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col group relative transition-all ${
+                    isSoldOut ? 'opacity-65 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:shadow-orange-500/5 hover:border-orange-300'
+                  }`}
+                >
+                  {/* Promo Overlay */}
+                  {promo && !isSoldOut && (
+                    <div className="absolute top-2.5 right-2.5 z-20">
+                      <PromoCountdown endDate={promo.endDate} compact />
                     </div>
-                    
-                    {!isSoldOut && (
-                      <span className="w-7 h-7 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center text-xs font-bold group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:to-amber-500 group-hover:text-white transition-all shadow-sm">
-                        +
-                      </span>
+                  )}
+
+                  {/* Badges */}
+                  {promo && !isSoldOut ? (
+                    <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-600 text-white shadow-sm">
+                      Promo
+                    </span>
+                  ) : product.badge && (
+                    <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm ${
+                      product.badge === 'best-seller' ? 'bg-[#8C6239] text-white' : ''
+                    }${product.badge === 'new' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white' : ''}${
+                      product.badge === 'sold-out' ? 'bg-stone-400 text-white' : ''
+                    }`}>
+                      {product.badge === 'best-seller' && 'Best Seller'}
+                      {product.badge === 'new' && 'Baru'}
+                      {product.badge === 'sold-out' && 'Habis'}
+                    </span>
+                  )}
+
+                  {/* Product Image */}
+                  <div className="relative w-full aspect-square bg-[#FAF9F6] overflow-hidden">
+                    {product.image ? (
+                      <Image
+                        src={product.image}
+                        alt={product.name}
+                        fill
+                        sizes="(max-width: 768px) 50vw, 25vw"
+                        className={`object-cover group-hover:scale-105 transition-transform duration-300 ${
+                          isSoldOut ? 'grayscale opacity-60' : ''
+                        }`}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><UtensilsCrossed className="w-8 h-8 text-stone-300" /></div>
                     )}
                   </div>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
+
+                  {/* Product Info */}
+                  <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between text-left">
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-orange-600 transition-colors line-clamp-1">
+                        {product.name}
+                      </h3>
+                      <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed">
+                        {product.description}
+                      </p>
+                    </div>
+                    
+                    <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between">
+                      <div className="flex flex-col text-left">
+                        {originalPrice && originalPrice > displayPrice && (
+                          <span className="text-[10px] text-stone-400 line-through leading-none mb-0.5">
+                            {formatRupiah(originalPrice)}
+                          </span>
+                        )}
+                        <span className="font-bold text-xs sm:text-sm text-orange-600">
+                          {formatRupiah(displayPrice)}
+                        </span>
+                      </div>
+                      
+                      {!isSoldOut && (
+                        <span className="w-7 h-7 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center text-xs font-bold group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:to-amber-500 group-hover:text-white transition-all shadow-sm">
+                          +
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Floating Bottom Cart Bar */}
