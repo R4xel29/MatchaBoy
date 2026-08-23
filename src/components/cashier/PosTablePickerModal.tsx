@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, UtensilsCrossed, Check, Armchair, Loader2 } from 'lucide-react';
 import type { LiveDiningTable } from '@/components/admin/tables/LiveTableMinimap';
+import { getDefaultChairs, type CustomChair } from '@/app/(admin)/admin/tables/AdminTablesClient';
 
 interface PosTablePickerModalProps {
   isOpen: boolean;
@@ -40,6 +41,18 @@ export function PosTablePickerModal({
       fetchTables();
     }
   }, [isOpen, fetchTables]);
+
+  const getTableChairs = (table: LiveDiningTable): CustomChair[] => {
+    if (table.chairsJson) {
+      try {
+        const parsed = JSON.parse(table.chairsJson);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {}
+    }
+    return getDefaultChairs(table.capacity || 4, table.shape || 'RECTANGLE');
+  };
 
   if (!isOpen) return null;
 
@@ -98,12 +111,16 @@ export function PosTablePickerModal({
 
           {/* 2D Canvas */}
           <div
-            className="relative w-full aspect-[16/9] min-h-[350px] rounded-2xl bg-[#FAF7F2] border border-stone-200 overflow-hidden select-none flex-1"
+            className="relative w-full aspect-[16/9] min-h-[360px] rounded-2xl bg-[#FAF7F2] border-2 border-stone-300 overflow-hidden select-none flex-1"
             style={{
               backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
               backgroundSize: '20px 20px',
             }}
           >
+            <div className="absolute top-2 left-3 text-stone-400 text-[8px] font-mono tracking-widest uppercase pointer-events-none">
+              [Denah 2D Fisik Kafe • Klik Meja untuk Memilih]
+            </div>
+
             {loading ? (
               <div className="absolute inset-0 flex items-center justify-center text-stone-400">
                 <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
@@ -118,6 +135,7 @@ export function PosTablePickerModal({
                 const isAvailable =
                   table.liveStatus === 'AVAILABLE' || table.status === 'AVAILABLE';
                 const isRound = table.shape === 'ROUND';
+                const chairs = getTableChairs(table);
 
                 return (
                   <div
@@ -131,30 +149,55 @@ export function PosTablePickerModal({
                       top: `${table.y}%`,
                       transform: 'translate(-50%, -50%)',
                     }}
-                    className={`absolute select-none cursor-pointer flex flex-col items-center justify-center transition-all ${
-                      isRound
-                        ? 'w-16 h-16 sm:w-20 sm:h-20 rounded-full'
-                        : 'w-20 h-14 sm:w-24 sm:h-16 rounded-2xl'
-                    } ${
-                      isSelected
-                        ? 'bg-orange-500 text-white ring-4 ring-orange-500/30 scale-110 z-30 shadow-xl'
-                        : isAvailable
-                        ? 'bg-white text-stone-900 border-2 border-emerald-500 shadow-md hover:scale-105 hover:bg-emerald-50'
-                        : 'bg-amber-100 text-amber-900 border-2 border-amber-400 shadow-sm opacity-80'
-                    }`}
+                    className="absolute select-none cursor-pointer flex items-center justify-center z-10 group"
                   >
-                    <span className="font-serif font-black text-xs sm:text-sm">
-                      Meja {table.number}
-                    </span>
-                    <span className="text-[9px] font-bold opacity-80 mt-0.5">
-                      {table.capacity} Kursi
-                    </span>
-
-                    {isSelected && (
-                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold">
-                        <Check className="w-2.5 h-2.5" />
+                    {/* Table Core Element */}
+                    <div
+                      className={`relative flex flex-col items-center justify-center border-2 transition-all ${
+                        isRound
+                          ? 'w-16 h-16 sm:w-20 sm:h-20 rounded-full'
+                          : 'w-20 h-14 sm:w-24 sm:h-16 rounded-2xl'
+                      } ${
+                        isSelected
+                          ? 'bg-orange-500 text-white ring-4 ring-orange-500/30 scale-110 z-30 shadow-xl'
+                          : isAvailable
+                          ? 'bg-white text-stone-900 border-emerald-500 shadow-md hover:scale-105 hover:bg-emerald-50'
+                          : 'bg-amber-100 text-amber-900 border-amber-400 shadow-sm opacity-80'
+                      }`}
+                    >
+                      <span className="text-[7px] font-bold uppercase tracking-wider px-1 py-0.2 rounded bg-black/10">
+                        {isRound ? 'Bulat' : 'Kotak'}
                       </span>
-                    )}
+
+                      <span className="font-serif font-black text-xs sm:text-sm">
+                        Meja {table.number}
+                      </span>
+                      <span className="text-[8px] font-bold opacity-80 mt-0.5">
+                        {table.capacity} Kursi
+                      </span>
+
+                      {isSelected && (
+                        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow">
+                          <Check className="w-2.5 h-2.5" />
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Physical Chairs */}
+                    {chairs.map((chair) => (
+                      <div
+                        key={chair.id}
+                        style={{
+                          transform: `translate(${chair.x * 0.75}px, ${chair.y * 0.75}px)`,
+                        }}
+                        className="absolute w-5 h-5 rounded-full bg-white border border-orange-400 text-orange-700 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10"
+                      >
+                        <Armchair className="w-2.5 h-2.5 text-orange-600" />
+                        <span className="font-serif font-black text-[6px] leading-none text-stone-900">
+                          {chair.label}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 );
               })
@@ -165,7 +208,7 @@ export function PosTablePickerModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-100"
+              className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 font-bold text-xs hover:bg-stone-100 cursor-pointer"
             >
               Tutup
             </button>

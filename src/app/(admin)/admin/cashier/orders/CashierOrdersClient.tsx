@@ -510,18 +510,6 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
             <p className="font-serif text-2xl font-bold text-emerald-900 mt-1">{selesaiTodayCount}</p>
           </div>
         </div>
-
-        {/* 2D Live Table Minimap */}
-        {showMinimap && (
-          <div className="pt-2 border-t border-stone-100 animate-in fade-in duration-200">
-            <LiveTableMinimap
-              isCompact
-              onSelectTable={(num) => setTableFilter(num || 'ALL')}
-              selectedTableNumber={tableFilter !== 'ALL' ? tableFilter : null}
-              onRefreshOrders={fetchOrders}
-            />
-          </div>
-        )}
       </div>
 
       {/* Flashing Continuous Alarm Banner */}
@@ -1080,6 +1068,31 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
           </div>
         )}
       </AnimatePresence>
+
+      {/* Floating 2D Live Table Minimap Widget */}
+      {!showMinimap && (
+        <button
+          type="button"
+          onClick={() => setShowMinimap(true)}
+          className="fixed bottom-6 right-6 z-40 px-4 py-3 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-2xl shadow-orange-500/40 flex items-center gap-2 border-2 border-white/40 transition-all hover:scale-105 active:scale-95 cursor-pointer animate-in fade-in slide-in-from-bottom-3"
+          title="Buka Denah Meja Floating"
+        >
+          <UtensilsCrossed className="w-4 h-4" />
+          <span>Denah Meja Live</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-ping" />
+        </button>
+      )}
+
+      {showMinimap && (
+        <LiveTableMinimap
+          isFloating={true}
+          isOpen={showMinimap}
+          onClose={() => setShowMinimap(false)}
+          onSelectTable={(num) => setTableFilter(num || 'ALL')}
+          selectedTableNumber={tableFilter !== 'ALL' ? tableFilter : null}
+          onRefreshOrders={fetchOrders}
+        />
+      )}
     </div>
   );
 }
