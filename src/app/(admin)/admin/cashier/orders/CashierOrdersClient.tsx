@@ -43,6 +43,7 @@ import {
   Printer
 } from 'lucide-react';
 import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
+import { LiveTableMinimap } from '@/components/admin/tables/LiveTableMinimap';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -181,6 +182,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   const [customReason, setCustomReason] = useState('');
   const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
   const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
+  const [showMinimap, setShowMinimap] = useState(false);
 
   // Load read order IDs on mount
   useEffect(() => {
@@ -461,6 +463,21 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
               <span>{!isAudioMuted ? 'Alarm Aktif' : 'Alarm Mute'}</span>
             </button>
 
+            {/* Denah Meja Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowMinimap(!showMinimap)}
+              className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold border flex items-center gap-2 transition-all cursor-pointer ${
+                showMinimap
+                  ? 'bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20'
+                  : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+              }`}
+              title="Tampilkan Denah Meja 2D Live"
+            >
+              <UtensilsCrossed className="w-4 h-4" />
+              <span>{showMinimap ? 'Tutup Denah Meja' : 'Denah Meja (Minimap)'}</span>
+            </button>
+
             {/* Refresh */}
             <button
               type="button"
@@ -493,6 +510,18 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
             <p className="font-serif text-2xl font-bold text-emerald-900 mt-1">{selesaiTodayCount}</p>
           </div>
         </div>
+
+        {/* 2D Live Table Minimap */}
+        {showMinimap && (
+          <div className="pt-2 border-t border-stone-100 animate-in fade-in duration-200">
+            <LiveTableMinimap
+              isCompact
+              onSelectTable={(num) => setTableFilter(num || 'ALL')}
+              selectedTableNumber={tableFilter !== 'ALL' ? tableFilter : null}
+              onRefreshOrders={fetchOrders}
+            />
+          </div>
+        )}
       </div>
 
       {/* Flashing Continuous Alarm Banner */}

@@ -293,11 +293,11 @@ export default function TableQrCardModal({
     setPdfProgress({ current: 0, total: tables.length });
 
     try {
-      // Dimensions matching the card ratio: 105mm x 151.4mm (standard standing banner size)
+      // Dimensions matching exact physical print specification: 140mm x 200mm (14 x 20 cm)
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [105, 151.4],
+        format: [140, 200],
         compress: true,
       });
 
@@ -311,14 +311,14 @@ export default function TableQrCardModal({
         const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
         if (i > 0) {
-          doc.addPage([105, 151.4], 'portrait');
+          doc.addPage([140, 200], 'portrait');
         }
 
-        doc.addImage(dataUrl, 'JPEG', 0, 0, 105, 151.4, undefined, 'FAST');
+        doc.addImage(dataUrl, 'JPEG', 0, 0, 140, 200, undefined, 'FAST');
       }
 
-      doc.save(`Semua-Kartu-Meja-Arus-Arum-Seduh.pdf`);
-      showToast(`Berhasil membuat 1 file PDF untuk ${tables.length} meja!`, 'success');
+      doc.save(`Semua-Kartu-Meja-14x20cm-Arus-Arum-Seduh.pdf`);
+      showToast(`Berhasil membuat 1 file PDF (14x20 cm) untuk ${tables.length} meja!`, 'success');
     } catch (err: any) {
       console.error(err);
       showToast('Gagal membuat file PDF', 'error');
@@ -327,14 +327,14 @@ export default function TableQrCardModal({
     }
   };
 
-  // Download Single Table PDF
+  // Download Single Table PDF (14 x 20 cm)
   const handleDownloadPdfSingle = async () => {
     if (!currentTable) return;
     try {
       const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: [105, 151.4],
+        format: [140, 200],
         compress: true,
       });
 
@@ -342,12 +342,31 @@ export default function TableQrCardModal({
       await drawCardToCanvas(canvas, currentTable.number, settings, templateSrc);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
 
-      doc.addImage(dataUrl, 'JPEG', 0, 0, 105, 151.4, undefined, 'FAST');
-      doc.save(`Kartu-Meja-${currentTable.number}-Arus-Arum-Seduh.pdf`);
-      showToast(`PDF Meja ${currentTable.number} berhasil diunduh`, 'success');
+      doc.addImage(dataUrl, 'JPEG', 0, 0, 140, 200, undefined, 'FAST');
+      doc.save(`Kartu-Meja-${currentTable.number}-14x20cm-Arus-Arum-Seduh.pdf`);
+      showToast(`PDF Meja ${currentTable.number} (14x20 cm) berhasil diunduh`, 'success');
     } catch (err: any) {
       console.error(err);
       showToast('Gagal mengunduh PDF meja', 'error');
+    }
+  };
+
+  // Download Single High-Res PNG (1204 x 1736 px)
+  const handleDownloadPngSingle = async () => {
+    if (!currentTable) return;
+    try {
+      const canvas = document.createElement('canvas');
+      await drawCardToCanvas(canvas, currentTable.number, settings, templateSrc);
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `Kartu-Meja-${currentTable.number}-14x20cm-Arus.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast(`Gambar PNG Meja ${currentTable.number} berhasil diunduh`, 'success');
+    } catch {
+      showToast('Gagal mengunduh gambar PNG', 'error');
     }
   };
 

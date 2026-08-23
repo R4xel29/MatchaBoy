@@ -141,6 +141,9 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   const [isCardModalOpen, setIsCardModalOpen] = useState(false);
   const [cardModalTableId, setCardModalTableId] = useState<string | null>(null);
   const [activeCanvasMode, setActiveCanvasMode] = useState<'VIEW' | 'MOVE_TABLE'>('VIEW');
+  const [snapToGrid, setSnapToGrid] = useState(true);
+  const [showGridLines, setShowGridLines] = useState(true);
+  const [liveOrdersMap, setLiveOrdersMap] = useState<Record<string, any>>({});
 
   // Form / Studio editing values
   const [editNumber, setEditNumber] = useState('');
@@ -339,12 +342,37 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
     window.removeEventListener('touchend', handleEndChairDrag);
   };
 
+  const fetchLiveTables = useCallback(async () => {
+    try {
+      const res = await fetch('/api/admin/tables/live');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tables) {
+          const ordersMap: Record<string, any> = {};
+          data.tables.forEach((t: any) => {
+            if (t.primaryOrder) {
+              ordersMap[t.id] = t.primaryOrder;
+            }
+          });
+          setLiveOrdersMap(ordersMap);
+        }
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    fetchLiveTables();
+    const interval = setInterval(fetchLiveTables, 6000);
+    return () => clearInterval(interval);
+  }, [fetchLiveTables]);
+
   const fetchTables = async () => {
     try {
       const res = await fetch('/api/admin/tables');
       if (res.ok) {
         const data = await res.json();
         setTables(data);
+        fetchLiveTables();
       }
     } catch (err) {
       console.error('Error fetching tables:', err);
@@ -492,8 +520,14 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
 
-    const xPercent = Math.max(10, Math.min(90, ((clientX - rect.left) / rect.width) * 100));
-    const yPercent = Math.max(10, Math.min(90, ((clientY - rect.top) / rect.height) * 100));
+    let xPercent = Math.max(10, Math.min(90, ((clientX - rect.left) / rect.width) * 100));
+    let yPercent = Math.max(10, Math.min(90, ((clientY - rect.top) / rect.height) * 100));
+
+    if (snapToGrid) {
+      // Snap to 2.5% step (corresponds to clean ~20px increments on 16:9 canvas)
+      xPercent = Math.round(xPercent / 2.5) * 2.5;
+      yPercent = Math.round(yPercent / 2.5) * 2.5;
+    }
 
     setTables(prev => prev.map(t => {
       if (t.id === dragInfo.current?.tableId) {
@@ -683,18 +717,59 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
 
       {/* Blueprint Floor Plan Canvas with Visible Surrounding Chairs (Unclipped & Beautifully Placed) */}
       <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4 text-left">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-100">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
             <span className="text-xs font-bold uppercase tracking-wider text-orange-700">
-              Denah Ruangan Kafe (Posisi Meja & Kursi Fisik Terlihat Bersih)
+              Denah Ruangan Kafe (Live Occupancy & Snap-to-Grid)
             </span>
           </div>
-          <div className="flex items-center gap-4 text-xs font-semibold text-stone-500">
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Tersedia</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Terisi</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Ditagih</span>
-            <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Dibersihkan</span>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Mode Selector */}
+            <div className="flex p-1 bg-stone-100 rounded-xl border border-stone-200 text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setActiveCanvasMode('VIEW')}
+                className={`px-3 py-1 rounded-lg transition-all ${
+                  activeCanvasMode === 'VIEW' ? 'bg-white text-orange-600 shadow-sm' : 'text-stone-500'
+                }`}
+              >
+                Mode Lihat & Studio
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCanvasMode('MOVE_TABLE')}
+                className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 ${
+                  activeCanvasMode === 'MOVE_TABLE' ? 'bg-orange-500 text-white shadow-sm' : 'text-stone-500'
+                }`}
+              >
+                <Move className="w-3 h-3" /> Geser Posisi Meja
+              </button>
+            </div>
+
+            {/* Snap to Grid Toggle */}
+            <button
+              type="button"
+              onClick={() => setSnapToGrid(!snapToGrid)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                snapToGrid
+                  ? 'bg-orange-50 text-orange-700 border-orange-300 shadow-sm'
+                  : 'bg-stone-50 text-stone-400 border-stone-200'
+              }`}
+              title="Aktifkan Magnet Grid 20px saat menggeser meja"
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>Magnet Grid: {snapToGrid ? 'ON' : 'OFF'}</span>
+            </button>
+
+            {/* Status Indicators */}
+            <div className="hidden lg:flex items-center gap-3 text-xs font-semibold text-stone-500">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Tersedia</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Terisi</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Ditagih</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Dibersihkan</span>
+            </div>
           </div>
         </div>
 

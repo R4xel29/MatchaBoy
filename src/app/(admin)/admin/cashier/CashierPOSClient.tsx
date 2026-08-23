@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
+import { PosTablePickerModal } from '@/components/cashier/PosTablePickerModal';
 import { useToast } from '@/components/ui/Toast';
 
 const DEFAULT_DRINK_SIZES = [
@@ -135,6 +136,7 @@ export default function CashierPOSClient({ products, categories }: Props) {
   const [selectedTable, setSelectedTable] = useState('');
   const [activeTables, setActiveTables] = useState<any[]>([]);
   const [showTableManagerModal, setShowTableManagerModal] = useState(false);
+  const [showPosTablePicker, setShowPosTablePicker] = useState(false);
   const [posPeopleCount, setPosPeopleCount] = useState(1);
 
   useEffect(() => {
@@ -1016,7 +1018,16 @@ export default function CashierPOSClient({ products, categories }: Props) {
             {orderType === 'DINE_IN' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60 mb-1 pl-1">Nomor Meja *</label>
+                  <div className="flex items-center justify-between mb-1 pl-1">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/60">Nomor Meja *</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPosTablePicker(true)}
+                      className="text-[10px] font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Coffee className="w-3 h-3" /> Denah 2D
+                    </button>
+                  </div>
                   <select
                     value={selectedTable}
                     onChange={(e) => setSelectedTable(e.target.value)}
@@ -1873,6 +1884,14 @@ export default function CashierPOSClient({ products, categories }: Props) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Visual 2D Table Picker Modal */}
+      <PosTablePickerModal
+        isOpen={showPosTablePicker}
+        onClose={() => setShowPosTablePicker(false)}
+        onSelectTable={(num) => setSelectedTable(num)}
+        currentSelectedTable={selectedTable}
+      />
     </div>
   );
 }
