@@ -34,17 +34,17 @@ export interface CardLayoutSettings {
 }
 
 const DEFAULT_SETTINGS: CardLayoutSettings = {
-  qrX: 11.2,          // ~135px in 1204px width (perfect horizontal fit in white box)
-  qrY: 26.2,          // ~455px in 1736px height (perfect vertical fit in white box)
-  qrSize: 43.5,       // ~524px in 1204px width (leaves comfortable white padding inside black rounded frame)
+  qrX: 11.0,          // Perfectly centered in white QR box
+  qrY: 26.5,          // Perfectly centered in white QR box
+  qrSize: 43.0,       // Generates clean white border within black rounded boundary
   
-  numX: 79.6,         // Centered under "MEJA NO." (~958px in 1204px width)
-  numY: 45.2,         // Centered in number slot (~785px in 1736px height)
+  numX: 80.4,         // Centered under "MEJA NO."
+  numY: 45.5,         // Centered in orange number slot
   numFontSize: 260,    // Large, bold number
   numColor: '#FFFFFF',
 };
 
-const STORAGE_KEY = 'arum_table_card_layout_settings_v4';
+const STORAGE_KEY = 'arum_table_card_layout_settings_v5';
 const DEFAULT_TEMPLATE_SRC = '/brand/table-qr-template-blank.png';
 
 interface TableQrCardModalProps {
