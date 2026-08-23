@@ -19,7 +19,7 @@ export interface DiningTableData {
 
 export interface CardLayoutSettings {
   // Relative percentages (0 - 100) based on template width & height
-  qrX: number;       // Center X or Top-Left X %
+  qrX: number;       // Top-Left X %
   qrY: number;       // Top-Left Y %
   qrSize: number;    // Width/Height as % of card width
   
@@ -32,17 +32,17 @@ export interface CardLayoutSettings {
 }
 
 const DEFAULT_SETTINGS: CardLayoutSettings = {
-  qrX: 8.6,          // ~104px in 1204px width
-  qrY: 25.2,         // ~437px in 1736px height
-  qrSize: 49.5,      // ~596px in 1204px width
+  qrX: 11.2,          // ~135px in 1204px width (perfect horizontal fit in white box)
+  qrY: 26.2,          // ~455px in 1736px height (perfect vertical fit in white box)
+  qrSize: 43.5,       // ~524px in 1204px width (leaves comfortable white padding inside black rounded frame)
   
-  numX: 79.5,        // Centered under "MEJA NO." (~957px in 1204px width)
-  numY: 45.0,        // Centered in number slot (~781px in 1736px height)
-  numFontSize: 210,   // Large, bold number
+  numX: 79.6,         // Centered under "MEJA NO." (~958px in 1204px width)
+  numY: 45.2,         // Centered in number slot (~785px in 1736px height)
+  numFontSize: 260,    // Large, bold number
   numColor: '#FFFFFF',
 };
 
-const STORAGE_KEY = 'arum_table_card_layout_settings_v2';
+const STORAGE_KEY = 'arum_table_card_layout_settings_v4';
 const DEFAULT_TEMPLATE_SRC = '/brand/table-qr-template-blank.png';
 
 interface TableQrCardModalProps {
@@ -201,7 +201,7 @@ export default function TableQrCardModal({
 
     ctx.save();
     ctx.fillStyle = layout.numColor;
-    ctx.font = `900 ${dynamicFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+    ctx.font = `900 ${dynamicFontSize}px "Arial Black", "Arial-BoldMT", Impact, "Segoe UI Black", "Montserrat", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
@@ -357,7 +357,7 @@ export default function TableQrCardModal({
                 value={getTableUrl(t.number)}
                 size={800}
                 level="H"
-                marginSize={1}
+                marginSize={0}
               />
             ))}
           </div>
@@ -590,24 +590,38 @@ export default function TableQrCardModal({
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
                       Ukuran & Posisi QR Code
                     </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2.5">
                       <div>
-                        <label className="text-[10px] font-semibold text-stone-500 block">Ukuran QR (%)</label>
+                        <label className="text-[10px] font-semibold text-stone-500 block">Ukuran QR ({settings.qrSize}%)</label>
                         <input
                           type="range"
                           min={20}
-                          max={70}
+                          max={60}
+                          step={0.5}
                           value={settings.qrSize}
                           onChange={(e) => updateSettings({ qrSize: parseFloat(e.target.value) })}
                           className="w-full accent-orange-500 cursor-pointer"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-semibold text-stone-500 block">Posisi Y (%)</label>
+                        <label className="text-[10px] font-semibold text-stone-500 block">Posisi X ({settings.qrX}%)</label>
+                        <input
+                          type="range"
+                          min={2}
+                          max={40}
+                          step={0.5}
+                          value={settings.qrX}
+                          onChange={(e) => updateSettings({ qrX: parseFloat(e.target.value) })}
+                          className="w-full accent-orange-500 cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-stone-500 block">Posisi Y ({settings.qrY}%)</label>
                         <input
                           type="range"
                           min={10}
-                          max={60}
+                          max={50}
+                          step={0.5}
                           value={settings.qrY}
                           onChange={(e) => updateSettings({ qrY: parseFloat(e.target.value) })}
                           className="w-full accent-orange-500 cursor-pointer"
@@ -621,24 +635,37 @@ export default function TableQrCardModal({
                     <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
                       Ukuran & Posisi Nomor Meja
                     </p>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-2.5">
                       <div>
-                        <label className="text-[10px] font-semibold text-stone-500 block">Ukuran Font (px)</label>
+                        <label className="text-[10px] font-semibold text-stone-500 block">Ukuran Font ({settings.numFontSize}px)</label>
                         <input
                           type="range"
                           min={100}
-                          max={350}
+                          max={400}
                           value={settings.numFontSize}
                           onChange={(e) => updateSettings({ numFontSize: parseInt(e.target.value) })}
                           className="w-full accent-orange-500 cursor-pointer"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-semibold text-stone-500 block">Posisi Y (%)</label>
+                        <label className="text-[10px] font-semibold text-stone-500 block">Posisi X ({settings.numX}%)</label>
+                        <input
+                          type="range"
+                          min={50}
+                          max={95}
+                          step={0.5}
+                          value={settings.numX}
+                          onChange={(e) => updateSettings({ numX: parseFloat(e.target.value) })}
+                          className="w-full accent-orange-500 cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-semibold text-stone-500 block">Posisi Y ({settings.numY}%)</label>
                         <input
                           type="range"
                           min={20}
-                          max={80}
+                          max={70}
+                          step={0.5}
                           value={settings.numY}
                           onChange={(e) => updateSettings({ numY: parseFloat(e.target.value) })}
                           className="w-full accent-orange-500 cursor-pointer"
@@ -774,7 +801,7 @@ function PrintCardSingle({
 
       ctx.save();
       ctx.fillStyle = settings.numColor;
-      ctx.font = `900 ${dynamicFontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif`;
+      ctx.font = `900 ${dynamicFontSize}px "Arial Black", "Arial-BoldMT", Impact, "Segoe UI Black", "Montserrat", sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(table.number, numPixelX, numPixelY);
