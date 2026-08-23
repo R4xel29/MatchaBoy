@@ -221,6 +221,8 @@ export function ProductModal({
         setQuantity(initialData.quantity || 1);
         setMatchaLevel(initialData.matchaLevel || 5);
         setHasTumbler(initialData.hasTumbler || false);
+        setShot(initialData.shot || 'Single Shot');
+        setShotPrice(initialData.shotPrice || 0);
         if (initialData.bundleSelections) {
           const loaded: { [groupId: string]: any } = {};
           initialData.bundleSelections.forEach((s: any) => {
@@ -234,6 +236,8 @@ export function ProductModal({
         setSelectedAddOns([]);
         setSize('Normal');
         setSizePrice(0);
+        setShot('Single Shot');
+        setShotPrice(0);
         setQuantity(1);
         setMatchaLevel(product?.modifiers?.defaultMatcha ?? 5);
         setHasTumbler(false);
@@ -271,6 +275,8 @@ export function ProductModal({
       setSelectedAddOns([]);
       setSize('Normal');
       setSizePrice(0);
+      setShot('Single Shot');
+      setShotPrice(0);
       setQuantity(1);
       setBundleSelections({});
       setMatchaLevel(product?.modifiers?.defaultMatcha ?? 5);
@@ -299,11 +305,20 @@ export function ProductModal({
     return nameLower.includes('matcha') || nameLower.includes('green tea') || descLower.includes('matcha');
   }, [product]);
 
-  const isAmericanoOrCoffee = useMemo(() => {
+  const shouldShowEspressoCustomizer = useMemo(() => {
     if (!product) return false;
-    const nameLower = product.name.toLowerCase();
-    const descLower = product.description.toLowerCase();
-    return nameLower.includes('americano') || nameLower.includes('espresso') || nameLower.includes('kopi') || nameLower.includes('coffee') || descLower.includes('americano') || descLower.includes('espresso');
+    return product.modifiers?.showEspressoShot === true;
+  }, [product]);
+
+  const availableShots: { name: string; price: number; label?: string; shots?: number }[] = useMemo(() => {
+    if (product?.modifiers?.espressoShots && product.modifiers.espressoShots.length > 0) {
+      return product.modifiers.espressoShots;
+    }
+    return [
+      { name: 'Single Shot', price: 0, label: 'Single Shot (Standar)', shots: 1 },
+      { name: 'Double Shot', price: 5000, label: 'Double Shot (+Rp 5.000)', shots: 2 },
+      { name: 'Triple Shot', price: 10000, label: 'Triple Shot (+Rp 10.000)', shots: 3 }
+    ];
   }, [product]);
 
   const isBeverage = useMemo(() => {
@@ -345,7 +360,12 @@ export function ProductModal({
 
   const activePromo = product ? getActivePromo(product) : null;
   const baseProductPrice = activePromo ? activePromo.promoPrice : (product?.price ?? 0);
-  const shotPriceComputed = isAmericanoOrCoffee && (shot === 'Double Shot' || shot === 'Double') ? 5000 : 0;
+  
+  const shotPriceComputed = useMemo(() => {
+    if (!shouldShowEspressoCustomizer) return 0;
+    const found = availableShots.find((s) => s.name === shot);
+    return found ? (found.price || 0) : 0;
+  }, [shouldShowEspressoCustomizer, availableShots, shot]);
 
   const unitPrice = product?.modifiers?.isBundle
     ? (baseProductPrice + bundleAdjustmentsTotal)
@@ -413,8 +433,8 @@ export function ProductModal({
       sugarLevel: product.modifiers?.isBundle ? 'Normal Sugar' as const : sugarLevel,
       size: product.modifiers?.isBundle ? 'Normal' : size,
       sizePrice: product.modifiers?.isBundle ? 0 : sizePrice,
-      shot: isAmericanoOrCoffee ? shot : undefined,
-      shotPrice: isAmericanoOrCoffee ? shotPriceComputed : 0,
+      shot: shouldShowEspressoCustomizer ? shot : undefined,
+      shotPrice: shouldShowEspressoCustomizer ? shotPriceComputed : 0,
       addOns: product.modifiers?.isBundle ? [] : selectedAddOns,
       isBundle: product.modifiers?.isBundle || false,
       bundleSelections: product.modifiers?.isBundle ? (bundleSelectionsArray as any[]) : undefined,
@@ -819,17 +839,17 @@ export function ProductModal({
                           </div>
                         )}
 
-                        {/* Opsi Espresso Shot (Khusus Americano & Kopi) */}
-                        {isAmericanoOrCoffee && (
+                        {/* Opsi Espresso Shot (Hanya tampil jika showEspressoShot aktif di produk) */}
+                        {shouldShowEspressoCustomizer && (
                           <div className="space-y-2.5 bg-amber-900/[0.04] p-4 rounded-2xl border border-amber-900/15 text-left mb-4">
                             <h3 className="text-xs font-bold text-stone-900 uppercase tracking-wider flex items-center justify-between">
                               <span>☕ Pilihan Espresso Shot</span>
+                              <span className="text-[10px] text-amber-800 font-semibold lowercase">
+                                {shot} {shotPriceComputed > 0 ? `(+${formatRupiah(shotPriceComputed)})` : ''}
+                              </span>
                             </h3>
-                            <div className="grid grid-cols-2 gap-2">
-                              {[
-                                { name: 'Single Shot', price: 0, label: 'Single Shot (Standar)' },
-                                { name: 'Double Shot', price: 5000, label: 'Double Shot (+Rp 5.000)' }
-                              ].map((sh) => {
+                            <div className="grid grid-cols-3 gap-2">
+                              {availableShots.map((sh) => {
                                 const isSelected = shot === sh.name;
                                 return (
                                   <button
@@ -839,15 +859,15 @@ export function ProductModal({
                                       setShot(sh.name);
                                       setShotPrice(sh.price);
                                     }}
-                                    className={`p-3 rounded-xl border text-left transition-all ${
+                                    className={`p-2.5 sm:p-3 rounded-xl border text-left transition-all cursor-pointer ${
                                       isSelected
-                                        ? 'bg-[#4A2E18] text-white border-[#4A2E18] shadow-sm'
+                                        ? 'bg-[#4A2E18] text-white border-[#4A2E18] shadow-sm ring-2 ring-[#4A2E18]/30'
                                         : 'bg-white text-stone-700 border-stone-200 hover:border-amber-300'
                                     }`}
                                   >
-                                    <p className="text-xs font-bold">{sh.name}</p>
+                                    <p className="text-xs font-bold truncate">{sh.name}</p>
                                     <p className={`text-[10px] mt-0.5 font-semibold ${isSelected ? 'text-amber-200' : 'text-stone-400'}`}>
-                                      {sh.price > 0 ? `+${formatRupiah(sh.price)}` : 'Termasuk'}
+                                      {sh.price > 0 ? `+${formatRupiah(sh.price)}` : 'Standar'}
                                     </p>
                                   </button>
                                 );

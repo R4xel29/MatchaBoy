@@ -45,6 +45,10 @@ export interface Product {
         showSweetness?: boolean;
         defaultSugar?: string;
         defaultIce?: string;
+        showEspressoShot?: boolean;
+        defaultEspressoShot?: number;
+        espressoShotPrice?: number;
+        espressoShots?: { name: string; price: number; label?: string; shots?: number }[];
     };
 }
 
