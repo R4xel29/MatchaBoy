@@ -41,6 +41,7 @@ export async function PATCH(
         if (shape !== undefined) updateData.shape = shape
         if (x !== undefined) updateData.x = parseInt(x)
         if (y !== undefined) updateData.y = parseInt(y)
+        if (body.chairsJson !== undefined) updateData.chairsJson = body.chairsJson
 
         // Handle occupiedSeats and status synchronization
         if (occupiedSeats !== undefined) {

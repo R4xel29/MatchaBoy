@@ -1058,6 +1058,7 @@ model DiningTable {
   x             Int      @default(0)
   y             Int      @default(0)
   qrUrl         String?
+  chairsJson    String?  // JSON array string of CustomChair[] [{id, label, x, y}]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

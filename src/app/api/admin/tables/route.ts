@@ -21,7 +21,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json()
-        const { number, capacity, shape, x, y } = body
+        const { number, capacity, shape, x, y, chairsJson } = body
 
         if (!number) {
             return NextResponse.json({ error: 'Table number is required' }, { status: 400 })
@@ -41,6 +41,7 @@ export async function POST(req: Request) {
                 shape: shape || 'RECTANGLE',
                 x: x !== undefined ? parseInt(x) : 0,
                 y: y !== undefined ? parseInt(y) : 0,
+                chairsJson: chairsJson || null,
                 status: 'AVAILABLE'
             }
         })

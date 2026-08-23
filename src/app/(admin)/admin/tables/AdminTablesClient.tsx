@@ -22,6 +22,7 @@ interface DiningTable {
   x: number;
   y: number;
   qrUrl: string | null;
+  chairsJson?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -152,9 +153,19 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
 
   // Load custom chair configurations into state
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const map: Record<string, CustomChair[]> = {};
-      tables.forEach(t => {
+    const map: Record<string, CustomChair[]> = {};
+    tables.forEach(t => {
+      // 1. Prioritize database chairsJson
+      if (t.chairsJson) {
+        try {
+          const parsed = JSON.parse(t.chairsJson);
+          if (Array.isArray(parsed) && parsed.length === t.capacity) {
+            map[t.id] = parsed;
+          }
+        } catch {}
+      }
+      // 2. Fallback to localStorage if not yet in DB
+      if (!map[t.id] && typeof window !== 'undefined') {
         const saved = localStorage.getItem(`arum_chairs_table_${t.id}`);
         if (saved) {
           try {
@@ -164,12 +175,13 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
             }
           } catch {}
         }
-        if (!map[t.id]) {
-          map[t.id] = getDefaultChairs(t.capacity || 4, t.shape || 'RECTANGLE');
-        }
-      });
-      setTableChairsMap(map);
-    }
+      }
+      // 3. Fallback to default placement
+      if (!map[t.id]) {
+        map[t.id] = getDefaultChairs(t.capacity || 4, t.shape || 'RECTANGLE');
+      }
+    });
+    setTableChairsMap(map);
   }, [tables]);
 
   // Floor Plan Canvas Dragging Ref
@@ -338,7 +350,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
           capacity: editCapacity,
           shape: editShape,
           x: 50,
-          y: 50
+          y: 50,
+          chairsJson: JSON.stringify(customChairs)
         })
       });
 
@@ -347,6 +360,7 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
 
       showToast(`Meja ${editNumber} berhasil ditambahkan`, 'success');
       setTables(prev => [...prev, data]);
+      setTableChairsMap(prev => ({ ...prev, [data.id]: customChairs }));
       setIsAddModalOpen(false);
       openStudio(data);
     } catch (err: any) {
@@ -369,7 +383,8 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
           number: editNumber.trim(),
           capacity: editCapacity,
           shape: editShape,
-          status: editStatus
+          status: editStatus,
+          chairsJson: JSON.stringify(customChairs)
         })
       });
 

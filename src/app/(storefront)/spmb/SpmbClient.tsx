@@ -16,6 +16,7 @@ import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
 import type { Product, Category } from '@/types';
+import { getDefaultChairs, CustomChair } from '@/app/(admin)/admin/tables/AdminTablesClient';
 
 interface SpmbClientProps {
   categories: Category[];
@@ -45,7 +46,7 @@ export default function SpmbClient({
   const [tableNumber, setTableNumber] = useState<string>('');
   const [seatNumber, setSeatNumber] = useState<string>('1');
   const [isTableLocked, setIsTableLocked] = useState<boolean>(false);
-  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string }>>([]);
+  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string; chairsJson?: string | null }>>([]);
   const [loadingTables, setLoadingTables] = useState<boolean>(false);
 
   // Modals
@@ -1002,59 +1003,31 @@ export default function SpmbClient({
                           )}
                         </button>
 
-                        {/* Surrounding Visible Mini Chairs (Unclipped & Beautifully Placed) */}
-                        {Array.from({ length: cap }).map((_, idx) => {
-                          let cX = 0;
-                          let cY = 0;
-
-                          if (isRound) {
-                            const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
-                            const radius = 52;
-                            cX = Math.cos(angle) * radius;
-                            cY = Math.sin(angle) * radius;
-                          } else {
-                            if (cap === 2) {
-                              cX = 0;
-                              cY = idx === 0 ? -44 : 44;
-                            } else if (cap === 4) {
-                              const positions = [
-                                { x: 0, y: -44 },
-                                { x: 64, y: 0 },
-                                { x: 0, y: 44 },
-                                { x: -64, y: 0 },
-                              ];
-                              const p = positions[idx % 4];
-                              cX = p.x;
-                              cY = p.y;
-                            } else if (cap === 6) {
-                              const positions = [
-                                { x: -28, y: -44 },
-                                { x: 28, y: -44 },
-                                { x: 64, y: 0 },
-                                { x: 28, y: 44 },
-                                { x: -28, y: 44 },
-                                { x: -64, y: 0 },
-                              ];
-                              const p = positions[idx % 6];
-                              cX = p.x;
-                              cY = p.y;
-                            } else {
-                              const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
-                              cX = Math.cos(angle) * 64;
-                              cY = Math.sin(angle) * 44;
-                            }
+                        {/* Surrounding Visible Mini Chairs (Unclipped & Synchronized) */}
+                        {(() => {
+                          let tChairs: CustomChair[] = [];
+                          if (t.chairsJson) {
+                            try {
+                              const parsed = JSON.parse(t.chairsJson);
+                              if (Array.isArray(parsed) && parsed.length === cap) {
+                                tChairs = parsed;
+                              }
+                            } catch {}
+                          }
+                          if (tChairs.length === 0) {
+                            tChairs = getDefaultChairs(cap, t.shape || 'RECTANGLE');
                           }
 
-                          return (
+                          return tChairs.map((c, cIdx) => (
                             <div
-                              key={idx}
-                              style={{ transform: `translate(${cX}px, ${cY}px)` }}
+                              key={c.id || cIdx}
+                              style={{ transform: `translate(${c.x * 0.75}px, ${c.y * 0.75}px)` }}
                               className="absolute w-4 h-4 rounded-full bg-white border border-orange-300 shadow-xs flex items-center justify-center pointer-events-none z-10"
                             >
                               <Armchair className="w-2.5 h-2.5 text-orange-600" />
                             </div>
-                          );
-                        })}
+                          ));
+                        })()}
                       </div>
                     );
                   })}
@@ -1131,8 +1104,18 @@ export default function SpmbClient({
                 const currentTableObj = activeTables.find(t => t.number.toString() === tableNumber);
                 const isRoundTable = currentTableObj?.shape === 'ROUND';
 
-                let savedChairs: Array<{ id: string; label: string; x: number; y: number }> | null = null;
-                if (typeof window !== 'undefined' && currentTableObj?.id) {
+                let savedChairs: CustomChair[] | null = null;
+                // 1. Try from database chairsJson (Synced from Admin Studio)
+                if (currentTableObj?.chairsJson) {
+                  try {
+                    const parsed = JSON.parse(currentTableObj.chairsJson);
+                    if (Array.isArray(parsed) && parsed.length === currentTableCapacity) {
+                      savedChairs = parsed;
+                    }
+                  } catch {}
+                }
+                // 2. Fallback to localStorage if any
+                if (!savedChairs && typeof window !== 'undefined' && currentTableObj?.id) {
                   const saved = localStorage.getItem(`arum_chairs_table_${currentTableObj.id}`);
                   if (saved) {
                     try {
@@ -1142,6 +1125,10 @@ export default function SpmbClient({
                       }
                     } catch {}
                   }
+                }
+                // 3. Fallback to default placement
+                if (!savedChairs) {
+                  savedChairs = getDefaultChairs(currentTableCapacity, currentTableObj?.shape || 'RECTANGLE');
                 }
 
                 return (
@@ -1176,8 +1163,8 @@ export default function SpmbClient({
                       </div>
                     )}
 
-                    {/* Top-Down Visual Table Canvas */}
-                    <div className="my-4 relative w-full aspect-square max-w-[280px] bg-[#FAF9F6] rounded-3xl border-2 border-stone-200 p-3 flex items-center justify-center shadow-inner select-none">
+                    {/* Top-Down Visual Table Canvas (Mobile & Desktop Responsive) */}
+                    <div className="my-4 relative w-72 h-72 sm:w-80 sm:h-80 max-w-full bg-[#FAF9F6] rounded-3xl border-2 border-stone-200 p-2 flex items-center justify-center shadow-inner select-none overflow-hidden touch-manipulation">
                       
                       {/* Background Grid Accent */}
                       <div 
@@ -1190,7 +1177,7 @@ export default function SpmbClient({
 
                       {/* Central Dining Table Graphic (Round vs Rectangular) */}
                       {isRoundTable ? (
-                        <div className="w-32 h-32 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10">
+                        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
                           <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
                           <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
                             {currentTableCapacity} Kursi
@@ -1198,7 +1185,7 @@ export default function SpmbClient({
                           <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Bundar (Bulat)</span>
                         </div>
                       ) : (
-                        <div className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10">
+                        <div className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
                           <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
                           <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
                             {currentTableCapacity} Kursi
@@ -1207,79 +1194,28 @@ export default function SpmbClient({
                         </div>
                       )}
 
-                      {/* Surrounding Chairs Positioned Top-Down */}
-                      {Array.from({ length: currentTableCapacity }).map((_, idx) => {
-                        const sLabel = (idx + 1).toString();
-                        const isSelected = seatNumber === sLabel;
-                        
-                        let posStyle: React.CSSProperties = {};
-                        let positionName = `Kursi ${sLabel}`;
-
-                        if (savedChairs && savedChairs[idx]) {
-                          // Use synchronized custom coordinates
-                          const sc = savedChairs[idx];
-                          posStyle = {
-                            transform: `translate(${sc.x}px, ${sc.y}px)`
-                          };
-                        } else if (isRoundTable) {
-                          // Circular radial placement
-                          const angle = (idx / currentTableCapacity) * 2 * Math.PI - Math.PI / 2;
-                          const radius = 100;
-                          posStyle = {
-                            top: `calc(50% + ${Math.sin(angle) * radius}px)`,
-                            left: `calc(50% + ${Math.cos(angle) * radius}px)`,
-                            transform: 'translate(-50%, -50%)'
-                          };
-                        } else {
-                          // Rectangular perimeter placement (Unblocked)
-                          if (currentTableCapacity <= 2) {
-                            if (idx === 0) {
-                              posStyle = { top: '8px', left: '50%', transform: 'translateX(-50%)' };
-                              positionName = 'Kursi Depan (1)';
-                            } else {
-                              posStyle = { bottom: '8px', left: '50%', transform: 'translateX(-50%)' };
-                              positionName = 'Kursi Belakang (2)';
-                            }
-                          } else if (currentTableCapacity === 4) {
-                            if (idx === 0) {
-                              posStyle = { top: '8px', left: '50%', transform: 'translateX(-50%)' };
-                              positionName = 'Kursi Depan (1)';
-                            } else if (idx === 1) {
-                              posStyle = { right: '8px', top: '50%', transform: 'translateY(-50%)' };
-                              positionName = 'Kursi Kanan (2)';
-                            } else if (idx === 2) {
-                              posStyle = { bottom: '8px', left: '50%', transform: 'translateX(-50%)' };
-                              positionName = 'Kursi Belakang (3)';
-                            } else {
-                              posStyle = { left: '8px', top: '50%', transform: 'translateY(-50%)' };
-                              positionName = 'Kursi Kiri (4)';
-                            }
-                          } else {
-                            const angle = (idx / currentTableCapacity) * 2 * Math.PI - Math.PI / 2;
-                            const radius = 100;
-                            posStyle = {
-                              top: `calc(50% + ${Math.sin(angle) * radius}px)`,
-                              left: `calc(50% + ${Math.cos(angle) * radius}px)`,
-                              transform: 'translate(-50%, -50%)'
-                            };
-                          }
-                        }
+                      {/* Surrounding Chairs Positioned Directly From Custom / Manual / Default Coordinates */}
+                      {savedChairs.map((chair, idx) => {
+                        const sLabel = chair.label || (idx + 1).toString();
+                        const isSelected = seatNumber.toString() === sLabel;
 
                         return (
                           <button
-                            key={sLabel}
+                            key={chair.id || idx}
                             type="button"
                             onClick={() => setSeatNumber(sLabel)}
-                            style={posStyle}
-                            title={positionName}
-                            className={`absolute p-2 rounded-2xl border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-20 ${
+                            style={{
+                              transform: `translate(${chair.x}px, ${chair.y}px)`
+                            }}
+                            title={`Pilih Kursi Nomor ${sLabel}`}
+                            className={`absolute w-10 h-10 rounded-full border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-20 shadow-md ${
                               isSelected
-                                ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/30 scale-110 shadow-lg shadow-orange-500/40'
-                                : 'bg-white text-stone-700 border-stone-300 hover:border-orange-400 hover:scale-105 shadow-sm'
+                                ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/40 scale-110 shadow-lg shadow-orange-500/40'
+                                : 'bg-white text-stone-800 border-orange-400 hover:border-orange-500 hover:scale-105 active:scale-95'
                             }`}
                           >
                             <Armchair className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-orange-600'}`} />
-                            <span className="font-serif font-black text-[10px] mt-0.5 leading-none">{sLabel}</span>
+                            <span className={`font-serif font-black text-[9px] mt-0.5 leading-none ${isSelected ? 'text-white' : 'text-stone-900'}`}>{sLabel}</span>
                           </button>
                         );
                       })}
