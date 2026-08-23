@@ -594,11 +594,10 @@ export function ProductFormModal({
                       <div>
                         <h4 className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
                           <ImageIcon className="w-4 h-4 text-orange-500" />
-                          Foto Menu Produk
+                          Foto Menu Produk (Rasio 1:1 Persegi • 600 × 600 px)
                         </h4>
                         <p className="text-[11px] text-stone-500">
-                          Gunakan foto berkualitas tinggi. Disarankan rasio 1:1 (Persegi) untuk
-                          SPMB & Kasir.
+                          Disarankan rasio <strong>1:1 Persegi (600 × 600 px s/d 1000 × 1000 px)</strong>. Sistem otomatis menyediakan alat pemotong (*cropper*) & konversi WebP tajam untuk SPMB & Kasir.
                         </p>
                       </div>
 
