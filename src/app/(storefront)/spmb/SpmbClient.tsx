@@ -238,7 +238,7 @@ export default function SpmbClient({
       setErrorMsg('Keranjang belanja Anda masih kosong.');
       return;
     }
-    setShowConfirmModal(true);
+    executeCheckout();
   };
 
   const handleDownloadQris = () => {
@@ -304,19 +304,11 @@ export default function SpmbClient({
           : (notes ? `[Kursi: ${seatNumber}] ${notes}` : `[Kursi: ${seatNumber}]`)
       };
 
-      let res = await fetch('/api/orders', {
+      const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-
-      if (!res.ok) {
-        res = await fetch('/api/checkout/spmb', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-      }
 
       const data = await res.json();
       if (!res.ok) {
@@ -475,14 +467,15 @@ export default function SpmbClient({
 
               <div>
                 <span className={`px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider inline-flex items-center gap-1.5
-                  ${activeOrderStatus.status === 'PENDING' || activeOrderStatus.status === 'PENDING_PAYMENT' ? 'bg-amber-50 text-amber-800 border border-amber-200 animate-pulse' : ''}
+                  ${activeOrderStatus.status === 'PENDING_PAYMENT' ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse' : ''}
+                  ${activeOrderStatus.status === 'PENDING' ? 'bg-orange-100 text-orange-900 border border-orange-200' : ''}
                   ${activeOrderStatus.status === 'PREPARING' ? 'bg-blue-50 text-blue-800 border border-blue-200 animate-pulse' : ''}
                   ${activeOrderStatus.status === 'READY' ? 'bg-emerald-50 text-emerald-800 border border-emerald-300 animate-bounce' : ''}
                   ${activeOrderStatus.status === 'COMPLETED' ? 'bg-stone-100 text-stone-700' : ''}
                   ${activeOrderStatus.status === 'CANCELLED' ? 'bg-rose-50 text-rose-700 border border-rose-200' : ''}
                 `}>
+                  {activeOrderStatus.status === 'PENDING_PAYMENT' && 'Menunggu Pembayaran QRIS'}
                   {activeOrderStatus.status === 'PENDING' && 'Pesanan Diterima'}
-                  {activeOrderStatus.status === 'PENDING_PAYMENT' && 'Menunggu Pembayaran'}
                   {activeOrderStatus.status === 'PREPARING' && 'Sedang Disiapkan'}
                   {activeOrderStatus.status === 'READY' && 'Pesanan Siap'}
                   {activeOrderStatus.status === 'COMPLETED' && 'Selesai'}
@@ -494,12 +487,16 @@ export default function SpmbClient({
             {/* 3-Step Simple Progress Bar */}
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className={`p-3 rounded-2xl border transition-all ${
-                ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED'].includes(activeOrderStatus.status)
+                activeOrderStatus.status === 'PENDING_PAYMENT'
+                  ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold animate-pulse'
+                  : ['PENDING', 'PREPARING', 'READY', 'COMPLETED'].includes(activeOrderStatus.status)
                   ? 'bg-orange-50 border-orange-300 text-orange-800 font-bold'
                   : 'bg-stone-50 border-stone-200 text-stone-400'
               }`}>
                 <p className="text-[9px] uppercase tracking-wider font-bold">Langkah 1</p>
-                <p className="text-xs font-bold mt-0.5">Diterima</p>
+                <p className="text-xs font-bold mt-0.5">
+                  {activeOrderStatus.status === 'PENDING_PAYMENT' ? 'Bayar QRIS' : 'Diterima'}
+                </p>
               </div>
 
               <div className={`p-3 rounded-2xl border transition-all ${
@@ -520,6 +517,33 @@ export default function SpmbClient({
                 <p className="text-xs font-bold mt-0.5">Selesai</p>
               </div>
             </div>
+
+            {/* Alert if unpaid QRIS */}
+            {activeOrderStatus.status === 'PENDING_PAYMENT' && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-left">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-amber-200/80 text-amber-900 flex items-center justify-center shrink-0">
+                    <CreditCard className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-amber-950">Pesanan belum dibayar</p>
+                    <p className="text-[11px] text-amber-800 font-medium">Selesaikan pembayaran QRIS agar pesanan Anda segera dibuat oleh barista.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQrisOrderId(activeOrderStatus.id);
+                    setQrisTotal(activeOrderStatus.total);
+                    setQrisPaymentPaid(false);
+                    setShowQrisModal(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-xs font-bold shrink-0 transition-all shadow-sm cursor-pointer"
+                >
+                  Buka QRIS
+                </button>
+              </div>
+            )}
 
             {/* 20-Minute Alert Notification */}
             {isOrderOver20Min && (

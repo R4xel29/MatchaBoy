@@ -88,6 +88,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     hasTumbler: order.hasTumbler || false,
     adminWhatsApp,
     paymentUrl: order.paymentUrl || undefined,
+    paymentQrContent: order.paymentQrContent || undefined,
     queueNumber: order.queueNumber || null,
   }
 

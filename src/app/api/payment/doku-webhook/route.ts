@@ -212,25 +212,20 @@ export async function POST(req: NextRequest) {
             console.error('[DOKU WEBHOOK] Loyalty completion error:', loyaltyErr);
           }
 
-          // Send WhatsApp payment confirmation
+          // Send WhatsApp payment confirmation & notify admin/kitchen that order is paid
           try {
-            const { sendPaymentSuccessNotification, sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service');
-            await sendPaymentSuccessNotification(invoiceNumber);
-
-            // If the order is from WhatsApp (source === 'WA'), notify admin now since it is paid (lunas)
-            if (order.source === 'WA') {
-              await sendAdminNewOrderNotification(invoiceNumber).catch(err =>
-                console.error('[DOKU WEBHOOK] Failed to send admin new order notification:', err)
-              );
-            }
+            const { sendPaymentSuccessNotification, sendAdminNewOrderNotification, sendKitchenNotification } = await import('@/lib/whatsapp-service');
+            await sendPaymentSuccessNotification(invoiceNumber).catch(err =>
+              console.error('[DOKU WEBHOOK] Failed to send payment success notification:', err)
+            );
+            await sendAdminNewOrderNotification(order.id).catch(err =>
+              console.error('[DOKU WEBHOOK] Failed to send admin new order notification:', err)
+            );
+            await sendKitchenNotification(order.id).catch(err =>
+              console.error('[DOKU WEBHOOK] Failed to send kitchen notification:', err)
+            );
           } catch (waErr) {
             console.error('[DOKU WEBHOOK] WhatsApp success notification error:', waErr);
-          }
-
-          if (order.source === 'SPMB') {
-            import('@/lib/whatsapp-service').then(({ sendAdminOrderSummary }) => {
-              sendAdminOrderSummary().catch(err => console.error('Failed to send admin order summary:', err));
-            });
           }
 
           // Fire real-time notification alerts

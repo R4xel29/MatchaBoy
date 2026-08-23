@@ -208,69 +208,88 @@ export function ActiveOrderPopup() {
       <motion.div
         initial={{ opacity: 0, y: 50, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-        className="fixed bottom-24 left-4 right-4 md:bottom-6 md:right-6 md:left-auto md:w-96 z-[88]"
+        exit={{ opacity: 0, y: 30, scale: 0.95 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+        className="fixed bottom-20 md:bottom-6 left-3 right-3 sm:left-auto sm:right-6 sm:w-[390px] z-[88]"
       >
-        <div className="bg-[#FFFBF5]/90 backdrop-blur-xl border border-brand-700/10 rounded-2xl shadow-[0_12px_40px_rgba(148,111,72,0.15)] overflow-hidden">
-          {/* Card Header & Content */}
-          <div className="p-4 relative">
-            {/* Close Button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsDismissed(true);
-              }}
-              className="absolute top-3.5 right-3.5 p-1 rounded-full text-muted-foreground hover:bg-black/5 hover:text-foreground transition-colors"
-              aria-label="Dismiss"
-            >
-              <X className="w-4 h-4" />
-            </button>
+        <div className="relative bg-[#16100C]/95 backdrop-blur-xl border border-[#D4A574]/30 rounded-[1.75rem] shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_0_1px_rgba(212,165,116,0.15)] text-[#FFFBF5] overflow-hidden">
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-0 w-36 h-36 bg-[#D4A574]/15 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="p-4 sm:p-4.5 relative z-10">
+            {/* Top Bar: Live Status + Order ID + Close Button */}
+            <div className="flex items-center justify-between pb-2.5 mb-2.5 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#EFDCA7]">
+                  Pesanan Aktif
+                </span>
+                <span className="text-[10px] font-mono font-bold text-stone-400 bg-white/5 px-2 py-0.5 rounded-md border border-white/5">
+                  #{activeOrder.id.slice(0, 8).toUpperCase()}
+                </span>
+              </div>
+
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDismissed(true);
+                }}
+                className="w-6 h-6 rounded-full bg-white/5 hover:bg-white/15 text-stone-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                aria-label="Tutup"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
             {/* Main Interactive Row */}
             <div
               onClick={handleClick}
-              className="flex items-start gap-3 cursor-pointer select-none"
+              className="flex items-center gap-3.5 cursor-pointer select-none group"
             >
               {/* Icon Container */}
               <div
-                className={`w-10 h-10 rounded-xl flex items-center justify-center border shrink-0 ${statusConfig.color}`}
+                className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#B48A5E]/30 to-[#D4A574]/10 border border-[#D4A574]/40 flex items-center justify-center shrink-0 shadow-inner group-hover:scale-105 transition-transform"
               >
-                <StatusIcon className="w-5 h-5 animate-pulse" />
+                <StatusIcon className="w-6 h-6 text-[#EFDCA7] animate-pulse" />
               </div>
 
               {/* Text Info */}
-              <div className="flex-1 min-w-0 pr-6">
-                <span className="text-[10px] font-bold text-brand-700 tracking-wider uppercase block">
-                  Pesanan Aktif • #{activeOrder.id.slice(0, 8).toUpperCase()}
-                </span>
-                <h4 className="font-heading font-extrabold text-sm text-gray-900 leading-tight mt-0.5">
+              <div className="flex-1 min-w-0 text-left">
+                <h4 className="font-sans font-bold text-sm sm:text-base text-white leading-tight truncate">
                   {statusConfig.title}
                 </h4>
-                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                <p className="text-xs text-[#EFDCA7]/80 truncate mt-0.5 font-medium">
                   {activeOrder.itemsSummary}
+                </p>
+                <p className="text-xs font-extrabold text-[#D4A574] mt-1">
+                  {formatRupiah(activeOrder.total)}
                 </p>
               </div>
 
-              {/* Arrow */}
-              <div className="self-center text-brand-700">
-                <ArrowRight className="w-4 h-4" />
+              {/* Arrow Action Button */}
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 text-stone-950 flex items-center justify-center shrink-0 shadow-md shadow-orange-500/25 group-hover:translate-x-0.5 transition-all">
+                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
               </div>
             </div>
 
-            {/* Progress Bar Container */}
-            <div className="mt-3.5 space-y-1">
-              <div className="h-1.5 w-full bg-brand-700/5 rounded-full overflow-hidden">
+            {/* Luxury Progress Bar Container */}
+            <div className="mt-3.5 space-y-1.5 text-left">
+              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
                 <motion.div
-                  className="h-full bg-brand-700 rounded-full"
+                  className="h-full bg-gradient-to-r from-[#B48A5E] via-[#D4A574] to-[#EFDCA7] rounded-full"
                   initial={{ width: 0 }}
                   animate={{ width: `${statusConfig.progress}%` }}
                   transition={{ duration: 0.8, ease: 'easeOut' }}
                 />
               </div>
-              <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold">
+              <div className="flex justify-between items-center text-[10px] text-stone-400 font-medium">
                 <span>{statusConfig.description}</span>
-                <span className="text-brand-700">{formatRupiah(activeOrder.total)}</span>
+                <span className="text-[#EFDCA7] font-semibold">Ketuk untuk detail →</span>
               </div>
             </div>
           </div>

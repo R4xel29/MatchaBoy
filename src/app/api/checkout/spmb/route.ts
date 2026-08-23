@@ -443,19 +443,20 @@ export async function POST(req: Request) {
       }
     }
 
+    // Send admin & kitchen notification (Only for COD/immediate orders. QRIS orders will notify admin & kitchen once payment is confirmed via webhook)
+    if (order.status !== 'PENDING_PAYMENT') {
+      import('@/lib/whatsapp-service')
+        .then(async ({ sendAdminNewOrderNotification, sendKitchenNotification }) => {
+          await sendAdminNewOrderNotification(order.id).catch((e) => console.error('[SPMB CHECKOUT] Admin WA error:', e));
+          await sendKitchenNotification(order.id).catch((e) => console.error('[SPMB CHECKOUT] Kitchen WA error:', e));
+        })
+        .catch((e) => console.error('[SPMB CHECKOUT] Notification import error:', e));
+    }
+
     const finalOrder = await prisma.order.findUnique({ 
       where: { id: order.id }, 
       select: { paymentUrl: true, paymentQrContent: true }
     });
-
-    // Send admin & kitchen notification
-    try {
-      const { sendAdminNewOrderNotification, sendKitchenNotification } = await import('@/lib/whatsapp-service');
-      await sendAdminNewOrderNotification(order.id);
-      await sendKitchenNotification(order.id);
-    } catch (e) {
-      console.error('[SPMB CHECKOUT] Admin/Kitchen notification error:', e);
-    }
 
     return NextResponse.json({
       success: true,

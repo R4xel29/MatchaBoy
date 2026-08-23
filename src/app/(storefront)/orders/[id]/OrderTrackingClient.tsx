@@ -22,10 +22,12 @@ import {
   Leaf,
   CreditCard,
   UtensilsCrossed,
+  Download,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatRupiah } from '@/lib/utils';
 import dynamic from 'next/dynamic';
+import { QRCodeCanvas } from 'qrcode.react';
 
 const LeafletTracking = dynamic(() => import('@/components/storefront/MapboxTracking').then(m => m.LeafletTracking), { ssr: false });
 import { SocialShareCard } from '@/components/storefront/SocialShareCard';
@@ -50,6 +52,7 @@ export type TrackingOrderShape = {
   hasTumbler?: boolean;
   adminWhatsApp?: string;
   paymentUrl?: string;
+  paymentQrContent?: string;
   queueNumber?: string | null;
 };
 
@@ -66,13 +69,15 @@ const STATUS_ORDER_PICKUP = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY',
 const STATUS_ORDER_DELIVERY = ['PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'ASSIGNED', 'PICKED_UP', 'ON_DELIVERY', 'DELIVERED'];
 
 function getOrderSteps(orderType: string, currentStatus: string, isSpmb?: boolean): OrderStep[] {
+  const isPendingPayment = currentStatus === 'PENDING_PAYMENT';
   if (isSpmb || orderType === 'DINE_IN') {
     const steps: OrderStep[] = [
-      { key: 'PENDING', label: 'Pesanan Diterima', icon: Check, active: false, completed: false },
+      { key: 'PENDING', label: isPendingPayment ? 'Menunggu Pembayaran QRIS' : 'Pesanan Diterima', icon: isPendingPayment ? CreditCard : Check, active: false, completed: false },
       { key: 'PREPARING', label: 'Sedang Disiapkan', icon: ChefHat, active: false, completed: false },
       { key: 'READY', label: 'Pesanan Selesai', icon: Check, active: false, completed: false },
     ];
-    const effectiveIdx = (currentStatus === 'PENDING_PAYMENT' || currentStatus === 'PENDING') ? 0 
+    const effectiveIdx = isPendingPayment ? 0
+      : currentStatus === 'PENDING' ? 0 
       : currentStatus === 'PREPARING' ? 1 
       : (currentStatus === 'READY' || currentStatus === 'COMPLETED') ? 2 : 0;
 
@@ -81,7 +86,7 @@ function getOrderSteps(orderType: string, currentStatus: string, isSpmb?: boolea
         step.completed = true; 
       } else if (i === effectiveIdx) { 
         step.active = true; 
-        step.completed = ['READY', 'COMPLETED'].includes(currentStatus); 
+        step.completed = isPendingPayment ? false : ['READY', 'COMPLETED'].includes(currentStatus); 
       }
     });
     return steps;
@@ -939,9 +944,75 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
           </section>
         )}
 
-        {/* Unified Pay Now Button */}
+        {/* Unified Pay Now / QRIS Block */}
         {currentStatus === 'PENDING_PAYMENT' && (
-          (order.paymentMethod === 'DOKU' || order.paymentMethod === 'QRIS') && order.paymentUrl ? (
+          order.paymentQrContent ? (
+            <div className="p-5 rounded-3xl bg-white border border-stone-200 shadow-sm space-y-4 text-center animate-in fade-in">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+                <span className="text-base font-black tracking-tight text-[#1b4353]">
+                  QR<span className="text-[#e26d5c]">IS</span>
+                </span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 px-2.5 py-0.5 rounded-md">
+                  Menunggu Pembayaran
+                </span>
+              </div>
+
+              <div className="relative w-56 h-56 mx-auto bg-white rounded-2xl p-2 border border-stone-200 shadow-inner flex items-center justify-center">
+                <QRCodeCanvas
+                  id={`tracking-qris-${order.id}`}
+                  value={order.paymentQrContent}
+                  size={200}
+                  level="M"
+                  includeMargin={false}
+                  className="w-full h-full object-contain rounded-xl"
+                />
+              </div>
+
+              <div className="px-3 py-2 rounded-xl bg-orange-50 border border-orange-100 text-center">
+                <p className="text-[11px] text-orange-800 font-bold">
+                  Scan QR dengan BCA, GoPay, OVO, ShopeePay, Dana, dll.
+                </p>
+                <p className="text-[10px] text-stone-500 mt-0.5">
+                  Total Tagihan: <strong className="text-stone-900">{formatRupiah(order.total)}</strong>
+                </p>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const canvas = document.getElementById(`tracking-qris-${order.id}`) as HTMLCanvasElement;
+                    if (!canvas) return;
+                    const url = canvas.toDataURL('image/png');
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `QRIS_${order.id.slice(0, 8)}.png`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="flex-1 py-2.5 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Unduh QR
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsCheckingStatus(true);
+                    await pollStatus();
+                    setTimeout(() => setIsCheckingStatus(false), 800);
+                  }}
+                  disabled={isCheckingStatus}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isCheckingStatus ? 'animate-spin' : ''}`} />
+                  {isCheckingStatus ? 'Memeriksa...' : 'Cek Status'}
+                </button>
+              </div>
+            </div>
+          ) : (order.paymentMethod === 'DOKU' || order.paymentMethod === 'QRIS') && order.paymentUrl ? (
             <div className="p-4 rounded-2xl bg-indigo-50/75 border border-indigo-100/50 space-y-3 shadow-sm">
               <div className="flex items-start gap-2.5 text-left">
                 <CreditCard className="w-5 h-5 text-indigo-600 mt-0.5 shrink-0" />

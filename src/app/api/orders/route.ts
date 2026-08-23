@@ -105,11 +105,14 @@ export async function POST(req: Request) {
       throw new ValidationError('Metode pembayaran tidak valid');
     }
 
-    // 2. Secure price calculation
+    // 2. Parallel product lookup & payment settings query
     const productIds = body.items.map((item: any) => item.productId);
-    const dbProducts = await prisma.product.findMany({
-      where: { id: { in: productIds } }
-    });
+    const [dbProducts, paymentSettings] = await Promise.all([
+      prisma.product.findMany({
+        where: { id: { in: productIds } }
+      }),
+      prisma.paymentSettings.findFirst()
+    ]);
 
     let secureSubtotal = 0;
     const orderItemsToCreate: Array<{
@@ -155,24 +158,14 @@ export async function POST(req: Request) {
 
     const secureTotal = secureSubtotal;
 
-    // Generate order ID
-    let orderId = '';
-    let isUnique = false;
-    let attempts = 0;
-    while (!isUnique && attempts < 20) {
-      orderId = generateOrderId();
-      const existing = await prisma.order.findUnique({
-        where: { id: orderId }
-      });
-      if (!existing) {
-        isUnique = true;
-      }
-      attempts++;
+    // Generate unique order ID instantly
+    const timeStr = Date.now().toString(36).toUpperCase().slice(-4);
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 4; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-
-    if (!isUnique) {
-      throw new Error('Gagal men-generate ID Pesanan unik, silakan coba lagi.');
-    }
+    const orderId = `ORD-${timeStr}${rand}`;
 
     const queueNumber = `DIN-${await getNextQueueSequence('DINE_IN')}`;
     const cleanPhone = body.phone ? body.phone.replace(/[^0-9]/g, '') : '-';
@@ -226,7 +219,6 @@ export async function POST(req: Request) {
 
     // Handle QRIS Payment Generation
     if (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') {
-      const paymentSettings = await prisma.paymentSettings.findFirst();
       if (paymentSettings && paymentSettings.dokuEnabled) {
         try {
           if (requestedMethod === 'QRIS_INSTAN') {
@@ -284,10 +276,12 @@ export async function POST(req: Request) {
       }
     }
 
-    // Admin Notification (Async Non-Blocking Fire-and-Forget)
-    import('@/lib/whatsapp-service')
-      .then(({ sendAdminNewOrderNotification }) => sendAdminNewOrderNotification(order.id))
-      .catch((e) => console.error('[API ORDERS] Admin notification error:', e));
+    // Admin Notification (Only for COD/immediate orders. QRIS orders will notify admin & kitchen once payment is confirmed via webhook)
+    if (order.status !== 'PENDING_PAYMENT') {
+      import('@/lib/whatsapp-service')
+        .then(({ sendAdminNewOrderNotification }) => sendAdminNewOrderNotification(order.id))
+        .catch((e) => console.error('[API ORDERS] Admin notification error:', e));
+    }
 
     return NextResponse.json({
       success: true,
