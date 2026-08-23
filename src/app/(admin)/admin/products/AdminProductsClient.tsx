@@ -1,234 +1,220 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { formatRupiah } from '@/lib/utils';
-import { useToast } from '@/components/ui/Toast';
 import {
-  Search, Plus, Edit2, Trash2, Power, PowerOff, X, Save, Loader2,
-  ImageIcon, Upload, Snowflake, CandyCane, CirclePlus, CircleMinus, History, Archive, ArchiveRestore,
-  CupSoda, Utensils
+  Search,
+  Plus,
+  Download,
+  LayoutGrid,
+  List,
+  Flame,
+  CandyCane,
+  Package,
+  Layers,
+  Archive,
+  ArchiveRestore,
+  RefreshCw,
+  Coins,
+  AlertTriangle,
+  Loader2,
+  Trash2,
+  CheckSquare,
+  Sparkles,
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import { ProductGridTable } from '@/components/admin/products/ProductGridTable';
+import { ProductFormModal } from '@/components/admin/products/ProductFormModal';
+import { ProductTypePickerModal } from '@/components/admin/products/ProductTypePickerModal';
+import { ProductQuickPriceModal } from '@/components/admin/products/ProductQuickPriceModal';
+import { RecipeHppModal } from '@/components/admin/products/RecipeHppModal';
+import { MasterToppingsTab } from '@/components/admin/products/MasterToppingsTab';
+import type {
+  ProductItem,
+  CategoryItem,
+  IngredientItem,
+  ToppingItem,
+  ModifiersData,
+} from '@/components/admin/products/types';
 
-// ── Types ──
-interface CategoryItem { id: string; name: string; slug: string; }
-interface ProductItem {
-  id: string; name: string; description: string; price: number;
-  image: string | null; badge: string | null; categoryId: string;
-  category: CategoryItem; modifiers: string | null;
-}
-interface IngredientItem { id: string; name: string; unit: string; costPerUnit: number; }
-interface Props { initialProducts: ProductItem[]; categories: CategoryItem[]; ingredients: IngredientItem[]; }
-
-interface AddOnItem { id: string; name: string; price: number; ingredientId?: string; ingredientQty?: number; }
-interface ToppingItem { id: string; name: string; defaultPrice: number; ingredientId?: string | null; ingredientQty?: number | null; isAvailable: boolean; }
-interface ProductPromo {
-  promoPrice: number;
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-}
-
-interface ModifiersData {
-  productType?: 'minuman' | 'makanan';
-  iceLevel?: string[];
-  sugarLevel?: string[];
-  addOns?: AddOnItem[];
-  isBundle?: boolean;
-  bundleGroups?: any[];
-  freeShipping?: boolean;
-  discountType?: 'fixed' | 'nominal' | 'percent';
-  discountValue?: number;
-  originalPrice?: number;
-  promo?: ProductPromo;
-  // Per-product customizer settings
-  showMatcha?: boolean;
-  showEspressoShot?: boolean;
-  defaultMatcha?: number;
-  showSweetness?: boolean;
-  defaultSugar?: string;
-  defaultIce?: string;
-  sizes?: { name: string; price: number }[];
+interface AdminProductsClientProps {
+  initialProducts: ProductItem[];
+  categories: CategoryItem[];
+  ingredients: IngredientItem[];
 }
 
-const ALL_ICE_LEVELS = ['Normal Ice', 'Less Ice', 'No Ice'];
-const ALL_SUGAR_LEVELS = ['Normal Sugar', 'Less Sugar'];
-
-// ── WebP Compression Utility ──
-function compressToWebP(file: File, maxSize = 800, quality = 0.8): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      let w = img.width, h = img.height;
-      if (w > maxSize || h > maxSize) {
-        const ratio = Math.min(maxSize / w, maxSize / h);
-        w = Math.round(w * ratio);
-        h = Math.round(h * ratio);
-      }
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('Canvas not supported')); return; }
-      ctx.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        (blob) => blob ? resolve(blob) : reject(new Error('Compression failed')),
-        'image/webp',
-        quality
-      );
-    };
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-function formatDateTimeLocal(dateStr: string): string {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '';
-  
-  const pad = (num: number) => num.toString().padStart(2, '0');
-  const year = d.getFullYear();
-  const month = pad(d.getMonth() + 1);
-  const day = pad(d.getDate());
-  const hours = pad(d.getHours());
-  const minutes = pad(d.getMinutes());
-  
-  return `${year}-${month}-${day}T${hours}:${minutes}`;
-}
-
-export default function AdminProductsClient({ initialProducts, categories, ingredients }: Props) {
+export default function AdminProductsClient({
+  initialProducts,
+  categories,
+  ingredients,
+}: AdminProductsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get('category');
   const { showToast } = useToast();
+
+  // Active Main Tab
+  const [activeTab, setActiveTab] = useState<'products' | 'combos' | 'toppings'>('products');
+
+  // View Mode: Grid or Table
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+
+  // Search & Filters
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'products' | 'combos' | 'toppings'>('products');
-  const [showArchived, setShowArchived] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'sold-out' | 'promo' | 'no-recipe' | 'archived'>('all');
+  const [sortBy, setSortBy] = useState<'name-asc' | 'name-desc' | 'price-asc' | 'price-desc'>('name-asc');
 
+  // Multi-select Checkboxes
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
+  // Modals Controller State
+  const [showTypePicker, setShowTypePicker] = useState(false);
+  const [showFormModal, setShowFormModal] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [formProductType, setFormProductType] = useState<'minuman' | 'makanan' | 'combo'>('minuman');
+
+  // Quick Price Modal
+  const [quickPriceProduct, setQuickPriceProduct] = useState<ProductItem | null>(null);
+
+  // Recipe Modal
+  const [recipeProduct, setRecipeProduct] = useState<ProductItem | null>(null);
+
+  // Master Toppings State
+  const [masterToppings, setMasterToppings] = useState<ToppingItem[]>([]);
+  const [loadingToppings, setLoadingToppings] = useState(false);
+
+  // Sync category param from URL
   useEffect(() => {
     if (categoryParam) {
       setSelectedCategory(categoryParam);
     }
   }, [categoryParam]);
 
-  // Master Toppings State
-  const [masterToppings, setMasterToppings] = useState<ToppingItem[]>([]);
-  const [loadingToppings, setLoadingToppings] = useState(false);
-
+  // Fetch Master Toppings
   const fetchToppings = useCallback(async () => {
     setLoadingToppings(true);
     try {
       const res = await fetch('/api/admin/toppings');
-      const data = await res.json();
-      setMasterToppings(data);
+      if (res.ok) {
+        const data = await res.json();
+        setMasterToppings(data);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('Error fetching toppings:', err);
     } finally {
       setLoadingToppings(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchToppings();
-  }, [fetchToppings]);
-
-  // Master Toppings Modal State
-  const [showToppingModal, setShowToppingModal] = useState(false);
-  const [editingTopping, setEditingTopping] = useState<ToppingItem | null>(null);
-  const [toppingForm, setToppingForm] = useState({ name: '', defaultPrice: '', ingredientId: '', ingredientQty: '' });
-  const [savingTopping, setSavingTopping] = useState(false);
-
-  const openToppingModal = (topping?: ToppingItem) => {
-    if (topping) {
-      setEditingTopping(topping);
-      setToppingForm({
-        name: topping.name,
-        defaultPrice: topping.defaultPrice.toString(),
-        ingredientId: topping.ingredientId || '',
-        ingredientQty: topping.ingredientQty?.toString() || ''
-      });
-    } else {
-      setEditingTopping(null);
-      setToppingForm({ name: '', defaultPrice: '', ingredientId: '', ingredientQty: '' });
-    }
-    setShowToppingModal(true);
-  };
-
-  const handleSaveTopping = async () => {
-    if (!toppingForm.name || !toppingForm.defaultPrice) return showToast('Nama dan harga wajib diisi', 'error');
-    setSavingTopping(true);
-    try {
-      const payload = {
-        name: toppingForm.name,
-        defaultPrice: Number(toppingForm.defaultPrice),
-        ingredientId: toppingForm.ingredientId || null,
-        ingredientQty: toppingForm.ingredientQty ? Number(toppingForm.ingredientQty) : null,
-        isAvailable: editingTopping ? editingTopping.isAvailable : true
-      };
-      const url = editingTopping ? `/api/admin/toppings/${editingTopping.id}` : '/api/admin/toppings';
-      const res = await fetch(url, {
-        method: editingTopping ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error();
-      showToast('Master Topping berhasil disimpan', 'success');
-      setShowToppingModal(false);
+    if (activeTab === 'toppings') {
       fetchToppings();
-    } catch {
-      showToast('Gagal menyimpan Topping', 'error');
-    } finally {
-      setSavingTopping(false);
     }
-  };
+  }, [activeTab, fetchToppings]);
 
-  const handleDeleteTopping = async (id: string) => {
-    if (!confirm('Hapus master topping ini?')) return;
+  // Helper check bundle
+  const isProductBundle = (p: ProductItem): boolean => {
+    if (!p.modifiers) return false;
     try {
-      await fetch(`/api/admin/toppings/${id}`, { method: 'DELETE' });
-      showToast('Topping dihapus', 'success');
-      fetchToppings();
+      const parsed: ModifiersData = JSON.parse(p.modifiers);
+      return !!parsed.isBundle;
     } catch {
-      showToast('Gagal menghapus topping', 'error');
+      return false;
     }
   };
 
-  const toggleToppingStatus = async (topping: ToppingItem) => {
+  // Helper check promo
+  const isProductOnPromo = (p: ProductItem): boolean => {
+    if (!p.modifiers) return false;
     try {
-      await fetch(`/api/admin/toppings/${topping.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isAvailable: !topping.isAvailable })
-      });
-      fetchToppings();
+      const parsed: ModifiersData = JSON.parse(p.modifiers);
+      return !!(parsed.promo?.isActive && parsed.promo?.promoPrice);
     } catch {
-      showToast('Gagal update status', 'error');
+      return false;
     }
   };
 
-  // Checkbox Selection & Bulk Actions
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Filtered & Sorted Products
+  const filteredProducts = useMemo(() => {
+    return initialProducts.filter((p) => {
+      const isCombo = isProductBundle(p);
+      const isArchived = p.badge === 'archived';
+      const isSoldOut = p.badge === 'sold-out';
+      const onPromo = isProductOnPromo(p);
+      const hasRecipe = (p.productIngredients || []).length > 0;
 
-  useEffect(() => {
-    setSelectedIds([]);
-  }, [activeTab, selectedCategory, search]);
+      // 1. Tab filtering
+      if (activeTab === 'combos') {
+        if (!isCombo) return false;
+      } else if (activeTab === 'products') {
+        if (isCombo) return false;
+      }
 
+      // 2. Status filtering
+      if (statusFilter === 'archived') {
+        if (!isArchived) return false;
+      } else {
+        if (isArchived) return false; // Hide archived by default
+        if (statusFilter === 'available' && isSoldOut) return false;
+        if (statusFilter === 'sold-out' && !isSoldOut) return false;
+        if (statusFilter === 'promo' && !onPromo) return false;
+        if (statusFilter === 'no-recipe' && hasRecipe) return false;
+      }
+
+      // 3. Category filtering
+      if (selectedCategory !== 'all' && p.categoryId !== selectedCategory) {
+        return false;
+      }
+
+      // 4. Search text
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        const matchesName = p.name.toLowerCase().includes(q);
+        const matchesDesc = (p.description || '').toLowerCase().includes(q);
+        const matchesCat = p.category.name.toLowerCase().includes(q);
+        if (!matchesName && !matchesDesc && !matchesCat) return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'name-asc') return a.name.localeCompare(b.name);
+      if (sortBy === 'name-desc') return b.name.localeCompare(a.name);
+      if (sortBy === 'price-asc') return a.price - b.price;
+      if (sortBy === 'price-desc') return b.price - a.price;
+      return 0;
+    });
+  }, [initialProducts, activeTab, statusFilter, selectedCategory, search, sortBy]);
+
+  // Overview Counts
+  const stats = useMemo(() => {
+    const activeList = initialProducts.filter((p) => p.badge !== 'archived');
+    return {
+      total: activeList.length,
+      soldOut: activeList.filter((p) => p.badge === 'sold-out').length,
+      promo: activeList.filter(isProductOnPromo).length,
+      noRecipe: activeList.filter((p) => (p.productIngredients || []).length === 0).length,
+      archived: initialProducts.filter((p) => p.badge === 'archived').length,
+    };
+  }, [initialProducts]);
+
+  // Checkbox Handlers
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
   };
 
   const toggleSelectAll = () => {
-    const visibleIds = filteredProducts.map(p => p.id);
-    const allSelected = visibleIds.every(id => selectedIds.includes(id));
+    const visibleIds = filteredProducts.map((p) => p.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
     if (allSelected) {
-      setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)));
+      setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
     } else {
-      setSelectedIds(prev => {
+      setSelectedIds((prev) => {
         const next = [...prev];
-        visibleIds.forEach(id => {
+        visibleIds.forEach((id) => {
           if (!next.includes(id)) next.push(id);
         });
         return next;
@@ -236,2218 +222,481 @@ export default function AdminProductsClient({ initialProducts, categories, ingre
     }
   };
 
+  // Bulk Actions
   const handleBulkAction = async (action: 'delete' | 'availability' | 'category', value?: any) => {
     if (selectedIds.length === 0) return;
-    
     if (action === 'delete') {
-      if (!confirm(`Apakah Anda yakin ingin menghapus/mengarsipkan ${selectedIds.length} produk terpilih?`)) {
+      if (!confirm(`Apakah Anda yakin ingin memproses ${selectedIds.length} produk terpilih?`)) {
         return;
       }
     }
 
-    setIsUpdating(true);
+    setIsBulkProcessing(true);
     try {
       const res = await fetch('/api/admin/products/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: selectedIds, action, value })
+        body: JSON.stringify({ ids: selectedIds, action, value }),
       });
       const data = await res.json();
       if (res.ok) {
-        showToast(data.message || 'Bulk action berhasil dijalankan', 'success');
+        showToast(data.message || 'Aksi masal berhasil dijalankan', 'success');
         setSelectedIds([]);
         router.refresh();
       } else {
-        throw new Error(data.error || 'Bulk action gagal');
+        throw new Error(data.error || 'Aksi masal gagal');
       }
     } catch (err: any) {
-      showToast(err.message || 'Gagal memproses bulk action', 'error');
+      showToast(err.message || 'Gagal memproses aksi masal', 'error');
     } finally {
-      setIsUpdating(false);
+      setIsBulkProcessing(false);
     }
   };
 
-  // Visual Product Selector Modal
-  const [activeGroupIdForPicker, setActiveGroupIdForPicker] = useState<string | null>(null);
-  const [pickerSearch, setPickerSearch] = useState('');
-  const [pickerCategory, setPickerCategory] = useState('all');
-
-  // Modal state
-  const [showTypePickerModal, setShowTypePickerModal] = useState(false);
-  const [productType, setProductType] = useState<'minuman' | 'makanan'>('minuman');
-  const [showModal, setShowModal] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
-  const [formData, setFormData] = useState({ name: '', description: '', price: '', categoryId: '', image: '' });
-  const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<ProductItem | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [archivingId, setArchivingId] = useState<string | null>(null);
-
-  // Image upload state
-  const [uploading, setUploading] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Image cropping states
-  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
-  const [cropZoom, setCropZoom] = useState(1);
-  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
-  const [isCropperDragging, setIsCropperDragging] = useState(false);
-  const cropperDragStart = useRef({ x: 0, y: 0 });
-  const cropperViewportRef = useRef<HTMLDivElement>(null);
-  const cropperImgRef = useRef<HTMLImageElement>(null);
-
-  // Modifier state
-  const [modIce, setModIce] = useState<string[]>([]);
-  const [modSugar, setModSugar] = useState<string[]>([]);
-  const [modAddOns, setModAddOns] = useState<AddOnItem[]>([]);
-  const [newAddOnName, setNewAddOnName] = useState('');
-  const [newAddOnPrice, setNewAddOnPrice] = useState('');
-
-  // Matcha & Sweetness customizer states
-  const [showMatcha, setShowMatcha] = useState<boolean>(true);
-  const [defaultMatcha, setDefaultMatcha] = useState<number>(5);
-  const [showSweetness, setShowSweetness] = useState<boolean>(true);
-  const [defaultSugar, setDefaultSugar] = useState<string>('Biasa');
-  const [defaultIce, setDefaultIce] = useState<string>('Normal Ice');
-  const [showEspressoShot, setShowEspressoShot] = useState<boolean>(false);
-
-  // Product Sizes state (e.g. Regular, Large (+5k))
-  const [modSizes, setModSizes] = useState<{ name: string; price: number }[]>([]);
-  const [newSizeName, setNewSizeName] = useState('');
-  const [newSizePrice, setNewSizePrice] = useState('');
-
-  const addSizeOption = () => {
-    if (!newSizeName.trim()) return;
-    setModSizes(prev => [...prev, { name: newSizeName.trim(), price: Number(newSizePrice) || 0 }]);
-    setNewSizeName('');
-    setNewSizePrice('');
-  };
-
-  const removeSizeOption = (idx: number) => {
-    setModSizes(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  // Bundle / Combo state
-  const [isBundle, setIsBundle] = useState<boolean>(false);
-  const [bundleGroups, setBundleGroups] = useState<any[]>([]);
-  const [freeShipping, setFreeShipping] = useState<boolean>(false);
-
-  // Discount Pricing Calculator state
-  const [discountType, setDiscountType] = useState<'fixed' | 'nominal' | 'percent'>('fixed');
-  const [discountValue, setDiscountValue] = useState<string>('');
-
-  // Promo Countdown states (Marketplace Style Promo)
-  const [promoActive, setPromoActive] = useState<boolean>(false);
-  const [promoPrice, setPromoPrice] = useState<string>('');
-  const [promoStartDate, setPromoStartDate] = useState<string>('');
-  const [promoEndDate, setPromoEndDate] = useState<string>('');
-
-  const getRegularTotalPrice = useCallback(() => {
-    let total = 0;
-    bundleGroups.forEach(group => {
-      if (group.options.length > 0) {
-        const firstOpt = group.options[0];
-        const prod = initialProducts.find(p => p.id === firstOpt.productId);
-        if (prod) {
-          total += prod.price * (group.selectCount || 1);
-        }
-      }
-    });
-    return total;
-  }, [bundleGroups, initialProducts]);
-
-  const handleDiscountTypeChange = (type: 'fixed' | 'nominal' | 'percent') => {
-    setDiscountType(type);
-    setDiscountValue('');
-    if (type === 'fixed') {
-      // Just keep current price
-    } else {
-      // Set to regular price initially
-      setFormData(prev => ({ ...prev, price: getRegularTotalPrice().toString() }));
-    }
-  };
-
-  const handleDiscountValueChange = (val: string) => {
-    setDiscountValue(val);
-    const regularTotal = getRegularTotalPrice();
-    if (discountType === 'percent') {
-      const pct = Number(val || 0);
-      const finalPrice = Math.max(0, regularTotal * (1 - pct / 100));
-      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
-    } else if (discountType === 'nominal') {
-      const nom = Number(val || 0);
-      const finalPrice = Math.max(0, regularTotal - nom);
-      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
-    }
-  };
-
-  // Automatically sync price if discount is active and regular total changes
-  useEffect(() => {
-    if (discountType === 'fixed') return;
-    const regularTotal = getRegularTotalPrice();
-    if (regularTotal === 0) return; // Skip updating price if bundle has no items configured yet
-    if (discountType === 'percent') {
-      const pct = Number(discountValue || 0);
-      const finalPrice = Math.max(0, regularTotal * (1 - pct / 100));
-      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
-    } else if (discountType === 'nominal') {
-      const nom = Number(discountValue || 0);
-      const finalPrice = Math.max(0, regularTotal - nom);
-      setFormData(prev => ({ ...prev, price: Math.round(finalPrice).toString() }));
-    }
-  }, [bundleGroups, discountType, discountValue, getRegularTotalPrice]);
-
-  // Bundle helper functions
-  const addBundleGroup = () => {
-    const id = 'group_' + Math.random().toString(36).substr(2, 9);
-    setBundleGroups(prev => [...prev, { id, name: 'Group Pilihan Baru', selectCount: 1, options: [] }]);
-  };
-
-  const removeBundleGroup = (id: string) => {
-    setBundleGroups(prev => prev.filter(g => g.id !== id));
-  };
-
-  const updateGroupName = (id: string, name: string) => {
-    setBundleGroups(prev => prev.map(g => g.id === id ? { ...g, name } : g));
-  };
-
-  const addOptionToGroup = (groupId: string, productId: string) => {
-    if (!productId) return;
-    const prod = initialProducts.find(p => p.id === productId);
-    if (!prod) return;
-
-    setBundleGroups(prev => prev.map(g => {
-      if (g.id !== groupId) return g;
-      const alreadyHas = g.options.some((o: any) => o.productId === productId);
-      if (alreadyHas) return g;
-      return {
-        ...g,
-        options: [...g.options, { productId, name: prod.name, priceAdjustment: 0 }]
-      };
-    }));
-  };
-
-  const removeOptionFromGroup = (groupId: string, productId: string) => {
-    setBundleGroups(prev => prev.map(g => {
-      if (g.id !== groupId) return g;
-      return {
-        ...g,
-        options: g.options.filter((o: any) => o.productId !== productId)
-      };
-    }));
-  };
-
-  const updateOptionPrice = (groupId: string, productId: string, priceAdjustment: number) => {
-    setBundleGroups(prev => prev.map(g => {
-      if (g.id !== groupId) return g;
-      return {
-        ...g,
-        options: g.options.map((o: any) => o.productId === productId ? { ...o, priceAdjustment } : o)
-      };
-    }));
-  };
-
-  // Recipe state
-  const [showRecipeModal, setShowRecipeModal] = useState(false);
-  const [recipeProduct, setRecipeProduct] = useState<ProductItem | null>(null);
-  const [recipeItems, setRecipeItems] = useState<{ ingredientId: string; quantity: string }[]>([]);
-  const [loadingRecipe, setLoadingRecipe] = useState(false);
-  const [savingRecipe, setSavingRecipe] = useState(false);
-
-  const isProductBundle = (product: ProductItem): boolean => {
-    if (!product.modifiers) return false;
+  // 1-Click Duplicate Handler
+  const handleDuplicateProduct = async (product: ProductItem) => {
     try {
-      const parsed = JSON.parse(product.modifiers);
-      return !!parsed.isBundle;
-    } catch {
-      return false;
-    }
-  };
-
-  const filteredProducts = initialProducts.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
-    const isCombo = isProductBundle(p);
-    const isArchived = p.badge === 'archived';
-
-    // Filter archived products
-    if (!showArchived && isArchived) return false;
-
-    if (activeTab === 'combos') {
-      if (!isCombo) return false;
-    } else {
-      if (isCombo) return false;
-    }
-
-    const matchesCat = selectedCategory === 'all' || p.categoryId === selectedCategory;
-    return matchesSearch && matchesCat;
-  });
-
-  const toggleAvailability = async (productId: string, currentBadge: string | null) => {
-    setIsUpdating(true);
-    try {
-      await fetch(`/api/admin/products/${productId}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ badge: currentBadge === 'sold-out' ? null : 'sold-out' })
-      });
-      router.refresh();
-    } catch { showToast('Gagal memperbarui produk', 'error'); }
-    finally { setIsUpdating(false); }
-  };
-
-  const toggleArchive = async (productId: string, currentBadge: string | null) => {
-    setArchivingId(productId);
-    try {
-      const isArchived = currentBadge === 'archived';
-      await fetch(`/api/admin/products/${productId}`, {
-        method: 'PATCH', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ badge: isArchived ? null : 'archived' })
-      });
-      showToast(isArchived ? 'Produk berhasil dikembalikan' : 'Produk berhasil diarsipkan', 'success');
-      router.refresh();
-    } catch { 
-      showToast('Gagal mengarsipkan produk', 'error'); 
-    } finally {
-      setArchivingId(null);
-    }
-  };
-
-  const handleSelectType = (type: 'minuman' | 'makanan') => {
-    setProductType(type);
-    setShowTypePickerModal(false);
-    if (type === 'minuman') {
-      setShowSweetness(true);
-      setShowMatcha(false);
-      setShowEspressoShot(false);
-      setModIce(['Normal Ice', 'Less Ice', 'No Ice']);
-      setModSugar(['Less', 'Biasa', 'Lumayan', 'Manis Sekali']);
-    } else {
-      setShowSweetness(false);
-      setShowMatcha(false);
-      setShowEspressoShot(false);
-      setModIce([]);
-      setModSugar([]);
-    }
-    setShowModal(true);
-  };
-
-  const handleSelectTypeInForm = (type: 'minuman' | 'makanan') => {
-    setProductType(type);
-    if (type === 'minuman') {
-      setShowSweetness(true);
-      if (modIce.length === 0) setModIce(['Normal Ice', 'Less Ice', 'No Ice']);
-      if (modSugar.length === 0) setModSugar(['Less', 'Biasa', 'Lumayan', 'Manis Sekali']);
-    } else {
-      setShowSweetness(false);
-      setShowMatcha(false);
-      setShowEspressoShot(false);
-      setModIce([]);
-      setModSugar([]);
-    }
-  };
-
-  const openModal = (product?: ProductItem) => {
-    if (product) {
-      setEditingProduct(product);
-      setFormData({
-        name: product.name, description: product.description,
-        price: product.price.toString(), categoryId: product.categoryId,
-        image: product.image || ''
-      });
-      setImagePreview(product.image || null);
-
-      // Parse modifiers
-      const mods: ModifiersData = product.modifiers ? JSON.parse(product.modifiers) : {};
-      const detectedType = mods.productType || 
-        (mods.showMatcha || mods.showSweetness || mods.showEspressoShot || (mods.iceLevel && mods.iceLevel.length > 0) ? 'minuman' : 'makanan');
-      setProductType(detectedType);
-
-      setModIce(mods.iceLevel || []);
-      setModSugar(mods.sugarLevel || []);
-      setModAddOns(mods.addOns || []);
-      setModSizes(mods.sizes || []);
-      setIsBundle(mods.isBundle || false);
-      setBundleGroups(mods.bundleGroups || []);
-      setFreeShipping(mods.freeShipping || false);
-      setDiscountType(mods.discountType || 'fixed');
-      setDiscountValue(mods.discountValue ? mods.discountValue.toString() : '');
-
-      // Customizer fields
-      setShowMatcha(mods.showMatcha === true);
-      setDefaultMatcha(mods.defaultMatcha ?? 5);
-      setShowSweetness(mods.showSweetness !== false);
-      setDefaultSugar(mods.defaultSugar || 'Biasa');
-      setDefaultIce(mods.defaultIce || 'Normal Ice');
-      setShowEspressoShot(mods.showEspressoShot === true);
-
-      // Promo properties
-      setPromoActive(mods.promo?.isActive || false);
-      setPromoPrice(mods.promo?.promoPrice ? mods.promo.promoPrice.toString() : '');
-      setPromoStartDate(mods.promo?.startDate ? formatDateTimeLocal(mods.promo.startDate) : '');
-      setPromoEndDate(mods.promo?.endDate ? formatDateTimeLocal(mods.promo.endDate) : '');
-
-      setShowModal(true);
-    } else {
-      setEditingProduct(null);
-      setFormData({ name: '', description: '', price: '', categoryId: categories[0]?.id || '', image: '' });
-      setImagePreview(null);
-      setModIce([]);
-      setModSugar([]);
-      setModAddOns([]);
-      setModSizes([]);
-      setIsBundle(activeTab === 'combos');
-      setBundleGroups([]);
-      setFreeShipping(false);
-      setDiscountType('fixed');
-      setDiscountValue('');
-
-      // Customizer fields defaults
-      setShowMatcha(false);
-      setDefaultMatcha(5);
-      setShowSweetness(true);
-      setDefaultSugar('Biasa');
-      setDefaultIce('Normal Ice');
-      setShowEspressoShot(false);
-
-      // Reset promo properties
-      setPromoActive(false);
-      setPromoPrice('');
-      setPromoStartDate('');
-      setPromoEndDate('');
-
-      if (activeTab === 'combos') {
-        setShowModal(true);
-      } else {
-        // Show Step 1: Product Type Picker Modal
-        setShowTypePickerModal(true);
-      }
-    }
-    setNewAddOnName('');
-    setNewAddOnPrice('');
-  };
-
-  const closeModal = () => { 
-    setShowModal(false); 
-    setShowTypePickerModal(false);
-    setEditingProduct(null); 
-  };
-
-  // ── Image Upload & Cropping handlers ──
-  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        // Calculate initial zoom to fit image in viewport
-        const viewportWidth = 420; // max-w-[420px]
-        const viewportHeight = viewportWidth / 1.6; // aspect-[16/10]
-        const scaleX = viewportWidth / img.width;
-        const scaleY = viewportHeight / img.height;
-        const initialZoom = Math.min(Math.max(scaleX, scaleY), 1); // Fit to viewport, max 1
-        
-        setCropImageSrc(reader.result as string);
-        setCropZoom(initialZoom);
-        setCropOffset({ x: 0, y: 0 });
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  }, []);
-
-  const handleCropperMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsCropperDragging(true);
-    cropperDragStart.current = { x: e.clientX - cropOffset.x, y: e.clientY - cropOffset.y };
-  };
-
-  const handleCropperMouseMove = useCallback((e: MouseEvent) => {
-    if (!isCropperDragging) return;
-    setCropOffset({
-      x: e.clientX - cropperDragStart.current.x,
-      y: e.clientY - cropperDragStart.current.y
-    });
-  }, [isCropperDragging, cropOffset.x, cropOffset.y]);
-
-  const handleCropperMouseUp = useCallback(() => {
-    setIsCropperDragging(false);
-  }, []);
-
-  const handleCropperTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-    setIsCropperDragging(true);
-    const touch = e.touches[0];
-    cropperDragStart.current = { x: touch.clientX - cropOffset.x, y: touch.clientY - cropOffset.y };
-  };
-
-  const handleCropperTouchMove = useCallback((e: TouchEvent) => {
-    if (!isCropperDragging || e.touches.length !== 1) return;
-    const touch = e.touches[0];
-    setCropOffset({
-      x: touch.clientX - cropperDragStart.current.x,
-      y: touch.clientY - cropperDragStart.current.y
-    });
-  }, [isCropperDragging, cropOffset.x, cropOffset.y]);
-
-  const handleCropperTouchEnd = useCallback(() => {
-    setIsCropperDragging(false);
-  }, []);
-
-  // Attach global window event handlers for smooth dragging when mouse/finger leaves the viewport container
-  useEffect(() => {
-    if (isCropperDragging) {
-      window.addEventListener('mousemove', handleCropperMouseMove);
-      window.addEventListener('mouseup', handleCropperMouseUp);
-      window.addEventListener('touchmove', handleCropperTouchMove);
-      window.addEventListener('touchend', handleCropperTouchEnd);
-    }
-    return () => {
-      window.removeEventListener('mousemove', handleCropperMouseMove);
-      window.removeEventListener('mouseup', handleCropperMouseUp);
-      window.removeEventListener('touchmove', handleCropperTouchMove);
-      window.removeEventListener('touchend', handleCropperTouchEnd);
-    };
-  }, [isCropperDragging, handleCropperMouseMove, handleCropperMouseUp, handleCropperTouchMove, handleCropperTouchEnd]);
-
-  const handleCropConfirm = async () => {
-    if (!cropperViewportRef.current || !cropperImgRef.current) return;
-    setUploading(true);
-    try {
-      const rectV = cropperViewportRef.current.getBoundingClientRect();
-      const rectI = cropperImgRef.current.getBoundingClientRect();
-
-      const canvas = document.createElement('canvas');
-      canvas.width = 800;
-      canvas.height = 500; // 16:10 aspect ratio
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Canvas not supported');
-
-      // Fill background as white (in case image is smaller than container)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const canvasScale = 800 / rectV.width;
-      const x = (rectI.left - rectV.left) * canvasScale;
-      const y = (rectI.top - rectV.top) * canvasScale;
-      const w = rectI.width * canvasScale;
-      const h = rectI.height * canvasScale;
-
-      ctx.drawImage(cropperImgRef.current, x, y, w, h);
-
-      // Export to WebP blob
-      const webpBlob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(
-          (blob) => blob ? resolve(blob) : reject(new Error('Cropping failed')),
-          'image/webp',
-          0.8
-        );
-      });
-
-      // Show locally immediately
-      setImagePreview(URL.createObjectURL(webpBlob));
-
-      // Upload to server
-      const fd = new FormData();
-      fd.append('file', new File([webpBlob], 'cropped-product.webp', { type: 'image/webp' }));
-
-      const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Upload failed'); }
-
-      const { url } = await res.json();
-      setFormData(p => ({ ...p, image: url }));
-      setCropImageSrc(null);
-    } catch (err: any) {
-      showToast('Gagal memotong/mengupload gambar: ' + err.message, 'error');
-    } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  // ── Modifier Helpers ──
-  const toggleIce = (level: string) => setModIce(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]);
-  const toggleSugar = (level: string) => setModSugar(prev => prev.includes(level) ? prev.filter(l => l !== level) : [...prev, level]);
-
-  const addAddOn = () => {
-    if (!newAddOnName.trim() || !newAddOnPrice) return;
-    const id = newAddOnName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    setModAddOns(prev => [...prev, { id, name: newAddOnName.trim(), price: Number(newAddOnPrice) }]);
-    setNewAddOnName('');
-    setNewAddOnPrice('');
-  };
-
-  const removeAddOn = (id: string) => setModAddOns(prev => prev.filter(a => a.id !== id));
-
-  // ── Recipe Helpers ──
-  const openRecipeModal = async (product: ProductItem) => {
-    setRecipeProduct(product);
-    setRecipeItems([]);
-    setLoadingRecipe(true);
-    setShowRecipeModal(true);
-    try {
-      const res = await fetch(`/api/admin/products/${product.id}/recipe`);
-      if (res.ok) {
-        const data = await res.json();
-        setRecipeItems(data.map((item: any) => ({
-          ingredientId: item.ingredientId,
-          quantity: item.quantity.toString()
-        })));
-      }
-    } catch (err) {
-      console.error('Error fetching recipe:', err);
-    } finally {
-      setLoadingRecipe(false);
-    }
-  };
-
-  const addRecipeItem = () => setRecipeItems(prev => [...prev, { ingredientId: ingredients[0]?.id || '', quantity: '1' }]);
-  const removeRecipeItem = (index: number) => setRecipeItems(prev => prev.filter((_, i) => i !== index));
-  const updateRecipeItem = (index: number, field: string, value: string) => {
-    setRecipeItems(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: value };
-      return next;
-    });
-  };
-
-  const handleSaveRecipe = async () => {
-    if (!recipeProduct) return;
-    setSavingRecipe(true);
-    try {
-      const res = await fetch(`/api/admin/products/${recipeProduct.id}/recipe`, {
+      const res = await fetch(`/api/admin/products/${product.id}/duplicate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients: recipeItems }),
       });
-      if (!res.ok) throw new Error('Failed to save recipe');
-      setShowRecipeModal(false);
+      if (!res.ok) throw new Error();
+      const newProduct = await res.json();
+      showToast(`Produk "${product.name}" berhasil digandakan!`, 'success');
       router.refresh();
-    } catch (err) {
-      showToast('Gagal menyimpan resep', 'error');
-    } finally {
-      setSavingRecipe(false);
+      // Open form immediately for quick name adjustment
+      setEditingProduct(newProduct);
+      setShowFormModal(true);
+    } catch {
+      showToast('Gagal menduplikasi produk', 'error');
     }
   };
 
-  // ── Save ──
-  const handleSave = async () => {
-    if (!formData.name || !formData.description || !formData.price || !formData.categoryId) { showToast('Harap isi semua kolom wajib', 'error'); return; }
-    setSaving(true);
+  // Toggle Availability
+  const handleToggleAvailability = async (product: ProductItem) => {
+    try {
+      const nextBadge = product.badge === 'sold-out' ? null : 'sold-out';
+      await fetch(`/api/admin/products/${product.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ badge: nextBadge }),
+      });
+      showToast(
+        nextBadge === 'sold-out'
+          ? `Status "${product.name}" diubah ke Habis`
+          : `Status "${product.name}" diubah ke Tersedia`,
+        'success'
+      );
+      router.refresh();
+    } catch {
+      showToast('Gagal memperbarui status ketersediaan', 'error');
+    }
+  };
 
-    const modifiers: ModifiersData = {
-      productType: productType,
-    };
-    if (isBundle) {
-      modifiers.isBundle = true;
-      modifiers.bundleGroups = bundleGroups;
-      modifiers.freeShipping = freeShipping;
-      modifiers.discountType = discountType;
-      modifiers.discountValue = Number(discountValue || 0);
-      modifiers.originalPrice = getRegularTotalPrice();
-    } else {
-      if (productType === 'minuman') {
-        if (showSweetness) {
-          modifiers.iceLevel = modIce.length > 0 ? modIce : ['Normal Ice', 'Less Ice', 'No Ice'];
-          modifiers.sugarLevel = modSugar.length > 0 ? modSugar : ['Less', 'Biasa', 'Lumayan', 'Manis Sekali'];
-        }
-        modifiers.showMatcha = showMatcha;
-        modifiers.defaultMatcha = defaultMatcha;
-        modifiers.showEspressoShot = showEspressoShot;
-        modifiers.showSweetness = showSweetness;
-        modifiers.defaultSugar = defaultSugar;
-        modifiers.defaultIce = defaultIce;
+  // Toggle Archive
+  const handleToggleArchive = async (product: ProductItem) => {
+    try {
+      const isArchived = product.badge === 'archived';
+      await fetch(`/api/admin/products/${product.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ badge: isArchived ? null : 'archived' }),
+      });
+      showToast(
+        isArchived ? `Produk "${product.name}" berhasil dipulihkan` : `Produk "${product.name}" berhasil diarsipkan`,
+        'success'
+      );
+      router.refresh();
+    } catch {
+      showToast('Gagal mengarsipkan produk', 'error');
+    }
+  };
+
+  // Delete Single Product
+  const handleDeleteProduct = async (product: ProductItem) => {
+    if (!confirm(`Hapus produk "${product.name}"?`)) return;
+    try {
+      const res = await fetch(`/api/admin/products/${product.id}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.archived) {
+        showToast('Produk diarsipkan karena memiliki riwayat transaksi.', 'info');
       } else {
-        modifiers.showMatcha = false;
-        modifiers.showEspressoShot = false;
-        modifiers.showSweetness = false;
+        showToast('Produk berhasil dihapus secara permanen.', 'success');
       }
-      if (modAddOns.length > 0) modifiers.addOns = modAddOns;
-      if (modSizes.length > 0) modifiers.sizes = modSizes;
-    }
-
-    if (promoActive) {
-      modifiers.promo = {
-        isActive: true,
-        promoPrice: Number(promoPrice || 0),
-        startDate: promoStartDate ? new Date(promoStartDate).toISOString() : new Date().toISOString(),
-        endDate: promoEndDate ? new Date(promoEndDate).toISOString() : new Date(Date.now() + 86400000).toISOString(),
-      };
-    }
-
-    const hasModifiers = Object.keys(modifiers).length > 0;
-
-    try {
-      const url = editingProduct ? `/api/admin/products/${editingProduct.id}` : '/api/admin/products';
-      const res = await fetch(url, {
-        method: editingProduct ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          price: Number(formData.price),
-          modifiers: hasModifiers ? modifiers : null,
-        }),
-      });
-      if (!res.ok) throw new Error('Failed');
-      closeModal(); router.refresh();
-    } catch { showToast('Gagal menyimpan produk', 'error'); }
-    finally { setSaving(false); }
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleting(true);
-    try {
-      const res = await fetch(`/api/admin/products/${deleteTarget.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed');
-      showToast(`Produk "${deleteTarget.name}" berhasil dihapus`, 'success');
-      setDeleteTarget(null); 
       router.refresh();
-    } catch { 
-      showToast('Gagal menghapus produk', 'error'); 
-    } finally {
-      setDeleting(false);
+    } catch {
+      showToast('Gagal menghapus produk', 'error');
     }
   };
 
-  const getModifierSummary = (modStr: string | null): string => {
-    if (!modStr) return '—';
-    try {
-      const m: ModifiersData = JSON.parse(modStr);
-      const parts: string[] = [];
-      if (m.iceLevel?.length) parts.push(`Ice (${m.iceLevel.length})`);
-      if (m.sugarLevel?.length) parts.push(`Sugar (${m.sugarLevel.length})`);
-      if (m.addOns?.length) parts.push(`${m.addOns.length} add-ons`);
-      return parts.join(', ') || '—';
-    } catch { return '—'; }
+  // Export CSV
+  const handleExportCSV = () => {
+    window.open('/api/admin/products/export', '_blank');
+  };
+
+  // Add Product Flow
+  const handleOpenAddProduct = () => {
+    if (activeTab === 'combos') {
+      setEditingProduct(null);
+      setFormProductType('combo');
+      setShowFormModal(true);
+    } else {
+      setShowTypePicker(true);
+    }
+  };
+
+  const handleSelectTypeFromPicker = (type: 'minuman' | 'makanan' | 'combo') => {
+    setShowTypePicker(false);
+    setEditingProduct(null);
+    setFormProductType(type);
+    setShowFormModal(true);
   };
 
   return (
-    <>
-      {/* Premium Tab Navigation */}
-      <div className="flex gap-2 border-b border-border/30 pb-3 mb-5 overflow-x-auto no-scrollbar">
-        <button
-          onClick={() => { setActiveTab('products'); setSelectedCategory('all'); }}
-          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
-            activeTab === 'products'
-              ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
-              : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
-          }`}
-        >
-          🍔 Semua Produk ({initialProducts.filter(p => !isProductBundle(p)).length})
-        </button>
-        <button
-          onClick={() => { setActiveTab('combos'); setSelectedCategory('all'); }}
-          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
-            activeTab === 'combos'
-              ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
-              : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
-          }`}
-        >
-          📦 Paket Combo & Promo ({initialProducts.filter(p => isProductBundle(p)).length})
-        </button>
-        <button
-          onClick={() => { setActiveTab('toppings'); }}
-          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2.5 text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
-            activeTab === 'toppings'
-              ? 'bg-brand-600 text-white shadow-md shadow-brand-700/10'
-              : 'bg-white hover:bg-muted/30 text-muted-foreground border border-border/20 shadow-sm'
-          }`}
-        >
-          🧁 Master Toppings
-        </button>
-      </div>
+    <div className="space-y-6">
+      {/* ── TOP ACTION HEADER ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold font-heading text-stone-900 flex items-center gap-2.5">
+            <Package className="w-6 h-6 text-orange-500" />
+            Katalog Produk & Varian
+          </h1>
+          <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
+            Kelola menu, kustomisasi rasa, foto WebP 1:1, paket combo, dan resep HPP.
+          </p>
+        </div>
 
-      {/* Toolbar */}
-      {activeTab === 'toppings' ? (
-        <div className="flex flex-col sm:flex-row gap-3 mb-4 justify-between items-center">
-          <div className="flex-1">
-            <h2 className="text-lg font-bold">Manajemen Master Topping</h2>
-            <p className="text-xs text-muted-foreground">Kelola semua topping/add-on yang bisa ditambahkan ke produk.</p>
-          </div>
-          <button onClick={() => openToppingModal()} className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md">
-            <Plus className="w-4 h-4" /> Tambah Topping
+        <div className="flex items-center gap-2.5 self-start md:self-auto">
+          {/* Export CSV Button */}
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="px-4 py-2.5 rounded-2xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all"
+            title="Download CSV Katalog Produk"
+          >
+            <Download className="w-4 h-4 text-stone-500" />
+            Export CSV
+          </button>
+
+          {/* Add Product Button */}
+          <button
+            type="button"
+            onClick={handleOpenAddProduct}
+            className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Menu Baru
           </button>
         </div>
-      ) : (
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-            <input type="text" placeholder={activeTab === 'combos' ? "Cari paket combo / promo..." : "Cari produk..."} value={search} onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]" />
-          </div>
-          <div className="flex gap-2">
-            {activeTab !== 'combos' && (
-              <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)}
-                className="px-3 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                <option value="all">All Categories</option>
-                {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
-              </select>
-            )}
-            <button 
-              onClick={() => setShowArchived(!showArchived)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl transition-all shadow-sm whitespace-nowrap ${
-                showArchived 
-                  ? 'bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200' 
-                  : 'bg-white text-muted-foreground border border-border/40 hover:bg-muted/30'
-              }`}
-            >
-              <Archive className="w-4 h-4" /> 
-              {showArchived ? 'Hide Archived' : 'Show Archived'}
-            </button>
-            <button onClick={() => openModal()}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md shadow-brand-700/15 active:scale-[0.98] whitespace-nowrap">
-              <Plus className="w-4 h-4" /> {activeTab === 'combos' ? 'Tambah Combo' : 'Add'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Action Bar */}
-      {selectedIds.length > 0 && activeTab !== 'toppings' && (
-        <div className="mb-4 flex flex-col md:flex-row items-center justify-between gap-3 p-4 bg-brand-50 border border-brand-200 rounded-2xl animate-in slide-in-from-top-2 duration-300">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-brand-600 animate-pulse" />
-            <span className="text-xs font-bold text-brand-800">{selectedIds.length} produk terpilih</span>
-          </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <button
-              type="button"
-              onClick={() => handleBulkAction('availability', 'available')}
-              disabled={isUpdating}
-              className="px-3 py-1.5 bg-white border border-brand-200 text-brand-700 hover:bg-brand-50 text-[10px] font-bold rounded-lg transition-all shadow-sm"
-            >
-              Set Available
-            </button>
-            <button
-              type="button"
-              onClick={() => handleBulkAction('availability', 'sold-out')}
-              disabled={isUpdating}
-              className="px-3 py-1.5 bg-white border border-brand-200 text-brand-750 hover:bg-brand-50 text-[10px] font-bold rounded-lg transition-all shadow-sm"
-            >
-              Set Sold Out
-            </button>
-            <button
-              type="button"
-              onClick={() => handleBulkAction('availability', 'archived')}
-              disabled={isUpdating}
-              className="px-3 py-1.5 bg-amber-100 border border-amber-200 text-amber-700 hover:bg-amber-200 text-[10px] font-bold rounded-lg transition-all shadow-sm flex items-center gap-1"
-            >
-              <Archive className="w-3 h-3" /> Archive
-            </button>
-            <select
-              onChange={(e) => {
-                if (e.target.value) {
-                  handleBulkAction('category', e.target.value);
-                  e.target.value = '';
-                }
-              }}
-              disabled={isUpdating}
-              className="px-3 py-1.5 bg-white border border-brand-200 text-brand-750 hover:bg-brand-50 text-[10px] font-bold rounded-lg transition-all outline-none shadow-sm cursor-pointer"
-            >
-              <option value="">Pindahkan Kategori...</option>
-              {categories.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <button
-              type="button"
-              onClick={() => handleBulkAction('delete')}
-              disabled={isUpdating}
-              className="px-3 py-1.5 bg-rose-650 hover:bg-rose-700 text-white text-[10px] font-bold rounded-lg transition-all flex items-center gap-1 shadow-sm"
-            >
-              <Trash2 className="w-3 h-3" /> Hapus / Arsip
-            </button>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'toppings' ? (
-        <div className="bg-white border border-border/40 rounded-2xl shadow-sm overflow-hidden mb-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/40 bg-muted/10">
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Nama Topping</th>
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Harga Default</th>
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Bahan Baku (Inventaris)</th>
-                <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Aksi</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/30">
-              {loadingToppings ? (
-                <tr><td colSpan={5} className="py-12 text-center text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Loading...</td></tr>
-              ) : masterToppings.length === 0 ? (
-                <tr><td colSpan={5} className="py-12 text-center text-muted-foreground">Belum ada data Master Topping</td></tr>
-              ) : (
-                masterToppings.map(t => {
-                  const ing = ingredients.find(i => i.id === t.ingredientId);
-                  return (
-                    <tr key={t.id} className="hover:bg-muted/20">
-                      <td className="px-5 py-3 font-semibold text-[13px]">{t.name}</td>
-                      <td className="px-5 py-3">{formatRupiah(t.defaultPrice)}</td>
-                      <td className="px-5 py-3 text-[11px]">
-                        {ing ? (
-                          <span className="flex items-center gap-1"><Archive className="w-3 h-3 text-muted-foreground" /> {ing.name} ({t.ingredientQty} {ing.unit})</span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-5 py-3">
-                        <button onClick={() => toggleToppingStatus(t)} className={`px-2 py-1 rounded text-[10px] font-bold uppercase transition-all ${t.isAvailable ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-rose-100 text-rose-700 hover:bg-rose-200'}`}>
-                          {t.isAvailable ? 'Tersedia' : 'Habis'}
-                        </button>
-                      </td>
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex justify-end gap-1">
-                          <button onClick={() => openToppingModal(t)} className="p-1.5 hover:bg-blue-50 rounded-lg text-muted-foreground hover:text-blue-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
-                          <button onClick={() => handleDeleteTopping(t.id)} className="p-1.5 hover:bg-rose-50 rounded-lg text-muted-foreground hover:text-rose-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <>
-      {/* Desktop Table */}
-      <div className="hidden md:block bg-white border border-border/40 rounded-2xl shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border/40">
-              <th className="w-10 px-5 py-3.5 text-left">
-                <input 
-                  type="checkbox" 
-                  checked={filteredProducts.length > 0 && filteredProducts.map(p => p.id).every(id => selectedIds.includes(id))}
-                  onChange={toggleSelectAll}
-                  className="rounded border-border text-brand-650 focus:ring-brand-500/20 w-4 h-4 cursor-pointer"
-                />
-              </th>
-              <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Product</th>
-              <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
-              <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
-              <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Modifiers</th>
-              <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-              <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">HPP / Recipe</th>
-              <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/30">
-            {filteredProducts.map((product) => {
-              const isSoldOut = product.badge === 'sold-out';
-              const isArchived = product.badge === 'archived';
-              return (
-                <tr key={product.id} className={`group hover:bg-muted/20 transition-colors ${isArchived ? 'opacity-50 grayscale' : ''}`}>
-                  <td className="w-10 px-5 py-3">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedIds.includes(product.id)}
-                      onChange={() => toggleSelect(product.id)}
-                      className="rounded border-border text-brand-650 focus:ring-brand-500/20 w-4 h-4 cursor-pointer"
-                    />
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-muted/50 overflow-hidden flex-shrink-0 border border-border/20">
-                        {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                          : <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-4 h-4 text-muted-foreground/30" /></div>}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-foreground text-[13px] truncate">{product.name}</p>
-                        <p className="text-[11px] text-muted-foreground truncate max-w-[180px]">{product.description}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-brand-50 text-brand-700">{product.category.name}</span>
-                  </td>
-                  <td className="px-5 py-3 font-semibold text-[13px]">{formatRupiah(product.price)}</td>
-                  <td className="px-5 py-3 text-[11px] text-muted-foreground">{getModifierSummary(product.modifiers)}</td>
-                  <td className="px-5 py-3">
-                    <button onClick={() => toggleAvailability(product.id, product.badge)} disabled={isUpdating}
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all
-                        ${isSoldOut ? 'bg-rose-50 text-rose-600 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}>
-                      {isSoldOut ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
-                      {isSoldOut ? 'Sold Out' : 'Available'}
-                    </button>
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <button onClick={() => openRecipeModal(product)} className="text-[10px] font-bold text-brand-600 hover:underline flex items-center gap-1 justify-end">
-                      <History className="w-3 h-3" /> Recipe
-                    </button>
-                  </td>
-                  <td className="px-5 py-3 text-right">
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => toggleArchive(product.id, product.badge)} 
-                        disabled={isUpdating}
-                        className={`p-1.5 rounded-lg transition-colors ${
-                          product.badge === 'archived'
-                            ? 'hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600'
-                            : 'hover:bg-amber-50 text-muted-foreground hover:text-amber-600'
-                        }`}
-                        title={product.badge === 'archived' ? 'Restore' : 'Archive'}
-                      >
-                        {product.badge === 'archived' ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                      </button>
-                      <button onClick={() => openModal(product)} className="p-1.5 hover:bg-blue-50 rounded-lg text-muted-foreground hover:text-blue-600 transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => setDeleteTarget(product)} className="p-1.5 hover:bg-rose-50 rounded-lg text-muted-foreground hover:text-rose-600 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {filteredProducts.length === 0 && (
-          <div className="py-12 text-center text-muted-foreground/50">
-            <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">No products found</p>
-          </div>
-        )}
       </div>
 
-      {/* Mobile Cards */}
-      <div className="md:hidden space-y-3">
-        {filteredProducts.length === 0 ? (
-          <div className="py-12 text-center text-muted-foreground/50 bg-white rounded-2xl border border-border/40">
-            <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-30" /><p className="text-sm">No products found</p>
-          </div>
-        ) : filteredProducts.map((product) => {
-          const isSoldOut = product.badge === 'sold-out';
-          const isArchived = product.badge === 'archived';
-          return (
-            <div key={product.id} className={`bg-white rounded-2xl border border-border/40 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)] relative ${isArchived ? 'opacity-50 grayscale' : ''}`}>
-              <div className="absolute top-4 right-4 z-10">
-                <input 
-                  type="checkbox" 
-                  checked={selectedIds.includes(product.id)}
-                  onChange={() => toggleSelect(product.id)}
-                  className="rounded border-border text-brand-650 focus:ring-brand-500/20 w-4 h-4 cursor-pointer"
-                />
-              </div>
-              <div className="flex items-start gap-3 pr-6">
-                <div className="w-14 h-14 rounded-xl bg-muted/50 overflow-hidden flex-shrink-0 border border-border/20">
-                  {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                    : <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-5 h-5 text-muted-foreground/30" /></div>}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground text-[13px]">{product.name}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{product.description}</p>
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                    <span className="font-bold text-sm">{formatRupiah(product.price)}</span>
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-brand-50 text-brand-700">{product.category.name}</span>
-                    {(() => {
-                      try {
-                        const m = product.modifiers ? JSON.parse(product.modifiers) : {};
-                        const type = m.productType || (m.showMatcha || m.showSweetness || m.showEspressoShot || (m.iceLevel && m.iceLevel.length > 0) ? 'minuman' : 'makanan');
-                        return (
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${type === 'minuman' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {type === 'minuman' ? '🥤 Minuman' : '🍱 Makanan'}
-                          </span>
-                        );
-                      } catch {
-                        return null;
-                      }
-                    })()}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1">{getModifierSummary(product.modifiers)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border/30">
-                <button onClick={() => toggleAvailability(product.id, product.badge)} disabled={isUpdating}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-bold uppercase transition-all
-                    ${isSoldOut ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                  {isSoldOut ? <PowerOff className="w-3 h-3" /> : <Power className="w-3 h-3" />}
-                  {isSoldOut ? 'Sold Out' : 'Available'}
-                </button>
-                <button 
-                  onClick={() => toggleArchive(product.id, product.badge)} 
-                  disabled={isUpdating}
-                  className={`p-2 rounded-lg transition-colors ${
-                    product.badge === 'archived'
-                      ? 'hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600'
-                      : 'hover:bg-amber-50 text-muted-foreground hover:text-amber-600'
-                  }`}
-                  title={product.badge === 'archived' ? 'Restore' : 'Archive'}
-                >
-                  {product.badge === 'archived' ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-                </button>
-                <button onClick={() => openModal(product)} className="p-2 hover:bg-blue-50 rounded-lg text-muted-foreground hover:text-blue-600 transition-colors"><Edit2 className="w-4 h-4" /></button>
-                <button onClick={() => setDeleteTarget(product)} className="p-2 hover:bg-rose-50 rounded-lg text-muted-foreground hover:text-rose-600 transition-colors"><Trash2 className="w-4 h-4" /></button>
-              </div>
-            </div>
-          );
-        })}
+      {/* ── STATS OVERVIEW CARDS ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm text-left">
+          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Total Menu Aktif</p>
+          <p className="text-lg font-extrabold text-stone-900 mt-1">{stats.total} Produk</p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm text-left">
+          <p className="text-[10px] font-bold text-rose-500 uppercase tracking-wider flex items-center gap-1">
+            <Flame className="w-3 h-3" /> Sedang Flash Sale
+          </p>
+          <p className="text-lg font-extrabold text-rose-600 mt-1">{stats.promo} Menu</p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm text-left">
+          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> Belum Ada Resep
+          </p>
+          <p className="text-lg font-extrabold text-amber-700 mt-1">{stats.noRecipe} Menu</p>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-stone-200/80 shadow-sm text-left">
+          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Habis (Sold Out)</p>
+          <p className="text-lg font-extrabold text-stone-600 mt-1">{stats.soldOut} Menu</p>
+        </div>
       </div>
-      </>
+
+      {/* ── MAIN NAVIGATION TABS ── */}
+      <div className="flex border-b border-stone-200 gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('products');
+            setSelectedIds([]);
+          }}
+          className={`py-3 px-5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
+            activeTab === 'products'
+              ? 'border-orange-500 text-orange-600 font-extrabold'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <Package className="w-4 h-4" />
+          Semua Produk Menu
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('combos');
+            setSelectedIds([]);
+          }}
+          className={`py-3 px-5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
+            activeTab === 'combos'
+              ? 'border-orange-500 text-orange-600 font-extrabold'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          Paket Bundling / Combo
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('toppings');
+            setSelectedIds([]);
+          }}
+          className={`py-3 px-5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all ${
+            activeTab === 'toppings'
+              ? 'border-orange-500 text-orange-600 font-extrabold'
+              : 'border-transparent text-stone-500 hover:text-stone-800'
+          }`}
+        >
+          <CandyCane className="w-4 h-4" />
+          Master Topping & Add-On
+        </button>
+      </div>
+
+      {/* ── TAB CONTENT: MASTER TOPPINGS ── */}
+      {activeTab === 'toppings' && (
+        <MasterToppingsTab
+          toppings={masterToppings}
+          ingredients={ingredients}
+          loading={loadingToppings}
+          onRefresh={fetchToppings}
+        />
       )}
 
-      {/* ═══════ Step 1: Modal Pilih Tipe Produk (Minuman vs Makanan) ═══════ */}
-      {showTypePickerModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setShowTypePickerModal(false)}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-border/40 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-border/30 bg-gradient-to-r from-emerald-50/50 via-white to-amber-50/50">
-              <div>
-                <h3 className="text-lg font-bold font-heading text-foreground">Pilih Tipe Produk</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Tentukan tipe produk sebelum masuk ke form detail</p>
-              </div>
-              <button onClick={() => setShowTypePickerModal(false)} className="p-2 hover:bg-muted/80 rounded-xl transition-colors">
-                <X className="w-5 h-5 text-muted-foreground" />
-              </button>
-            </div>
-
-            {/* Content Cards */}
-            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Option 1: Minuman */}
-              <button
-                type="button"
-                onClick={() => handleSelectType('minuman')}
-                className="group relative flex flex-col items-start p-5 rounded-2xl border-2 border-emerald-200 bg-gradient-to-b from-emerald-50/60 to-emerald-100/30 hover:border-emerald-500 hover:from-emerald-50 hover:to-emerald-100/80 hover:shadow-lg hover:shadow-emerald-900/5 transition-all text-left active:scale-[0.98]"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 mb-3 group-hover:scale-110 transition-transform">
-                  <CupSoda className="w-6 h-6" />
-                </div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="font-bold text-base text-emerald-950">Minuman</span>
-                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-800">Drink</span>
-                </div>
-                <p className="text-xs text-emerald-900/70 leading-relaxed">
-                  Kopi, matcha, boba, jus, teh, dll. Mengaktifkan opsi Level Es, Gula, Size, Matcha & Espresso.
-                </p>
-                <div className="mt-4 flex items-center text-xs font-bold text-emerald-700 group-hover:translate-x-1 transition-transform">
-                  Pilih Minuman &rarr;
-                </div>
-              </button>
-
-              {/* Option 2: Makanan */}
-              <button
-                type="button"
-                onClick={() => handleSelectType('makanan')}
-                className="group relative flex flex-col items-start p-5 rounded-2xl border-2 border-amber-200 bg-gradient-to-b from-amber-50/60 to-amber-100/30 hover:border-amber-500 hover:from-amber-50 hover:to-amber-100/80 hover:shadow-lg hover:shadow-amber-900/5 transition-all text-left active:scale-[0.98]"
-              >
-                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 mb-3 group-hover:scale-110 transition-transform">
-                  <Utensils className="w-6 h-6" />
-                </div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <span className="font-bold text-base text-amber-950">Makanan</span>
-                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-amber-200 text-amber-800">Food</span>
-                </div>
-                <p className="text-xs text-amber-900/70 leading-relaxed">
-                  Makanan berat, snack, kue, & pastry. Menonaktifkan kustomisasi es & gula khas minuman.
-                </p>
-                <div className="mt-4 flex items-center text-xs font-bold text-amber-700 group-hover:translate-x-1 transition-transform">
-                  Pilih Makanan &rarr;
-                </div>
-              </button>
-            </div>
-
-            <div className="px-6 py-3.5 bg-muted/20 border-t border-border/30 text-center">
-              <p className="text-[11px] text-muted-foreground">Tipe produk dapat diubah kapan saja di dalam form detail produk</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════ Add/Edit Modal ═══════ */}
-      {showModal && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={closeModal}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 sticky top-0 bg-white z-10">
-              <h3 className="text-base font-bold font-heading">
-                {editingProduct 
-                  ? (isBundle ? 'Edit Paket Combo / Bundle' : 'Edit Product') 
-                  : (activeTab === 'combos' ? 'Tambah Paket Combo / Bundle' : 'New Product')
-                }
-              </h3>
-              <button onClick={closeModal} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></button>
-            </div>
-
-            <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
-              {/* ── Product Type Toggle in Form ── */}
-              {!isBundle && (
-                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-slate-50 to-gray-50 border border-border/40 shadow-sm">
-                  <div>
-                    <span className="text-xs font-bold text-foreground block">Tipe Produk</span>
-                    <span className="text-[10px] text-muted-foreground">Pilih tipe produk untuk menyesuaikan form kustomisasi</span>
-                  </div>
-                  <div className="flex items-center p-1 bg-white border border-border/40 rounded-xl gap-1 shadow-inner">
-                    <button
-                      type="button"
-                      onClick={() => handleSelectTypeInForm('minuman')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        productType === 'minuman'
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <CupSoda className="w-3.5 h-3.5" /> Minuman
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectTypeInForm('makanan')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                        productType === 'makanan'
-                          ? 'bg-amber-600 text-white shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      <Utensils className="w-3.5 h-3.5" /> Makanan
-                    </button>
-                  </div>
-                </div>
-              )}
-              {/* ── Image Upload ── */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">Product Image</label>
-                {imagePreview || formData.image ? (
-                  <div className="relative group">
-                    <img src={imagePreview || formData.image} alt="Preview" className="w-full aspect-[16/10] object-cover rounded-xl border border-border/30" />
-                    <div className="absolute inset-0 bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                      <button type="button" onClick={() => fileInputRef.current?.click()}
-                        className="px-3 py-2 bg-white rounded-lg text-xs font-semibold hover:bg-white/90 transition-colors">
-                        Change
-                      </button>
-                      <button type="button" onClick={() => { setImagePreview(null); setFormData(p => ({ ...p, image: '' })); }}
-                        className="px-3 py-2 bg-rose-500 text-white rounded-lg text-xs font-semibold hover:bg-rose-600 transition-colors">
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button type="button" onClick={() => fileInputRef.current?.click()}
-                    className="w-full aspect-[16/10] rounded-xl border-2 border-dashed border-border/50 hover:border-brand-400 bg-muted/20 hover:bg-brand-50/30 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer">
-                    {uploading ? (
-                      <><Loader2 className="w-6 h-6 text-brand-500 animate-spin" /><span className="text-xs text-muted-foreground">Compressing & uploading...</span></>
-                    ) : (
-                      <><Upload className="w-6 h-6 text-muted-foreground/40" /><span className="text-xs text-muted-foreground">Click to upload — Auto WebP</span></>
-                    )}
-                  </button>
-                )}
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageSelect} className="hidden" />
-                <p className="text-[10px] text-muted-foreground mt-1.5">Images are auto-compressed to WebP (max 800px, 80% quality)</p>
-              </div>
-
-              {/* ── Basic Info ── */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Product Name *</label>
-                <input value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Description *</label>
-                <textarea value={formData.description} onChange={e => setFormData(p => ({ ...p, description: e.target.value }))} rows={2}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all resize-none" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Price (Rp) *</label>
-                  <input type="number" value={formData.price} onChange={e => setFormData(p => ({ ...p, price: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Category *</label>
-                  <select value={formData.categoryId} onChange={e => setFormData(p => ({ ...p, categoryId: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all">
-                    {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
-                  </select>
-                </div>
-              </div>
-
-              {/* ── Promo & Countdown (Flash Sale) ── */}
-              <div className="pt-4 border-t border-border/30">
-                <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-200 bg-amber-50/20 mb-4">
-                  <div>
-                    <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
-                      🔥 Promo & Countdown (Flash Sale)
-                    </h4>
-                    <p className="text-[10px] text-amber-700/80 mt-0.5">Aktifkan promo dengan batas waktu dan hitung mundur ala e-commerce.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setPromoActive(!promoActive)}
-                    className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${promoActive ? 'bg-amber-500' : 'bg-gray-200'}`}
-                  >
-                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${promoActive ? 'left-[18px]' : 'left-0.5'}`} />
-                  </button>
-                </div>
-
-                {promoActive && (
-                  <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/10 space-y-4 mb-4">
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">Harga Promo (Rp) *</label>
-                        <input
-                          type="number"
-                          value={promoPrice}
-                          onChange={(e) => setPromoPrice(e.target.value)}
-                          placeholder="e.g. 7000"
-                          className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">Waktu Mulai *</label>
-                        <input
-                          type="datetime-local"
-                          value={promoStartDate}
-                          onChange={(e) => setPromoStartDate(e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-muted-foreground"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-bold text-amber-800 uppercase tracking-wider block mb-1">Waktu Selesai *</label>
-                        <input
-                          type="datetime-local"
-                          value={promoEndDate}
-                          onChange={(e) => setPromoEndDate(e.target.value)}
-                          className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-muted-foreground"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Combo / Bundle Toggle ── */}
-              <div className="pt-4 border-t border-border/30">
-                <div className="flex items-center justify-between p-3.5 rounded-xl border border-border/30 bg-muted/10 mb-4">
-                  <div>
-                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                      📦 Produk Combo / Bundle?
-                    </h4>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Tipe produk ini terdiri dari pilihan produk-produk lain (e.g. 3 Roti Discount 15%)</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsBundle(!isBundle)}
-                    className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${isBundle ? 'bg-brand-600' : 'bg-gray-200'}`}
-                  >
-                    <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${isBundle ? 'left-[18px]' : 'left-0.5'}`} />
-                  </button>
-                </div>
-              </div>
-
-              {isBundle ? (
-                /* ── Bundle Configurator ── */
-                <div className="space-y-4">
-                  {/* 💰 Premium Ringkasan Harga & Diskon Combo */}
-                  <div className="p-4 rounded-2xl border border-brand-100 bg-brand-50/30 space-y-3">
-                    <h5 className="text-[11px] font-bold text-brand-800 uppercase tracking-wider flex items-center gap-1.5">
-                      💰 Kalkulator Diskon & Harga Combo
-                    </h5>
-                    
-                    <div className="grid grid-cols-2 gap-3 text-xs bg-white p-3 rounded-xl border border-border/20 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                      <div>
-                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Total Harga Asli</p>
-                        <p className="text-base font-extrabold text-foreground mt-0.5">
-                          {formatRupiah(getRegularTotalPrice())}
-                        </p>
-                        <p className="text-[9px] text-muted-foreground/80 mt-1 leading-normal">Sum harga menu pertama di setiap kelompok pilihan</p>
-                      </div>
-                      <div className="border-l border-border/30 pl-3">
-                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Harga Paket Sekarang</p>
-                        <p className="text-base font-extrabold text-brand-600 mt-0.5">
-                          {formatRupiah(Number(formData.price || 0))}
-                        </p>
-                        {getRegularTotalPrice() > Number(formData.price || 0) && (
-                          <p className="text-[9px] font-bold text-emerald-600 mt-1 flex items-center gap-0.5">
-                            🎉 Hemat {formatRupiah(getRegularTotalPrice() - Number(formData.price || 0))} ({Math.round(((getRegularTotalPrice() - Number(formData.price || 0)) / getRegularTotalPrice()) * 100)}%)
-                          </p>
-                        )}
-                        {getRegularTotalPrice() === 0 && (
-                          <p className="text-[9px] font-bold text-amber-600 mt-1">
-                            ⚠️ Tambahkan menu pilihan di kelompok pilihan (groups) di bawah agar harga terhitung otomatis.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Tipe input diskon */}
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-bold text-brand-700 uppercase tracking-wider block">Metode Penentuan Harga Paket</label>
-                      <div className="grid grid-cols-3 gap-1.5 bg-muted/20 p-1 rounded-xl border border-border/10">
-                        <button
-                          type="button"
-                          onClick={() => handleDiscountTypeChange('fixed')}
-                          className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                            discountType === 'fixed'
-                              ? 'bg-white text-brand-700 shadow-sm border border-border/10'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          Manual (Input Harga)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDiscountTypeChange('nominal')}
-                          className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                            discountType === 'nominal'
-                              ? 'bg-white text-brand-700 shadow-sm border border-border/10'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          Potongan Nominal (Rp)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDiscountTypeChange('percent')}
-                          className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                            discountType === 'percent'
-                              ? 'bg-white text-brand-700 shadow-sm border border-border/10'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          Persentase (%)
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Input Nilai Diskon */}
-                    {discountType !== 'fixed' && (
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-brand-700 uppercase tracking-wider block">
-                          {discountType === 'percent' ? 'Masukkan Persen Diskon (%)' : 'Masukkan Nominal Potongan (Rp)'}
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="number"
-                            value={discountValue}
-                            onChange={(e) => handleDiscountValueChange(e.target.value)}
-                            placeholder={discountType === 'percent' ? 'e.g. 15' : 'e.g. 5000'}
-                            className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                          />
-                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-muted-foreground">
-                            {discountType === 'percent' ? '%' : 'Rp'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 🚚 Gratis Ongkir Toggle */}
-                    <div className="pt-3 border-t border-border/20 flex items-center justify-between">
-                      <div>
-                        <p className="text-[10px] font-bold text-brand-700 uppercase tracking-wider flex items-center gap-1">
-                          🚚 Gratis Ongkir untuk Paket Ini?
-                        </p>
-                        <p className="text-[9px] text-muted-foreground leading-normal mt-0.5">
-                          Pelanggan mendapat gratis ongkir otomatis jika membeli paket combo ini
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setFreeShipping(!freeShipping)}
-                        className={`w-9 h-5 rounded-full transition-colors relative shrink-0 ${freeShipping ? 'bg-emerald-500' : 'bg-gray-200'}`}
-                      >
-                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all ${freeShipping ? 'left-[18px]' : 'left-0.5'}`} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center pt-2">
-                    <h4 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
-                      🛠️ Pengaturan Kelompok Pilihan (Groups)
-                    </h4>
-                    <button type="button" onClick={addBundleGroup}
-                      className="px-3 py-1.5 rounded-lg bg-brand-50 text-brand-700 hover:bg-brand-100 text-[10px] font-bold transition-all">
-                      + Tambah Group
-                    </button>
-                  </div>
-
-                  {bundleGroups.length === 0 ? (
-                    <p className="text-xs text-muted-foreground italic text-center py-4 bg-muted/15 rounded-xl border border-dashed border-border/30">Belum ada kelompok pilihan. Klik "+ Tambah Group" di atas.</p>
-                  ) : (
-                    <div className="space-y-3.5">
-                      {bundleGroups.map((group) => (
-                        <div key={group.id} className="p-4 rounded-xl border border-border/40 bg-muted/5 relative">
-                          <div className="flex justify-between items-center gap-2 mb-3">
-                            <input
-                              type="text"
-                              value={group.name}
-                              onChange={(e) => updateGroupName(group.id, e.target.value)}
-                              placeholder="Nama Group (e.g., Food 1)"
-                              className="font-bold text-xs text-foreground bg-transparent border-b border-border/40 focus:border-brand-500 focus:outline-none flex-1 pb-0.5"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeBundleGroup(group.id)}
-                              className="p-1 hover:bg-rose-50 text-rose-500 rounded-lg transition-colors"
-                              title="Hapus Group"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                           {/* Options in group (Visual with Thumbnail Images) */}
-                           <div className="space-y-1.5 mb-3">
-                             {group.options.map((opt: any) => {
-                               const optProd = initialProducts.find(p => p.id === opt.productId);
-                               return (
-                                 <div key={opt.productId} className="flex items-center justify-between p-2 rounded-xl bg-white border border-border/20 shadow-[0_1px_2px_rgba(0,0,0,0.02)] text-xs gap-3">
-                                   <div className="flex items-center gap-2.5 min-w-0">
-                                     <div className="w-8 h-8 rounded-lg bg-muted/50 overflow-hidden flex-shrink-0 border border-border/10">
-                                       {optProd?.image ? (
-                                         <img src={optProd.image} alt={opt.name} className="w-full h-full object-cover" />
-                                       ) : (
-                                         <div className="w-full h-full flex items-center justify-center bg-brand-50"><ImageIcon className="w-3.5 h-3.5 text-brand-300" /></div>
-                                       )}
-                                     </div>
-                                     <span className="font-semibold text-foreground truncate">{opt.name}</span>
-                                   </div>
-                                   <div className="flex items-center gap-2 shrink-0">
-                                     <span className="text-[10px] font-medium text-muted-foreground">Harga Extra:</span>
-                                     <div className="relative">
-                                       <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-bold text-muted-foreground">Rp</span>
-                                       <input
-                                         type="number"
-                                         value={opt.priceAdjustment || 0}
-                                         onChange={(e) => updateOptionPrice(group.id, opt.productId, Number(e.target.value))}
-                                         className="w-16 pl-5 pr-1.5 py-0.5 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-right font-semibold text-[11px]"
-                                       />
-                                     </div>
-                                     <button
-                                       type="button"
-                                       onClick={() => removeOptionFromGroup(group.id, opt.productId)}
-                                       className="p-1 text-muted-foreground hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"
-                                     >
-                                       <CircleMinus className="w-4 h-4" />
-                                     </button>
-                                   </div>
-                                 </div>
-                               );
-                             })}
-                           </div>
-
-                           {/* Add option row (Visual Product Picker Modal Trigger & Quick select combo) */}
-                           <div className="flex flex-col sm:flex-row gap-2">
-                             <button
-                               type="button"
-                               onClick={() => {
-                                 setActiveGroupIdForPicker(group.id);
-                                 setPickerSearch('');
-                                 setPickerCategory('all');
-                               }}
-                               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-bold text-brand-700 bg-brand-50 hover:bg-brand-100 rounded-xl border border-brand-200/30 transition-all active:scale-[0.98]"
-                             >
-                               <Plus className="w-3.5 h-3.5" /> Pilih Makan / Minum (Visual)
-                             </button>
-                             <span className="text-[10px] text-muted-foreground self-center">atau</span>
-                             <select
-                               defaultValue=""
-                               onChange={(e) => {
-                                 if (e.target.value) {
-                                   addOptionToGroup(group.id, e.target.value);
-                                   e.target.value = ""; // Reset
-                                 }
-                               }}
-                               className="flex-1 max-w-[200px] px-2.5 py-2 text-[10px] font-semibold bg-white border border-border/30 rounded-xl focus:outline-none"
-                             >
-                               <option value="" disabled>Cepat Tambah...</option>
-                               {initialProducts
-                                 .filter(p => p.id !== editingProduct?.id) // Prevent self-referencing
-                                 .map(p => (
-                                   <option key={p.id} value={p.id}>{p.name} ({formatRupiah(p.price)})</option>
-                                 ))
-                               }
-                             </select>
-                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* ── Standard Modifiers ── */
-                <div className="space-y-4">
-                  <h4 className="text-xs font-bold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <Snowflake className="w-3.5 h-3.5 text-brand-600" /> Product Modifiers ({productType === 'minuman' ? 'Minuman' : 'Makanan'})
-                  </h4>
-                  <p className="text-[10px] text-muted-foreground mb-3">Kelola add-on tambahan dan kustomisasi produk di bawah ini</p>
-
-                  {productType === 'makanan' && (
-                    <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/40 text-amber-900 text-xs shadow-sm">
-                      <div className="flex items-center gap-2 font-bold mb-1 text-amber-950">
-                        <Utensils className="w-4 h-4 text-amber-600" />
-                        <span>Mode Produk Makanan Active</span>
-                      </div>
-                      <p className="text-[11px] text-amber-900/80 leading-relaxed">
-                        Kustomisasi khas minuman (Kadar Es, Kadar Gula, Kepekatan Matcha, & Espresso Shot) dinonaktifkan secara otomatis. Anda tetap dapat menentukan Pilihan Ukuran Porsi & Add-ons Makanan di bawah ini.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Sizes (Ukuran Porsi / Gelas & Harga Tambahan) */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
-                        {productType === 'minuman' ? '🥤 Ukuran Gelas & Harga Tambahan' : '🍱 Ukuran Porsi & Harga Tambahan'}
-                      </label>
-                      <div className="flex gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!modSizes.some(s => s.name.toLowerCase() === 'big size')) {
-                              setModSizes(prev => [...prev, { name: 'Big Size', price: 3000 }]);
-                            }
-                          }}
-                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-brand-50 text-brand-700 hover:bg-brand-100 border border-brand-200/50 transition-all"
-                        >
-                          + Big Size (+Rp 3.000)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!modSizes.some(s => s.name.toLowerCase() === 'large')) {
-                              setModSizes(prev => [...prev, { name: 'Large', price: 5000 }]);
-                            }
-                          }}
-                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition-all"
-                        >
-                          + Large (+Rp 5.000)
-                        </button>
-                      </div>
-                    </div>
-                    {modSizes.length > 0 && (
-                      <div className="space-y-1.5 mb-2">
-                        {modSizes.map((sz, idx) => (
-                          <div key={idx} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/20 border border-border/30">
-                            <span className="text-xs font-medium text-foreground">{sz.name}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-brand-600 font-medium">{sz.price > 0 ? `+${formatRupiah(sz.price)}` : 'Standard / Free'}</span>
-                              <button type="button" onClick={() => removeSizeOption(idx)}
-                                className="p-0.5 hover:bg-rose-50 rounded text-muted-foreground hover:text-rose-500 transition-colors">
-                                <CircleMinus className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      <input value={newSizeName} onChange={e => setNewSizeName(e.target.value)} placeholder={productType === 'minuman' ? "Nama Ukuran (misal: Big Size)" : "Nama Porsi (misal: Jumbo / Extra)"}
-                        onKeyDown={e => e.key === 'Enter' && addSizeOption()}
-                        className="flex-1 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                      <input type="number" value={newSizePrice} onChange={e => setNewSizePrice(e.target.value)} placeholder="+Harga (misal: 3000)"
-                        onKeyDown={e => e.key === 'Enter' && addSizeOption()}
-                        className="w-32 px-3 py-2 text-xs bg-muted/30 border border-border/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                      <button type="button" onClick={addSizeOption}
-                        className="p-2 rounded-lg bg-brand-50 text-brand-600 hover:bg-brand-100 transition-colors">
-                        <CirclePlus className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Master Toppings Checklist */}
-                  <div>
-                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">🧁 Toppings / Add-Ons</label>
-                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {masterToppings.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic p-4 bg-muted/20 rounded-xl border border-dashed border-border/40 text-center">Belum ada Master Topping. Silakan tambahkan di Tab Toppings.</p>
-                      ) : (
-                        masterToppings.filter(t => t.isAvailable).map(topping => {
-                          const isSelected = modAddOns.some(a => a.id === topping.id);
-                          const currentAddOn = modAddOns.find(a => a.id === topping.id);
-                          return (
-                            <div key={topping.id} className={`flex flex-col sm:flex-row sm:items-center gap-2 p-3 rounded-xl border ${isSelected ? 'border-brand-500 bg-brand-50/30 shadow-sm' : 'border-border/40 bg-white hover:border-brand-300'} transition-all`}>
-                              <label className="flex items-center gap-3 flex-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      setModAddOns(prev => [...prev, {
-                                        id: topping.id,
-                                        name: topping.name,
-                                        price: topping.defaultPrice,
-                                        ingredientId: topping.ingredientId || undefined,
-                                        ingredientQty: topping.ingredientQty || undefined
-                                      }]);
-                                    } else {
-                                      setModAddOns(prev => prev.filter(a => a.id !== topping.id));
-                                    }
-                                  }}
-                                  className="w-4 h-4 rounded border-border text-brand-600 focus:ring-brand-500/20"
-                                />
-                                <div>
-                                  <p className="text-sm font-semibold text-foreground">{topping.name}</p>
-                                  <p className="text-[10px] text-muted-foreground">Default: {formatRupiah(topping.defaultPrice)}</p>
-                                </div>
-                              </label>
-                              {isSelected && (
-                                <div className="flex items-center gap-2 pl-7 sm:pl-0 border-t sm:border-t-0 sm:border-l border-border/30 pt-2 sm:pt-0 sm:pl-3 mt-1 sm:mt-0">
-                                  <span className="text-[10px] font-bold text-muted-foreground">Custom Price:</span>
-                                  <div className="relative">
-                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-muted-foreground">Rp</span>
-                                    <input
-                                      type="number"
-                                      value={currentAddOn?.price ?? topping.defaultPrice}
-                                      onChange={(e) => {
-                                        const newPrice = Number(e.target.value);
-                                        setModAddOns(prev => prev.map(a => a.id === topping.id ? { ...a, price: newPrice } : a));
-                                      }}
-                                      className="w-24 pl-7 pr-2 py-1.5 text-xs bg-white border border-border/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-semibold"
-                                    />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  {/* ── Drink Specific Customizers (Only for Minuman) ── */}
-                  {productType === 'minuman' && (
-                    <>
-                      {/* ── Espresso Shot Customizer Toggle ── */}
-                      <div className="pt-4 border-t border-border/30">
-                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-800/20 bg-amber-950/5 mb-3">
-                          <div>
-                            <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider flex items-center gap-2">
-                              ☕ Kustomisasi Espresso Shot
-                            </h4>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan pilihan Espresso Shot (Single, Double, Triple) untuk produk ini</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowEspressoShot(!showEspressoShot)}
-                            className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showEspressoShot ? 'bg-amber-800' : 'bg-gray-200'}`}
-                          >
-                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showEspressoShot ? 'left-[18px]' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* ── Matcha Customizer Toggle ── */}
-                      <div className="pt-4 border-t border-border/30">
-                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-brand-100 bg-brand-50/20 mb-3">
-                          <div>
-                            <h4 className="text-xs font-bold text-brand-800 uppercase tracking-wider flex items-center gap-2">
-                              🍵 Kustomisasi Kepekatan Matcha
-                            </h4>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kepekatan matcha untuk produk ini</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowMatcha(!showMatcha)}
-                            className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showMatcha ? 'bg-[#2E5A44]' : 'bg-gray-200'}`}
-                          >
-                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showMatcha ? 'left-[18px]' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-                        {showMatcha && (
-                          <div className="px-1 pb-1 space-y-2">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Default Kepekatan Matcha (1–10)</label>
-                            <div className="flex items-center gap-3">
-                              <input
-                                type="range" min="1" max="10"
-                                value={defaultMatcha}
-                                onChange={(e) => setDefaultMatcha(parseInt(e.target.value))}
-                                className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-emerald-100 to-emerald-900"
-                              />
-                              <span className="text-sm font-black text-[#2E5A44] w-6 text-center">{defaultMatcha}</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* ── Sweetness & Ice Toggle ── */}
-                      <div className="pt-4 border-t border-border/30">
-                        <div className="flex items-center justify-between p-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5 mb-3">
-                          <div>
-                            <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider flex items-center gap-2">
-                              🍯 Kustomisasi Kemanisan & Es
-                            </h4>
-                            <p className="text-[10px] text-muted-foreground mt-0.5">Tampilkan slider kemanisan dan pilihan es untuk produk ini</p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setShowSweetness(!showSweetness)}
-                            className={`w-10 h-6 rounded-full transition-colors relative shrink-0 ${showSweetness ? 'bg-amber-500' : 'bg-gray-200'}`}
-                          >
-                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm transition-all ${showSweetness ? 'left-[18px]' : 'left-0.5'}`} />
-                          </button>
-                        </div>
-                        {showSweetness && (
-                          <div className="grid grid-cols-2 gap-3 bg-muted/10 p-3 rounded-xl border border-border/20">
-                            <div>
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Kemanisan</label>
-                              <select
-                                value={defaultSugar}
-                                onChange={(e) => setDefaultSugar(e.target.value)}
-                                className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
-                              >
-                                <option value="Less">Less</option>
-                                <option value="Biasa">Biasa</option>
-                                <option value="Lumayan">Lumayan</option>
-                                <option value="Manis Sekali">Manis Sekali</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">Default Es</label>
-                              <select
-                                value={defaultIce}
-                                onChange={(e) => setDefaultIce(e.target.value)}
-                                className="w-full px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none"
-                              >
-                                <option value="Normal Ice">Normal Ice</option>
-                                <option value="Less Ice">Less Ice</option>
-                                <option value="No Ice">No Ice</option>
-                              </select>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10 sticky bottom-0">
-              <button onClick={closeModal} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
-              <button onClick={handleSave} disabled={saving || uploading}
-                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-700/15">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════ Delete Confirm ═══════ */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => !deleting && setDeleteTarget(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center" onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center mx-auto mb-4">
-              <Trash2 className="w-5 h-5 text-rose-500" />
-            </div>
-            <h3 className="text-base font-bold mb-1">Delete Product?</h3>
-            <p className="text-sm text-muted-foreground mb-5"><strong>{deleteTarget.name}</strong> will be permanently removed.</p>
-            <div className="flex gap-2">
-              <button 
-                onClick={() => setDeleteTarget(null)} 
-                disabled={deleting}
-                className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={handleDelete} 
-                disabled={deleting}
-                className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {deleting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Deleting...
-                  </>
-                ) : (
-                  'Delete'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════ Recipe Modal ═══════ */}
-      {showRecipeModal && recipeProduct && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30">
-              <div>
-                <h3 className="text-base font-bold font-heading">Product Recipe</h3>
-                <p className="text-[11px] text-muted-foreground">Manage ingredients for <strong>{recipeProduct.name}</strong></p>
-              </div>
-              <button onClick={() => setShowRecipeModal(false)} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></button>
-            </div>
-            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-              {loadingRecipe ? (
-                <div className="py-12 flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-brand-500" />
-                  <p className="text-sm text-muted-foreground">Loading recipe...</p>
-                </div>
-              ) : (
-                <>
-                  <div className="space-y-3">
-                    {recipeItems.map((item, index) => {
-                      const selectedIng = ingredients.find(i => i.id === item.ingredientId);
-                      return (
-                        <div key={index} className="flex gap-2 items-end bg-muted/20 p-3 rounded-xl border border-border/30 group">
-                          <div className="flex-1">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Ingredient</label>
-                            <select 
-                              value={item.ingredientId} 
-                              onChange={(e) => updateRecipeItem(index, 'ingredientId', e.target.value)}
-                              className="w-full px-2 py-1.5 text-xs bg-white border border-border/40 rounded-lg"
-                            >
-                              {ingredients.map(ing => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
-                            </select>
-                          </div>
-                          <div className="w-24">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Qty ({selectedIng?.unit || '-'})</label>
-                            <input 
-                              type="number" 
-                              value={item.quantity} 
-                              onChange={(e) => updateRecipeItem(index, 'quantity', e.target.value)}
-                              className="w-full px-2 py-1.5 text-xs bg-white border border-border/40 rounded-lg"
-                            />
-                          </div>
-                          <div className="w-24">
-                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 block">Cost</label>
-                            <div className="px-2 py-1.5 text-[11px] font-semibold text-emerald-700">
-                              {formatRupiah((selectedIng?.costPerUnit || 0) * parseFloat(item.quantity || '0'))}
-                            </div>
-                          </div>
-                          <button onClick={() => removeRecipeItem(index)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <button onClick={addRecipeItem} className="w-full py-2 border-2 border-dashed border-border/40 rounded-xl text-xs font-bold text-muted-foreground hover:border-brand-400 hover:text-brand-600 transition-all flex items-center justify-center gap-2">
-                    <Plus className="w-4 h-4" /> Add Ingredient
-                  </button>
-
-                  <div className="mt-6 p-4 bg-brand-50 rounded-2xl border border-brand-100 flex justify-between items-center">
-                    <div>
-                      <p className="text-[10px] font-bold text-brand-700 uppercase tracking-wider">Total HPP per Serving</p>
-                      <p className="text-xl font-bold text-brand-900">
-                        {formatRupiah(recipeItems.reduce((acc, item) => {
-                          const ing = ingredients.find(i => i.id === item.ingredientId);
-                          return acc + (ing?.costPerUnit || 0) * parseFloat(item.quantity || '0');
-                        }, 0))}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Sale Price</p>
-                      <p className="text-lg font-bold text-foreground">{formatRupiah(recipeProduct.price)}</p>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10">
-              <button onClick={() => setShowRecipeModal(false)} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
-              <button onClick={handleSaveRecipe} disabled={savingRecipe || loadingRecipe}
-                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
-                {savingRecipe ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Recipe
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* ═══════ Searchable Visual Product Picker Modal ═══════ */}
-      {activeGroupIdForPicker && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setActiveGroupIdForPicker(null)}>
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-scale-up" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 bg-muted/5 sticky top-0 z-10">
-              <div>
-                <h3 className="text-sm font-bold font-heading text-foreground flex items-center gap-2">
-                  ✨ Pilih Pilihan Menu Combo
-                </h3>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Pilih produk makanan atau minuman yang ingin ditambahkan ke kelompok pilihan ini.</p>
-              </div>
-              <button onClick={() => setActiveGroupIdForPicker(null)} className="p-1.5 hover:bg-muted rounded-xl transition-all"><X className="w-5 h-5 text-muted-foreground" /></button>
-            </div>
-
-            {/* Content Filters & Toolbar */}
-            <div className="p-5 border-b border-border/20 bg-muted/5 space-y-3">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/45" />
-                  <input
-                    type="text"
-                    placeholder="Cari nama makan / minum..."
-                    value={pickerSearch}
-                    onChange={(e) => setPickerSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-                  />
-                </div>
-                <select
-                  value={pickerCategory}
-                  onChange={(e) => setPickerCategory(e.target.value)}
-                  className="px-3 py-2 text-xs bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-                >
-                  <option value="all">Semua Kategori</option>
-                  {categories.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
-                </select>
-              </div>
-            </div>
-
-            {/* Products Grid */}
-            <div className="p-5 max-h-[50vh] overflow-y-auto bg-gray-50/50">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
-                {initialProducts
-                  .filter(p => {
-                    if (p.id === editingProduct?.id) return false; // Prevent self-referencing
-                    const matchesSearch = p.name.toLowerCase().includes(pickerSearch.toLowerCase());
-                    const matchesCat = pickerCategory === 'all' || p.categoryId === pickerCategory;
-                    return matchesSearch && matchesCat;
-                  })
-                  .map((p) => {
-                    const group = bundleGroups.find(g => g.id === activeGroupIdForPicker);
-                    const isSelected = group?.options.some((o: any) => o.productId === p.id);
-
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => {
-                          if (isSelected) {
-                            removeOptionFromGroup(activeGroupIdForPicker, p.id);
-                          } else {
-                            addOptionToGroup(activeGroupIdForPicker, p.id);
-                          }
-                        }}
-                        className={`flex flex-col text-left rounded-2xl border bg-white overflow-hidden transition-all duration-300 group shadow-sm active:scale-[0.98] ${
-                          isSelected
-                            ? 'border-brand-500 ring-2 ring-brand-500/20 hover:border-brand-600'
-                            : 'border-border/30 hover:border-brand-400 hover:shadow-md'
-                        }`}
-                      >
-                        {/* Product Image */}
-                        <div className="w-full aspect-[4/3] bg-muted/30 overflow-hidden relative border-b border-border/10 shrink-0">
-                          {p.image ? (
-                            <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-brand-50/50"><ImageIcon className="w-6 h-6 text-brand-200" /></div>
-                          )}
-                          {isSelected && (
-                            <div className="absolute top-2 right-2 bg-brand-600 text-white rounded-full p-1 shadow-md">
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Product Info */}
-                        <div className="p-3 flex-1 flex flex-col justify-between">
-                          <div>
-                            <p className="font-semibold text-foreground text-xs line-clamp-1 group-hover:text-brand-600 transition-colors">{p.name}</p>
-                            <p className="text-[10px] text-muted-foreground truncate mt-0.5">{p.category.name}</p>
-                          </div>
-                          <p className="text-[11px] font-bold text-brand-600 mt-2">{formatRupiah(p.price)}</p>
-                        </div>
-                      </button>
-                    );
-                  })}
-              </div>
-
-              {initialProducts.filter(p => {
-                if (p.id === editingProduct?.id) return false;
-                const matchesSearch = p.name.toLowerCase().includes(pickerSearch.toLowerCase());
-                const matchesCat = pickerCategory === 'all' || p.categoryId === pickerCategory;
-                return matchesSearch && matchesCat;
-              }).length === 0 && (
-                <div className="py-12 text-center text-muted-foreground/45">
-                  <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">Tidak ada menu ditemukan</p>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-border/20 flex justify-between items-center bg-muted/5 sticky bottom-0">
-              <span className="text-[10px] font-medium text-muted-foreground">
-                Terpilih: {bundleGroups.find(g => g.id === activeGroupIdForPicker)?.options.length || 0} menu
-              </span>
-              <button
-                type="button"
-                onClick={() => setActiveGroupIdForPicker(null)}
-                className="px-5 py-2 text-xs font-bold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md active:scale-[0.98]"
-              >
-                Selesai
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════ Image Cropper Modal ═══════ */}
-      {cropImageSrc && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-border/10 flex flex-col max-h-[90vh]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 sticky top-0 bg-white z-10">
-              <div>
-                <h3 className="text-sm font-bold font-heading text-foreground">
-                  ✂️ Sesuaikan Gambar Produk
-                </h3>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Geser gambar dan gunakan slider untuk zoom agar pas di bingkai 16:10.</p>
-              </div>
-              <button onClick={() => setCropImageSrc(null)} className="p-1.5 hover:bg-muted rounded-xl transition-all">
-                <X className="w-5 h-5 text-muted-foreground" />
-              </button>
-            </div>
-
-            {/* Viewport container */}
-            <div className="p-6 flex-1 flex flex-col items-center justify-center bg-muted/10 overflow-y-auto">
-              <div 
-                ref={cropperViewportRef}
-                className="relative w-full max-w-[420px] aspect-[16/10] overflow-hidden bg-zinc-950 border border-border/40 rounded-2xl cursor-move touch-none select-none shadow-inner"
-                onMouseDown={handleCropperMouseDown}
-                onTouchStart={handleCropperTouchStart}
-              >
-                <img
-                  ref={cropperImgRef}
-                  src={cropImageSrc}
-                  alt="To Crop"
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 max-w-none max-h-none pointer-events-none select-none transition-transform duration-75 origin-center"
-                  style={{
-                    transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropZoom})`,
-                  }}
-                />
-
-                {/* Grid Overlay */}
-                <div className="absolute inset-0 pointer-events-none border border-white/20">
-                  <div className="absolute inset-x-0 top-1/3 border-b border-dashed border-white/30" />
-                  <div className="absolute inset-x-0 top-2/3 border-b border-dashed border-white/30" />
-                  <div className="absolute inset-y-0 left-1/3 border-r border-dashed border-white/30" />
-                  <div className="absolute inset-y-0 left-2/3 border-r border-dashed border-white/30" />
-                </div>
-              </div>
-
-              {/* Zoom controls */}
-              <div className="w-full max-w-[420px] flex items-center gap-3 mt-5 px-1">
-                <button
-                  type="button"
-                  onClick={() => setCropZoom(Math.max(0.5, cropZoom - 0.1))}
-                  className="p-1.5 hover:bg-muted rounded-lg transition-colors"
-                  title="Zoom Out"
-                >
-                  <CircleMinus className="w-4 h-4 text-muted-foreground" />
-                </button>
+      {/* ── TAB CONTENT: PRODUCTS & COMBOS ── */}
+      {(activeTab === 'products' || activeTab === 'combos') && (
+        <div className="space-y-4">
+          {/* SEARCH, CATEGORY PILLS & CONTROLS */}
+          <div className="bg-white p-4 rounded-3xl border border-stone-200 shadow-sm space-y-3 text-left">
+            {/* Row 1: Search & View Modes */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              {/* Search Bar */}
+              <div className="relative w-full sm:max-w-md">
+                <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
-                  type="range"
-                  min="0.5"
-                  max="3"
-                  step="0.05"
-                  value={cropZoom}
-                  onChange={(e) => setCropZoom(parseFloat(e.target.value))}
-                  className="flex-1 accent-brand-600 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Cari nama menu, deskripsi, atau kategori..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-2xl border border-stone-200 text-xs font-bold bg-stone-50/50 focus:bg-white focus:ring-2 focus:ring-orange-500 transition-all"
                 />
-                <button
-                  type="button"
-                  onClick={() => setCropZoom(Math.min(3, cropZoom + 0.1))}
-                  className="p-1.5 hover:bg-muted rounded-lg transition-colors"
-                  title="Zoom In"
+              </div>
+
+              {/* Controls: Sorting & View Switcher */}
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                {/* Sort Dropdown */}
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="px-3 py-2 rounded-xl border border-stone-200 text-xs font-bold bg-white focus:ring-2 focus:ring-orange-500"
                 >
-                  <CirclePlus className="w-4 h-4 text-muted-foreground" />
-                </button>
-                <span className="text-xs font-bold text-muted-foreground w-10 text-right">
-                  {Math.round(cropZoom * 100)}%
-                </span>
+                  <option value="name-asc">Nama (A - Z)</option>
+                  <option value="name-desc">Nama (Z - A)</option>
+                  <option value="price-asc">Harga (Termurah)</option>
+                  <option value="price-desc">Harga (Termahal)</option>
+                </select>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center p-1 bg-stone-100 rounded-xl border border-stone-200">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('table')}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      viewMode === 'table' ? 'bg-white text-orange-600 shadow-sm' : 'text-stone-500'
+                    }`}
+                    title="Tampilan Tabel"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('grid')}
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      viewMode === 'grid' ? 'bg-white text-orange-600 shadow-sm' : 'text-stone-500'
+                    }`}
+                    title="Tampilan Grid Kartu"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="px-6 py-4 border-t border-border/20 flex justify-end gap-2 bg-muted/5 sticky bottom-0">
-              <button 
-                type="button"
-                onClick={() => { setCropZoom(0.5); setCropOffset({ x: 0, y: 0 }); }}
-                className="px-4 py-2 text-xs font-medium rounded-xl hover:bg-muted transition-colors mr-auto"
-              >
-                Reset
-              </button>
-              <button 
-                type="button"
-                onClick={() => setCropImageSrc(null)} 
-                className="px-4 py-2 text-xs font-medium rounded-xl hover:bg-muted transition-colors"
-              >
-                Batal
-              </button>
+            {/* Row 2: Category Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
               <button
                 type="button"
-                onClick={handleCropConfirm}
-                disabled={uploading}
-                className="px-5 py-2 text-xs font-bold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-1.5 disabled:opacity-50 shadow-md active:scale-[0.98]"
+                onClick={() => setSelectedCategory('all')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all ${
+                  selectedCategory === 'all'
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
               >
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    Memproses...
-                  </>
-                ) : (
-                  'Terapkan'
-                )}
+                Semua Kategori
               </button>
+              {categories.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(c.id)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all ${
+                    selectedCategory === c.id
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Row 3: Status Quick Filter Chips */}
+            <div className="flex items-center gap-1.5 pt-2 border-t border-stone-100 overflow-x-auto pb-1 text-[11px] font-bold">
+              {[
+                { id: 'all', label: 'Semua Status' },
+                { id: 'available', label: 'Tersedia Saja' },
+                { id: 'promo', label: '🔥 Sedang Flash Sale' },
+                { id: 'no-recipe', label: '⚠️ Belum Ada Resep' },
+                { id: 'sold-out', label: '❌ Habis (Sold Out)' },
+                { id: 'archived', label: '📦 Produk Diarsipkan' },
+              ].map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setStatusFilter(f.id as any)}
+                  className={`px-3 py-1 rounded-lg shrink-0 transition-all border ${
+                    statusFilter === f.id
+                      ? 'bg-stone-900 text-white border-stone-900 shadow-sm'
+                      : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
           </div>
+
+          {/* ── BULK ACTIONS BAR (When checked) ── */}
+          {selectedIds.length > 0 && (
+            <div className="p-3.5 rounded-2xl bg-orange-600 text-white flex flex-wrap items-center justify-between gap-3 shadow-lg shadow-orange-500/20 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2 font-bold text-xs">
+                <CheckSquare className="w-4 h-4" />
+                <span>{selectedIds.length} produk dipilih</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isBulkProcessing}
+                  onClick={() => handleBulkAction('availability', 'in-stock')}
+                  className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors"
+                >
+                  Set Tersedia
+                </button>
+                <button
+                  type="button"
+                  disabled={isBulkProcessing}
+                  onClick={() => handleBulkAction('availability', 'sold-out')}
+                  className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors"
+                >
+                  Set Sold Out
+                </button>
+                <button
+                  type="button"
+                  disabled={isBulkProcessing}
+                  onClick={() => handleBulkAction('delete')}
+                  className="px-3 py-1.5 rounded-xl bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold flex items-center gap-1 transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Hapus / Arsipkan
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── PRODUCT TABLE & GRID ── */}
+          <ProductGridTable
+            products={filteredProducts}
+            ingredients={ingredients}
+            viewMode={viewMode}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onToggleSelectAll={toggleSelectAll}
+            onEdit={(p) => {
+              setEditingProduct(p);
+              setShowFormModal(true);
+            }}
+            onQuickPrice={(p) => setQuickPriceProduct(p)}
+            onDuplicate={handleDuplicateProduct}
+            onOpenRecipe={(p) => setRecipeProduct(p)}
+            onToggleAvailability={handleToggleAvailability}
+            onToggleArchive={handleToggleArchive}
+            onDelete={handleDeleteProduct}
+          />
         </div>
       )}
 
-      {/* ═══════ Archive Progress Modal ═══════ */}
-      {archivingId && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-8 text-center">
-            <div className="flex justify-center mb-6">
-              <div className="relative w-16 h-16">
-                <div className="absolute inset-0 rounded-full border-4 border-brand-100"></div>
-                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-brand-600 border-r-brand-600 animate-spin"></div>
-              </div>
-            </div>
-            <h3 className="text-base font-bold mb-2">Processing...</h3>
-            <p className="text-sm text-muted-foreground">Mengarsipkan produk, mohon tunggu...</p>
-          </div>
-        </div>
-      )}
+      {/* ── MODALS ── */}
 
-      {/* ═══════ Master Topping Modal ═══════ */}
-      {showToppingModal && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto" onClick={() => setShowToppingModal(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-8 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30 bg-white">
-              <h3 className="text-base font-bold font-heading">{editingTopping ? 'Edit Master Topping' : 'Tambah Master Topping'}</h3>
-              <button onClick={() => setShowToppingModal(false)} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Nama Topping *</label>
-                <input value={toppingForm.name} onChange={e => setToppingForm(p => ({ ...p, name: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Harga Default (Rp) *</label>
-                <input type="number" value={toppingForm.defaultPrice} onChange={e => setToppingForm(p => ({ ...p, defaultPrice: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-              </div>
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Bahan Inventaris Terikat (Opsional)</label>
-                <select value={toppingForm.ingredientId} onChange={e => setToppingForm(p => ({ ...p, ingredientId: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all">
-                  <option value="">-- Tidak Terikat Bahan --</option>
-                  {ingredients.map(ing => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
-                </select>
-              </div>
-              {toppingForm.ingredientId && (
-                <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Takaran / Porsi (Qty)</label>
-                  <input type="number" value={toppingForm.ingredientQty} onChange={e => setToppingForm(p => ({ ...p, ingredientQty: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" />
-                </div>
-              )}
-            </div>
-            <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10">
-              <button onClick={() => setShowToppingModal(false)} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Batal</button>
-              <button onClick={handleSaveTopping} disabled={savingTopping}
-                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
-                {savingTopping ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+      {/* 1. Step 1: Type Picker Modal */}
+      <ProductTypePickerModal
+        isOpen={showTypePicker}
+        onClose={() => setShowTypePicker(false)}
+        onSelectType={handleSelectTypeFromPicker}
+      />
+
+      {/* 2. Step 2: Comprehensive Product Form Modal */}
+      <ProductFormModal
+        product={editingProduct}
+        productType={formProductType}
+        categories={categories}
+        allProducts={initialProducts}
+        isOpen={showFormModal}
+        onClose={() => {
+          setShowFormModal(false);
+          setEditingProduct(null);
+        }}
+        onSuccess={() => {
+          router.refresh();
+        }}
+      />
+
+      {/* 3. Quick Price Modal */}
+      <ProductQuickPriceModal
+        product={quickPriceProduct}
+        isOpen={!!quickPriceProduct}
+        onClose={() => setQuickPriceProduct(null)}
+        onSuccess={() => {
+          router.refresh();
+        }}
+      />
+
+      {/* 4. Recipe & HPP Modal */}
+      <RecipeHppModal
+        product={recipeProduct}
+        ingredients={ingredients}
+        isOpen={!!recipeProduct}
+        onClose={() => setRecipeProduct(null)}
+        onSuccess={() => {
+          router.refresh();
+        }}
+      />
+    </div>
   );
 }
