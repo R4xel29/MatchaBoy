@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Armchair,
   UtensilsCrossed,
@@ -66,6 +66,9 @@ interface LiveTableMinimapProps {
   onClose?: () => void;
 }
 
+const BASE_CANVAS_WIDTH = 1000;
+const BASE_CANVAS_HEIGHT = 562.5; // 16:9
+
 export function LiveTableMinimap({
   onSelectTable,
   selectedTableNumber,
@@ -80,6 +83,27 @@ export function LiveTableMinimap({
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedModalTable, setSelectedModalTable] = useState<LiveDiningTable | null>(null);
   const [clearingTableId, setClearingTableId] = useState<string | null>(null);
+
+  // Proportional Responsive Scaling
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [canvasWidth, setCanvasWidth] = useState<number>(440);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        setCanvasWidth(containerRef.current.clientWidth || 440);
+      }
+    };
+    updateDimensions();
+    const observer = new ResizeObserver(updateDimensions);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [isMinimized, isOpen]);
+
+  const scale = useMemo(() => {
+    return Math.max(0.2, Math.min(1.2, canvasWidth / BASE_CANVAS_WIDTH));
+  }, [canvasWidth]);
 
   const fetchLiveTables = useCallback(async () => {
     try {
@@ -147,7 +171,6 @@ export function LiveTableMinimap({
           border: 'border-blue-600 ring-4 ring-blue-500/30 shadow-lg shadow-blue-500/20',
           badge: 'Siap Saji',
           badgeBg: 'bg-blue-100 text-blue-800',
-          indicator: 'bg-blue-400',
         };
       case 'OCCUPIED':
         return {
@@ -155,7 +178,6 @@ export function LiveTableMinimap({
           border: 'border-orange-600 ring-4 ring-orange-500/30 shadow-lg shadow-orange-500/20',
           badge: 'Sedang Seduh',
           badgeBg: 'bg-amber-100 text-amber-800',
-          indicator: 'bg-amber-400',
         };
       case 'BILLING':
         return {
@@ -163,7 +185,6 @@ export function LiveTableMinimap({
           border: 'border-purple-600 ring-4 ring-purple-500/30 shadow-lg shadow-purple-500/20',
           badge: 'Menunggu Bayar',
           badgeBg: 'bg-purple-100 text-purple-800',
-          indicator: 'bg-purple-400',
         };
       case 'CLEANING':
         return {
@@ -171,16 +192,14 @@ export function LiveTableMinimap({
           border: 'border-rose-600 ring-4 ring-rose-500/30 shadow-lg shadow-rose-500/20',
           badge: 'Dibersihkan',
           badgeBg: 'bg-rose-100 text-rose-800',
-          indicator: 'bg-rose-400',
         };
       case 'AVAILABLE':
       default:
         return {
           bg: 'bg-white text-stone-800',
-          border: 'border-emerald-500/80 hover:border-emerald-600 hover:shadow-md ring-2 ring-emerald-500/20',
+          border: 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md',
           badge: 'Tersedia',
           badgeBg: 'bg-emerald-100 text-emerald-800',
-          indicator: 'bg-emerald-500',
         };
     }
   };
@@ -190,9 +209,9 @@ export function LiveTableMinimap({
   if (!isOpen) return null;
 
   const content = (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {/* Top bar inside minimap */}
-      <div className="flex items-center justify-between gap-2 pb-2 border-b border-stone-100">
+      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-stone-100">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
           <h3 className="font-heading font-extrabold text-xs sm:text-sm text-stone-900 flex items-center gap-1.5">
@@ -243,7 +262,7 @@ export function LiveTableMinimap({
       {!isMinimized && (
         <>
           {/* Legend */}
-          <div className="flex flex-wrap items-center gap-2.5 text-[10px] font-bold text-stone-600">
+          <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold text-stone-600">
             <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500" /> Kosong
             </span>
@@ -255,94 +274,109 @@ export function LiveTableMinimap({
             </span>
           </div>
 
-          {/* 2D Canvas Blueprint Container matching AdminTablesClient & SpmbClient */}
+          {/* 2D Canvas Container with Proportional Vector Scaling */}
           <div
-            className="relative w-full rounded-2xl bg-[#FAF7F2] border-2 border-stone-300 overflow-hidden select-none aspect-[16/10] min-h-[300px] sm:min-h-[360px]"
+            ref={containerRef}
+            className="relative w-full rounded-2xl bg-[#FAF7F2] border-2 border-stone-300 overflow-hidden select-none shadow-inner"
             style={{
-              backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
-              backgroundSize: '20px 20px',
+              height: `${BASE_CANVAS_HEIGHT * scale}px`,
             }}
           >
-            <div className="absolute top-2 left-3 text-stone-400 text-[8px] font-mono tracking-widest uppercase pointer-events-none">
-              [Denah 2D Fisik • Klik Meja untuk Detail & Filter]
-            </div>
-
-            {/* Tables with surrounding physical chairs */}
-            {tables.map((table) => {
-              const config = getTableStatusConfig(table);
-              const isSelected = selectedTableNumber === table.number;
-              const hasOrder = table.primaryOrder !== null;
-              const isRound = table.shape === 'ROUND';
-              const chairs = getTableChairs(table);
-
-              return (
-                <div
-                  key={table.id}
-                  onClick={() => {
-                    if (hasOrder) {
-                      setSelectedModalTable(table);
-                    }
-                    if (onSelectTable) {
-                      onSelectTable(isSelected ? null : table.number);
-                    }
-                  }}
-                  style={{
-                    left: `${table.x}%`,
-                    top: `${table.y}%`,
-                    transform: 'translate(-50%, -50%)',
-                  }}
-                  className="absolute select-none cursor-pointer flex items-center justify-center z-10 group"
-                >
-                  {/* Table Core Element */}
-                  <div
-                    className={`relative flex flex-col items-center justify-center border-2 transition-all ${
-                      isRound ? 'w-16 h-16 sm:w-20 sm:h-20 rounded-full' : 'w-20 h-14 sm:w-24 sm:h-16 rounded-2xl'
-                    } ${config.bg} ${config.border} ${
-                      isSelected ? 'ring-4 ring-orange-500 scale-110 z-30 shadow-xl' : 'shadow-md z-20 hover:scale-105'
-                    }`}
-                  >
-                    <span className="text-[7px] font-bold uppercase tracking-wider px-1 py-0.2 rounded bg-black/10">
-                      {isRound ? 'Bulat' : 'Kotak'}
-                    </span>
-
-                    <span className="font-serif font-black text-xs sm:text-sm leading-tight mt-0.5">
-                      Meja {table.number}
-                    </span>
-
-                    <span className="text-[8px] font-bold opacity-85 mt-0.5 flex items-center gap-0.5">
-                      <Armchair className="w-2.5 h-2.5" /> {table.capacity} Kursi
-                    </span>
-
-                    {hasOrder && (
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-white animate-bounce z-30" />
-                    )}
-                  </div>
-
-                  {/* Physical Chairs Surrounding The Table (Matching Studio & SPMB) */}
-                  {chairs.map((chair) => (
-                    <div
-                      key={chair.id}
-                      style={{
-                        transform: `translate(${chair.x * 0.75}px, ${chair.y * 0.75}px)`,
-                      }}
-                      title={`Meja ${table.number} - Kursi ${chair.label}`}
-                      className="absolute w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white border border-orange-400 text-orange-700 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10"
-                    >
-                      <Armchair className="w-2.5 h-2.5 text-orange-600" />
-                      <span className="font-serif font-black text-[6px] sm:text-[7px] leading-none text-stone-900">
-                        {chair.label}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-
-            {tables.length === 0 && !loading && (
-              <div className="absolute inset-0 flex items-center justify-center text-stone-400 text-xs">
-                Belum ada denah meja yang dikonfigurasi
+            {/* Scaled Inner Canvas - 1000 x 562.5 matches Admin Canvas 1:1 */}
+            <div
+              style={{
+                width: `${BASE_CANVAS_WIDTH}px`,
+                height: `${BASE_CANVAS_HEIGHT}px`,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+                backgroundImage: 'radial-gradient(#F97316 1.5px, transparent 1.5px)',
+                backgroundSize: '24px 24px',
+              }}
+              className="relative select-none"
+            >
+              <div className="absolute top-3 left-4 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none">
+                [Denah 2D Skala 1:25 • Spasi Proporsional]
               </div>
-            )}
+
+              {/* Tables with exact positions and surrounding physical chairs */}
+              {tables.map((table) => {
+                const config = getTableStatusConfig(table);
+                const isSelected = selectedTableNumber === table.number;
+                const hasOrder = table.primaryOrder !== null;
+                const isRound = table.shape === 'ROUND';
+                const chairs = getTableChairs(table);
+
+                return (
+                  <div
+                    key={table.id}
+                    onClick={() => {
+                      if (hasOrder) {
+                        setSelectedModalTable(table);
+                      }
+                      if (onSelectTable) {
+                        onSelectTable(isSelected ? null : table.number);
+                      }
+                    }}
+                    style={{
+                      left: `${table.x}%`,
+                      top: `${table.y}%`,
+                      transform: 'translate(-50%, -50%)',
+                    }}
+                    className="absolute select-none cursor-pointer flex items-center justify-center z-10 group"
+                  >
+                    {/* Table Core Element matching Admin Dimensions */}
+                    <div
+                      className={`relative flex flex-col items-center justify-center border-2 transition-all ${
+                        isRound ? 'w-24 h-24 rounded-full' : 'w-32 h-20 rounded-2xl'
+                      } ${config.bg} ${config.border} ${
+                        isSelected
+                          ? 'ring-4 ring-orange-500/50 scale-105 z-30 shadow-2xl'
+                          : 'shadow-md z-20 hover:scale-105'
+                      }`}
+                    >
+                      <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-black/10">
+                        {isRound ? 'Bulat' : 'Kotak'}
+                      </span>
+
+                      <span className="font-serif font-black text-sm leading-tight mt-0.5">
+                        Meja {table.number}
+                      </span>
+
+                      <span className="text-[10px] font-semibold opacity-90 mt-0.5 flex items-center gap-1">
+                        <Armchair className="w-3 h-3" /> {table.capacity} Kursi
+                      </span>
+
+                      {hasOrder && (
+                        <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 border-2 border-white animate-bounce z-30 shadow" />
+                      )}
+                    </div>
+
+                    {/* Surrounding Physical Chairs (Exact offsets without collision) */}
+                    {chairs.map((chair) => (
+                      <div
+                        key={chair.id}
+                        style={{
+                          transform: `translate(${chair.x}px, ${chair.y}px)`,
+                        }}
+                        title={`Meja ${table.number} - Kursi ${chair.label}`}
+                        className="absolute w-8 h-8 rounded-full bg-white border-2 border-orange-400 text-orange-700 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10"
+                      >
+                        <Armchair className="w-3.5 h-3.5 text-orange-600" />
+                        <span className="font-serif font-black text-[8px] leading-none text-stone-900 mt-0.5">
+                          {chair.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+
+              {tables.length === 0 && !loading && (
+                <div className="absolute inset-0 flex items-center justify-center text-stone-400 text-sm font-mono">
+                  [Belum ada denah meja yang dikonfigurasi]
+                </div>
+              )}
+            </div>
           </div>
         </>
       )}
