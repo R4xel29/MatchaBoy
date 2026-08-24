@@ -1057,10 +1057,25 @@ model DiningTable {
   shape         String   @default("RECTANGLE") // RECTANGLE, ROUND
   x             Int      @default(0)
   y             Int      @default(0)
+  rotation      Int      @default(0) // 0, 90, 180, 270 (degrees)
   qrUrl         String?
-  chairsJson    String?  // JSON array string of CustomChair[] [{id, label, x, y}]
+  chairsJson    String?  // JSON array string of CustomChair[] [{id, label, x, y, color}]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model FloorElement {
+  id        String   @id @default(cuid())
+  name      String   // e.g. "Pintu Utama", "TV 55 Inch", "Rak Display", "Kasir / Bar"
+  type      String   // DOOR, TV, SHELF, BAR, PLANT, WINDOW, RESTROOM, CUSTOM
+  x         Int      @default(50) // percentage 0-100% on floor plan
+  y         Int      @default(50) // percentage 0-100% on floor plan
+  width     Int      @default(80) // width in pixels
+  height    Int      @default(40) // height in pixels
+  rotation  Int      @default(0)  // rotation in degrees (0, 90, 180, 270)
+  color     String?  // optional custom color
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 

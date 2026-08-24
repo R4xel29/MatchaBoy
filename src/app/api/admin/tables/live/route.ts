@@ -100,9 +100,15 @@ export async function GET() {
       };
     });
 
+    // 4. Fetch floor elements (doors, tv, shelves, etc.)
+    const floorElements = await prisma.floorElement.findMany({
+      orderBy: { createdAt: 'asc' },
+    });
+
     return NextResponse.json({
       success: true,
       tables: enrichedTables,
+      floorElements,
       totalTables: tables.length,
       occupiedTables: enrichedTables.filter((t) => t.primaryOrder !== null).length,
     });

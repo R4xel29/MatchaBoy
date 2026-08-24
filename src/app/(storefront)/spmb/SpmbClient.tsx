@@ -16,7 +16,15 @@ import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
 import type { Product, Category } from '@/types';
-import { getDefaultChairs, getChairVisualClass, getChairIconClass, CustomChair, type ChairColor } from '@/app/(admin)/admin/tables/AdminTablesClient';
+import { 
+  getDefaultChairs, 
+  getChairVisualClass, 
+  getChairIconClass, 
+  FloorElementVisual,
+  type CustomChair, 
+  type ChairColor, 
+  type FloorElementData 
+} from '@/app/(admin)/admin/tables/AdminTablesClient';
 
 interface SpmbClientProps {
   categories: Category[];
@@ -27,7 +35,8 @@ interface SpmbClientProps {
   spmbCloseTime: string;
   operationalDays: string;
   disabledDates: string;
-  initialTables?: Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string; chairsJson?: string | null }>;
+  initialTables?: Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; rotation?: number; status?: string; chairsJson?: string | null }>;
+  initialFloorElements?: FloorElementData[];
 }
 
 export default function SpmbClient({ 
@@ -39,7 +48,8 @@ export default function SpmbClient({
   spmbCloseTime,
   operationalDays,
   disabledDates,
-  initialTables
+  initialTables,
+  initialFloorElements
 }: SpmbClientProps) {
   const searchParams = useSearchParams();
   const tableParam = searchParams.get('table');
@@ -53,7 +63,8 @@ export default function SpmbClient({
   const [tableNumber, setTableNumber] = useState<string>('');
   const [seatNumber, setSeatNumber] = useState<string>('1');
   const [isTableLocked, setIsTableLocked] = useState<boolean>(false);
-  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; status?: string; chairsJson?: string | null }>>(initialTables || []);
+  const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; rotation?: number; status?: string; chairsJson?: string | null }>>(initialTables || []);
+  const [floorElements, setFloorElements] = useState<FloorElementData[]>(initialFloorElements || []);
   const [loadingTables, setLoadingTables] = useState<boolean>(false);
 
   // Modals
@@ -1186,9 +1197,25 @@ export default function SpmbClient({
                     backgroundSize: '20px 20px'
                   }}
                 >
-                  <div className="absolute top-3 left-4 text-stone-400 text-[9px] font-mono tracking-widest uppercase pointer-events-none">
+                  <div className="absolute top-3 left-4 text-stone-400 text-[9px] font-mono tracking-widest uppercase pointer-events-none z-0">
                     [Denah Arum Seduh • Geser & Ketuk Meja]
                   </div>
+
+                  {/* Floor Elements (Doors, TV, Shelves, Bar, Plant, Window, Restroom) */}
+                  {floorElements.map((el) => (
+                    <div
+                      key={el.id}
+                      style={{
+                        position: 'absolute',
+                        left: `${Math.max(5, Math.min(95, el.x))}%`,
+                        top: `${Math.max(5, Math.min(95, el.y))}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      className="absolute flex items-center justify-center pointer-events-none z-10"
+                    >
+                      <FloorElementVisual element={el} />
+                    </div>
+                  ))}
 
                   {activeTables.map((t) => {
                     const isCurrent = tableNumber === t.number.toString();
@@ -1207,7 +1234,7 @@ export default function SpmbClient({
                           top: `${Math.max(10, Math.min(90, yPos))}%`,
                           transform: 'translate(-50%, -50%)'
                         }}
-                        className="absolute flex items-center justify-center z-10"
+                        className="absolute flex items-center justify-center z-20"
                       >
                         <button
                           type="button"
@@ -1215,6 +1242,9 @@ export default function SpmbClient({
                             setTableNumber(t.number.toString());
                             setShowTableModal(false);
                             setShowSeatModal(true);
+                          }}
+                          style={{
+                            transform: `rotate(${t.rotation || 0}deg)`,
                           }}
                           className={`border-2 shadow-md flex flex-col items-center justify-center transition-all cursor-pointer ${
                             isRound ? 'w-20 h-20 rounded-full p-2' : 'w-28 h-18 rounded-2xl p-2'
@@ -1429,7 +1459,10 @@ export default function SpmbClient({
                           <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Bundar (Bulat)</span>
                         </div>
                       ) : (
-                        <div className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
+                        <div 
+                          style={{ transform: `rotate(${currentTableObj?.rotation || 0}deg)` }}
+                          className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none transition-transform duration-300"
+                        >
                           <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
                           <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
                             {currentTableCapacity} Kursi

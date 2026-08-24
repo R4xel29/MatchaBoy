@@ -14,7 +14,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await req.json();
-    const { number, capacity, shape, status, x, y, occupiedSeats, action } = body;
+    const { number, capacity, shape, status, x, y, rotation, occupiedSeats, action } = body;
 
     // Check if table exists
     const existingTable = await prisma.diningTable.findUnique({
@@ -68,6 +68,7 @@ export async function PATCH(
     if (shape !== undefined) updateData.shape = shape;
     if (x !== undefined) updateData.x = parseInt(x);
     if (y !== undefined) updateData.y = parseInt(y);
+    if (rotation !== undefined) updateData.rotation = parseInt(rotation);
     if (body.chairsJson !== undefined) updateData.chairsJson = body.chairsJson;
 
     // Handle occupiedSeats and status synchronization

@@ -5,7 +5,7 @@ import SpmbClient from "./SpmbClient"
 export const dynamic = 'force-dynamic'
 
 export default async function SpmbPage() {
-  const [categories, products, storeSettings, tables] = await Promise.all([
+  const [categories, products, storeSettings, tables, floorElements] = await Promise.all([
     prisma.category.findMany({
       orderBy: { createdAt: 'asc' }
     }),
@@ -24,6 +24,9 @@ export default async function SpmbPage() {
     prisma.storeSettings.findFirst(),
     prisma.diningTable.findMany({
       orderBy: { number: 'asc' }
+    }),
+    prisma.floorElement.findMany({
+      orderBy: { createdAt: 'asc' }
     })
   ])
 
@@ -83,6 +86,7 @@ export default async function SpmbPage() {
         operationalDays={storeSettings?.operationalDays || "[0,1,2,3,4,5,6]"}
         disabledDates={storeSettings?.disabledDates || "[]"}
         initialTables={tables}
+        initialFloorElements={floorElements}
       />
     </Suspense>
   )

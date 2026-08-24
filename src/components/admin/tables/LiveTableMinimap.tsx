@@ -22,7 +22,14 @@ import {
 import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getDefaultChairs, getChairVisualClass, getChairIconClass, type CustomChair } from '@/app/(admin)/admin/tables/AdminTablesClient';
+import { 
+  getDefaultChairs, 
+  getChairVisualClass, 
+  getChairIconClass, 
+  FloorElementVisual,
+  type CustomChair, 
+  type FloorElementData 
+} from '@/app/(admin)/admin/tables/AdminTablesClient';
 
 export interface LiveTableOrder {
   id: string;
@@ -51,6 +58,7 @@ export interface LiveDiningTable {
   shape: string;
   x: number;
   y: number;
+  rotation?: number;
   liveStatus: string; // AVAILABLE, OCCUPIED, READY, BILLING, CLEANING
   primaryOrder: LiveTableOrder | null;
   activeOrders: LiveTableOrder[];
@@ -79,6 +87,7 @@ export function LiveTableMinimap({
 }: LiveTableMinimapProps) {
   const { showToast } = useToast();
   const [tables, setTables] = useState<LiveDiningTable[]>([]);
+  const [floorElements, setFloorElements] = useState<FloorElementData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedModalTable, setSelectedModalTable] = useState<LiveDiningTable | null>(null);
@@ -111,6 +120,7 @@ export function LiveTableMinimap({
       if (res.ok) {
         const data = await res.json();
         setTables(data.tables || []);
+        setFloorElements(data.floorElements || []);
       }
     } catch (err) {
       console.error('Error fetching live tables:', err);
@@ -294,9 +304,24 @@ export function LiveTableMinimap({
               }}
               className="relative select-none"
             >
-              <div className="absolute top-3 left-4 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none">
+              <div className="absolute top-3 left-4 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none z-0">
                 [Denah 2D Skala 1:25 • Spasi Proporsional]
               </div>
+
+              {/* Floor Elements (Doors, TV, Shelves, Bar, etc.) */}
+              {floorElements.map((el) => (
+                <div
+                  key={el.id}
+                  style={{
+                    left: `${el.x}%`,
+                    top: `${el.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                  className="absolute select-none pointer-events-none flex items-center justify-center z-10"
+                >
+                  <FloorElementVisual element={el} />
+                </div>
+              ))}
 
               {/* Tables with exact positions and surrounding physical chairs */}
               {tables.map((table) => {
@@ -322,10 +347,13 @@ export function LiveTableMinimap({
                       top: `${table.y}%`,
                       transform: 'translate(-50%, -50%)',
                     }}
-                    className="absolute select-none cursor-pointer flex items-center justify-center z-10 group"
+                    className="absolute select-none cursor-pointer flex items-center justify-center z-20 group"
                   >
-                    {/* Table Core Element matching Admin Dimensions */}
+                    {/* Table Core Element matching Admin Dimensions with Rotation */}
                     <div
+                      style={{
+                        transform: `rotate(${table.rotation || 0}deg)`,
+                      }}
                       className={`relative flex flex-col items-center justify-center border-2 transition-all ${
                         isRound ? 'w-24 h-24 rounded-full' : 'w-32 h-20 rounded-2xl'
                       } ${config.bg} ${config.border} ${
