@@ -16,11 +16,15 @@ export async function PATCH(
     const body = await request.json();
     const { name, amount, category, date, notes } = body;
 
+    const parsedAmount = amount !== undefined
+      ? (typeof amount === 'string' ? parseInt(amount.replace(/[^0-9]/g, '')) || 0 : parseInt(amount) || 0)
+      : undefined;
+
     const expense = await prisma.expense.update({
       where: { id },
       data: {
         name,
-        amount: amount !== undefined ? parseInt(amount) : undefined,
+        amount: parsedAmount,
         category,
         date: date ? new Date(date) : undefined,
         notes,

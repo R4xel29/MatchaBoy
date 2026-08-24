@@ -25,6 +25,7 @@ interface Props {
   currentPage?: number;
   totalPages?: number;
   totalExpenses?: number;
+  totalAmountSum?: number;
   pageSize?: number;
 }
 
@@ -42,6 +43,7 @@ export default function ExpensesClient({
   currentPage = 1,
   totalPages = 1,
   totalExpenses = 0,
+  totalAmountSum = 0,
   pageSize = 15
 }: Props) {
   const router = useRouter();
@@ -216,12 +218,17 @@ export default function ExpensesClient({
       </div>
 
       {/* Total Summary */}
-      <div className="mt-4 p-4 bg-rose-50 rounded-2xl border border-rose-100 flex justify-between items-center">
+      <div className="mt-4 p-4 bg-rose-50 rounded-2xl border border-rose-100 flex flex-wrap gap-4 justify-between items-center">
         <div>
-          <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Total Expenses (Selected List)</p>
-          <p className="text-xl font-bold text-rose-900">
-            {formatRupiah(filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0))}
+          <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Total Seluruh Pengeluaran ({totalExpenses} Catatan)</p>
+          <p className="text-xl font-extrabold text-rose-900">
+            {formatRupiah(totalAmountSum || filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0))}
           </p>
+          {search && (
+            <p className="text-[11px] text-rose-600 mt-0.5">
+              Halaman Ini (Terfilter): {formatRupiah(filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0))}
+            </p>
+          )}
         </div>
         <Receipt className="w-8 h-8 text-rose-200" />
       </div>

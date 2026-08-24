@@ -32,7 +32,6 @@ import {
   Settings,
   Truck,
   Archive,
-  BarChart4,
   UserX,
   Ticket,
   Megaphone,
@@ -60,7 +59,6 @@ const MAIN_ITEMS = [
   { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
   { label: 'Penjualan', href: '/admin/reports', icon: BarChart3 },
-  { label: 'Laba Rugi', href: '/admin/reports/profit', icon: BarChart4 },
   { label: 'Pengeluaran (Expenses)', href: '/admin/expenses', icon: Receipt },
 ];
 

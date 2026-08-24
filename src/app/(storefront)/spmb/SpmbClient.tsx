@@ -16,7 +16,7 @@ import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
 import type { Product, Category } from '@/types';
-import { getDefaultChairs, CustomChair } from '@/app/(admin)/admin/tables/AdminTablesClient';
+import { getDefaultChairs, getChairVisualClass, getChairIconClass, CustomChair, type ChairColor } from '@/app/(admin)/admin/tables/AdminTablesClient';
 
 interface SpmbClientProps {
   categories: Category[];
@@ -1242,13 +1242,13 @@ export default function SpmbClient({
                           )}
                         </button>
 
-                        {/* Surrounding Visible Mini Chairs (Unclipped & Synchronized) */}
+                        {/* Surrounding Visible Mini Chairs (Unclipped, Synchronized & Colored) */}
                         {(() => {
                           let tChairs: CustomChair[] = [];
                           if (t.chairsJson) {
                             try {
                               const parsed = JSON.parse(t.chairsJson);
-                              if (Array.isArray(parsed) && parsed.length === cap) {
+                              if (Array.isArray(parsed) && parsed.length > 0) {
                                 tChairs = parsed;
                               }
                             } catch {}
@@ -1257,15 +1257,19 @@ export default function SpmbClient({
                             tChairs = getDefaultChairs(cap, t.shape || 'RECTANGLE');
                           }
 
-                          return tChairs.map((c, cIdx) => (
-                            <div
-                              key={c.id || cIdx}
-                              style={{ transform: `translate(${c.x * 0.75}px, ${c.y * 0.75}px)` }}
-                              className="absolute w-4 h-4 rounded-full bg-white border border-orange-300 shadow-xs flex items-center justify-center pointer-events-none z-10"
-                            >
-                              <Armchair className="w-2.5 h-2.5 text-orange-600" />
-                            </div>
-                          ));
+                          return tChairs.map((c, cIdx) => {
+                            const visualClass = getChairVisualClass(c.color, false);
+                            const iconClass = getChairIconClass(c.color, false);
+                            return (
+                              <div
+                                key={c.id || cIdx}
+                                style={{ transform: `translate(${c.x * 0.75}px, ${c.y * 0.75}px)` }}
+                                className={`absolute w-4 h-4 rounded-full border shadow-xs flex items-center justify-center pointer-events-none z-10 ${visualClass}`}
+                              >
+                                <Armchair className={`w-2.5 h-2.5 ${iconClass}`} />
+                              </div>
+                            );
+                          });
                         })()}
                       </div>
                     );
@@ -1434,10 +1438,12 @@ export default function SpmbClient({
                         </div>
                       )}
 
-                      {/* Surrounding Chairs Positioned Directly From Custom / Manual / Default Coordinates */}
+                      {/* Surrounding Chairs Positioned Directly From Custom / Manual / Default Coordinates & Custom Colors */}
                       {savedChairs.map((chair, idx) => {
                         const sLabel = chair.label || (idx + 1).toString();
                         const isSelected = seatNumber.toString() === sLabel;
+                        const visualClass = getChairVisualClass(chair.color, isSelected);
+                        const iconClass = getChairIconClass(chair.color, isSelected);
 
                         return (
                           <button
@@ -1447,15 +1453,11 @@ export default function SpmbClient({
                             style={{
                               transform: `translate(${chair.x}px, ${chair.y}px)`
                             }}
-                            title={`Pilih Kursi Nomor ${sLabel}`}
-                            className={`absolute w-10 h-10 rounded-full border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-20 shadow-md ${
-                              isSelected
-                                ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/40 scale-110 shadow-lg shadow-orange-500/40'
-                                : 'bg-white text-stone-800 border-orange-400 hover:border-orange-500 hover:scale-105 active:scale-95'
-                            }`}
+                            title={`Pilih Kursi Nomor ${sLabel} (${chair.color || 'Putih'})`}
+                            className={`absolute w-10 h-10 rounded-full border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-20 shadow-md ${visualClass}`}
                           >
-                            <Armchair className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-orange-600'}`} />
-                            <span className={`font-serif font-black text-[9px] mt-0.5 leading-none ${isSelected ? 'text-white' : 'text-stone-900'}`}>{sLabel}</span>
+                            <Armchair className={`w-4 h-4 ${iconClass}`} />
+                            <span className={`font-serif font-black text-[9px] mt-0.5 leading-none ${isSelected ? 'text-white' : ''}`}>{sLabel}</span>
                           </button>
                         );
                       })}

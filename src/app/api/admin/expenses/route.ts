@@ -30,10 +30,14 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name, amount, category, date, notes } = body;
 
+    const parsedAmount = typeof amount === 'string'
+      ? parseInt(amount.replace(/[^0-9]/g, '')) || 0
+      : parseInt(amount) || 0;
+
     const expense = await prisma.expense.create({
       data: {
         name,
-        amount: parseInt(amount) || 0,
+        amount: parsedAmount,
         category,
         date: date ? new Date(date) : new Date(),
         notes,

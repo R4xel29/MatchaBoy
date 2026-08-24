@@ -7,10 +7,64 @@ import {
   Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, 
   Users, Armchair, Sparkles, X, Circle, Square, RotateCw, Settings, UtensilsCrossed,
   ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Sliders, Compass, LayoutGrid,
-  Printer
+  Printer, Palette
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TableQrCardModal from './TableQrCardModal';
+
+export type ChairColor = 'WHITE' | 'BLACK' | 'YELLOW' | 'GRAY' | 'WOOD';
+
+export interface ChairColorOption {
+  id: ChairColor;
+  label: string;
+  name: string;
+  previewBg: string;
+  previewBorder: string;
+}
+
+export const CHAIR_COLOR_OPTIONS: ChairColorOption[] = [
+  { id: 'WHITE', label: 'Putih', name: 'Putih (Clean)', previewBg: 'bg-white', previewBorder: 'border-stone-300' },
+  { id: 'BLACK', label: 'Hitam', name: 'Hitam (Charcoal)', previewBg: 'bg-stone-900', previewBorder: 'border-black' },
+  { id: 'YELLOW', label: 'Kuning', name: 'Kuning (Warm Amber)', previewBg: 'bg-amber-400', previewBorder: 'border-amber-500' },
+  { id: 'GRAY', label: 'Abu-Abu', name: 'Abu-Abu (Slate)', previewBg: 'bg-stone-400', previewBorder: 'border-stone-500' },
+  { id: 'WOOD', label: 'Kayu', name: 'Kayu (Oak Wood)', previewBg: 'bg-[#8B5A2B]', previewBorder: 'border-[#6F3E1B]' },
+];
+
+export function getChairVisualClass(color?: ChairColor, isSelected?: boolean) {
+  if (isSelected) {
+    return 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/50 shadow-lg scale-110';
+  }
+  switch (color) {
+    case 'BLACK':
+      return 'bg-stone-900 text-white border-stone-800 shadow-md';
+    case 'YELLOW':
+      return 'bg-amber-400 text-amber-950 border-amber-500 shadow-md';
+    case 'GRAY':
+      return 'bg-stone-300 text-stone-900 border-stone-400 shadow-md';
+    case 'WOOD':
+      return 'bg-[#935A2B] text-amber-100 border-[#6F3E1B] shadow-md';
+    case 'WHITE':
+    default:
+      return 'bg-white text-stone-900 border-orange-400 shadow-sm';
+  }
+}
+
+export function getChairIconClass(color?: ChairColor, isSelected?: boolean) {
+  if (isSelected) return 'text-white';
+  switch (color) {
+    case 'BLACK':
+      return 'text-stone-200';
+    case 'YELLOW':
+      return 'text-amber-950';
+    case 'GRAY':
+      return 'text-stone-700';
+    case 'WOOD':
+      return 'text-amber-200';
+    case 'WHITE':
+    default:
+      return 'text-orange-600';
+  }
+}
 
 interface DiningTable {
   id: string;
@@ -32,10 +86,11 @@ export interface CustomChair {
   label: string;
   x: number; // relative pixel offset from table center
   y: number; // relative pixel offset from table center
+  color?: ChairColor; // 'WHITE' | 'BLACK' | 'YELLOW' | 'GRAY' | 'WOOD'
 }
 
 // Compute default chair coordinates without clipping the table
-export const getDefaultChairs = (capacity: number, shape: string): CustomChair[] => {
+export const getDefaultChairs = (capacity: number, shape: string, defaultColor: ChairColor = 'WHITE'): CustomChair[] => {
   const cap = Math.max(1, capacity);
   if (shape === 'ROUND') {
     const radius = 66; // outside 88px circle
@@ -45,7 +100,8 @@ export const getDefaultChairs = (capacity: number, shape: string): CustomChair[]
         id: `chair-${idx + 1}`,
         label: (idx + 1).toString(),
         x: Math.round(Math.cos(angle) * radius),
-        y: Math.round(Math.sin(angle) * radius)
+        y: Math.round(Math.sin(angle) * radius),
+        color: defaultColor
       };
     });
   } else {
@@ -53,47 +109,47 @@ export const getDefaultChairs = (capacity: number, shape: string): CustomChair[]
     // Chairs placed cleanly outside: Top (y=-56), Bottom (y=56), Left (x=-78), Right (x=78)
     if (cap === 2) {
       return [
-        { id: 'chair-1', label: '1', x: 0, y: -56 },
-        { id: 'chair-2', label: '2', x: 0, y: 56 }
+        { id: 'chair-1', label: '1', x: 0, y: -56, color: defaultColor },
+        { id: 'chair-2', label: '2', x: 0, y: 56, color: defaultColor }
       ];
     } else if (cap === 4) {
       return [
-        { id: 'chair-1', label: '1', x: -78, y: 0 },
-        { id: 'chair-2', label: '2', x: 0, y: -56 },
-        { id: 'chair-3', label: '3', x: 78, y: 0 },
-        { id: 'chair-4', label: '4', x: 0, y: 56 }
+        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
+        { id: 'chair-2', label: '2', x: 0, y: -56, color: defaultColor },
+        { id: 'chair-3', label: '3', x: 78, y: 0, color: defaultColor },
+        { id: 'chair-4', label: '4', x: 0, y: 56, color: defaultColor }
       ];
     } else if (cap === 6) {
       return [
-        { id: 'chair-1', label: '1', x: -78, y: 0 },
-        { id: 'chair-2', label: '2', x: -32, y: -56 },
-        { id: 'chair-3', label: '3', x: 32, y: -56 },
-        { id: 'chair-4', label: '4', x: 78, y: 0 },
-        { id: 'chair-5', label: '5', x: 32, y: 56 },
-        { id: 'chair-6', label: '6', x: -32, y: 56 }
+        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
+        { id: 'chair-2', label: '2', x: -32, y: -56, color: defaultColor },
+        { id: 'chair-3', label: '3', x: 32, y: -56, color: defaultColor },
+        { id: 'chair-4', label: '4', x: 78, y: 0, color: defaultColor },
+        { id: 'chair-5', label: '5', x: 32, y: 56, color: defaultColor },
+        { id: 'chair-6', label: '6', x: -32, y: 56, color: defaultColor }
       ];
     } else if (cap === 8) {
       return [
-        { id: 'chair-1', label: '1', x: -78, y: 0 },
-        { id: 'chair-2', label: '2', x: -40, y: -56 },
-        { id: 'chair-3', label: '3', x: 0, y: -56 },
-        { id: 'chair-4', label: '4', x: 40, y: -56 },
-        { id: 'chair-5', label: '5', x: 78, y: 0 },
-        { id: 'chair-6', label: '6', x: 40, y: 56 },
-        { id: 'chair-7', label: '7', x: 0, y: 56 },
-        { id: 'chair-8', label: '8', x: -40, y: 56 }
+        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
+        { id: 'chair-2', label: '2', x: -40, y: -56, color: defaultColor },
+        { id: 'chair-3', label: '3', x: 0, y: -56, color: defaultColor },
+        { id: 'chair-4', label: '4', x: 40, y: -56, color: defaultColor },
+        { id: 'chair-5', label: '5', x: 78, y: 0, color: defaultColor },
+        { id: 'chair-6', label: '6', x: 40, y: 56, color: defaultColor },
+        { id: 'chair-7', label: '7', x: 0, y: 56, color: defaultColor },
+        { id: 'chair-8', label: '8', x: -40, y: 56, color: defaultColor }
       ];
     } else if (cap === 9) {
       return [
-        { id: 'chair-1', label: '1', x: -78, y: 0 },
-        { id: 'chair-2', label: '2', x: -45, y: -56 },
-        { id: 'chair-3', label: '3', x: 0, y: -56 },
-        { id: 'chair-4', label: '4', x: 45, y: -56 },
-        { id: 'chair-5', label: '5', x: 78, y: 0 },
-        { id: 'chair-6', label: '6', x: 45, y: 56 },
-        { id: 'chair-7', label: '7', x: 15, y: 56 },
-        { id: 'chair-8', label: '8', x: -15, y: 56 },
-        { id: 'chair-9', label: '9', x: -45, y: 56 }
+        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
+        { id: 'chair-2', label: '2', x: -45, y: -56, color: defaultColor },
+        { id: 'chair-3', label: '3', x: 0, y: -56, color: defaultColor },
+        { id: 'chair-4', label: '4', x: 45, y: -56, color: defaultColor },
+        { id: 'chair-5', label: '5', x: 78, y: 0, color: defaultColor },
+        { id: 'chair-6', label: '6', x: 45, y: 56, color: defaultColor },
+        { id: 'chair-7', label: '7', x: 15, y: 56, color: defaultColor },
+        { id: 'chair-8', label: '8', x: -15, y: 56, color: defaultColor },
+        { id: 'chair-9', label: '9', x: -45, y: 56, color: defaultColor }
       ];
     } else {
       // General layout
@@ -103,25 +159,25 @@ export const getDefaultChairs = (capacity: number, shape: string): CustomChair[]
       let cIdx = 1;
 
       // Left col
-      list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: -78, y: 0 });
+      list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: -78, y: 0, color: defaultColor });
       cIdx++;
 
       // Top row
       for (let i = 0; i < topCount && cIdx <= cap; i++) {
         const xOffset = topCount === 1 ? 0 : -45 + (90 / (topCount - 1)) * i;
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: -56 });
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: -56, color: defaultColor });
         cIdx++;
       }
       // Right col
       if (cIdx <= cap) {
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: 78, y: 0 });
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: 78, y: 0, color: defaultColor });
         cIdx++;
       }
       // Bottom row
       const remaining = cap - cIdx + 1;
       for (let i = 0; i < remaining && cIdx <= cap; i++) {
         const xOffset = remaining === 1 ? 0 : 45 - (90 / Math.max(1, remaining - 1)) * i;
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: 56 });
+        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: 56, color: defaultColor });
         cIdx++;
       }
       return list.slice(0, cap);
@@ -242,21 +298,48 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
   const handleCapacityChange = (newCap: number) => {
     const clamped = Math.max(1, Math.min(16, newCap));
     setEditCapacity(clamped);
-    setCustomChairs(getDefaultChairs(clamped, editShape));
+    const defaultColor = customChairs[0]?.color || 'WHITE';
+    const newChairs = getDefaultChairs(clamped, editShape, defaultColor).map((c, idx) => ({
+      ...c,
+      color: customChairs[idx]?.color || defaultColor
+    }));
+    setCustomChairs(newChairs);
   };
 
   const handleShapeChange = (newShape: 'RECTANGLE' | 'ROUND') => {
     setEditShape(newShape);
-    setCustomChairs(getDefaultChairs(editCapacity, newShape));
+    const defaultColor = customChairs[0]?.color || 'WHITE';
+    const newChairs = getDefaultChairs(editCapacity, newShape, defaultColor).map((c, idx) => ({
+      ...c,
+      color: customChairs[idx]?.color || defaultColor
+    }));
+    setCustomChairs(newChairs);
+  };
+
+  // Change chair color (individual selected chair or all chairs)
+  const handleChairColorChange = (newColor: ChairColor) => {
+    setCustomChairs(prev => {
+      if (selectedChairIdx !== null && prev[selectedChairIdx]) {
+        return prev.map((c, idx) => idx === selectedChairIdx ? { ...c, color: newColor } : c);
+      } else {
+        return prev.map(c => ({ ...c, color: newColor }));
+      }
+    });
+    const label = selectedChairIdx !== null && customChairs[selectedChairIdx]
+      ? `Warna Kursi #${customChairs[selectedChairIdx].label} diubah`
+      : 'Warna semua kursi diubah';
+    showToast(label, 'info');
   };
 
   // Preset placements: Kotak 4 Sisi, Atas-Bawah, Kiri-Kanan, Melingkar Orbital
   const applyPresetPlacement = (presetType: 'FOUR_SIDES' | 'OPPOSITE' | 'LEFT_RIGHT' | 'ORBITAL') => {
+    const defaultColor = customChairs[0]?.color || 'WHITE';
+    let list: CustomChair[] = [];
+
     if (presetType === 'FOUR_SIDES') {
-      setCustomChairs(getDefaultChairs(editCapacity, 'RECTANGLE'));
+      list = getDefaultChairs(editCapacity, 'RECTANGLE', defaultColor);
     } else if (presetType === 'OPPOSITE') {
       const half = Math.ceil(editCapacity / 2);
-      const list: CustomChair[] = [];
       for (let i = 0; i < editCapacity; i++) {
         const isTop = i < half;
         const colIdx = isTop ? i : i - half;
@@ -266,13 +349,12 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
           id: `chair-${i + 1}`,
           label: (i + 1).toString(),
           x: Math.round(xOffset),
-          y: isTop ? -56 : 56
+          y: isTop ? -56 : 56,
+          color: customChairs[i]?.color || defaultColor
         });
       }
-      setCustomChairs(list);
     } else if (presetType === 'LEFT_RIGHT') {
       const half = Math.ceil(editCapacity / 2);
-      const list: CustomChair[] = [];
       for (let i = 0; i < editCapacity; i++) {
         const isLeft = i < half;
         const rowIdx = isLeft ? i : i - half;
@@ -282,14 +364,19 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
           id: `chair-${i + 1}`,
           label: (i + 1).toString(),
           x: isLeft ? -78 : 78,
-          y: Math.round(yOffset)
+          y: Math.round(yOffset),
+          color: customChairs[i]?.color || defaultColor
         });
       }
-      setCustomChairs(list);
     } else {
       // Orbital 360°
-      setCustomChairs(getDefaultChairs(editCapacity, 'ROUND'));
+      list = getDefaultChairs(editCapacity, 'ROUND', defaultColor);
     }
+
+    setCustomChairs(list.map((c, idx) => ({
+      ...c,
+      color: customChairs[idx]?.color || defaultColor
+    })));
     showToast('Tata letak kursi diterapkan', 'info');
   };
 
@@ -841,19 +928,21 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                   )}
                 </div>
 
-                {/* PHYSICAL CHAIRS POSITIONED CLEANLY AROUND THE PERIMETER */}
+                {/* PHYSICAL CHAIRS POSITIONED CLEANLY AROUND THE PERIMETER WITH CUSTOM COLORS */}
                 {tableChairs.map((chair) => {
+                  const visualClass = getChairVisualClass(chair.color, false);
+                  const iconClass = getChairIconClass(chair.color, false);
                   return (
                     <div
                       key={chair.id}
                       style={{
                         transform: `translate(${chair.x}px, ${chair.y}px)`,
                       }}
-                      title={`Meja ${table.number} - Kursi ${chair.label}`}
-                      className="absolute w-8 h-8 rounded-full bg-white border-2 border-orange-400 text-orange-700 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10"
+                      title={`Meja ${table.number} - Kursi ${chair.label} (${chair.color || 'Putih'})`}
+                      className={`absolute w-8 h-8 rounded-full border-2 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10 transition-all ${visualClass}`}
                     >
-                      <Armchair className="w-3.5 h-3.5 text-orange-600" />
-                      <span className="font-serif font-black text-[8px] leading-none text-stone-900 mt-0.5">
+                      <Armchair className={`w-3.5 h-3.5 ${iconClass}`} />
+                      <span className="font-serif font-black text-[8px] leading-none mt-0.5">
                         {chair.label}
                       </span>
                     </div>
@@ -1030,6 +1119,61 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                     </div>
                   </div>
 
+                  {/* Chair Color Picker (Hitam, Kuning, Abu-Abu, Putih, Kayu) */}
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                        <Palette className="w-3.5 h-3.5 text-orange-600" />
+                        <span>
+                          {selectedChairIdx !== null && customChairs[selectedChairIdx]
+                            ? `Warna Kursi #${customChairs[selectedChairIdx].label}`
+                            : 'Warna Kursi Meja'}
+                        </span>
+                      </label>
+                      {selectedChairIdx !== null && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedChairIdx(null)}
+                          className="text-[10px] text-orange-600 font-bold hover:underline cursor-pointer"
+                        >
+                          Pilih Semua
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {CHAIR_COLOR_OPTIONS.map((opt) => {
+                        const activeColor = selectedChairIdx !== null && customChairs[selectedChairIdx]
+                          ? (customChairs[selectedChairIdx].color || 'WHITE')
+                          : (customChairs[0]?.color || 'WHITE');
+                        const isColorActive = activeColor === opt.id;
+
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => handleChairColorChange(opt.id)}
+                            title={`Pilih Warna ${opt.name}`}
+                            className={`p-1.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                              isColorActive
+                                ? 'ring-2 ring-orange-500 border-orange-500 bg-white shadow-sm scale-105'
+                                : 'border-stone-200 bg-white hover:border-stone-400 hover:scale-102'
+                            }`}
+                          >
+                            <span className={`w-5 h-5 rounded-full ${opt.previewBg} ${opt.previewBorder} border shadow-xs`} />
+                            <span className="text-[9px] font-bold text-stone-800 leading-tight">{opt.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <p className="text-[9px] text-stone-500 leading-snug">
+                      {selectedChairIdx !== null
+                        ? `💡 Klik warna untuk mengubah Kursi #${customChairs[selectedChairIdx]?.label}.`
+                        : '💡 Klik warna untuk mengubah semua kursi, atau klik kursi tertentu di kanvas.'}
+                    </p>
+                  </div>
+
                   {/* Status Selector */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
@@ -1095,13 +1239,14 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                       Kanvas Interaktif Studio Kursi Bebas (2D Free-Form)
                     </p>
                     <p className="text-[10px] text-stone-500">
-                      Tarik kursi ke posisi mana pun di kanvas. Kursi tidak akan tertutup meja.
+                      Tarik kursi ke posisi mana pun di kanvas. Klik kursi untuk mengubah warnanya secara spesifik.
                     </p>
                   </div>
 
                   {/* Interactive Drag Canvas */}
                   <div
                     ref={studioCanvasRef}
+                    onClick={() => setSelectedChairIdx(null)}
                     className="relative w-80 h-80 bg-white rounded-3xl border-2 border-stone-300 shadow-inner flex items-center justify-center select-none"
                   >
                     {/* Visual Placement Guide: Box Guide if Rectangle, Circle Guide if Round */}
@@ -1128,28 +1273,30 @@ export default function AdminTablesClient({ initialTables }: { initialTables: Di
                       </div>
                     )}
 
-                    {/* INTERACTIVE 2D DRAGGABLE CHAIRS */}
+                    {/* INTERACTIVE 2D DRAGGABLE CHAIRS WITH CUSTOM COLORS */}
                     {customChairs.map((chair, idx) => {
                       const isSelected = selectedChairIdx === idx;
+                      const visualClass = getChairVisualClass(chair.color, isSelected);
+                      const iconClass = getChairIconClass(chair.color, isSelected);
 
                       return (
                         <div
                           key={chair.id}
                           onMouseDown={(e) => handleStartChairDrag(e, idx)}
                           onTouchStart={(e) => handleStartChairDrag(e, idx)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedChairIdx(idx);
+                          }}
                           style={{
                             transform: `translate(${chair.x}px, ${chair.y}px)`,
                             touchAction: 'none'
                           }}
-                          title={`Klik & Tarik Kursi ${chair.label}`}
-                          className={`absolute w-10 h-10 rounded-full border-2 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center transition-transform z-30 shadow-md ${
-                            isSelected
-                              ? 'bg-orange-500 text-white border-white ring-4 ring-orange-500/30 scale-110'
-                              : 'bg-white text-stone-800 border-orange-400 hover:scale-105'
-                          }`}
+                          title={`Kursi ${chair.label} (${chair.color || 'Putih'}) - Klik untuk pilih & ubah warna/geser`}
+                          className={`absolute w-10 h-10 rounded-full border-2 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center transition-transform z-30 shadow-md ${visualClass}`}
                         >
-                          <Armchair className={`w-4 h-4 ${isSelected ? 'text-white' : 'text-orange-600'}`} />
-                          <span className={`font-serif font-black text-[9px] leading-none mt-0.5 ${isSelected ? 'text-white' : 'text-stone-900'}`}>{chair.label}</span>
+                          <Armchair className={`w-4 h-4 ${iconClass}`} />
+                          <span className="font-serif font-black text-[9px] leading-none mt-0.5">{chair.label}</span>
                         </div>
                       );
                     })}

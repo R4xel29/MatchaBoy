@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, UtensilsCrossed, Check, Armchair, Loader2 } from 'lucide-react';
 import type { LiveDiningTable } from '@/components/admin/tables/LiveTableMinimap';
-import { getDefaultChairs, type CustomChair } from '@/app/(admin)/admin/tables/AdminTablesClient';
+import { getDefaultChairs, getChairVisualClass, getChairIconClass, type CustomChair } from '@/app/(admin)/admin/tables/AdminTablesClient';
 
 interface PosTablePickerModalProps {
   isOpen: boolean;
@@ -215,21 +215,26 @@ export function PosTablePickerModal({
                         )}
                       </div>
 
-                      {/* Physical Chairs with exact spacing */}
-                      {chairs.map((chair) => (
-                        <div
-                          key={chair.id}
-                          style={{
-                            transform: `translate(${chair.x}px, ${chair.y}px)`,
-                          }}
-                          className="absolute w-8 h-8 rounded-full bg-white border-2 border-orange-400 text-orange-700 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10"
-                        >
-                          <Armchair className="w-3.5 h-3.5 text-orange-600" />
-                          <span className="font-serif font-black text-[8px] leading-none text-stone-900 mt-0.5">
-                            {chair.label}
-                          </span>
-                        </div>
-                      ))}
+                      {/* Physical Chairs with exact spacing and custom colors */}
+                      {chairs.map((chair) => {
+                        const visualClass = getChairVisualClass(chair.color, false);
+                        const iconClass = getChairIconClass(chair.color, false);
+                        return (
+                          <div
+                            key={chair.id}
+                            style={{
+                              transform: `translate(${chair.x}px, ${chair.y}px)`,
+                            }}
+                            title={`Meja ${table.number} - Kursi ${chair.label} (${chair.color || 'Putih'})`}
+                            className={`absolute w-8 h-8 rounded-full border-2 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10 transition-all ${visualClass}`}
+                          >
+                            <Armchair className={`w-3.5 h-3.5 ${iconClass}`} />
+                            <span className="font-serif font-black text-[8px] leading-none mt-0.5">
+                              {chair.label}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}

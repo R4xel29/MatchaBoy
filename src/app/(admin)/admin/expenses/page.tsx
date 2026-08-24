@@ -12,8 +12,9 @@ export default async function AdminExpensesPage({ searchParams }: PageProps) {
   const page = Math.max(1, Number(params?.page) || 1);
   const pageSize = 15;
 
-  const [totalExpenses, expenses] = await Promise.all([
+  const [totalExpenses, totalAmountAgg, expenses] = await Promise.all([
     prisma.expense.count(),
+    prisma.expense.aggregate({ _sum: { amount: true } }),
     prisma.expense.findMany({
       orderBy: { date: 'desc' },
       skip: (page - 1) * pageSize,
@@ -34,6 +35,7 @@ export default async function AdminExpensesPage({ searchParams }: PageProps) {
         currentPage={page}
         totalPages={totalPages}
         totalExpenses={totalExpenses}
+        totalAmountSum={totalAmountAgg._sum.amount || 0}
         pageSize={pageSize}
       />
     </div>
