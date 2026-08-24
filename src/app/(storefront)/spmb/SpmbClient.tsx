@@ -8,7 +8,7 @@ import {
   ShoppingBag, Trash2, Plus, Minus, User, MapPin, 
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
   ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Armchair, Sparkles,
-  Flame, Clock, AlertTriangle
+  Flame, Clock, AlertTriangle, DoorOpen, Tv, Archive, Coffee, Flower2, Columns, Accessibility, Compass, Map
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
@@ -21,6 +21,7 @@ import {
   getChairVisualClass, 
   getChairIconClass, 
   FloorElementVisual,
+  CHAIR_COLOR_OPTIONS,
   type CustomChair, 
   type ChairColor, 
   type FloorElementData 
@@ -70,6 +71,7 @@ export default function SpmbClient({
   // Modals
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
   const [showSeatModal, setShowSeatModal] = useState<boolean>(false);
+  const [seatModalView, setSeatModalView] = useState<'SEAT_PICKER' | 'ROOM_MAP'>('SEAT_PICKER');
 
   // Cart State
   const cartItems = useCartStore((s) => s.items);
@@ -1355,15 +1357,15 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Pop-up Pemilihan Nomor Kursi (Top-Down Visual Table Layout - Bulat vs Kotak) */}
+      {/* Pop-up Pemilihan Nomor Kursi (Contextual Landmark Orientation + Dual View Denah) */}
       <AnimatePresence>
         {showSeatModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
               onClick={() => setShowSeatModal(false)}
             />
 
@@ -1371,15 +1373,55 @@ export default function SpmbClient({
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl w-full max-w-md p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center"
+              className="bg-white rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center max-h-[90vh] overflow-y-auto"
             >
               {(() => {
                 const currentTableObj = activeTables.find(t => t.number.toString().trim() === tableNumber.toString().trim()) || null;
                 const isRoundTable = currentTableObj?.shape === 'ROUND';
                 const currentTableCapacity = currentTableObj?.capacity || 4;
 
+                // 1. Calculate nearby room landmarks around the current table
+                const tx = currentTableObj?.x !== undefined ? currentTableObj.x : 50;
+                const ty = currentTableObj?.y !== undefined ? currentTableObj.y : 50;
+
+                let topEl: { el: FloorElementData; dist: number } | null = null;
+                let bottomEl: { el: FloorElementData; dist: number } | null = null;
+                let leftEl: { el: FloorElementData; dist: number } | null = null;
+                let rightEl: { el: FloorElementData; dist: number } | null = null;
+
+                for (const el of floorElements) {
+                  const dx = el.x - tx;
+                  const dy = el.y - ty;
+                  const dist = Math.hypot(dx, dy);
+
+                  if (dy < -2 && Math.abs(dy) >= Math.abs(dx) * 0.4) {
+                    if (!topEl || dist < topEl.dist) topEl = { el, dist };
+                  }
+                  if (dy > 2 && dy >= Math.abs(dx) * 0.4) {
+                    if (!bottomEl || dist < bottomEl.dist) bottomEl = { el, dist };
+                  }
+                  if (dx < -2 && Math.abs(dx) >= Math.abs(dy) * 0.4) {
+                    if (!leftEl || dist < leftEl.dist) leftEl = { el, dist };
+                  }
+                  if (dx > 2 && dx >= Math.abs(dy) * 0.4) {
+                    if (!rightEl || dist < rightEl.dist) rightEl = { el, dist };
+                  }
+                }
+
+                const landmarks: {
+                  top: FloorElementData | null;
+                  bottom: FloorElementData | null;
+                  left: FloorElementData | null;
+                  right: FloorElementData | null;
+                } = {
+                  top: topEl ? topEl.el : null,
+                  bottom: bottomEl ? bottomEl.el : null,
+                  left: leftEl ? leftEl.el : null,
+                  right: rightEl ? rightEl.el : null,
+                };
+
                 let savedChairs: CustomChair[] | null = null;
-                // 1. Try from database chairsJson (Synced from Admin Studio)
+                // Try from database chairsJson (Synced from Admin Studio)
                 if (currentTableObj?.chairsJson) {
                   try {
                     const parsed = JSON.parse(currentTableObj.chairsJson);
@@ -1388,7 +1430,7 @@ export default function SpmbClient({
                     }
                   } catch {}
                 }
-                // 2. Fallback to localStorage if any
+                // Fallback to localStorage if any
                 if (!savedChairs && typeof window !== 'undefined' && currentTableObj?.id) {
                   const saved = localStorage.getItem(`arum_chairs_table_${currentTableObj.id}`);
                   if (saved) {
@@ -1400,13 +1442,59 @@ export default function SpmbClient({
                     } catch {}
                   }
                 }
-                // 3. Fallback to default placement
+                // Fallback to default placement
                 if (!savedChairs || savedChairs.length === 0) {
                   savedChairs = getDefaultChairs(currentTableCapacity, currentTableObj?.shape || 'RECTANGLE');
                 }
 
+                // Helper to get facing direction text for a chair
+                const getChairFacingText = (c: CustomChair) => {
+                  if (c.y < -20 && Math.abs(c.y) >= Math.abs(c.x)) {
+                    return landmarks.top ? `Menghadap ${landmarks.top.name}` : 'Sisi Atas (Depan)';
+                  }
+                  if (c.y > 20 && c.y >= Math.abs(c.x)) {
+                    return landmarks.bottom ? `Menghadap ${landmarks.bottom.name}` : 'Sisi Bawah (Belakang)';
+                  }
+                  if (c.x < -20) {
+                    return landmarks.left ? `Menghadap ${landmarks.left.name}` : 'Sisi Kiri';
+                  }
+                  if (c.x > 20) {
+                    return landmarks.right ? `Menghadap ${landmarks.right.name}` : 'Sisi Kanan';
+                  }
+                  return 'Sisi Meja';
+                };
+
+                const selectedChairObj = savedChairs.find(c => (c.label || '').toString() === seatNumber.toString()) || savedChairs[0];
+                const selectedChairColorOption = CHAIR_COLOR_OPTIONS.find(opt => opt.id === selectedChairObj?.color) || CHAIR_COLOR_OPTIONS[0];
+                const selectedChairFacing = selectedChairObj ? getChairFacingText(selectedChairObj) : 'Sisi Meja';
+
+                const renderLandmarkBadge = (el: FloorElementData | null, directionLabel: string) => {
+                  if (!el) return null;
+                  const isDoor = el.type === 'DOOR';
+                  const isTv = el.type === 'TV';
+                  const isShelf = el.type === 'SHELF';
+                  const isBar = el.type === 'BAR';
+                  const isPlant = el.type === 'PLANT';
+                  const isWindow = el.type === 'WINDOW';
+                  const isRestroom = el.type === 'RESTROOM';
+
+                  return (
+                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 border border-stone-300 text-stone-800 shadow-xs text-[10px] font-bold tracking-wide backdrop-blur-xs whitespace-nowrap">
+                      {isDoor && <DoorOpen className="w-3 h-3 text-amber-700 shrink-0" />}
+                      {isTv && <Tv className="w-3 h-3 text-sky-500 shrink-0 animate-pulse" />}
+                      {isShelf && <Archive className="w-3 h-3 text-[#8C5E35] shrink-0" />}
+                      {isBar && <Coffee className="w-3 h-3 text-amber-600 shrink-0" />}
+                      {isPlant && <Flower2 className="w-3 h-3 text-emerald-600 shrink-0" />}
+                      {isWindow && <Columns className="w-3 h-3 text-cyan-600 shrink-0" />}
+                      {isRestroom && <Accessibility className="w-3 h-3 text-purple-600 shrink-0" />}
+                      <span>{directionLabel}: {el.name}</span>
+                    </div>
+                  );
+                };
+
                 return (
                   <>
+                    {/* Header */}
                     <div className="flex items-center justify-between w-full pb-3 border-b border-stone-100 mb-2">
                       <div className="text-left">
                         <div className="flex items-center gap-2">
@@ -1415,10 +1503,12 @@ export default function SpmbClient({
                             <span>Pilih Tempat Duduk Anda</span>
                           </h3>
                           <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-bold">
-                            {isRoundTable ? 'Meja Bulat' : 'Meja Kotak'}
+                            Meja {tableNumber} ({isRoundTable ? 'Bulat' : 'Kotak'})
                           </span>
                         </div>
-                        <p className="text-[11px] text-stone-500">Ketuk kursi fisik yang Anda duduki di Meja {tableNumber}</p>
+                        <p className="text-[11px] text-stone-500">
+                          Gunakan patokan ruangan & warna kursi fisik untuk memilih posisi duduk Anda
+                        </p>
                       </div>
                       <button
                         onClick={() => setShowSeatModal(false)}
@@ -1428,95 +1518,286 @@ export default function SpmbClient({
                       </button>
                     </div>
 
+                    {/* Dual View Toggle (Pilih Kursi vs Denah Ruangan Lengkap) */}
+                    <div className="flex p-1 bg-stone-100 rounded-2xl border border-stone-200 w-full my-2">
+                      <button
+                        type="button"
+                        onClick={() => setSeatModalView('SEAT_PICKER')}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          seatModalView === 'SEAT_PICKER'
+                            ? 'bg-white text-orange-600 shadow-sm'
+                            : 'text-stone-500 hover:text-stone-800'
+                        }`}
+                      >
+                        <Armchair className="w-3.5 h-3.5" />
+                        <span>Kursi & Arah Hadap</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSeatModalView('ROOM_MAP')}
+                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          seatModalView === 'ROOM_MAP'
+                            ? 'bg-orange-500 text-white shadow-sm'
+                            : 'text-stone-500 hover:text-stone-800'
+                        }`}
+                      >
+                        <Compass className="w-3.5 h-3.5" />
+                        <span>Denah Ruangan Kafe</span>
+                      </button>
+                    </div>
+
                     {isTableLocked && (
-                      <div className="w-full mb-3 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-orange-500/10 to-amber-500/10 border border-orange-300/60 text-orange-900 text-xs font-bold flex items-center gap-2 text-left">
-                        <span className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center shrink-0 text-xs font-black shadow-sm">
+                      <div className="w-full mb-2 px-3 py-1.5 rounded-2xl bg-orange-50/80 border border-orange-200 text-orange-950 text-[11px] font-semibold flex items-center gap-2 text-left">
+                        <span className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center shrink-0 text-[10px] font-black shadow-xs">
                           {tableNumber}
                         </span>
-                        <span>Tersambung di Meja {tableNumber} via QR Code. Tentukan nomor kursi Anda:</span>
+                        <span>Tersambung di Meja {tableNumber}. Pilih kursi yang Anda duduki:</span>
                       </div>
                     )}
 
-                    {/* Top-Down Visual Table Canvas (Mobile & Desktop Responsive) */}
-                    <div className="my-4 relative w-72 h-72 sm:w-80 sm:h-80 max-w-full bg-[#FAF9F6] rounded-3xl border-2 border-stone-200 p-2 flex items-center justify-center shadow-inner select-none overflow-hidden touch-manipulation">
-                      
-                      {/* Background Grid Accent */}
-                      <div 
-                        className="absolute inset-0 opacity-15 pointer-events-none rounded-3xl"
-                        style={{
-                          backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
-                          backgroundSize: '14px 14px'
-                        }}
-                      />
-
-                      {/* Central Dining Table Graphic (Round vs Rectangular) */}
-                      {isRoundTable ? (
-                        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
-                          <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
-                          <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
-                            {currentTableCapacity} Kursi
-                          </span>
-                          <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Bundar (Bulat)</span>
-                        </div>
-                      ) : (
-                        <div 
-                          style={{ transform: `rotate(${currentTableObj?.rotation || 0}deg)` }}
-                          className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none transition-transform duration-300"
-                        >
-                          <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
-                          <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
-                            {currentTableCapacity} Kursi
-                          </span>
-                          <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Persegi (Kotak)</span>
-                        </div>
-                      )}
-
-                      {/* Surrounding Chairs Positioned Directly From Custom / Manual / Default Coordinates & Custom Colors */}
-                      {savedChairs.map((chair, idx) => {
-                        const sLabel = chair.label || (idx + 1).toString();
-                        const isSelected = seatNumber.toString() === sLabel;
-                        const visualClass = getChairVisualClass(chair.color, isSelected);
-                        const iconClass = getChairIconClass(chair.color, isSelected);
-
-                        return (
-                          <button
-                            key={chair.id || idx}
-                            type="button"
-                            onClick={() => setSeatNumber(sLabel)}
+                    {/* VIEW 1: SEAT PICKER WITH LANDMARK ORIENTATION GUIDES */}
+                    {seatModalView === 'SEAT_PICKER' && (
+                      <div className="w-full space-y-3">
+                        {/* Interactive Table Canvas with Directional Landmark Badges */}
+                        <div className="relative w-full max-w-[340px] sm:max-w-[380px] aspect-square mx-auto bg-[#FAF9F6] rounded-3xl border-2 border-stone-300 p-4 flex items-center justify-center shadow-inner select-none overflow-hidden touch-manipulation">
+                          
+                          {/* Compass Crosshair Accent */}
+                          <div 
+                            className="absolute inset-0 opacity-15 pointer-events-none rounded-3xl"
                             style={{
-                              transform: `translate(${chair.x}px, ${chair.y}px)`
+                              backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
+                              backgroundSize: '16px 16px'
                             }}
-                            title={`Pilih Kursi Nomor ${sLabel} (${chair.color || 'Putih'})`}
-                            className={`absolute w-10 h-10 rounded-full border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-20 shadow-md ${visualClass}`}
-                          >
-                            <Armchair className={`w-4 h-4 ${iconClass}`} />
-                            <span className={`font-serif font-black text-[9px] mt-0.5 leading-none ${isSelected ? 'text-white' : ''}`}>{sLabel}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                          />
 
-                    {/* Selection Summary */}
-                    <div className="w-full p-3 bg-orange-50/70 rounded-2xl border border-orange-200 mb-4 flex items-center justify-between text-xs">
-                      <div className="text-left">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-800">Kursi Dipilih</p>
-                        <p className="font-serif font-bold text-stone-900 mt-0.5">
-                          Meja {tableNumber} ({isRoundTable ? 'Bulat' : 'Kotak'}) • Kursi Nomor {seatNumber}
+                          {/* Landmark Badges on 4 Sides */}
+                          {landmarks.top && (
+                            <div className="absolute top-2 inset-x-0 flex justify-center pointer-events-none z-20">
+                              {renderLandmarkBadge(landmarks.top, '▲ Depan')}
+                            </div>
+                          )}
+                          {landmarks.bottom && (
+                            <div className="absolute bottom-2 inset-x-0 flex justify-center pointer-events-none z-20">
+                              {renderLandmarkBadge(landmarks.bottom, '▼ Belakang')}
+                            </div>
+                          )}
+                          {landmarks.left && (
+                            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-start pointer-events-none z-20">
+                              {renderLandmarkBadge(landmarks.left, '◄ Kiri')}
+                            </div>
+                          )}
+                          {landmarks.right && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-end pointer-events-none z-20">
+                              {renderLandmarkBadge(landmarks.right, '► Kanan')}
+                            </div>
+                          )}
+
+                          {/* Central Dining Table Graphic */}
+                          {isRoundTable ? (
+                            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
+                              <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
+                              <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
+                                {currentTableCapacity} Kursi
+                              </span>
+                              <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Bundar</span>
+                            </div>
+                          ) : (
+                            <div 
+                              style={{ transform: `rotate(${currentTableObj?.rotation || 0}deg)` }}
+                              className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none transition-transform duration-300"
+                            >
+                              <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
+                              <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
+                                {currentTableCapacity} Kursi
+                              </span>
+                              <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Kotak</span>
+                            </div>
+                          )}
+
+                          {/* Physical Chairs with Exact Colors & Placement */}
+                          {savedChairs.map((chair, idx) => {
+                            const sLabel = chair.label || (idx + 1).toString();
+                            const isSelected = seatNumber.toString() === sLabel;
+                            const visualClass = getChairVisualClass(chair.color, isSelected);
+                            const iconClass = getChairIconClass(chair.color, isSelected);
+                            const facing = getChairFacingText(chair);
+                            const cColor = CHAIR_COLOR_OPTIONS.find(opt => opt.id === chair.color)?.label || 'Putih';
+
+                            return (
+                              <button
+                                key={chair.id || idx}
+                                type="button"
+                                onClick={() => setSeatNumber(sLabel)}
+                                style={{
+                                  transform: `translate(${chair.x}px, ${chair.y}px)`
+                                }}
+                                title={`Pilih Kursi Nomor ${sLabel} (${cColor} • ${facing})`}
+                                className={`absolute w-10 h-10 rounded-full border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-25 shadow-md group ${visualClass}`}
+                              >
+                                <Armchair className={`w-4 h-4 ${iconClass}`} />
+                                <span className={`font-serif font-black text-[9px] mt-0.5 leading-none ${isSelected ? 'text-white' : ''}`}>
+                                  {sLabel}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Quick Chair Selection Chips (With Color & Facing Description) */}
+                        <div className="space-y-1.5 text-left">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                            Pilih Kursi Berdasarkan Warna / Arah Hadap:
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {savedChairs.map((chair, idx) => {
+                              const sLabel = chair.label || (idx + 1).toString();
+                              const isSelected = seatNumber.toString() === sLabel;
+                              const cColorOpt = CHAIR_COLOR_OPTIONS.find(opt => opt.id === chair.color) || CHAIR_COLOR_OPTIONS[0];
+                              const facing = getChairFacingText(chair);
+
+                              return (
+                                <button
+                                  key={chair.id || idx}
+                                  type="button"
+                                  onClick={() => setSeatNumber(sLabel)}
+                                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-orange-50 border-orange-500 text-orange-950 ring-2 ring-orange-500/20 shadow-xs'
+                                      : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
+                                  }`}
+                                >
+                                  <span className={`w-5 h-5 rounded-full ${cColorOpt.previewBg} ${cColorOpt.previewBorder} border shadow-xs flex items-center justify-center text-[8px] font-black ${chair.color === 'BLACK' ? 'text-white' : 'text-stone-900'}`}>
+                                    {sLabel}
+                                  </span>
+                                  <div className="overflow-hidden">
+                                    <p className="text-[11px] font-bold leading-tight truncate">
+                                      Kursi #{sLabel} ({cColorOpt.label})
+                                    </p>
+                                    <p className="text-[9px] text-stone-500 leading-tight truncate">
+                                      {facing}
+                                    </p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* VIEW 2: FULL CAFE ROOM FLOOR PLAN MAP */}
+                    {seatModalView === 'ROOM_MAP' && (
+                      <div className="w-full space-y-2 text-left">
+                        <p className="text-[10px] text-stone-500">
+                          Lihat posisi Meja {tableNumber} terhadap seluruh ruangan kafe (Pintu, Bar Kasir, TV, Rak, Jendela).
+                        </p>
+                        
+                        <div
+                          className="relative w-full aspect-[16/9] min-h-[220px] rounded-2xl bg-[#FAF7F2] border-2 border-stone-300 shadow-inner overflow-hidden select-none"
+                          style={{
+                            backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
+                            backgroundSize: '16px 16px'
+                          }}
+                        >
+                          {/* Floor Landmarks */}
+                          {floorElements.map((el) => (
+                            <div
+                              key={el.id}
+                              style={{
+                                position: 'absolute',
+                                left: `${Math.max(5, Math.min(95, el.x))}%`,
+                                top: `${Math.max(5, Math.min(95, el.y))}%`,
+                                transform: 'translate(-50%, -50%)',
+                              }}
+                              className="absolute flex items-center justify-center pointer-events-none z-10"
+                            >
+                              <FloorElementVisual element={el} />
+                            </div>
+                          ))}
+
+                          {/* Tables */}
+                          {activeTables.map((t) => {
+                            const isCurrent = tableNumber === t.number.toString();
+                            const isRound = t.shape === 'ROUND';
+                            const xPos = t.x !== undefined ? t.x : 50;
+                            const yPos = t.y !== undefined ? t.y : 50;
+
+                            return (
+                              <div
+                                key={t.id}
+                                onClick={() => {
+                                  setTableNumber(t.number.toString());
+                                  setSeatModalView('SEAT_PICKER');
+                                }}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${Math.max(10, Math.min(90, xPos))}%`,
+                                  top: `${Math.max(10, Math.min(90, yPos))}%`,
+                                  transform: 'translate(-50%, -50%)',
+                                }}
+                                className="absolute flex items-center justify-center cursor-pointer z-20 group"
+                              >
+                                <div
+                                  style={{ transform: `rotate(${t.rotation || 0}deg)` }}
+                                  className={`relative flex flex-col items-center justify-center border-2 transition-all p-1.5 ${
+                                    isRound ? 'w-16 h-16 rounded-full' : 'w-20 h-14 rounded-xl'
+                                  } ${
+                                    isCurrent
+                                      ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/40 shadow-xl scale-110 z-30'
+                                      : 'bg-white text-stone-800 border-stone-300 hover:border-orange-400 hover:scale-105'
+                                  }`}
+                                >
+                                  <span className="font-serif font-black text-[10px] leading-tight">
+                                    Meja {t.number}
+                                  </span>
+                                  {isCurrent && (
+                                    <span className="text-[7px] bg-white/20 px-1 rounded font-bold uppercase mt-0.5">
+                                      Posisi Anda
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-stone-500 pt-1">
+                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meja {tableNumber} (Posisi Anda)</span>
+                          <button
+                            type="button"
+                            onClick={() => setSeatModalView('SEAT_PICKER')}
+                            className="text-orange-600 font-bold hover:underline cursor-pointer"
+                          >
+                            Kembali ke Pilih Kursi &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Selection Summary Confirmation Card */}
+                    <div className="w-full p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-200 my-3 flex items-center justify-between text-xs text-left">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-800">
+                          Tempat Duduk Terpilih
+                        </p>
+                        <p className="font-serif font-bold text-stone-900 mt-0.5 text-sm">
+                          Meja {tableNumber} • Kursi #{seatNumber} ({selectedChairColorOption.label})
+                        </p>
+                        <p className="text-[11px] text-orange-700 font-medium mt-0.5">
+                          📍 {selectedChairFacing}
                         </p>
                       </div>
-                      <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-sm">
+                      <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-sm shrink-0">
                         <Check className="w-4 h-4" />
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setShowSeatModal(false);
-                      }}
-                      className="w-full py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+                      onClick={() => setShowSeatModal(false)}
+                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer"
                     >
-                      Konfirmasi Kursi Nomor {seatNumber}
+                      Konfirmasi Kursi #{seatNumber} ({selectedChairColorOption.label})
                     </button>
                   </>
                 );
