@@ -1,7 +1,7 @@
 import { prisma } from './prisma';
 
 /**
- * Deducts stock for all items in an order based on their product recipes.
+ * Deducts stock for all items in an order based on their product recipes and packaging cups.
  */
 export async function deductStockForOrder(orderId: string) {
   try {
@@ -38,11 +38,23 @@ export async function deductStockForOrder(orderId: string) {
 
     if (!order) throw new Error('Order not found');
 
+    // Fetch cup packaging ingredients
+    const [cupRegular, cupJumbo] = await Promise.all([
+      prisma.ingredient.findFirst({
+        where: { isPackaging: true, name: { contains: 'Regular', mode: 'insensitive' } },
+      }),
+      prisma.ingredient.findFirst({
+        where: { isPackaging: true, name: { contains: 'Jumbo', mode: 'insensitive' } },
+      }),
+    ]);
+
     // 3. Process each order item
     for (const item of order.items) {
       let isBundle = false;
       let bundleSelections: any[] = [];
       let addOns: any[] = [];
+      let itemSize = 'Regular';
+
       if (item.modifiers) {
         try {
           const parsed = JSON.parse(item.modifiers);
@@ -53,8 +65,41 @@ export async function deductStockForOrder(orderId: string) {
           if (parsed && Array.isArray(parsed.addOns)) {
             addOns = parsed.addOns;
           }
+          if (parsed && parsed.size) {
+            itemSize = parsed.size;
+          }
         } catch {
-          // Ignore
+          if (item.modifiers.toLowerCase().includes('large') || item.modifiers.toLowerCase().includes('jumbo')) {
+            itemSize = 'Large';
+          }
+        }
+      }
+
+      // Deduct Cup Packaging if customer did NOT bring a tumbler
+      if (!order.hasTumbler) {
+        const isLarge = itemSize.toLowerCase().includes('large') || itemSize.toLowerCase().includes('jumbo');
+        const targetCup = isLarge ? (cupJumbo || cupRegular) : cupRegular;
+
+        if (targetCup) {
+          const totalCupQty = item.qty;
+          await prisma.$transaction([
+            prisma.ingredient.update({
+              where: { id: targetCup.id },
+              data: {
+                stock: {
+                  decrement: totalCupQty,
+                },
+              },
+            }),
+            prisma.stockMovement.create({
+              data: {
+                ingredientId: targetCup.id,
+                quantity: -totalCupQty,
+                type: 'OUT',
+                reason: `Order #${orderId.slice(-6).toUpperCase()} - ${targetCup.name} (${item.product.name} Size ${itemSize}, Qty: ${item.qty})`,
+              },
+            }),
+          ]);
         }
       }
 
@@ -85,14 +130,14 @@ export async function deductStockForOrder(orderId: string) {
 
       if (isBundle && bundleSelections.length > 0) {
         // Fetch recipes for all products selected in the bundle
-        const selectProductIds = bundleSelections.map(s => s.productId);
+        const selectProductIds = bundleSelections.map((s) => s.productId);
         const selectedProducts = await prisma.product.findMany({
           where: { id: { in: selectProductIds } },
-          include: { productIngredients: true }
+          include: { productIngredients: true },
         });
 
         for (const sel of bundleSelections) {
-          const selProduct = selectedProducts.find(p => p.id === sel.productId);
+          const selProduct = selectedProducts.find((p) => p.id === sel.productId);
           const recipe = selProduct?.productIngredients;
           if (!recipe || recipe.length === 0) continue;
 
@@ -100,7 +145,6 @@ export async function deductStockForOrder(orderId: string) {
             const totalQtyToDeduct = recipeItem.quantity * item.qty;
 
             await prisma.$transaction([
-              // Deduct stock
               prisma.ingredient.update({
                 where: { id: recipeItem.ingredientId },
                 data: {
@@ -109,7 +153,6 @@ export async function deductStockForOrder(orderId: string) {
                   },
                 },
               }),
-              // Log movement
               prisma.stockMovement.create({
                 data: {
                   ingredientId: recipeItem.ingredientId,
@@ -125,11 +168,14 @@ export async function deductStockForOrder(orderId: string) {
         const recipe = item.product.productIngredients;
         if (!recipe || recipe.length === 0) continue;
 
+        // Scale recipe slightly if Large / Jumbo (e.g. 1.25x portion for liquids/powder)
+        const isLarge = itemSize.toLowerCase().includes('large') || itemSize.toLowerCase().includes('jumbo');
+        const sizeMultiplier = isLarge ? 1.25 : 1.0;
+
         for (const recipeItem of recipe) {
-          const totalQtyToDeduct = recipeItem.quantity * item.qty;
+          const totalQtyToDeduct = Math.round(recipeItem.quantity * sizeMultiplier * item.qty * 100) / 100;
 
           await prisma.$transaction([
-            // Deduct stock
             prisma.ingredient.update({
               where: { id: recipeItem.ingredientId },
               data: {
@@ -138,13 +184,12 @@ export async function deductStockForOrder(orderId: string) {
                 },
               },
             }),
-            // Log movement
             prisma.stockMovement.create({
               data: {
                 ingredientId: recipeItem.ingredientId,
                 quantity: -totalQtyToDeduct,
                 type: 'OUT',
-                reason: `Order #${orderId.slice(-6).toUpperCase()} - ${item.product.name} (Qty: ${item.qty})`,
+                reason: `Order #${orderId.slice(-6).toUpperCase()} - ${item.product.name} [Size ${itemSize}] (Qty: ${item.qty})`,
               },
             }),
           ]);
@@ -155,7 +200,6 @@ export async function deductStockForOrder(orderId: string) {
     console.log(`Successfully deducted stock for order ${orderId}`);
   } catch (error) {
     console.error('Error in deductStockForOrder:', error);
-    // Non-blocking error, we don't want to fail the order update if stock fails
   }
 }
 
@@ -200,7 +244,6 @@ export async function restoreStockForOrder(orderId: string) {
       if (refundQty <= 0) continue;
 
       await prisma.$transaction([
-        // Restore stock
         prisma.ingredient.update({
           where: { id: move.ingredientId },
           data: {
@@ -209,7 +252,6 @@ export async function restoreStockForOrder(orderId: string) {
             },
           },
         }),
-        // Log movement
         prisma.stockMovement.create({
           data: {
             ingredientId: move.ingredientId,
@@ -226,4 +268,3 @@ export async function restoreStockForOrder(orderId: string) {
     console.error('Error in restoreStockForOrder:', error);
   }
 }
-

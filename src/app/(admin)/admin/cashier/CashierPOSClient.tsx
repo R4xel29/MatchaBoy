@@ -121,13 +121,15 @@ type OrderType = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
 interface Props {
   products: POSProduct[];
   categories: { id: string; name: string; slug: string }[];
+  packagingStock?: { cupRegular: number; cupJumbo: number };
 }
 
-export default function CashierPOSClient({ products, categories }: Props) {
+export default function CashierPOSClient({ products, categories, packagingStock }: Props) {
   const { showToast } = useToast();
   const router = useRouter();
 
   // State
+  const [packStock, setPackStock] = useState(packagingStock || { cupRegular: 999, cupJumbo: 999 });
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [cart, setCart] = useState<CartItemPOS[]>([]);
@@ -1583,31 +1585,59 @@ export default function CashierPOSClient({ products, categories }: Props) {
                             activeStep === 'SIZE' ? 'border-indigo-500 bg-indigo-50/50 shadow-sm' : 'border-border/40'
                           }`}
                         >
-                          <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider mb-2 flex items-center justify-between">
-                            <span>🥤 Ukuran Gelas</span>
-                            <span className="text-[10px] text-indigo-600 font-semibold">{modSize} {modSizePrice > 0 ? `(+${formatRupiah(modSizePrice)})` : ''}</span>
-                          </p>
+                          <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+                            <p className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <span>🥤 Ukuran Gelas</span>
+                              {packStock.cupJumbo <= 0 && (
+                                <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                  Cup Jumbo Habis
+                                </span>
+                              )}
+                              {packStock.cupRegular <= 0 && (
+                                <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                  Cup Regular Habis
+                                </span>
+                              )}
+                            </p>
+                            <span className="text-[10px] text-indigo-600 font-semibold">
+                              {modSize} {modSizePrice > 0 ? `(+${formatRupiah(modSizePrice)})` : ''}
+                            </span>
+                          </div>
                           <div className="flex flex-wrap gap-2">
-                            {effectiveSizes.map((sz) => (
-                              <button
-                                key={sz.name}
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setModSize(sz.name);
-                                  setModSizePrice(sz.price);
-                                  setActiveStep('SIZE');
-                                }}
-                                className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                                  modSize === sz.name
-                                    ? 'bg-indigo-600 text-white shadow-sm'
-                                    : 'bg-white border border-border/60 text-foreground hover:border-indigo-300'
-                                }`}
-                              >
-                                <span>{sz.name}</span>
-                                <span className="text-[10px] opacity-80">{sz.price > 0 ? `(+${formatRupiah(sz.price)})` : 'Gratis'}</span>
-                              </button>
-                            ))}
+                            {effectiveSizes.map((sz) => {
+                              const isLarge = sz.name.toLowerCase().includes('large') || sz.name.toLowerCase().includes('jumbo');
+                              const isRegular = sz.name.toLowerCase().includes('normal') || sz.name.toLowerCase().includes('regular');
+                              const isOutOfStock = (isLarge && packStock.cupJumbo <= 0) || (isRegular && packStock.cupRegular <= 0);
+
+                              return (
+                                <button
+                                  key={sz.name}
+                                  type="button"
+                                  disabled={isOutOfStock && !hasTumbler}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setModSize(sz.name);
+                                    setModSizePrice(sz.price);
+                                    setActiveStep('SIZE');
+                                  }}
+                                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                                    isOutOfStock && !hasTumbler
+                                      ? 'bg-slate-100 text-slate-400 border border-slate-200 opacity-60 cursor-not-allowed line-through'
+                                      : modSize === sz.name
+                                      ? 'bg-indigo-600 text-white shadow-sm'
+                                      : 'bg-white border border-border/60 text-foreground hover:border-indigo-300'
+                                  }`}
+                                >
+                                  <span>{sz.name}</span>
+                                  <span className="text-[10px] opacity-80">
+                                    {sz.price > 0 ? `(+${formatRupiah(sz.price)})` : 'Gratis'}
+                                  </span>
+                                  {isOutOfStock && !hasTumbler && (
+                                    <span className="text-[9px] text-rose-600 font-extrabold">(Habis)</span>
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       )}

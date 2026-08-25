@@ -4,7 +4,7 @@ import CashierPOSClient from './CashierPOSClient';
 export const revalidate = 0;
 
 export default async function AdminCashierPage() {
-  const [products, categories] = await Promise.all([
+  const [products, categories, packagingIngredients] = await Promise.all([
     prisma.product.findMany({
       include: {
         category: true,
@@ -15,7 +15,23 @@ export default async function AdminCashierPage() {
       orderBy: { name: 'asc' },
     }),
     prisma.category.findMany({ orderBy: { name: 'asc' } }),
+    prisma.ingredient.findMany({
+      where: { isPackaging: true },
+      select: { id: true, name: true, stock: true },
+    }),
   ]);
+
+  let cupRegularStock = 999;
+  let cupJumboStock = 999;
+
+  packagingIngredients.forEach((p) => {
+    const name = p.name.toLowerCase();
+    if (name.includes('jumbo') || name.includes('large') || name.includes('22')) {
+      cupJumboStock = p.stock;
+    } else if (name.includes('regular') || name.includes('14') || name.includes('16') || name.includes('gelas')) {
+      cupRegularStock = p.stock;
+    }
+  });
 
   // Filter out archived, hidden, and disabled items
   const activeProducts = products.filter((p) => {
@@ -55,5 +71,11 @@ export default async function AdminCashierPage() {
     slug: c.slug,
   }));
 
-  return <CashierPOSClient products={mappedProducts} categories={mappedCategories} />;
+  return (
+    <CashierPOSClient
+      products={mappedProducts}
+      categories={mappedCategories}
+      packagingStock={{ cupRegular: cupRegularStock, cupJumbo: cupJumboStock }}
+    />
+  );
 }

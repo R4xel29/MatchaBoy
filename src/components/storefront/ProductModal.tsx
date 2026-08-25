@@ -58,6 +58,10 @@ export function ProductModal({
   const [matchaLevel, setMatchaLevel] = useState<number>(5);
   const [hasTumbler, setHasTumbler] = useState(false);
   const [loyaltySettings, setLoyaltySettings] = useState<any>(null);
+  const [packagingStock, setPackagingStock] = useState<{ cupRegular: number; cupJumbo: number }>({
+    cupRegular: 999,
+    cupJumbo: 999,
+  });
   
   // Bundle Selection State
   const [bundleSelections, setBundleSelections] = useState<{ [groupId: string]: any }>({});
@@ -71,6 +75,15 @@ export function ProductModal({
         .then((r) => (r.ok ? r.json() : {}))
         .then((data) => setLoyaltySettings(data))
         .catch((err) => console.error('Error fetching settings in modal:', err));
+
+      fetch('/api/products')
+        .then((r) => (r.ok ? r.json() : {}))
+        .then((data: any) => {
+          if (data && data.packagingStock) {
+            setPackagingStock(data.packagingStock);
+          }
+        })
+        .catch((err) => console.error('Error fetching packaging stock:', err));
     }
   }, [isOpen]);
   
@@ -879,29 +892,49 @@ export function ProductModal({
                         {/* Ukuran Gelas (Cup Size) */}
                         {hasSizeOption && (
                           <div className="text-left">
-                            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2.5">
-                              Ukuran Gelas (Cup Size)
-                            </h3>
+                            <div className="flex items-center justify-between mb-2.5 flex-wrap gap-1">
+                              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                                Ukuran Gelas (Cup Size)
+                              </h3>
+                              {packagingStock.cupJumbo <= 0 && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                  Cup Jumbo Habis
+                                </span>
+                              )}
+                              {packagingStock.cupRegular <= 0 && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                  Cup Regular Habis
+                                </span>
+                              )}
+                            </div>
                             <div className="flex gap-2 flex-wrap">
-                              {availableSizes.map((sz: any) => (
-                                <button
-                                  key={sz.name}
-                                  type="button"
-                                  onClick={() => {
-                                    setSize(sz.name);
-                                    setSizePrice(sz.price);
-                                  }}
-                                  className={`px-4 py-2 rounded-2xl text-xs font-bold 
-                                    transition-all touch-target border cursor-pointer
-                                    ${
-                                      size === sz.name
+                              {availableSizes.map((sz: any) => {
+                                const isLarge = sz.name.toLowerCase().includes('large') || sz.name.toLowerCase().includes('jumbo');
+                                const isRegular = sz.name.toLowerCase().includes('normal') || sz.name.toLowerCase().includes('regular');
+                                const isOutOfStock = (isLarge && packagingStock.cupJumbo <= 0) || (isRegular && packagingStock.cupRegular <= 0);
+
+                                return (
+                                  <button
+                                    key={sz.name}
+                                    type="button"
+                                    disabled={isOutOfStock && !hasTumbler}
+                                    onClick={() => {
+                                      setSize(sz.name);
+                                      setSizePrice(sz.price);
+                                    }}
+                                    className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all touch-target border cursor-pointer ${
+                                      isOutOfStock && !hasTumbler
+                                        ? 'bg-slate-100 text-slate-400 border-slate-200 opacity-60 cursor-not-allowed line-through'
+                                        : size === sz.name
                                         ? 'bg-stone-900 text-white border-stone-900 shadow-sm'
                                         : 'bg-card text-foreground border-border hover:border-brand-400'
                                     }`}
-                                >
-                                  {sz.name} {sz.price > 0 ? `(+${formatRupiah(sz.price)})` : ''}
-                                </button>
-                              ))}
+                                  >
+                                    {sz.name} {sz.price > 0 ? `(+${formatRupiah(sz.price)})` : ''}
+                                    {isOutOfStock && !hasTumbler && ' (Habis)'}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         )}

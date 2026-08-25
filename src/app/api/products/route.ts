@@ -5,17 +5,35 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const products = await prisma.product.findMany({
-      where: {
-        OR: [
-          { badge: null },
-          { badge: { not: 'archived' } }
-        ]
-      },
-      include: {
-        category: true
-      },
-      orderBy: { createdAt: 'desc' }
+    const [products, categories, packagingIngredients] = await Promise.all([
+      prisma.product.findMany({
+        where: {
+          OR: [{ badge: null }, { badge: { not: 'archived' } }],
+        },
+        include: {
+          category: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.category.findMany({
+        orderBy: { name: 'asc' },
+      }),
+      prisma.ingredient.findMany({
+        where: { isPackaging: true },
+        select: { id: true, name: true, stock: true },
+      }),
+    ]);
+
+    let cupRegularStock = 999;
+    let cupJumboStock = 999;
+
+    packagingIngredients.forEach((p) => {
+      const name = p.name.toLowerCase();
+      if (name.includes('jumbo') || name.includes('large') || name.includes('22')) {
+        cupJumboStock = p.stock;
+      } else if (name.includes('regular') || name.includes('14') || name.includes('16') || name.includes('gelas')) {
+        cupRegularStock = p.stock;
+      }
     });
 
     const mappedProducts = products.map((p: any) => {
@@ -38,21 +56,20 @@ export async function GET() {
         categoryName: p.category?.name,
         categorySlug: p.category?.slug,
         badge: p.badge,
-        modifiers
+        modifiers,
       };
     });
 
-    const categories = await prisma.category.findMany({
-      orderBy: { name: 'asc' }
-    });
-
-    return NextResponse.json({ 
+    return NextResponse.json({
       products: mappedProducts,
-      categories: categories
+      categories,
+      packagingStock: {
+        cupRegular: cupRegularStock,
+        cupJumbo: cupJumboStock,
+      },
     });
   } catch (error) {
     console.error('Error fetching all products:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
-
