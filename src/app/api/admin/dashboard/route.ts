@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const BASE_CASH_AVAILABLE = 320000; // Rp 320.000 modal kas tunai awal tersedia
+const BASE_CASH_AVAILABLE = 245000; // Rp 320.000 - Rp 75.000 = Rp 245.000 modal kas tunai awal tersedia
 
 export async function GET(req: NextRequest) {
   try {

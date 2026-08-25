@@ -185,8 +185,8 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
   const kpis = data.kpis;
   const balance = data.balancePosition || {
-    baseCashFloat: 320000,
-    cashOnHand: 320000,
+    baseCashFloat: 245000,
+    cashOnHand: 245000,
     cashOrdersTotal: 0,
     cashCount: 0,
     qrisBalance: 0,
@@ -194,7 +194,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
     walletBalance: 0,
     transferBalance: 0,
     otherBalance: 0,
-    totalFunds: 320000,
+    totalFunds: 245000,
     totalCompletedOrders: 0,
   };
   const pipeline = data.pipeline;
@@ -331,7 +331,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
               {formatRupiah(balance.cashOnHand)}
             </p>
             <p className="text-[11px] text-amber-900/80 font-medium">
-              Tersedia Rp 320.000 (modal awal) {balance.cashOrdersTotal > 0 ? `+ ${formatRupiah(balance.cashOrdersTotal)} tunai` : ''}
+              Tersedia Rp 245.000 (modal kas awal) {balance.cashOrdersTotal > 0 ? `+ ${formatRupiah(balance.cashOrdersTotal)} tunai` : ''}
             </p>
           </div>
 
