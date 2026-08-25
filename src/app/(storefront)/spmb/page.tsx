@@ -5,7 +5,7 @@ import SpmbClient from "./SpmbClient"
 export const dynamic = 'force-dynamic'
 
 export default async function SpmbPage() {
-  const [categories, products, storeSettings, tables, floorElements] = await Promise.all([
+  const [categories, products, storeSettings, tables, floorElements, packagingIngredients] = await Promise.all([
     prisma.category.findMany({
       orderBy: { createdAt: 'asc' }
     }),
@@ -27,8 +27,24 @@ export default async function SpmbPage() {
     }),
     prisma.floorElement.findMany({
       orderBy: { createdAt: 'asc' }
-    })
+    }),
+    prisma.ingredient.findMany({
+      where: { isPackaging: true },
+      select: { id: true, name: true, stock: true },
+    }),
   ])
+
+  let cupRegularStock = 999;
+  let cupJumboStock = 999;
+
+  packagingIngredients.forEach((p) => {
+    const name = p.name.toLowerCase();
+    if (name.includes('jumbo') || name.includes('large') || name.includes('22')) {
+      cupJumboStock = p.stock;
+    } else if (name.includes('regular') || name.includes('14') || name.includes('16') || name.includes('gelas')) {
+      cupRegularStock = p.stock;
+    }
+  });
 
   // Map Prisma 'Category' to the frontend 'Category' type format
   const mappedCategories = [
@@ -65,28 +81,41 @@ export default async function SpmbPage() {
     }
   })
 
-  const botNumber = storeSettings?.whatsappNumber || "";
-
   return (
-    <Suspense fallback={
-      <div className="min-h-dvh flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-9 h-9 rounded-full border-2 border-brand-500/25 border-t-brand-500 animate-spin" />
-          <p className="text-xs font-medium text-muted-foreground tracking-wider uppercase">Memuat Menu...</p>
-        </div>
-      </div>
-    }>
-      <SpmbClient 
-        categories={mappedCategories} 
+    <Suspense fallback={<div className="min-h-screen bg-[#FAF9F6] flex items-center justify-center font-serif text-sm text-stone-500">Memuat Menu Arum Seduh...</div>}>
+      <SpmbClient
+        categories={mappedCategories}
         products={mappedProducts}
-        botNumber={botNumber}
-        spmbStartTime={storeSettings?.spmbStartTime || "08:00"}
-        spmbEndTime={storeSettings?.spmbEndTime || "13:00"}
-        spmbCloseTime={storeSettings?.spmbCloseTime || "16:00"}
-        operationalDays={storeSettings?.operationalDays || "[0,1,2,3,4,5,6]"}
-        disabledDates={storeSettings?.disabledDates || "[]"}
-        initialTables={tables}
-        initialFloorElements={floorElements}
+        botNumber={(storeSettings as any)?.botNumber || storeSettings?.adminWaNumbers || ''}
+        spmbStartTime={(storeSettings as any)?.spmbStartTime || storeSettings?.openTime || '08:00'}
+        spmbEndTime={(storeSettings as any)?.spmbEndTime || storeSettings?.closeTime || '22:00'}
+        spmbCloseTime={(storeSettings as any)?.spmbCloseTime || storeSettings?.closeTime || '21:30'}
+        operationalDays={(storeSettings as any)?.operationalDays || 'ALL'}
+        disabledDates={(storeSettings as any)?.disabledDates || ''}
+        initialTables={tables.map((t: any) => ({
+          id: t.id,
+          number: t.number.toString(),
+          capacity: t.capacity,
+          shape: t.shape,
+          x: t.x,
+          y: t.y,
+          rotation: t.rotation,
+          status: t.status,
+          chairsJson: t.chairsJson
+        }))}
+        initialFloorElements={floorElements.map((el: any) => ({
+          id: el.id,
+          name: el.label || el.type || 'Landmark',
+          type: el.type,
+          label: el.label,
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          rotation: el.rotation,
+          metadata: el.metadata
+        }))}
+        packagingStock={{ cupRegular: cupRegularStock, cupJumbo: cupJumboStock }}
       />
     </Suspense>
   )

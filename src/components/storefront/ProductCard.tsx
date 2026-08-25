@@ -4,13 +4,14 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { Plus } from 'lucide-react';
 import type { Product } from '@/types';
-import { formatRupiah, cn, getActivePromo } from '@/lib/utils';
+import { formatRupiah, cn, getEffectiveProductDisplay } from '@/lib/utils';
 import { PromoCountdown } from './PromoCountdown';
 
 interface ProductCardProps {
   product: Product;
   onAddClick: (product: Product) => void;
   index: number;
+  packagingStock?: { cupRegular: number; cupJumbo: number };
 }
 
 const badgeStyles: Record<string, { bg: string; text: string; label: string }> = {
@@ -19,13 +20,17 @@ const badgeStyles: Record<string, { bg: string; text: string; label: string }> =
   'sold-out': { bg: 'bg-gray-400', text: 'text-white', label: 'Sold Out' },
 };
 
-export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
-  const isSoldOut = product.badge === 'sold-out';
-  const badge = product.badge ? badgeStyles[product.badge] : null;
+export function ProductCard({ product, onAddClick, index, packagingStock }: ProductCardProps) {
+  const {
+    displayPrice,
+    originalPrice,
+    promo,
+    isRegularOut,
+    sizeNotice,
+    isSoldOut,
+  } = getEffectiveProductDisplay(product, packagingStock);
 
-  const promo = getActivePromo(product);
-  const displayPrice = promo ? promo.promoPrice : product.price;
-  const originalPrice = promo ? product.price : (product.modifiers?.originalPrice || null);
+  const badge = product.badge ? badgeStyles[product.badge] : null;
 
   return (
     <motion.article
@@ -47,7 +52,7 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
       {/* Image Container */}
       <div className="relative aspect-[4/3] overflow-hidden bg-brand-50">
         <Image
-          src={product.image}
+          src={product.image || ''}
           alt={product.name}
           fill
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -65,6 +70,17 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
           <div className="absolute top-2 right-2 z-20">
             <PromoCountdown endDate={promo.endDate} compact />
           </div>
+        )}
+
+        {/* Size Notice Badge if Regular is Out */}
+        {isRegularOut && !isSoldOut && (
+          <motion.span
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="absolute top-2.5 right-2.5 z-20 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase bg-amber-500 text-white shadow-md flex items-center gap-0.5"
+          >
+            🥤 {sizeNotice}
+          </motion.span>
         )}
 
         {/* Badge */}
@@ -114,15 +130,22 @@ export function ProductCard({ product, onAddClick, index }: ProductCardProps) {
         </p>
 
         <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border/40">
-          <div className="flex flex-col">
+          <div className="flex flex-col text-left">
             {originalPrice && originalPrice > displayPrice && (
               <span className="text-[10px] text-muted-foreground line-through leading-none mb-0.5">
                 {formatRupiah(originalPrice)}
               </span>
             )}
-            <span className="font-body font-bold text-sm text-brand-700">
-              {formatRupiah(displayPrice)}
-            </span>
+            <div className="flex items-baseline gap-1">
+              <span className="font-body font-bold text-sm text-brand-700">
+                {formatRupiah(displayPrice)}
+              </span>
+              {isRegularOut && (
+                <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                  (Jumbo)
+                </span>
+              )}
+            </div>
           </div>
 
           {isSoldOut ? (

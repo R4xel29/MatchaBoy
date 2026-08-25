@@ -81,11 +81,15 @@ export function ProductModal({
         .then((data: any) => {
           if (data && data.packagingStock) {
             setPackagingStock(data.packagingStock);
+            if (data.packagingStock.cupRegular <= 0 && data.packagingStock.cupJumbo > 0 && !hasTumbler) {
+              setSize('Large');
+              setSizePrice(3000);
+            }
           }
         })
         .catch((err) => console.error('Error fetching packaging stock:', err));
     }
-  }, [isOpen]);
+  }, [isOpen, hasTumbler]);
   
   // Reviews state
   const [reviews, setReviews] = useState<any[]>([]);
@@ -433,6 +437,22 @@ export function ProductModal({
 
   const handleAddToCart = () => {
     if (!product) return;
+
+    // Validate Cup Stock Availability
+    if (!product.modifiers?.isBundle && !hasTumbler && isBeverage) {
+      const isLarge = size.toLowerCase().includes('large') || size.toLowerCase().includes('jumbo');
+      const isRegular = size.toLowerCase().includes('normal') || size.toLowerCase().includes('regular');
+
+      if (isRegular && packagingStock.cupRegular <= 0) {
+        showToast('Gelas ukuran Regular sedang habis. Silakan pilih ukuran Large atau gunakan tumbler.', 'error');
+        return;
+      }
+      if (isLarge && packagingStock.cupJumbo <= 0) {
+        showToast('Gelas ukuran Large sedang habis. Silakan pilih ukuran Regular atau gunakan tumbler.', 'error');
+        return;
+      }
+    }
+
     const promo = getActivePromo(product);
     const effectiveBasePrice = promo ? promo.promoPrice : product.price;
     

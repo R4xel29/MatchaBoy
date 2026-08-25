@@ -14,7 +14,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
 import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
-import { formatRupiah, getActivePromo } from '@/lib/utils';
+import { formatRupiah, getActivePromo, getEffectiveProductDisplay } from '@/lib/utils';
 import type { Product, Category } from '@/types';
 import { 
   getDefaultChairs, 
@@ -38,6 +38,7 @@ interface SpmbClientProps {
   disabledDates: string;
   initialTables?: Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; rotation?: number; status?: string; chairsJson?: string | null }>;
   initialFloorElements?: FloorElementData[];
+  packagingStock?: { cupRegular: number; cupJumbo: number };
 }
 
 export default function SpmbClient({ 
@@ -50,7 +51,8 @@ export default function SpmbClient({
   operationalDays,
   disabledDates,
   initialTables,
-  initialFloorElements
+  initialFloorElements,
+  packagingStock
 }: SpmbClientProps) {
   const searchParams = useSearchParams();
   const tableParam = searchParams.get('table');
@@ -636,10 +638,14 @@ export default function SpmbClient({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4 mt-4">
             {filteredProducts.map((product) => {
-              const isSoldOut = product.badge === 'sold-out';
-              const promo = getActivePromo(product);
-              const displayPrice = promo ? promo.promoPrice : product.price;
-              const originalPrice = promo ? product.price : (product.modifiers?.originalPrice || null);
+              const {
+                displayPrice,
+                originalPrice,
+                promo,
+                isRegularOut,
+                sizeNotice,
+                isSoldOut,
+              } = getEffectiveProductDisplay(product, packagingStock);
 
               return (
                 <motion.div
@@ -656,6 +662,13 @@ export default function SpmbClient({
                     <div className="absolute top-2.5 right-2.5 z-20">
                       <PromoCountdown endDate={promo.endDate} compact />
                     </div>
+                  )}
+
+                  {/* Size Notice Badge if Regular is Out */}
+                  {isRegularOut && !isSoldOut && (
+                    <span className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase bg-amber-500 text-white shadow-sm flex items-center gap-0.5">
+                      🥤 {sizeNotice}
+                    </span>
                   )}
 
                   {/* Badges */}
@@ -710,9 +723,16 @@ export default function SpmbClient({
                             {formatRupiah(originalPrice)}
                           </span>
                         )}
-                        <span className="font-bold text-xs sm:text-sm text-orange-600">
-                          {formatRupiah(displayPrice)}
-                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-bold text-xs sm:text-sm text-orange-600">
+                            {formatRupiah(displayPrice)}
+                          </span>
+                          {isRegularOut && (
+                            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                              (Jumbo)
+                            </span>
+                          )}
+                        </div>
                       </div>
                       
                       {!isSoldOut && (

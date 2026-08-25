@@ -8,12 +8,14 @@ interface ProductGridProps {
   products: Product[];
   activeCategory: string;
   onProductClick: (product: Product) => void;
+  packagingStock?: { cupRegular: number; cupJumbo: number };
 }
 
 export function ProductGrid({
   products,
   activeCategory,
   onProductClick,
+  packagingStock,
 }: ProductGridProps) {
   const filtered = useMemo(() => {
     if (activeCategory === 'bundle') {
@@ -46,6 +48,7 @@ export function ProductGrid({
           product={product}
           onAddClick={onProductClick}
           index={i}
+          packagingStock={packagingStock}
         />
       ))}
     </div>

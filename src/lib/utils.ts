@@ -36,3 +36,40 @@ export function getCurrentProductPrice(product: any): number {
   const promo = getActivePromo(product);
   return promo ? promo.promoPrice : (product?.price ?? 0);
 }
+
+export function getEffectiveProductDisplay(
+  product: any,
+  packagingStock?: { cupRegular: number; cupJumbo: number }
+) {
+  const isBundle = product?.modifiers?.isBundle === true;
+  const promo = getActivePromo(product);
+  const basePrice = promo ? promo.promoPrice : (product?.price ?? 0);
+  const originalPrice = promo ? product.price : (product?.modifiers?.originalPrice || null);
+
+  const cupRegular = packagingStock?.cupRegular ?? 999;
+  const cupJumbo = packagingStock?.cupJumbo ?? 999;
+  const isRegularOut = !isBundle && cupRegular <= 0 && cupJumbo > 0;
+  const isBothOut = !isBundle && cupRegular <= 0 && cupJumbo <= 0;
+
+  let displayPrice = basePrice;
+  let sizeNotice: string | null = null;
+
+  if (isRegularOut) {
+    const largeSize = product?.modifiers?.sizes?.find(
+      (s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')
+    )?.price ?? 3000;
+    displayPrice = basePrice + largeSize;
+    sizeNotice = 'Hanya Jumbo';
+  }
+
+  return {
+    displayPrice,
+    originalPrice,
+    basePrice,
+    promo,
+    isRegularOut,
+    isBothOut,
+    sizeNotice,
+    isSoldOut: product?.badge === 'sold-out' || (isBothOut && product?.category !== 'pastries'),
+  };
+}

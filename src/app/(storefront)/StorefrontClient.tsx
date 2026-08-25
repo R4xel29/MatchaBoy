@@ -8,7 +8,7 @@ import { useStorefrontContext } from './layout';
 import { useCartStore } from '@/stores/cart-store';
 import type { Product, Category } from '@/types';
 import Image from 'next/image';
-import { formatRupiah, getActivePromo, cn } from '@/lib/utils';
+import { formatRupiah, getActivePromo, getEffectiveProductDisplay, cn } from '@/lib/utils';
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion';
 import { Star, Sparkles, Flame, MessageCircle, Info, ChevronRight, ChevronDown, ShoppingBag, Clock, Gift, Copy, Check, Share2, Trophy, RefreshCw, FlaskConical, CreditCard, Plus, History, Trash2, ArrowUpRight, Leaf, Award, ShieldAlert, CheckCircle2, CalendarDays, Wallet, Loader2 } from 'lucide-react';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
@@ -35,11 +35,13 @@ interface HeroBanner {
 export default function StorefrontClient({ 
   categories, 
   products,
-  banners
+  banners,
+  packagingStock
 }: { 
   categories: Category[]; 
   products: Product[];
   banners: HeroBanner[];
+  packagingStock?: { cupRegular: number; cupJumbo: number };
 }) {
   const { data: session, status } = useSession();
   
@@ -1320,10 +1322,14 @@ export default function StorefrontClient({
 
             <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
               {spesialProducts.map((p) => {
-                const isSoldOut = p.badge === 'sold-out';
-                const promo = getActivePromo(p);
-                const displayPrice = promo ? promo.promoPrice : p.price;
-                const originalPrice = promo ? p.price : (p.modifiers?.originalPrice || null);
+                const {
+                  displayPrice,
+                  originalPrice,
+                  promo,
+                  isRegularOut,
+                  sizeNotice,
+                  isSoldOut,
+                } = getEffectiveProductDisplay(p, packagingStock);
 
                 return (
                   <div 
@@ -1377,9 +1383,16 @@ export default function StorefrontClient({
                             {formatRupiah(originalPrice)}
                           </span>
                         )}
-                        <span className="font-bold text-xs text-[#B48A5E]">
-                          {formatRupiah(displayPrice)}
-                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-bold text-xs text-[#B48A5E]">
+                            {formatRupiah(displayPrice)}
+                          </span>
+                          {isRegularOut && (
+                            <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                              (Jumbo)
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1401,10 +1414,14 @@ export default function StorefrontClient({
 
             <div className="flex gap-4 overflow-x-auto pb-3 scrollbar-hide">
               {baruProducts.map((p) => {
-                const isSoldOut = p.badge === 'sold-out';
-                const promo = getActivePromo(p);
-                const displayPrice = promo ? promo.promoPrice : p.price;
-                const originalPrice = promo ? p.price : (p.modifiers?.originalPrice || null);
+                const {
+                  displayPrice,
+                  originalPrice,
+                  promo,
+                  isRegularOut,
+                  sizeNotice,
+                  isSoldOut,
+                } = getEffectiveProductDisplay(p, packagingStock);
 
                 return (
                   <div 
@@ -1464,9 +1481,16 @@ export default function StorefrontClient({
                             {formatRupiah(originalPrice)}
                           </span>
                         )}
-                        <p className="font-bold text-xs text-[#B48A5E] leading-none">
-                          {formatRupiah(displayPrice)}
-                        </p>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-bold text-xs text-[#B48A5E]">
+                            {formatRupiah(displayPrice)}
+                          </span>
+                          {isRegularOut && (
+                            <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                              (Jumbo)
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

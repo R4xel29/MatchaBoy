@@ -1,11 +1,10 @@
 import { prisma } from "@/lib/prisma"
 import StorefrontClient from "./StorefrontClient"
-import { ADD_ONS } from "@/lib/constants"
 
 export const revalidate = 10 // Revalidate page cache at most every 10 seconds (ISR)
 
 export default async function StorefrontPage() {
-  const [categories, products, banners] = await Promise.all([
+  const [categories, products, banners, packagingIngredients] = await Promise.all([
     prisma.category.findMany({
       orderBy: { createdAt: 'asc' }
     }),
@@ -21,8 +20,24 @@ export default async function StorefrontPage() {
     prisma.heroBanner.findMany({
       where: { isActive: true },
       orderBy: { order: 'asc' }
-    })
+    }),
+    prisma.ingredient.findMany({
+      where: { isPackaging: true },
+      select: { id: true, name: true, stock: true },
+    }),
   ])
+
+  let cupRegularStock = 999;
+  let cupJumboStock = 999;
+
+  packagingIngredients.forEach((p) => {
+    const name = p.name.toLowerCase();
+    if (name.includes('jumbo') || name.includes('large') || name.includes('22')) {
+      cupJumboStock = p.stock;
+    } else if (name.includes('regular') || name.includes('14') || name.includes('16') || name.includes('gelas')) {
+      cupRegularStock = p.stock;
+    }
+  });
 
   // Map Prisma 'Category' to the frontend 'Category' type format
   const mappedCategories = [
@@ -36,7 +51,6 @@ export default async function StorefrontPage() {
 
   // Map Prisma Product to frontend Product, reading modifiers from DB
   const mappedProducts = products.map((p: any) => {
-    // Parse modifiers from DB JSON — no more matching against constants.ts
     let modifiers = undefined;
     if (p.modifiers) {
       try {
@@ -63,6 +77,7 @@ export default async function StorefrontPage() {
       categories={mappedCategories} 
       products={mappedProducts}
       banners={banners}
+      packagingStock={{ cupRegular: cupRegularStock, cupJumbo: cupJumboStock }}
     />
   )
 }

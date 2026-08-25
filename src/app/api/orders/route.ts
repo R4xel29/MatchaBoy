@@ -107,12 +107,27 @@ export async function POST(req: Request) {
 
     // 2. Parallel product lookup & payment settings query
     const productIds = body.items.map((item: any) => item.productId);
-    const [dbProducts, paymentSettings] = await Promise.all([
+    const [dbProducts, paymentSettings, packagingIngredients] = await Promise.all([
       prisma.product.findMany({
         where: { id: { in: productIds } }
       }),
-      prisma.paymentSettings.findFirst()
+      prisma.paymentSettings.findFirst(),
+      prisma.ingredient.findMany({
+        where: { isPackaging: true },
+      }),
     ]);
+
+    let cupRegularStock = 999;
+    let cupJumboStock = 999;
+
+    packagingIngredients.forEach((p) => {
+      const name = p.name.toLowerCase();
+      if (name.includes('jumbo') || name.includes('large') || name.includes('22')) {
+        cupJumboStock = p.stock;
+      } else if (name.includes('regular') || name.includes('14') || name.includes('16') || name.includes('gelas')) {
+        cupRegularStock = p.stock;
+      }
+    });
 
     let secureSubtotal = 0;
     const orderItemsToCreate: Array<{
@@ -128,14 +143,28 @@ export async function POST(req: Request) {
         throw new ValidationError(`Produk tidak ditemukan: ${item.name}`);
       }
 
-      const addOnIds = item.addOnIds || (item.addOns ? item.addOns.map((a: any) => a.id) : []);
-
       let dbModifiers: any = {};
       if (dbProduct.modifiers) {
         try {
           dbModifiers = JSON.parse(dbProduct.modifiers);
         } catch {}
       }
+
+      // Check cup availability if not bundle and no tumbler
+      if (!body.hasTumbler && !dbModifiers.isBundle) {
+        const sizeLower = (item.size || 'Normal').toLowerCase();
+        const isLarge = sizeLower.includes('large') || sizeLower.includes('jumbo');
+        const isRegular = sizeLower.includes('normal') || sizeLower.includes('regular');
+
+        if (isRegular && cupRegularStock <= 0) {
+          throw new ValidationError(`Gelas ukuran Regular untuk "${dbProduct.name}" sedang habis. Silakan pilih ukuran Large atau gunakan tumbler.`);
+        }
+        if (isLarge && cupJumboStock <= 0) {
+          throw new ValidationError(`Gelas ukuran Large untuk "${dbProduct.name}" sedang habis. Silakan pilih ukuran Regular atau gunakan tumbler.`);
+        }
+      }
+
+      const addOnIds = item.addOnIds || (item.addOns ? item.addOns.map((a: any) => a.id) : []);
 
       const itemForPriceCalc = {
         ...item,

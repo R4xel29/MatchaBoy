@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const [paymentSettings, storeSettings, banners, products, categories] = await Promise.all([
+    const [paymentSettings, storeSettings, banners, products, categories, packagingIngredients] = await Promise.all([
       prisma.paymentSettings.findFirst({
         select: {
           qrisImage: true,
@@ -31,7 +31,23 @@ export async function GET() {
         orderBy: { name: 'asc' },
         select: { id: true, name: true, slug: true },
       }),
+      prisma.ingredient.findMany({
+        where: { isPackaging: true },
+        select: { id: true, name: true, stock: true },
+      }),
     ]);
+
+    let cupRegularStock = 999;
+    let cupJumboStock = 999;
+
+    packagingIngredients.forEach((p) => {
+      const name = p.name.toLowerCase();
+      if (name.includes('jumbo') || name.includes('large') || name.includes('22')) {
+        cupJumboStock = p.stock;
+      } else if (name.includes('regular') || name.includes('14') || name.includes('16') || name.includes('gelas')) {
+        cupRegularStock = p.stock;
+      }
+    });
 
     // Update storeName in DB if it still says Matchaboy
     if (storeSettings && storeSettings.storeName.includes('Matchaboy')) {
@@ -46,7 +62,19 @@ export async function GET() {
       return !badgeLower.includes('archived') && !badgeLower.includes('hidden') && !badgeLower.includes('disabled');
     });
 
+    const isRegularOut = cupRegularStock <= 0 && cupJumboStock > 0;
+    const isBothCupsOut = cupRegularStock <= 0 && cupJumboStock <= 0;
+
     const formattedProducts = activeProducts.map((p) => {
+      let modifiers: any = undefined;
+      if (p.modifiers) {
+        try {
+          modifiers = JSON.parse(p.modifiers);
+        } catch {}
+      }
+
+      const isBundle = modifiers?.isBundle === true;
+
       const isBadgeSoldOut =
         p.badge?.toLowerCase().includes('sold') ||
         p.badge?.toLowerCase().includes('habis') ||
@@ -56,15 +84,23 @@ export async function GET() {
         (pi) => pi.ingredient.stock < pi.quantity
       );
 
-      const isSoldOut = isBadgeSoldOut || isIngredientEmpty;
+      const isSoldOut = isBadgeSoldOut || isIngredientEmpty || (isBothCupsOut && !isBundle && p.category.slug !== 'pastries');
+
+      let displayPrice = p.price;
+      if (isRegularOut && !isBundle && p.category.slug !== 'pastries') {
+        const largeSize = modifiers?.sizes?.find(
+          (s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')
+        )?.price ?? 3000;
+        displayPrice = p.price + largeSize;
+      }
 
       return {
         id: p.id,
         name: p.name,
         description: p.description,
-        price: p.price,
+        price: displayPrice,
         image: p.image,
-        badge: p.badge,
+        badge: isRegularOut && !isBundle && !isSoldOut ? (p.badge || 'Hanya Jumbo') : p.badge,
         isSoldOut,
         categoryId: p.categoryId,
         categoryName: p.category.name,
@@ -85,6 +121,7 @@ export async function GET() {
       })),
       categories,
       products: formattedProducts,
+      packagingStock: { cupRegular: cupRegularStock, cupJumbo: cupJumboStock },
     });
   } catch (error) {
     console.error('Display settings API error:', error);

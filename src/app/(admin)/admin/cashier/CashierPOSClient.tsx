@@ -541,9 +541,20 @@ export default function CashierPOSClient({ products, categories, packagingStock 
       setModIce(mods?.defaultIce || mods?.iceLevel?.[0] || 'Normal Ice');
       setModSugar(mods?.defaultSugar || mods?.sugarLevel?.[0] || 'Biasa');
       setModMatcha(mods?.defaultMatcha ?? 5);
-      const firstSize = effectiveSizes[0];
-      setModSize(firstSize?.name || 'Regular');
-      setModSizePrice(firstSize?.price || 0);
+      const cupRegStock = packagingStock?.cupRegular ?? 999;
+      const cupJumboStock = packagingStock?.cupJumbo ?? 999;
+
+      if (cupRegStock <= 0 && cupJumboStock > 0 && !hasTumbler) {
+        const largeOpt = effectiveSizes.find(
+          (s) => s.name.toLowerCase().includes('large') || s.name.toLowerCase().includes('jumbo')
+        );
+        setModSize(largeOpt?.name || 'Large');
+        setModSizePrice(largeOpt?.price ?? 3000);
+      } else {
+        const firstSize = effectiveSizes[0];
+        setModSize(firstSize?.name || 'Regular');
+        setModSizePrice(firstSize?.price || 0);
+      }
 
       const firstShot = effectiveShots[0];
       setModShot(firstShot?.name || 'Single Shot');
@@ -625,6 +636,23 @@ export default function CashierPOSClient({ products, categories, packagingStock 
 
   const handleModifierConfirm = () => {
     if (!modifierProduct) return;
+
+    if (!hasTumbler) {
+      const isLarge = modSize.toLowerCase().includes('large') || modSize.toLowerCase().includes('jumbo');
+      const isRegular = modSize.toLowerCase().includes('normal') || modSize.toLowerCase().includes('regular');
+      const cupRegStock = packagingStock?.cupRegular ?? 999;
+      const cupJumboStock = packagingStock?.cupJumbo ?? 999;
+
+      if (isRegular && cupRegStock <= 0) {
+        showToast('Cup Regular sedang habis! Silakan pilih Jumbo atau gunakan Tumbler.', 'error');
+        return;
+      }
+      if (isLarge && cupJumboStock <= 0) {
+        showToast('Cup Jumbo sedang habis! Silakan pilih Regular atau gunakan Tumbler.', 'error');
+        return;
+      }
+    }
+
     addToCart(modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modShot, modShotCount, modShotPrice, modAddOns, modQty);
     setModifierProduct(null);
   };
