@@ -34,7 +34,10 @@ import {
   RefreshCw,
   Award,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  QrCode,
+  Banknote,
+  Coins
 } from 'lucide-react';
 
 type Range = 'today' | 'week' | 'month' | 'all';
@@ -45,6 +48,22 @@ const RANGE_LABELS: Record<Range, { label: string; subtext: string }> = {
   month: { label: 'Bulan Ini', subtext: 'Bulan berjalan' },
   all: { label: 'Semua', subtext: 'Akumulasi total' },
 };
+
+interface CashFlowItem {
+  amount: number;
+  count: number;
+  percentage: number;
+}
+
+interface CashFlowSummary {
+  cash: CashFlowItem;
+  qris: CashFlowItem;
+  wallet: CashFlowItem;
+  transfer: CashFlowItem;
+  other: CashFlowItem;
+  totalMoney: number;
+  totalTransactions: number;
+}
 
 interface DashboardData {
   kpis: {
@@ -58,6 +77,7 @@ interface DashboardData {
     activeProducts: number;
     soldOutProducts: number;
   };
+  cashFlow?: CashFlowSummary;
   pipeline: {
     PENDING: number;
     PREPARING: number;
@@ -102,7 +122,7 @@ interface DashboardData {
     revenue: number;
     categoryName: string;
   }>;
-  paymentMethods: Array<{ method: string; count: number; percentage: number }>;
+  paymentMethods: Array<{ method: string; count: number; amount?: number; percentage: number; amountPercentage?: number }>;
   orderTypes: Array<{ type: string; count: number; percentage: number }>;
   timeline: Array<{ label: string; revenue: number; orders: number }>;
   recentOrders: Array<{
@@ -165,6 +185,15 @@ export default function AdminDashboardClient({ initialData }: Props) {
   }, [range, fetchData]);
 
   const kpis = data.kpis;
+  const cashFlow = data.cashFlow || {
+    cash: { amount: 0, count: 0, percentage: 0 },
+    qris: { amount: 0, count: 0, percentage: 0 },
+    wallet: { amount: 0, count: 0, percentage: 0 },
+    transfer: { amount: 0, count: 0, percentage: 0 },
+    other: { amount: 0, count: 0, percentage: 0 },
+    totalMoney: kpis.totalRevenue,
+    totalTransactions: kpis.completedCount,
+  };
   const pipeline = data.pipeline;
   const liveOps = data.liveOperations;
   const alerts = data.alerts;
@@ -223,7 +252,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
             Dashboard Arum Seduh
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-            Pantauan omset penjualan, operasional seduhan, stok bahan, dan aktivitas kasir real-time
+            Pantauan kas masuk (Tunai & QRIS), operasional seduhan, stok bahan, dan aktivitas kasir real-time
           </p>
         </div>
 
@@ -256,7 +285,108 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       </div>
 
-      {/* 2. Quick Action Bar */}
+      {/* 2. Ringkasan Kas Masuk (Uang Tunai, QRIS, & Totalan Uang) */}
+      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-slate-800 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-750 pb-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center">
+              <Coins className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
+                Rincian Arus Kas & Saldo Uang Masuk
+              </h2>
+              <p className="text-[11px] sm:text-xs text-slate-400">
+                Pemisahan uang tunai di kasir, pembayaran QRIS, dompet digital, dan total uang terakumulasi ({RANGE_LABELS[range].label})
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1 rounded-full text-xs font-black bg-orange-500/20 text-orange-300 border border-orange-500/40 self-start sm:self-auto">
+            {cashFlow.totalTransactions} Transaksi Sukses
+          </span>
+        </div>
+
+        {/* 4 Kolom Rincian Uang */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Uang Tunai */}
+          <div className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl p-4 space-y-2 transition-colors group">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Banknote className="w-4 h-4" />
+                Uang Tunai (Cash)
+              </span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-400/15 text-amber-300 border border-amber-400/30">
+                {cashFlow.cash.percentage}% Porsi
+              </span>
+            </div>
+            <p className="text-2xl font-black text-white tracking-tight">
+              {formatRupiah(cashFlow.cash.amount)}
+            </p>
+            <p className="text-[11px] text-slate-400 font-medium">
+              {cashFlow.cash.count} transaksi tunai / COD diterima
+            </p>
+          </div>
+
+          {/* Pembayaran QRIS */}
+          <div className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl p-4 space-y-2 transition-colors group">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                <QrCode className="w-4 h-4" />
+                QRIS Dinamis / Statis
+              </span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-sky-400/15 text-sky-300 border border-sky-400/30">
+                {cashFlow.qris.percentage}% Porsi
+              </span>
+            </div>
+            <p className="text-2xl font-black text-white tracking-tight">
+              {formatRupiah(cashFlow.qris.amount)}
+            </p>
+            <p className="text-[11px] text-slate-400 font-medium">
+              {cashFlow.qris.count} transaksi via scan QRIS
+            </p>
+          </div>
+
+          {/* Transfer & Saldo Dompet */}
+          <div className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl p-4 space-y-2 transition-colors group">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-extrabold text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Wallet className="w-4 h-4" />
+                Dompet & Transfer
+              </span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-violet-400/15 text-violet-300 border border-violet-400/30">
+                {cashFlow.wallet.percentage + cashFlow.transfer.percentage}% Porsi
+              </span>
+            </div>
+            <p className="text-2xl font-black text-white tracking-tight">
+              {formatRupiah(cashFlow.wallet.amount + cashFlow.transfer.amount)}
+            </p>
+            <p className="text-[11px] text-slate-400 font-medium">
+              {cashFlow.wallet.count + cashFlow.transfer.count} transaksi saldo / bank
+            </p>
+          </div>
+
+          {/* Totalan Uang Masuk */}
+          <div className="bg-gradient-to-br from-orange-600/90 to-amber-600/90 border border-orange-400/40 rounded-2xl p-4 space-y-2 shadow-lg shadow-orange-950/40">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                <TrendingUp className="w-4 h-4 text-orange-100" />
+                Total Seluruh Uang
+              </span>
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/20 text-white">
+                100%
+              </span>
+            </div>
+            <p className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              {formatRupiah(cashFlow.totalMoney)}
+            </p>
+            <p className="text-[11px] text-orange-100 font-semibold">
+              Total bruto seluruh penerimaan
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Quick Action Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Link
           href="/admin/cashier"
@@ -349,7 +479,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </Link>
       </div>
 
-      {/* 3. Financial & Profit Grid */}
+      {/* 4. Financial & Profit Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Omset Kotor */}
         <div className="bg-white border border-slate-150/80 rounded-3xl p-5 shadow-sm space-y-3 relative overflow-hidden group hover:border-orange-300 transition-all duration-300">
@@ -463,7 +593,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       </div>
 
-      {/* 4. Kitchen & Operational Live Pipeline */}
+      {/* 5. Kitchen & Operational Live Pipeline */}
       <div className="bg-white border border-slate-150/80 rounded-3xl p-5 sm:p-6 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <div>
@@ -622,7 +752,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       </div>
 
-      {/* 5. Pusat Peringatan Kritis & Kebutuhan Tindakan (Jika Ada) */}
+      {/* 6. Pusat Peringatan Kritis & Kebutuhan Tindakan (Jika Ada) */}
       {hasAlerts && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* Bahan Baku Kritis */}
@@ -723,7 +853,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       )}
 
-      {/* 6. Main Interactive Graphs & Channel Breakdown */}
+      {/* 7. Main Interactive Graphs & Channel Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Sales Trend & Peak Hours Chart */}
         <div className="lg:col-span-8 bg-white border border-slate-150/80 rounded-3xl p-6 shadow-sm flex flex-col justify-between space-y-5">
@@ -881,7 +1011,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
               Metode Bayar & Channel
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Sebaran saluran pemesanan dan cara bayar pelanggan
+              Sebaran nominal uang dan cara bayar pelanggan
             </p>
           </div>
 
@@ -907,27 +1037,32 @@ export default function AdminDashboardClient({ initialData }: Props) {
             </div>
           </div>
 
-          {/* Payment Methods */}
+          {/* Payment Methods with Amount */}
           <div className="space-y-2.5 pt-2 border-t border-slate-100">
             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Metode Pembayaran
+              Rincian Nominal per Metode
             </p>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {paymentMethods.length === 0 ? (
                 <p className="text-xs text-slate-400 text-center py-2">Belum ada transaksi</p>
               ) : (
                 paymentMethods.map((pm) => (
                   <div key={pm.method} className="space-y-1">
-                    <div className="flex justify-between text-xs font-bold text-slate-700">
-                      <span>{pm.method}</span>
-                      <span>
-                        {pm.count}x ({pm.percentage}%)
-                      </span>
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="font-bold text-slate-800">{pm.method}</span>
+                      <div className="text-right">
+                        <span className="font-black text-slate-900">
+                          {formatRupiah(pm.amount || 0)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 ml-1 font-medium">
+                          ({pm.count}x • {pm.percentage}%)
+                        </span>
+                      </div>
                     </div>
                     <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
                       <div
                         className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-full transition-all duration-500"
-                        style={{ width: `${pm.percentage}%` }}
+                        style={{ width: `${pm.amountPercentage || pm.percentage}%` }}
                       />
                     </div>
                   </div>
@@ -938,7 +1073,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       </div>
 
-      {/* 7. Bottom Grid: Top Best Seller Products & Live Recent Orders */}
+      {/* 8. Bottom Grid: Top Best Seller Products & Live Recent Orders */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Top 5 Menu Terlaris */}
         <div className="lg:col-span-5 bg-white border border-slate-150/80 rounded-3xl p-6 shadow-sm space-y-4">

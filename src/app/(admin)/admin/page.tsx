@@ -188,16 +188,89 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
-  const paymentMap = new Map<string, number>();
+  let cashRevenue = 0;
+  let cashCount = 0;
+  let qrisRevenue = 0;
+  let qrisCount = 0;
+  let walletRevenue = 0;
+  let walletCount = 0;
+  let transferRevenue = 0;
+  let transferCount = 0;
+  let otherRevenue = 0;
+  let otherCount = 0;
+
+  const paymentMap = new Map<string, { count: number; amount: number }>();
+
   completedOrders.forEach((o) => {
-    const pm = o.paymentMethod || 'OTHER';
-    paymentMap.set(pm, (paymentMap.get(pm) || 0) + 1);
+    const pmRaw = (o.paymentMethod || 'OTHER').trim();
+    const pmUpper = pmRaw.toUpperCase();
+
+    const existing = paymentMap.get(pmRaw) || { count: 0, amount: 0 };
+    paymentMap.set(pmRaw, {
+      count: existing.count + 1,
+      amount: existing.amount + o.total,
+    });
+
+    if (pmUpper === 'CASH' || pmUpper === 'TUNAI' || pmUpper === 'COD') {
+      cashRevenue += o.total;
+      cashCount += 1;
+    } else if (pmUpper.includes('QRIS')) {
+      qrisRevenue += o.total;
+      qrisCount += 1;
+    } else if (pmUpper.includes('WALLET') || pmUpper.includes('SALDO')) {
+      walletRevenue += o.total;
+      walletCount += 1;
+    } else if (
+      pmUpper.includes('TRANSFER') ||
+      pmUpper.includes('MIDTRANS') ||
+      pmUpper.includes('DOKU') ||
+      pmUpper.includes('BANK')
+    ) {
+      transferRevenue += o.total;
+      transferCount += 1;
+    } else {
+      otherRevenue += o.total;
+      otherCount += 1;
+    }
   });
-  const paymentMethods = Array.from(paymentMap.entries()).map(([method, count]) => ({
+
+  const paymentMethods = Array.from(paymentMap.entries()).map(([method, data]) => ({
     method,
-    count,
-    percentage: completedCount > 0 ? Math.round((count / completedCount) * 100) : 0,
+    count: data.count,
+    amount: data.amount,
+    percentage: completedCount > 0 ? Math.round((data.count / completedCount) * 100) : 0,
+    amountPercentage: totalRevenue > 0 ? Math.round((data.amount / totalRevenue) * 100) : 0,
   }));
+
+  const cashFlow = {
+    cash: {
+      amount: cashRevenue,
+      count: cashCount,
+      percentage: totalRevenue > 0 ? Math.round((cashRevenue / totalRevenue) * 100) : 0,
+    },
+    qris: {
+      amount: qrisRevenue,
+      count: qrisCount,
+      percentage: totalRevenue > 0 ? Math.round((qrisRevenue / totalRevenue) * 100) : 0,
+    },
+    wallet: {
+      amount: walletRevenue,
+      count: walletCount,
+      percentage: totalRevenue > 0 ? Math.round((walletRevenue / totalRevenue) * 100) : 0,
+    },
+    transfer: {
+      amount: transferRevenue,
+      count: transferCount,
+      percentage: totalRevenue > 0 ? Math.round((transferRevenue / totalRevenue) * 100) : 0,
+    },
+    other: {
+      amount: otherRevenue,
+      count: otherCount,
+      percentage: totalRevenue > 0 ? Math.round((otherRevenue / totalRevenue) * 100) : 0,
+    },
+    totalMoney: totalRevenue,
+    totalTransactions: completedCount,
+  };
 
   const typeMap = new Map<string, number>();
   orders.forEach((o) => {
@@ -249,6 +322,7 @@ export default async function AdminDashboardPage() {
       activeProducts,
       soldOutProducts: soldOutProductsCount,
     },
+    cashFlow,
     pipeline,
     liveOperations: {
       activeCashiers: activeCashierShifts.map((s) => ({
