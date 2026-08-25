@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const BASE_CASH_AVAILABLE = 320000; // Rp 320.000 modal kas tunai awal tersedia
+
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -40,13 +42,14 @@ export async function GET(req: NextRequest) {
     const nonSpmbPendingFilter = {
       NOT: {
         source: 'SPMB',
-        customerPhone: { startsWith: 'SPMB-PENDING' }
-      }
+        customerPhone: { startsWith: 'SPMB-PENDING' },
+      },
     };
 
     // Parallel DB Queries
     const [
       orders,
+      allCompletedOrders,
       expensesAggregate,
       totalCustomers,
       totalProducts,
@@ -59,9 +62,9 @@ export async function GET(req: NextRequest) {
       openTicketsCount,
       pendingTopupsCount,
       orderItems,
-      recentOrders
+      recentOrders,
     ] = await Promise.all([
-      // Orders in range
+      // Orders in chosen range
       prisma.order.findMany({
         where: {
           ...orderDateFilter,
@@ -76,6 +79,18 @@ export async function GET(req: NextRequest) {
           createdAt: true,
         },
         orderBy: { createdAt: 'asc' },
+      }),
+
+      // All Completed Orders (Global / All-time for real-time vault balance)
+      prisma.order.findMany({
+        where: {
+          ...nonSpmbPendingFilter,
+          status: { in: ['COMPLETED', 'DELIVERED'] },
+        },
+        select: {
+          total: true,
+          paymentMethod: true,
+        },
       }),
 
       // Expenses in range
@@ -147,7 +162,7 @@ export async function GET(req: NextRequest) {
         },
       }),
 
-      // Order items for best-seller calculation
+      // Order items for best-seller calculation in range
       prisma.orderItem.findMany({
         where: {
           order: {
@@ -194,7 +209,7 @@ export async function GET(req: NextRequest) {
       }),
     ]);
 
-    // Financial & Volume Calculations
+    // Financial & Volume Calculations (Filtered Range)
     const completedOrders = orders.filter((o) => ['COMPLETED', 'DELIVERED'].includes(o.status));
     const totalRevenue = completedOrders.reduce((sum, o) => sum + o.total, 0);
     const totalOrders = orders.length;
@@ -225,7 +240,7 @@ export async function GET(req: NextRequest) {
       else pipeline.PENDING++;
     });
 
-    // Best Selling Products
+    // Best Selling Products in Range
     const productMap = new Map<string, { id: string; name: string; image: string | null; qty: number; revenue: number; categoryName: string }>();
     orderItems.forEach((item) => {
       if (item.product) {
@@ -250,51 +265,64 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
 
-    // Detail Arus Uang Masuk: Tunai, QRIS, Wallet, Transfer
-    let cashRevenue = 0;
-    let cashCount = 0;
-    let qrisRevenue = 0;
-    let qrisCount = 0;
-    let walletRevenue = 0;
-    let walletCount = 0;
-    let transferRevenue = 0;
-    let transferCount = 0;
-    let otherRevenue = 0;
-    let otherCount = 0;
+    // 1. GLOBAL REAL-TIME BALANCE POSITION (Permanent Vault & Cash, NOT affected by time filter)
+    let allTimeCash = 0;
+    let allTimeQris = 0;
+    let allTimeWallet = 0;
+    let allTimeTransfer = 0;
+    let allTimeOther = 0;
+    let allTimeQrisCount = 0;
+    let allTimeCashCount = 0;
 
-    const paymentMap = new Map<string, { count: number; amount: number }>();
-
-    completedOrders.forEach((o) => {
-      const pmRaw = (o.paymentMethod || 'OTHER').trim();
-      const pmUpper = pmRaw.toUpperCase();
-
-      const existing = paymentMap.get(pmRaw) || { count: 0, amount: 0 };
-      paymentMap.set(pmRaw, {
-        count: existing.count + 1,
-        amount: existing.amount + o.total,
-      });
-
+    allCompletedOrders.forEach((o) => {
+      const pmUpper = (o.paymentMethod || '').trim().toUpperCase();
       if (pmUpper === 'CASH' || pmUpper === 'TUNAI' || pmUpper === 'COD') {
-        cashRevenue += o.total;
-        cashCount += 1;
+        allTimeCash += o.total;
+        allTimeCashCount += 1;
       } else if (pmUpper.includes('QRIS')) {
-        qrisRevenue += o.total;
-        qrisCount += 1;
+        allTimeQris += o.total;
+        allTimeQrisCount += 1;
       } else if (pmUpper.includes('WALLET') || pmUpper.includes('SALDO')) {
-        walletRevenue += o.total;
-        walletCount += 1;
+        allTimeWallet += o.total;
       } else if (
         pmUpper.includes('TRANSFER') ||
         pmUpper.includes('MIDTRANS') ||
         pmUpper.includes('DOKU') ||
         pmUpper.includes('BANK')
       ) {
-        transferRevenue += o.total;
-        transferCount += 1;
+        allTimeTransfer += o.total;
       } else {
-        otherRevenue += o.total;
-        otherCount += 1;
+        allTimeOther += o.total;
       }
+    });
+
+    const totalCashOnHand = BASE_CASH_AVAILABLE + allTimeCash;
+    const totalFundsAvailable =
+      totalCashOnHand + allTimeQris + allTimeWallet + allTimeTransfer + allTimeOther;
+
+    const balancePosition = {
+      baseCashFloat: BASE_CASH_AVAILABLE,
+      cashOnHand: totalCashOnHand,
+      cashOrdersTotal: allTimeCash,
+      cashCount: allTimeCashCount,
+      qrisBalance: allTimeQris,
+      qrisCount: allTimeQrisCount,
+      walletBalance: allTimeWallet,
+      transferBalance: allTimeTransfer,
+      otherBalance: allTimeOther,
+      totalFunds: totalFundsAvailable,
+      totalCompletedOrders: allCompletedOrders.length,
+    };
+
+    // 2. PERIODIC PAYMENT METHODS BREAKDOWN (Filtered Range)
+    const paymentMap = new Map<string, { count: number; amount: number }>();
+    completedOrders.forEach((o) => {
+      const pmRaw = (o.paymentMethod || 'OTHER').trim();
+      const existing = paymentMap.get(pmRaw) || { count: 0, amount: 0 };
+      paymentMap.set(pmRaw, {
+        count: existing.count + 1,
+        amount: existing.amount + o.total,
+      });
     });
 
     const paymentMethods = Array.from(paymentMap.entries()).map(([method, data]) => ({
@@ -305,37 +333,7 @@ export async function GET(req: NextRequest) {
       amountPercentage: totalRevenue > 0 ? Math.round((data.amount / totalRevenue) * 100) : 0,
     }));
 
-    const cashFlow = {
-      cash: {
-        amount: cashRevenue,
-        count: cashCount,
-        percentage: totalRevenue > 0 ? Math.round((cashRevenue / totalRevenue) * 100) : 0,
-      },
-      qris: {
-        amount: qrisRevenue,
-        count: qrisCount,
-        percentage: totalRevenue > 0 ? Math.round((qrisRevenue / totalRevenue) * 100) : 0,
-      },
-      wallet: {
-        amount: walletRevenue,
-        count: walletCount,
-        percentage: totalRevenue > 0 ? Math.round((walletRevenue / totalRevenue) * 100) : 0,
-      },
-      transfer: {
-        amount: transferRevenue,
-        count: transferCount,
-        percentage: totalRevenue > 0 ? Math.round((transferRevenue / totalRevenue) * 100) : 0,
-      },
-      other: {
-        amount: otherRevenue,
-        count: otherCount,
-        percentage: totalRevenue > 0 ? Math.round((otherRevenue / totalRevenue) * 100) : 0,
-      },
-      totalMoney: totalRevenue,
-      totalTransactions: completedCount,
-    };
-
-    // Order Types Breakdown
+    // Order Types Breakdown (Filtered Range)
     const typeMap = new Map<string, number>();
     orders.forEach((o) => {
       const ot = o.orderType || 'PICKUP';
@@ -347,7 +345,7 @@ export async function GET(req: NextRequest) {
       percentage: totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0,
     }));
 
-    // Timeline Calculations for Interactive Chart
+    // Timeline Calculations for Interactive Chart (Filtered Range)
     let timeline: Array<{ label: string; revenue: number; orders: number }> = [];
 
     if (range === 'today') {
@@ -466,7 +464,7 @@ export async function GET(req: NextRequest) {
           activeProducts,
           soldOutProducts: soldOutProductsCount,
         },
-        cashFlow,
+        balancePosition,
         pipeline,
         liveOperations: {
           activeCashiers: activeCashierShifts.map((s) => ({

@@ -37,7 +37,8 @@ import {
   ExternalLink,
   QrCode,
   Banknote,
-  Coins
+  Coins,
+  Vault
 } from 'lucide-react';
 
 type Range = 'today' | 'week' | 'month' | 'all';
@@ -49,20 +50,18 @@ const RANGE_LABELS: Record<Range, { label: string; subtext: string }> = {
   all: { label: 'Semua', subtext: 'Akumulasi total' },
 };
 
-interface CashFlowItem {
-  amount: number;
-  count: number;
-  percentage: number;
-}
-
-interface CashFlowSummary {
-  cash: CashFlowItem;
-  qris: CashFlowItem;
-  wallet: CashFlowItem;
-  transfer: CashFlowItem;
-  other: CashFlowItem;
-  totalMoney: number;
-  totalTransactions: number;
+interface BalancePosition {
+  baseCashFloat: number;
+  cashOnHand: number;
+  cashOrdersTotal: number;
+  cashCount: number;
+  qrisBalance: number;
+  qrisCount: number;
+  walletBalance: number;
+  transferBalance: number;
+  otherBalance: number;
+  totalFunds: number;
+  totalCompletedOrders: number;
 }
 
 interface DashboardData {
@@ -77,7 +76,7 @@ interface DashboardData {
     activeProducts: number;
     soldOutProducts: number;
   };
-  cashFlow?: CashFlowSummary;
+  balancePosition?: BalancePosition;
   pipeline: {
     PENDING: number;
     PREPARING: number;
@@ -185,14 +184,18 @@ export default function AdminDashboardClient({ initialData }: Props) {
   }, [range, fetchData]);
 
   const kpis = data.kpis;
-  const cashFlow = data.cashFlow || {
-    cash: { amount: 0, count: 0, percentage: 0 },
-    qris: { amount: 0, count: 0, percentage: 0 },
-    wallet: { amount: 0, count: 0, percentage: 0 },
-    transfer: { amount: 0, count: 0, percentage: 0 },
-    other: { amount: 0, count: 0, percentage: 0 },
-    totalMoney: kpis.totalRevenue,
-    totalTransactions: kpis.completedCount,
+  const balance = data.balancePosition || {
+    baseCashFloat: 320000,
+    cashOnHand: 320000,
+    cashOrdersTotal: 0,
+    cashCount: 0,
+    qrisBalance: 0,
+    qrisCount: 0,
+    walletBalance: 0,
+    transferBalance: 0,
+    otherBalance: 0,
+    totalFunds: 320000,
+    totalCompletedOrders: 0,
   };
   const pipeline = data.pipeline;
   const liveOps = data.liveOperations;
@@ -285,102 +288,107 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       </div>
 
-      {/* 2. Ringkasan Kas Masuk (Uang Tunai, QRIS, & Totalan Uang) */}
-      <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-slate-800 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-750 pb-3.5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center">
+      {/* 2. Posisi Saldo Kas & Rekening Toko (Clean Light Theme - Tidak terpengaruh filter) */}
+      <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-150/80 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3.5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 flex-shrink-0">
               <Coins className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-                Rincian Arus Kas & Saldo Uang Masuk
-              </h2>
-              <p className="text-[11px] sm:text-xs text-slate-400">
-                Pemisahan uang tunai di kasir, pembayaran QRIS, dompet digital, dan total uang terakumulasi ({RANGE_LABELS[range].label})
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg font-extrabold tracking-tight text-slate-900">
+                  Posisi Saldo Kas & Dompet
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Real-time Kumulatif
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
+                Total uang tunai fisik di laci, saldo QRIS merchant, dompet digital, dan total dana riil yang tersedia
               </p>
             </div>
           </div>
-          <span className="px-3 py-1 rounded-full text-xs font-black bg-orange-500/20 text-orange-300 border border-orange-500/40 self-start sm:self-auto">
-            {cashFlow.totalTransactions} Transaksi Sukses
+          <span className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-150 self-start sm:self-auto">
+            Dana Tersedia Saat Ini
           </span>
         </div>
 
-        {/* 4 Kolom Rincian Uang */}
+        {/* 4 Kolom Rincian Saldo (Light Theme) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* Uang Tunai */}
-          <div className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl p-4 space-y-2 transition-colors group">
+          {/* Uang Tunai di Kas / Laci */}
+          <div className="bg-amber-50/60 hover:bg-amber-50/90 border border-amber-200/80 rounded-2xl p-4 space-y-2 transition-all group">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Banknote className="w-4 h-4" />
-                Uang Tunai (Cash)
+              <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Banknote className="w-4 h-4 text-amber-600" />
+                Uang Tunai di Kasir
               </span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-400/15 text-amber-300 border border-amber-400/30">
-                {cashFlow.cash.percentage}% Porsi
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-200/60 text-amber-900 border border-amber-300">
+                Fisik / Laci
               </span>
             </div>
-            <p className="text-2xl font-black text-white tracking-tight">
-              {formatRupiah(cashFlow.cash.amount)}
+            <p className="text-2xl font-black text-slate-900 tracking-tight">
+              {formatRupiah(balance.cashOnHand)}
             </p>
-            <p className="text-[11px] text-slate-400 font-medium">
-              {cashFlow.cash.count} transaksi tunai / COD diterima
+            <p className="text-[11px] text-amber-900/80 font-medium">
+              Tersedia Rp 320.000 (modal awal) {balance.cashOrdersTotal > 0 ? `+ ${formatRupiah(balance.cashOrdersTotal)} tunai` : ''}
             </p>
           </div>
 
-          {/* Pembayaran QRIS */}
-          <div className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl p-4 space-y-2 transition-colors group">
+          {/* Saldo QRIS Merchant */}
+          <div className="bg-sky-50/60 hover:bg-sky-50/90 border border-sky-200/80 rounded-2xl p-4 space-y-2 transition-all group">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                <QrCode className="w-4 h-4" />
-                QRIS Dinamis / Statis
+              <span className="text-[11px] font-extrabold text-sky-800 uppercase tracking-wider flex items-center gap-1.5">
+                <QrCode className="w-4 h-4 text-sky-600" />
+                Saldo QRIS Masuk
               </span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-sky-400/15 text-sky-300 border border-sky-400/30">
-                {cashFlow.qris.percentage}% Porsi
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-sky-200/60 text-sky-900 border border-sky-300">
+                Rekening
               </span>
             </div>
-            <p className="text-2xl font-black text-white tracking-tight">
-              {formatRupiah(cashFlow.qris.amount)}
+            <p className="text-2xl font-black text-slate-900 tracking-tight">
+              {formatRupiah(balance.qrisBalance)}
             </p>
-            <p className="text-[11px] text-slate-400 font-medium">
-              {cashFlow.qris.count} transaksi via scan QRIS
+            <p className="text-[11px] text-sky-900/80 font-medium">
+              {balance.qrisCount} transaksi pembayaran QRIS
             </p>
           </div>
 
-          {/* Transfer & Saldo Dompet */}
-          <div className="bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 rounded-2xl p-4 space-y-2 transition-colors group">
+          {/* Dompet Digital & Transfer */}
+          <div className="bg-violet-50/60 hover:bg-violet-50/90 border border-violet-200/80 rounded-2xl p-4 space-y-2 transition-all group">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-violet-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Wallet className="w-4 h-4" />
+              <span className="text-[11px] font-extrabold text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Wallet className="w-4 h-4 text-violet-600" />
                 Dompet & Transfer
               </span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-violet-400/15 text-violet-300 border border-violet-400/30">
-                {cashFlow.wallet.percentage + cashFlow.transfer.percentage}% Porsi
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-violet-200/60 text-violet-900 border border-violet-300">
+                Digital
               </span>
             </div>
-            <p className="text-2xl font-black text-white tracking-tight">
-              {formatRupiah(cashFlow.wallet.amount + cashFlow.transfer.amount)}
+            <p className="text-2xl font-black text-slate-900 tracking-tight">
+              {formatRupiah(balance.walletBalance + balance.transferBalance)}
             </p>
-            <p className="text-[11px] text-slate-400 font-medium">
-              {cashFlow.wallet.count + cashFlow.transfer.count} transaksi saldo / bank
+            <p className="text-[11px] text-violet-900/80 font-medium">
+              Saldo dompet member & bank transfer
             </p>
           </div>
 
-          {/* Totalan Uang Masuk */}
-          <div className="bg-gradient-to-br from-orange-600/90 to-amber-600/90 border border-orange-400/40 rounded-2xl p-4 space-y-2 shadow-lg shadow-orange-950/40">
+          {/* Total Dana Tersedia */}
+          <div className="bg-gradient-to-br from-orange-500 to-amber-500 text-white rounded-2xl p-4 space-y-2 shadow-md shadow-orange-500/20 group">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+              <span className="text-[11px] font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4 text-orange-100" />
-                Total Seluruh Uang
+                Total Seluruh Dana
               </span>
               <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/20 text-white">
-                100%
+                Total Kas
               </span>
             </div>
             <p className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              {formatRupiah(cashFlow.totalMoney)}
+              {formatRupiah(balance.totalFunds)}
             </p>
             <p className="text-[11px] text-orange-100 font-semibold">
-              Total bruto seluruh penerimaan
+              Total kas tunai + seluruh saldo digital
             </p>
           </div>
         </div>
@@ -390,7 +398,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Link
           href="/admin/cashier"
-          className="group p-3.5 rounded-2xl bg-white border border-slate-100 hover:border-orange-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
+          className="group p-3.5 rounded-2xl bg-white border border-slate-150/80 hover:border-orange-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
         >
           <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 border border-orange-100 flex items-center justify-center group-hover:scale-105 transition-transform">
             <Store className="w-5 h-5" />
@@ -405,7 +413,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
         <Link
           href="/admin/expenses"
-          className="group p-3.5 rounded-2xl bg-white border border-slate-100 hover:border-amber-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
+          className="group p-3.5 rounded-2xl bg-white border border-slate-150/80 hover:border-amber-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
         >
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center group-hover:scale-105 transition-transform">
             <Receipt className="w-5 h-5" />
@@ -420,7 +428,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
         <Link
           href="/admin/products"
-          className="group p-3.5 rounded-2xl bg-white border border-slate-100 hover:border-orange-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
+          className="group p-3.5 rounded-2xl bg-white border border-slate-150/80 hover:border-orange-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
         >
           <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 border border-orange-100 flex items-center justify-center group-hover:scale-105 transition-transform">
             <Package className="w-5 h-5" />
@@ -435,7 +443,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
         <Link
           href="/admin/inventory"
-          className="group p-3.5 rounded-2xl bg-white border border-slate-100 hover:border-amber-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
+          className="group p-3.5 rounded-2xl bg-white border border-slate-150/80 hover:border-amber-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
         >
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center group-hover:scale-105 transition-transform">
             <Coffee className="w-5 h-5" />
@@ -450,7 +458,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
         <Link
           href="/admin/reports"
-          className="group p-3.5 rounded-2xl bg-white border border-slate-100 hover:border-orange-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
+          className="group p-3.5 rounded-2xl bg-white border border-slate-150/80 hover:border-orange-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
         >
           <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 border border-orange-100 flex items-center justify-center group-hover:scale-105 transition-transform">
             <BarChart3 className="w-5 h-5" />
@@ -465,7 +473,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
         <Link
           href="/admin/tables"
-          className="group p-3.5 rounded-2xl bg-white border border-slate-100 hover:border-amber-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
+          className="group p-3.5 rounded-2xl bg-white border border-slate-150/80 hover:border-amber-300 hover:shadow-md transition-all duration-200 flex items-center gap-3"
         >
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex items-center justify-center group-hover:scale-105 transition-transform">
             <Layers className="w-5 h-5" />
@@ -479,7 +487,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </Link>
       </div>
 
-      {/* 4. Financial & Profit Grid */}
+      {/* 4. Financial & Profit Grid (Filtered Range) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Omset Kotor */}
         <div className="bg-white border border-slate-150/80 rounded-3xl p-5 shadow-sm space-y-3 relative overflow-hidden group hover:border-orange-300 transition-all duration-300">
@@ -493,13 +501,13 @@ export default function AdminDashboardClient({ initialData }: Props) {
           </div>
           <div>
             <span className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
-              Total Omset Kotor
+              Omset Penjualan ({RANGE_LABELS[range].label})
             </span>
             <h3 className="text-2xl sm:text-3xl font-black text-slate-900 mt-1 tracking-tight">
               {formatRupiah(kpis.totalRevenue)}
             </h3>
             <p className="text-[11px] text-slate-500 font-medium mt-1">
-              Dari {kpis.totalOrders} total pesanan masuk ({RANGE_LABELS[range].label})
+              Dari {kpis.totalOrders} total pesanan masuk
             </p>
           </div>
         </div>
@@ -525,7 +533,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
               {formatRupiah(kpis.totalExpenses)}
             </h3>
             <p className="text-[11px] text-slate-500 font-medium mt-1">
-              Biaya operasional, bahan, & utilitas
+              Biaya operasional pada {RANGE_LABELS[range].label.toLowerCase()}
             </p>
           </div>
         </div>
@@ -545,8 +553,8 @@ export default function AdminDashboardClient({ initialData }: Props) {
             <span
               className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full border ${
                 kpis.netProfit >= 0
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : 'bg-rose-50 text-rose-700 border-rose-200'
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-rose-50 text-rose-700 border border-rose-200'
               }`}
             >
               {kpis.netProfit >= 0 ? 'Surplus Laba' : 'Defisit'}
@@ -1011,7 +1019,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
               Metode Bayar & Channel
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Sebaran nominal uang dan cara bayar pelanggan
+              Sebaran nominal uang dan cara bayar periode {RANGE_LABELS[range].label.toLowerCase()}
             </p>
           </div>
 

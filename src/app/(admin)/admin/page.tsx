@@ -4,6 +4,8 @@ import AdminDashboardClient from './AdminDashboardClient';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+const BASE_CASH_AVAILABLE = 320000; // Rp 320.000 modal kas tunai awal tersedia
+
 export default async function AdminDashboardPage() {
   const now = new Date();
   const currentStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -21,6 +23,7 @@ export default async function AdminDashboardPage() {
 
   const [
     orders,
+    allCompletedOrders,
     expensesAggregate,
     totalCustomers,
     totalProducts,
@@ -49,6 +52,16 @@ export default async function AdminDashboardPage() {
         createdAt: true,
       },
       orderBy: { createdAt: 'asc' },
+    }),
+    prisma.order.findMany({
+      where: {
+        ...nonSpmbPendingFilter,
+        status: { in: ['COMPLETED', 'DELIVERED'] },
+      },
+      select: {
+        total: true,
+        paymentMethod: true,
+      },
     }),
     prisma.expense.aggregate({
       _sum: { amount: true },
@@ -188,50 +201,64 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
-  let cashRevenue = 0;
-  let cashCount = 0;
-  let qrisRevenue = 0;
-  let qrisCount = 0;
-  let walletRevenue = 0;
-  let walletCount = 0;
-  let transferRevenue = 0;
-  let transferCount = 0;
-  let otherRevenue = 0;
-  let otherCount = 0;
+  // Global All-Time Balance Position
+  let allTimeCash = 0;
+  let allTimeQris = 0;
+  let allTimeWallet = 0;
+  let allTimeTransfer = 0;
+  let allTimeOther = 0;
+  let allTimeQrisCount = 0;
+  let allTimeCashCount = 0;
 
-  const paymentMap = new Map<string, { count: number; amount: number }>();
-
-  completedOrders.forEach((o) => {
-    const pmRaw = (o.paymentMethod || 'OTHER').trim();
-    const pmUpper = pmRaw.toUpperCase();
-
-    const existing = paymentMap.get(pmRaw) || { count: 0, amount: 0 };
-    paymentMap.set(pmRaw, {
-      count: existing.count + 1,
-      amount: existing.amount + o.total,
-    });
-
+  allCompletedOrders.forEach((o) => {
+    const pmUpper = (o.paymentMethod || '').trim().toUpperCase();
     if (pmUpper === 'CASH' || pmUpper === 'TUNAI' || pmUpper === 'COD') {
-      cashRevenue += o.total;
-      cashCount += 1;
+      allTimeCash += o.total;
+      allTimeCashCount += 1;
     } else if (pmUpper.includes('QRIS')) {
-      qrisRevenue += o.total;
-      qrisCount += 1;
+      allTimeQris += o.total;
+      allTimeQrisCount += 1;
     } else if (pmUpper.includes('WALLET') || pmUpper.includes('SALDO')) {
-      walletRevenue += o.total;
-      walletCount += 1;
+      allTimeWallet += o.total;
     } else if (
       pmUpper.includes('TRANSFER') ||
       pmUpper.includes('MIDTRANS') ||
       pmUpper.includes('DOKU') ||
       pmUpper.includes('BANK')
     ) {
-      transferRevenue += o.total;
-      transferCount += 1;
+      allTimeTransfer += o.total;
     } else {
-      otherRevenue += o.total;
-      otherCount += 1;
+      allTimeOther += o.total;
     }
+  });
+
+  const totalCashOnHand = BASE_CASH_AVAILABLE + allTimeCash;
+  const totalFundsAvailable =
+    totalCashOnHand + allTimeQris + allTimeWallet + allTimeTransfer + allTimeOther;
+
+  const balancePosition = {
+    baseCashFloat: BASE_CASH_AVAILABLE,
+    cashOnHand: totalCashOnHand,
+    cashOrdersTotal: allTimeCash,
+    cashCount: allTimeCashCount,
+    qrisBalance: allTimeQris,
+    qrisCount: allTimeQrisCount,
+    walletBalance: allTimeWallet,
+    transferBalance: allTimeTransfer,
+    otherBalance: allTimeOther,
+    totalFunds: totalFundsAvailable,
+    totalCompletedOrders: allCompletedOrders.length,
+  };
+
+  // Filtered payment methods
+  const paymentMap = new Map<string, { count: number; amount: number }>();
+  completedOrders.forEach((o) => {
+    const pmRaw = (o.paymentMethod || 'OTHER').trim();
+    const existing = paymentMap.get(pmRaw) || { count: 0, amount: 0 };
+    paymentMap.set(pmRaw, {
+      count: existing.count + 1,
+      amount: existing.amount + o.total,
+    });
   });
 
   const paymentMethods = Array.from(paymentMap.entries()).map(([method, data]) => ({
@@ -241,36 +268,6 @@ export default async function AdminDashboardPage() {
     percentage: completedCount > 0 ? Math.round((data.count / completedCount) * 100) : 0,
     amountPercentage: totalRevenue > 0 ? Math.round((data.amount / totalRevenue) * 100) : 0,
   }));
-
-  const cashFlow = {
-    cash: {
-      amount: cashRevenue,
-      count: cashCount,
-      percentage: totalRevenue > 0 ? Math.round((cashRevenue / totalRevenue) * 100) : 0,
-    },
-    qris: {
-      amount: qrisRevenue,
-      count: qrisCount,
-      percentage: totalRevenue > 0 ? Math.round((qrisRevenue / totalRevenue) * 100) : 0,
-    },
-    wallet: {
-      amount: walletRevenue,
-      count: walletCount,
-      percentage: totalRevenue > 0 ? Math.round((walletRevenue / totalRevenue) * 100) : 0,
-    },
-    transfer: {
-      amount: transferRevenue,
-      count: transferCount,
-      percentage: totalRevenue > 0 ? Math.round((transferRevenue / totalRevenue) * 100) : 0,
-    },
-    other: {
-      amount: otherRevenue,
-      count: otherCount,
-      percentage: totalRevenue > 0 ? Math.round((otherRevenue / totalRevenue) * 100) : 0,
-    },
-    totalMoney: totalRevenue,
-    totalTransactions: completedCount,
-  };
 
   const typeMap = new Map<string, number>();
   orders.forEach((o) => {
@@ -322,7 +319,7 @@ export default async function AdminDashboardPage() {
       activeProducts,
       soldOutProducts: soldOutProductsCount,
     },
-    cashFlow,
+    balancePosition,
     pipeline,
     liveOperations: {
       activeCashiers: activeCashierShifts.map((s) => ({
