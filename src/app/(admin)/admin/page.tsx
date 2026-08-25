@@ -203,7 +203,9 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
-  // 100% Dynamic Real-Time Balance Position from Database
+  // Global Real-Time Balance Position
+  const BASE_CASH_BALANCE = 245000; // Modal kas tunai awal (320.000 - 75.000)
+  const BASE_QRIS_BALANCE = 722000; // Saldo QRIS awal / merchant settlement
   const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + (s.openingCash || 0), 0);
   const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
 
@@ -237,17 +239,21 @@ export default async function AdminDashboardPage() {
     }
   });
 
-  const totalCashOnHand = Math.max(0, (activeShiftOpeningCash + allTimeCash) - allTimeExpensesTotal);
+  const totalCashOnHand = Math.max(0, (BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash) - allTimeExpensesTotal);
+  const totalQrisBalance = BASE_QRIS_BALANCE + allTimeQris;
   const totalFundsAvailable =
-    totalCashOnHand + allTimeQris + allTimeWallet + allTimeTransfer + allTimeOther;
+    totalCashOnHand + totalQrisBalance + allTimeWallet + allTimeTransfer + allTimeOther;
 
   const balancePosition = {
+    baseCashBalance: BASE_CASH_BALANCE,
+    baseQrisBalance: BASE_QRIS_BALANCE,
     activeShiftOpeningCash,
     allTimeExpensesTotal,
     cashOnHand: totalCashOnHand,
     cashOrdersTotal: allTimeCash,
     cashCount: allTimeCashCount,
-    qrisBalance: allTimeQris,
+    qrisBalance: totalQrisBalance,
+    qrisOrdersTotal: allTimeQris,
     qrisCount: allTimeQrisCount,
     walletBalance: allTimeWallet,
     transferBalance: allTimeTransfer,

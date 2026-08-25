@@ -50,12 +50,15 @@ const RANGE_LABELS: Record<Range, { label: string; subtext: string }> = {
 };
 
 interface BalancePosition {
+  baseCashBalance?: number;
+  baseQrisBalance?: number;
   activeShiftOpeningCash: number;
   allTimeExpensesTotal: number;
   cashOnHand: number;
   cashOrdersTotal: number;
   cashCount: number;
   qrisBalance: number;
+  qrisOrdersTotal?: number;
   qrisCount: number;
   walletBalance: number;
   transferBalance: number;
@@ -185,17 +188,20 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
   const kpis = data.kpis;
   const balance = data.balancePosition || {
+    baseCashBalance: 245000,
+    baseQrisBalance: 722000,
     activeShiftOpeningCash: 0,
     allTimeExpensesTotal: 0,
-    cashOnHand: 0,
+    cashOnHand: 245000,
     cashOrdersTotal: 0,
     cashCount: 0,
-    qrisBalance: 0,
+    qrisBalance: 722000,
+    qrisOrdersTotal: 0,
     qrisCount: 0,
     walletBalance: 0,
     transferBalance: 0,
     otherBalance: 0,
-    totalFunds: 0,
+    totalFunds: 967000,
     totalCompletedOrders: 0,
   };
   const pipeline = data.pipeline;
@@ -332,10 +338,11 @@ export default function AdminDashboardClient({ initialData }: Props) {
               {formatRupiah(balance.cashOnHand)}
             </p>
             <p className="text-[11px] text-amber-900/80 font-medium">
+              Tersedia {formatRupiah(balance.baseCashBalance || 245000)} (kas awal)
               {balance.activeShiftOpeningCash > 0
-                ? `${formatRupiah(balance.activeShiftOpeningCash)} (modal shift) + `
+                ? ` + ${formatRupiah(balance.activeShiftOpeningCash)} (shift)`
                 : ''}
-              {formatRupiah(balance.cashOrdersTotal)} tunai
+              {balance.cashOrdersTotal > 0 ? ` + ${formatRupiah(balance.cashOrdersTotal)} tunai` : ''}
               {balance.allTimeExpensesTotal > 0
                 ? ` - ${formatRupiah(balance.allTimeExpensesTotal)} expense`
                 : ''}
@@ -357,7 +364,11 @@ export default function AdminDashboardClient({ initialData }: Props) {
               {formatRupiah(balance.qrisBalance)}
             </p>
             <p className="text-[11px] text-sky-900/80 font-medium">
-              {balance.qrisCount} transaksi pembayaran QRIS
+              Tersedia {formatRupiah(balance.baseQrisBalance || 722000)} (saldo awal)
+              {balance.qrisOrdersTotal && balance.qrisOrdersTotal > 0
+                ? ` + ${formatRupiah(balance.qrisOrdersTotal)} QRIS`
+                : ''}
+              {balance.qrisCount > 0 ? ` (${balance.qrisCount} transaksi)` : ''}
             </p>
           </div>
 
