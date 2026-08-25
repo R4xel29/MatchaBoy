@@ -271,7 +271,7 @@ export async function GET(req: NextRequest) {
 
     // 1. GLOBAL REAL-TIME BALANCE POSITION
     // - Baseline Saldo Awal Toko: Kas Tunai Rp 245.000, QRIS Rp 722.000
-    // - Ditambah transaksi berjalan & shift dari database
+    // - Ditambah seluruh transaksi tunai & QRIS dari database
     const BASE_CASH_BALANCE = 245000; // Modal kas tunai awal (320.000 - 75.000)
     const BASE_QRIS_BALANCE = 722000; // Saldo QRIS awal / merchant settlement
     const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + (s.openingCash || 0), 0);
@@ -279,9 +279,6 @@ export async function GET(req: NextRequest) {
 
     let allTimeCash = 0;
     let allTimeQris = 0;
-    let allTimeWallet = 0;
-    let allTimeTransfer = 0;
-    let allTimeOther = 0;
     let allTimeQrisCount = 0;
     let allTimeCashCount = 0;
 
@@ -293,41 +290,31 @@ export async function GET(req: NextRequest) {
       } else if (pmUpper.includes('QRIS')) {
         allTimeQris += o.total;
         allTimeQrisCount += 1;
-      } else if (pmUpper.includes('WALLET') || pmUpper.includes('SALDO')) {
-        allTimeWallet += o.total;
-      } else if (
-        pmUpper.includes('TRANSFER') ||
-        pmUpper.includes('MIDTRANS') ||
-        pmUpper.includes('DOKU') ||
-        pmUpper.includes('BANK')
-      ) {
-        allTimeTransfer += o.total;
-      } else {
-        allTimeOther += o.total;
       }
     });
 
-    // Uang tunai fisik = (Kas Awal + Shift + Penerimaan Tunai) - Pengeluaran
-    const totalCashOnHand = Math.max(0, (BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash) - allTimeExpensesTotal);
-    const totalQrisBalance = BASE_QRIS_BALANCE + allTimeQris;
-    const totalFundsAvailable =
-      totalCashOnHand + totalQrisBalance + allTimeWallet + allTimeTransfer + allTimeOther;
+    // 1. Uang Tunai yang ada (Kas awal + shift + pesanan tunai)
+    const cashTotal = BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash;
+    // 2. Uang QRIS yang ada (QRIS awal + pesanan QRIS)
+    const qrisTotal = BASE_QRIS_BALANCE + allTimeQris;
+    // 3. Total seluruh uang selama ini (Gross = Tunai + QRIS)
+    const grossTotalMoney = cashTotal + qrisTotal;
+    // 4. Total uang bersih (Setelah dikurangi seluruh pengeluaran)
+    const netTotalMoney = Math.max(0, grossTotalMoney - allTimeExpensesTotal);
 
     const balancePosition = {
       baseCashBalance: BASE_CASH_BALANCE,
       baseQrisBalance: BASE_QRIS_BALANCE,
       activeShiftOpeningCash,
       allTimeExpensesTotal,
-      cashOnHand: totalCashOnHand,
+      cashTotal,
       cashOrdersTotal: allTimeCash,
       cashCount: allTimeCashCount,
-      qrisBalance: totalQrisBalance,
+      qrisTotal,
       qrisOrdersTotal: allTimeQris,
       qrisCount: allTimeQrisCount,
-      walletBalance: allTimeWallet,
-      transferBalance: allTimeTransfer,
-      otherBalance: allTimeOther,
-      totalFunds: totalFundsAvailable,
+      grossTotalMoney,
+      netTotalMoney,
       totalCompletedOrders: allCompletedOrders.length,
     };
 

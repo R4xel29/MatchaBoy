@@ -211,9 +211,6 @@ export default async function AdminDashboardPage() {
 
   let allTimeCash = 0;
   let allTimeQris = 0;
-  let allTimeWallet = 0;
-  let allTimeTransfer = 0;
-  let allTimeOther = 0;
   let allTimeQrisCount = 0;
   let allTimeCashCount = 0;
 
@@ -225,40 +222,27 @@ export default async function AdminDashboardPage() {
     } else if (pmUpper.includes('QRIS')) {
       allTimeQris += o.total;
       allTimeQrisCount += 1;
-    } else if (pmUpper.includes('WALLET') || pmUpper.includes('SALDO')) {
-      allTimeWallet += o.total;
-    } else if (
-      pmUpper.includes('TRANSFER') ||
-      pmUpper.includes('MIDTRANS') ||
-      pmUpper.includes('DOKU') ||
-      pmUpper.includes('BANK')
-    ) {
-      allTimeTransfer += o.total;
-    } else {
-      allTimeOther += o.total;
     }
   });
 
-  const totalCashOnHand = Math.max(0, (BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash) - allTimeExpensesTotal);
-  const totalQrisBalance = BASE_QRIS_BALANCE + allTimeQris;
-  const totalFundsAvailable =
-    totalCashOnHand + totalQrisBalance + allTimeWallet + allTimeTransfer + allTimeOther;
+  const cashTotal = BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash;
+  const qrisTotal = BASE_QRIS_BALANCE + allTimeQris;
+  const grossTotalMoney = cashTotal + qrisTotal;
+  const netTotalMoney = Math.max(0, grossTotalMoney - allTimeExpensesTotal);
 
   const balancePosition = {
     baseCashBalance: BASE_CASH_BALANCE,
     baseQrisBalance: BASE_QRIS_BALANCE,
     activeShiftOpeningCash,
     allTimeExpensesTotal,
-    cashOnHand: totalCashOnHand,
+    cashTotal,
     cashOrdersTotal: allTimeCash,
     cashCount: allTimeCashCount,
-    qrisBalance: totalQrisBalance,
+    qrisTotal,
     qrisOrdersTotal: allTimeQris,
     qrisCount: allTimeQrisCount,
-    walletBalance: allTimeWallet,
-    transferBalance: allTimeTransfer,
-    otherBalance: allTimeOther,
-    totalFunds: totalFundsAvailable,
+    grossTotalMoney,
+    netTotalMoney,
     totalCompletedOrders: allCompletedOrders.length,
   };
 

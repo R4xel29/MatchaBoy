@@ -54,16 +54,14 @@ interface BalancePosition {
   baseQrisBalance?: number;
   activeShiftOpeningCash: number;
   allTimeExpensesTotal: number;
-  cashOnHand: number;
+  cashTotal: number;
   cashOrdersTotal: number;
   cashCount: number;
-  qrisBalance: number;
+  qrisTotal: number;
   qrisOrdersTotal?: number;
   qrisCount: number;
-  walletBalance: number;
-  transferBalance: number;
-  otherBalance: number;
-  totalFunds: number;
+  grossTotalMoney: number;
+  netTotalMoney: number;
   totalCompletedOrders: number;
 }
 
@@ -192,16 +190,14 @@ export default function AdminDashboardClient({ initialData }: Props) {
     baseQrisBalance: 722000,
     activeShiftOpeningCash: 0,
     allTimeExpensesTotal: 0,
-    cashOnHand: 245000,
+    cashTotal: 245000,
     cashOrdersTotal: 0,
     cashCount: 0,
-    qrisBalance: 722000,
+    qrisTotal: 722000,
     qrisOrdersTotal: 0,
     qrisCount: 0,
-    walletBalance: 0,
-    transferBalance: 0,
-    otherBalance: 0,
-    totalFunds: 967000,
+    grossTotalMoney: 967000,
+    netTotalMoney: 967000,
     totalCompletedOrders: 0,
   };
   const pipeline = data.pipeline;
@@ -323,19 +319,19 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
         {/* 4 Kolom Rincian Saldo (Light Theme Dinamis) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* Uang Tunai di Kas / Laci */}
+          {/* 1. Uang Tunai di Kas / Laci */}
           <div className="bg-amber-50/60 hover:bg-amber-50/90 border border-amber-200/80 rounded-2xl p-4 space-y-2 transition-all group">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Banknote className="w-4 h-4 text-amber-600" />
-                Uang Tunai di Kasir
+                Uang Tunai (Cash)
               </span>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-200/60 text-amber-900 border border-amber-300">
                 Fisik / Laci
               </span>
             </div>
             <p className="text-2xl font-black text-slate-900 tracking-tight">
-              {formatRupiah(balance.cashOnHand)}
+              {formatRupiah(balance.cashTotal)}
             </p>
             <p className="text-[11px] text-amber-900/80 font-medium">
               Tersedia {formatRupiah(balance.baseCashBalance || 245000)} (kas awal)
@@ -343,13 +339,10 @@ export default function AdminDashboardClient({ initialData }: Props) {
                 ? ` + ${formatRupiah(balance.activeShiftOpeningCash)} (shift)`
                 : ''}
               {balance.cashOrdersTotal > 0 ? ` + ${formatRupiah(balance.cashOrdersTotal)} tunai` : ''}
-              {balance.allTimeExpensesTotal > 0
-                ? ` - ${formatRupiah(balance.allTimeExpensesTotal)} expense`
-                : ''}
             </p>
           </div>
 
-          {/* Saldo QRIS Merchant */}
+          {/* 2. Saldo QRIS Merchant */}
           <div className="bg-sky-50/60 hover:bg-sky-50/90 border border-sky-200/80 rounded-2xl p-4 space-y-2 transition-all group">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-sky-800 uppercase tracking-wider flex items-center gap-1.5">
@@ -361,7 +354,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
               </span>
             </div>
             <p className="text-2xl font-black text-slate-900 tracking-tight">
-              {formatRupiah(balance.qrisBalance)}
+              {formatRupiah(balance.qrisTotal)}
             </p>
             <p className="text-[11px] text-sky-900/80 font-medium">
               Tersedia {formatRupiah(balance.baseQrisBalance || 722000)} (saldo awal)
@@ -372,41 +365,41 @@ export default function AdminDashboardClient({ initialData }: Props) {
             </p>
           </div>
 
-          {/* Dompet Digital & Transfer */}
-          <div className="bg-violet-50/60 hover:bg-violet-50/90 border border-violet-200/80 rounded-2xl p-4 space-y-2 transition-all group">
+          {/* 3. Total Seluruh Uang Selama Ini (Bruto) */}
+          <div className="bg-indigo-50/60 hover:bg-indigo-50/90 border border-indigo-200/80 rounded-2xl p-4 space-y-2 transition-all group">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] font-extrabold text-violet-800 uppercase tracking-wider flex items-center gap-1.5">
-                <Wallet className="w-4 h-4 text-violet-600" />
-                Dompet & Transfer
+              <span className="text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
+                <Coins className="w-4 h-4 text-indigo-600" />
+                Total Uang Selama Ini
               </span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-violet-200/60 text-violet-900 border border-violet-300">
-                Digital
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-200/60 text-indigo-900 border border-indigo-300">
+                Tunai + QRIS
               </span>
             </div>
             <p className="text-2xl font-black text-slate-900 tracking-tight">
-              {formatRupiah(balance.walletBalance + balance.transferBalance)}
+              {formatRupiah(balance.grossTotalMoney)}
             </p>
-            <p className="text-[11px] text-violet-900/80 font-medium">
-              Saldo dompet member & bank transfer
+            <p className="text-[11px] text-indigo-900/80 font-medium">
+              Akumulasi seluruh uang masuk (sebelum pengeluaran)
             </p>
           </div>
 
-          {/* Total Dana Tersedia */}
+          {/* 4. Total Uang Bersih (Setelah Pengeluaran) */}
           <div className="bg-gradient-to-br from-orange-500 to-amber-500 text-white rounded-2xl p-4 space-y-2 shadow-md shadow-orange-500/20 group">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4 text-orange-100" />
-                Total Seluruh Dana
+                Total Uang Bersih (Sisa)
               </span>
               <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/20 text-white">
-                Total Kas
+                Kas Akhir
               </span>
             </div>
             <p className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-              {formatRupiah(balance.totalFunds)}
+              {formatRupiah(balance.netTotalMoney)}
             </p>
             <p className="text-[11px] text-orange-100 font-semibold">
-              Total kas tunai + seluruh saldo digital
+              Sudah dikurangi total pengeluaran {formatRupiah(balance.allTimeExpensesTotal)}
             </p>
           </div>
         </div>
