@@ -223,9 +223,8 @@ export default async function AdminDashboardPage() {
     .slice(0, 5);
 
   // Balance calculations (Cash & QRIS Saat Ini)
-  const BASE_CASH_BALANCE = 245000;
+  const BASE_CASH_BALANCE = 252000;
   const BASE_QRIS_BALANCE = 722000;
-  const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + s.openingCash, 0);
 
   let allTimeCash = 0;
   let allTimeCashCount = 0;
@@ -253,8 +252,9 @@ export default async function AdminDashboardPage() {
     }
   });
 
+  const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + s.openingCash, 0);
   const allTimeExpensesTotal = allTimeCashExpenses + allTimeTransferExpenses;
-  const cashInflowTotal = BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash;
+  const cashInflowTotal = BASE_CASH_BALANCE + allTimeCash;
   const qrisInflowTotal = BASE_QRIS_BALANCE + allTimeQris;
   const currentCash = Math.max(0, cashInflowTotal - allTimeCashExpenses);
   const currentQris = Math.max(0, qrisInflowTotal - allTimeTransferExpenses);

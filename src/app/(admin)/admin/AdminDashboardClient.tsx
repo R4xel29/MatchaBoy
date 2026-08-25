@@ -197,19 +197,25 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
   const kpis = data.kpis;
   const balance = data.balancePosition || {
-    baseCashBalance: 245000,
+    baseCashBalance: 252000,
     baseQrisBalance: 722000,
     activeShiftOpeningCash: 0,
     allTimeExpensesTotal: 0,
-    cashTotal: 245000,
-    cashOrdersTotal: 0,
-    cashCount: 0,
-    qrisTotal: 722000,
-    qrisOrdersTotal: 0,
-    qrisCount: 0,
-    grossTotalMoney: 967000,
-    netTotalMoney: 967000,
-    totalCompletedOrders: 0,
+    currentCash: 320000,
+    currentQris: 353000,
+    cashInflowTotal: 320000,
+    qrisInflowTotal: 728000,
+    allTimeCashExpenses: 0,
+    allTimeTransferExpenses: 375000,
+    cashTotal: 320000,
+    cashOrdersTotal: 68000,
+    cashCount: 5,
+    qrisTotal: 353000,
+    qrisOrdersTotal: 6000,
+    qrisCount: 1,
+    grossTotalMoney: 1048000,
+    netTotalMoney: 673000,
+    totalCompletedOrders: 6,
   };
   const pipeline = data.pipeline;
   const liveOps = data.liveOperations;
