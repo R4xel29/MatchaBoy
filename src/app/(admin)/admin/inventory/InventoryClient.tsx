@@ -48,7 +48,8 @@ export default function InventoryClient({ initialIngredients }: Props) {
   const [restockData, setRestockData] = useState({
     quantity: '',
     totalCost: '',
-    notes: ''
+    notes: '',
+    source: 'CASH_DRAWER',
   });
 
   const filteredIngredients = initialIngredients.filter(i =>
@@ -80,7 +81,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
 
   const openRestockModal = (ingredient: Ingredient) => {
     setRestockIngredient(ingredient);
-    setRestockData({ quantity: '', totalCost: '', notes: '' });
+    setRestockData({ quantity: '', totalCost: '', notes: '', source: 'CASH_DRAWER' });
     setShowRestockModal(true);
   };
 
@@ -354,13 +355,43 @@ export default function InventoryClient({ initialIngredients }: Props) {
                 </div>
               )}
               <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                  Sumber Dana Pembayaran
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRestockData(p => ({ ...p, source: 'CASH_DRAWER' }))}
+                    className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all ${
+                      restockData.source === 'CASH_DRAWER'
+                        ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Kas Laci (Tunai)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRestockData(p => ({ ...p, source: 'BANK_TRANSFER' }))}
+                    className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all ${
+                      restockData.source === 'BANK_TRANSFER'
+                        ? 'bg-sky-100 border-sky-300 text-sky-900 shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Transfer Bank / Rekening
+                  </button>
+                </div>
+              </div>
+
+              <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Notes (Optional)</label>
                 <textarea 
                   value={restockData.notes} 
                   onChange={e => setRestockData(p => ({ ...p, notes: e.target.value }))}
                   rows={2}
                   className="w-full px-3.5 py-2.5 text-sm bg-emerald-50/20 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all resize-none"
-                  placeholder="e.g. Purchased from Supplier X"
+                  placeholder="e.g. Pembelian dari Toko Suplier A"
                 />
               </div>
             </div>

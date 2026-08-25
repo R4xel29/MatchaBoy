@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { ingredientId, quantity, totalCost, notes } = body;
+    const { ingredientId, quantity, totalCost, notes, source = 'CASH_DRAWER' } = body;
 
     const ingredient = await prisma.ingredient.findUnique({
       where: { id: ingredientId },
@@ -20,17 +20,15 @@ export async function POST(request: Request) {
       return new NextResponse('Ingredient not found', { status: 404 });
     }
 
-    const newStock = ingredient.stock + parseFloat(quantity);
-    
-    // Calculate new average cost
-    // Formula: (Current Stock * Current Cost + New Stock * New Cost) / Total Stock
-    // But usually simpler: total spent / total units if we track everything.
-    // Let's use: ((current stock * current cost) + totalCost) / (current stock + quantity)
-    const currentTotalValue = ingredient.stock * ingredient.costPerUnit;
-    const newTotalValue = currentTotalValue + parseInt(totalCost);
-    const newAverageCost = Math.round(newTotalValue / newStock);
+    const qty = parseFloat(quantity) || 0;
+    const cost = parseInt(totalCost) || 0;
+    const newStock = ingredient.stock + qty;
 
-    const updatedIngredient = await prisma.$transaction([
+    const currentTotalValue = ingredient.stock * ingredient.costPerUnit;
+    const newTotalValue = currentTotalValue + cost;
+    const newAverageCost = newStock > 0 ? Math.round(newTotalValue / newStock) : ingredient.costPerUnit;
+
+    const txOperations: any[] = [
       prisma.ingredient.update({
         where: { id: ingredientId },
         data: {
@@ -41,14 +39,32 @@ export async function POST(request: Request) {
       prisma.stockMovement.create({
         data: {
           ingredientId,
-          quantity: parseFloat(quantity),
+          quantity: qty,
           type: 'IN',
-          reason: notes || 'Restock',
+          reason: notes ? `Restock: ${notes}` : `Restock ${ingredient.name} (${qty} ${ingredient.unit})`,
         },
       }),
-    ]);
+    ];
 
-    return NextResponse.json(updatedIngredient[0]);
+    if (cost > 0) {
+      const sourceLabel = source === 'CASH_DRAWER' ? 'Kas Laci (Tunai)' : 'Transfer Bank / Rekening';
+      txOperations.push(
+        prisma.expense.create({
+          data: {
+            name: `Restock: ${ingredient.name} (${qty} ${ingredient.unit})`,
+            amount: cost,
+            category: 'RAW_MATERIAL',
+            date: new Date(),
+            notes: notes
+              ? `${notes} [Sumber: ${sourceLabel}]`
+              : `Pembelian stok bahan baku ${ingredient.name} [Sumber: ${sourceLabel}]`,
+          },
+        })
+      );
+    }
+
+    const updatedResult = await prisma.$transaction(txOperations);
+    return NextResponse.json(updatedResult[0]);
   } catch (error) {
     console.error('Error restocking ingredient:', error);
     return new NextResponse('Internal Server Error', { status: 500 });

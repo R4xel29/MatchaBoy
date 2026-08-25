@@ -114,6 +114,11 @@ interface DashboardData {
     openTicketsCount: number;
     pendingTopupsCount: number;
   };
+  stockAssetValuation?: {
+    totalValue: number;
+    totalIngredientsCount: number;
+    lowStockCount: number;
+  };
   topProducts: Array<{
     id: string;
     name: string;
@@ -124,7 +129,7 @@ interface DashboardData {
   }>;
   paymentMethods: Array<{ method: string; count: number; amount?: number; percentage: number; amountPercentage?: number }>;
   orderTypes: Array<{ type: string; count: number; percentage: number }>;
-  timeline: Array<{ label: string; revenue: number; orders: number }>;
+  timeline: Array<{ label: string; revenue: number; expenses?: number; orders: number }>;
   recentOrders: Array<{
     id: string;
     customerName: string;
@@ -149,7 +154,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
   const [range, setRange] = useState<Range>('today');
   const [data, setData] = useState<DashboardData>(initialData);
   const [loading, setLoading] = useState(false);
-  const [activeChartMetric, setActiveChartMetric] = useState<'revenue' | 'orders'>('revenue');
+  const [activeChartMetric, setActiveChartMetric] = useState<'revenue' | 'orders' | 'cashflow'>('revenue');
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
 
   const fetchData = useCallback(async (selectedRange: Range, isBackground = false) => {
@@ -211,8 +216,14 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
   // Chart SVG Calculations
   const maxRevenue = Math.max(...timeline.map((t) => t.revenue), 10000);
+  const maxExpenses = Math.max(...timeline.map((t) => t.expenses || 0), 10000);
   const maxOrders = Math.max(...timeline.map((t) => t.orders), 5);
-  const currentMax = activeChartMetric === 'revenue' ? maxRevenue : maxOrders;
+  const currentMax =
+    activeChartMetric === 'revenue'
+      ? maxRevenue
+      : activeChartMetric === 'cashflow'
+      ? Math.max(maxRevenue, maxExpenses)
+      : maxOrders;
 
   const svgWidth = 640;
   const svgHeight = 200;
@@ -223,12 +234,20 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
   const points = timeline.map((p, idx) => {
     const x = paddingX + (idx / Math.max(timeline.length - 1, 1)) * chartW;
-    const val = activeChartMetric === 'revenue' ? p.revenue : p.orders;
+    const val = activeChartMetric === 'orders' ? p.orders : p.revenue;
+    const y = svgHeight - paddingY - (val / currentMax) * chartH;
+    return { x, y, ...p };
+  });
+
+  const expensePoints = timeline.map((p, idx) => {
+    const x = paddingX + (idx / Math.max(timeline.length - 1, 1)) * chartW;
+    const val = p.expenses || 0;
     const y = svgHeight - paddingY - (val / currentMax) * chartH;
     return { x, y, ...p };
   });
 
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+  const expenseLinePath = expensePoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
 
   const totalActivePipeline =
     pipeline.PENDING + pipeline.PREPARING + pipeline.READY + pipeline.ON_DELIVERY;
@@ -312,9 +331,21 @@ export default function AdminDashboardClient({ initialData }: Props) {
               </p>
             </div>
           </div>
-          <span className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-150 self-start sm:self-auto">
-            Dana Tersedia Saat Ini
-          </span>
+          <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            {data.stockAssetValuation && (
+              <Link
+                href="/admin/inventory"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900 hover:bg-amber-100 transition-colors shadow-sm"
+                title="Total nilai modal bahan baku yang tersedia di gudang saat ini"
+              >
+                <Package className="w-3.5 h-3.5 text-amber-600" />
+                Valuasi Stok: <span className="font-extrabold text-amber-950">{formatRupiah(data.stockAssetValuation.totalValue)}</span>
+              </Link>
+            )}
+            <span className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-150">
+              Dana Tersedia Saat Ini
+            </span>
+          </div>
         </div>
 
         {/* 4 Kolom Rincian Saldo (Light Theme Dinamis) */}
@@ -890,7 +921,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
             </div>
 
             {/* Toggle Metric */}
-            <div className="flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200/80 self-start sm:self-auto">
+            <div className="flex items-center p-1 rounded-xl bg-slate-100 border border-slate-200/80 self-start sm:self-auto flex-wrap gap-1">
               <button
                 onClick={() => setActiveChartMetric('revenue')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
@@ -900,6 +931,16 @@ export default function AdminDashboardClient({ initialData }: Props) {
                 }`}
               >
                 Omset (Rp)
+              </button>
+              <button
+                onClick={() => setActiveChartMetric('cashflow')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeChartMetric === 'cashflow'
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Arus Kas (In vs Out)
               </button>
               <button
                 onClick={() => setActiveChartMetric('orders')}
@@ -946,15 +987,17 @@ export default function AdminDashboardClient({ initialData }: Props) {
                   );
                 })}
 
-                {/* Area Fill */}
-                <path
-                  d={`${linePath} L ${points[points.length - 1].x} ${svgHeight - paddingY} L ${points[0].x} ${
-                    svgHeight - paddingY
-                  } Z`}
-                  fill="url(#arumAreaGrad)"
-                />
+                {/* Area Fill for Revenue / Single Mode */}
+                {activeChartMetric !== 'cashflow' && (
+                  <path
+                    d={`${linePath} L ${points[points.length - 1].x} ${svgHeight - paddingY} L ${points[0].x} ${
+                      svgHeight - paddingY
+                    } Z`}
+                    fill="url(#arumAreaGrad)"
+                  />
+                )}
 
-                {/* Main Stroke */}
+                {/* Main Stroke (Revenue / Orders / Cash In) */}
                 <path
                   d={linePath}
                   fill="none"
@@ -964,9 +1007,22 @@ export default function AdminDashboardClient({ initialData }: Props) {
                   strokeLinejoin="round"
                 />
 
-                {/* Data Points */}
+                {/* Second Stroke for Expenses when Cashflow mode is active */}
+                {activeChartMetric === 'cashflow' && (
+                  <path
+                    d={expenseLinePath}
+                    fill="none"
+                    stroke="#e11d48"
+                    strokeWidth="3"
+                    strokeDasharray="4 2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                )}
+
+                {/* Data Points (Revenue) */}
                 {points.map((p, idx) => (
-                  <g key={idx} className="cursor-pointer group/dot">
+                  <g key={`rev-${idx}`} className="cursor-pointer group/dot">
                     <circle
                       cx={p.x}
                       cy={p.y}
@@ -994,30 +1050,69 @@ export default function AdminDashboardClient({ initialData }: Props) {
                       textAnchor="middle"
                       className="text-[10px] font-extrabold fill-slate-900 opacity-0 group-hover/dot:opacity-100 transition-opacity"
                     >
-                      {activeChartMetric === 'revenue' ? formatRupiah(p.revenue) : `${p.orders} order`}
+                      {activeChartMetric === 'revenue'
+                        ? formatRupiah(p.revenue)
+                        : activeChartMetric === 'cashflow'
+                        ? `Masuk: +${formatRupiah(p.revenue)}`
+                        : `${p.orders} order`}
                     </text>
                   </g>
                 ))}
+
+                {/* Data Points (Expenses in cashflow mode) */}
+                {activeChartMetric === 'cashflow' &&
+                  expensePoints.map((ep, idx) => (
+                    <g key={`exp-${idx}`} className="cursor-pointer group/expdot">
+                      <circle
+                        cx={ep.x}
+                        cy={ep.y}
+                        r="4"
+                        fill="#FFFFFF"
+                        stroke="#e11d48"
+                        strokeWidth="2.5"
+                        className="transition-transform duration-200 group-hover/expdot:scale-150"
+                      />
+                      <text
+                        x={ep.x}
+                        y={ep.y + 16}
+                        textAnchor="middle"
+                        className="text-[10px] font-extrabold fill-rose-600 opacity-0 group-hover/expdot:opacity-100 transition-opacity"
+                      >
+                        Keluar: -{formatRupiah(ep.expenses || 0)}
+                      </text>
+                    </g>
+                  ))}
               </svg>
             )}
           </div>
 
           {/* Bottom Chart Footer */}
-          <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
-              <span className="font-semibold text-slate-700">Total Periode Ini:</span>
-              <span className="font-extrabold text-orange-600">
-                {activeChartMetric === 'revenue'
-                  ? formatRupiah(kpis.totalRevenue)
-                  : `${kpis.totalOrders} Transaksi`}
-              </span>
+          <div className="flex items-center justify-between text-xs text-slate-500 border-t border-slate-100 pt-3 flex-wrap gap-2">
+            <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
+                <span className="font-semibold text-slate-700">
+                  {activeChartMetric === 'cashflow' ? 'Uang Masuk (Omset):' : 'Total Periode:'}
+                </span>
+                <span className="font-extrabold text-orange-600">
+                  {activeChartMetric === 'orders'
+                    ? `${kpis.totalOrders} Transaksi`
+                    : formatRupiah(kpis.totalRevenue)}
+                </span>
+              </div>
+              {activeChartMetric === 'cashflow' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-600" />
+                  <span className="font-semibold text-slate-700">Uang Keluar (Expenses):</span>
+                  <span className="font-extrabold text-rose-600">{formatRupiah(kpis.totalExpenses)}</span>
+                </div>
+              )}
             </div>
             <Link
-              href="/admin/analytics"
+              href="/admin/reports"
               className="text-[11px] font-bold text-slate-500 hover:text-orange-600 flex items-center gap-1"
             >
-              Analisis Lengkap <ChevronRight className="w-3.5 h-3.5" />
+              Laporan Penjualan & Profit <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
         </div>

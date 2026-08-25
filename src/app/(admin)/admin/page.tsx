@@ -22,8 +22,10 @@ export default async function AdminDashboardPage() {
   const [
     orders,
     allCompletedOrders,
+    periodExpensesList,
     periodExpensesAggregate,
     allTimeExpensesAggregate,
+    allIngredients,
     totalCustomers,
     totalProducts,
     soldOutProductsCount,
@@ -62,12 +64,19 @@ export default async function AdminDashboardPage() {
         paymentMethod: true,
       },
     }),
+    prisma.expense.findMany({
+      where: expenseDateFilter,
+      select: { id: true, amount: true, date: true, category: true },
+    }),
     prisma.expense.aggregate({
       _sum: { amount: true },
       where: expenseDateFilter,
     }),
     prisma.expense.aggregate({
       _sum: { amount: true },
+    }),
+    prisma.ingredient.findMany({
+      select: { id: true, name: true, stock: true, unit: true, costPerUnit: true },
     }),
     prisma.user.count({ where: { role: 'CUSTOMER' } }),
     prisma.product.count(),
@@ -101,10 +110,7 @@ export default async function AdminDashboardPage() {
     }),
     prisma.supportTicket.count({ where: { status: 'OPEN' } }),
     prisma.walletTransaction.count({
-      where: {
-        status: { in: ['PENDING', 'VERIFYING'] },
-        type: 'TOP_UP',
-      },
+      where: { status: { in: ['PENDING', 'VERIFYING'] }, type: 'TOP_UP' },
     }),
     prisma.orderItem.findMany({
       where: {
@@ -157,7 +163,22 @@ export default async function AdminDashboardPage() {
   const avgOrderValue = completedCount > 0 ? Math.round(totalRevenue / completedCount) : 0;
   const totalExpenses = periodExpensesAggregate._sum.amount || 0;
   const netProfit = totalRevenue - totalExpenses;
+  const netProfitMargin = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
   const activeProducts = totalProducts - soldOutProductsCount;
+
+  // Stock Asset Valuation
+  let totalStockAssetValue = 0;
+  let lowStockIngredientsCount = 0;
+  allIngredients.forEach((ing) => {
+    totalStockAssetValue += Math.round(ing.stock * ing.costPerUnit);
+    if (ing.stock <= 5) lowStockIngredientsCount++;
+  });
+
+  const stockAssetValuation = {
+    totalValue: totalStockAssetValue,
+    totalIngredientsCount: allIngredients.length,
+    lowStockCount: lowStockIngredientsCount,
+  };
 
   const pipeline = {
     PENDING: 0,
@@ -182,20 +203,18 @@ export default async function AdminDashboardPage() {
   const productMap = new Map<string, { id: string; name: string; image: string | null; qty: number; revenue: number; categoryName: string }>();
   orderItems.forEach((item) => {
     if (item.product) {
-      const prodId = item.product.id;
-      const current = productMap.get(prodId) || {
-        id: prodId,
-        name: item.product.name,
-        image: item.product.image,
+      const p = item.product;
+      const existing = productMap.get(p.id) || {
+        id: p.id,
+        name: p.name,
+        image: p.image,
         qty: 0,
         revenue: 0,
-        categoryName: item.product.category?.name || 'Menu',
+        categoryName: p.category?.name || 'Uncategorized',
       };
-      productMap.set(prodId, {
-        ...current,
-        qty: current.qty + item.qty,
-        revenue: current.revenue + item.price * item.qty,
-      });
+      existing.qty += item.qty;
+      existing.revenue += item.qty * (item.price || 0);
+      productMap.set(p.id, existing);
     }
   });
 
@@ -203,28 +222,28 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
-  // Global Real-Time Balance Position
-  const BASE_CASH_BALANCE = 245000; // Modal kas tunai awal (320.000 - 75.000)
-  const BASE_QRIS_BALANCE = 722000; // Saldo QRIS awal / merchant settlement
-  const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + (s.openingCash || 0), 0);
-  const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
+  // Balance calculations
+  const BASE_CASH_BALANCE = 245000;
+  const BASE_QRIS_BALANCE = 722000;
+  const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + s.openingCash, 0);
 
   let allTimeCash = 0;
+  let allTimeCashCount = 0;
   let allTimeQris = 0;
   let allTimeQrisCount = 0;
-  let allTimeCashCount = 0;
 
   allCompletedOrders.forEach((o) => {
-    const pmUpper = (o.paymentMethod || '').trim().toUpperCase();
-    if (pmUpper === 'CASH' || pmUpper === 'TUNAI' || pmUpper === 'COD') {
+    const pm = (o.paymentMethod || '').toUpperCase();
+    if (pm === 'CASH' || pm === 'TUNAI' || pm === 'COD') {
       allTimeCash += o.total;
-      allTimeCashCount += 1;
-    } else if (pmUpper.includes('QRIS')) {
+      allTimeCashCount++;
+    } else if (pm.includes('QRIS')) {
       allTimeQris += o.total;
-      allTimeQrisCount += 1;
+      allTimeQrisCount++;
     }
   });
 
+  const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
   const cashTotal = BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash;
   const qrisTotal = BASE_QRIS_BALANCE + allTimeQris;
   const grossTotalMoney = cashTotal + qrisTotal;
@@ -246,7 +265,6 @@ export default async function AdminDashboardPage() {
     totalCompletedOrders: allCompletedOrders.length,
   };
 
-  // Filtered payment methods
   const paymentMap = new Map<string, { count: number; amount: number }>();
   completedOrders.forEach((o) => {
     const pmRaw = (o.paymentMethod || 'OTHER').trim();
@@ -277,8 +295,8 @@ export default async function AdminDashboardPage() {
   }));
 
   const hours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
-  const hourMap = new Map<string, { revenue: number; orders: number }>();
-  hours.forEach((h) => hourMap.set(h, { revenue: 0, orders: 0 }));
+  const hourMap = new Map<string, { revenue: number; expenses: number; orders: number }>();
+  hours.forEach((h) => hourMap.set(h, { revenue: 0, expenses: 0, orders: 0 }));
 
   completedOrders.forEach((o) => {
     const orderHour = new Date(o.createdAt).getHours();
@@ -291,13 +309,29 @@ export default async function AdminDashboardPage() {
     else if (orderHour < 20) slot = '18:00';
     else if (orderHour < 22) slot = '20:00';
 
-    const curr = hourMap.get(slot) || { revenue: 0, orders: 0 };
-    hourMap.set(slot, { revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+    const curr = hourMap.get(slot) || { revenue: 0, expenses: 0, orders: 0 };
+    hourMap.set(slot, { ...curr, revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+  });
+
+  periodExpensesList.forEach((e) => {
+    const expHour = new Date(e.date).getHours();
+    let slot = '22:00';
+    if (expHour < 10) slot = '08:00';
+    else if (expHour < 12) slot = '10:00';
+    else if (expHour < 14) slot = '12:00';
+    else if (expHour < 16) slot = '14:00';
+    else if (expHour < 18) slot = '16:00';
+    else if (expHour < 20) slot = '18:00';
+    else if (expHour < 22) slot = '20:00';
+
+    const curr = hourMap.get(slot) || { revenue: 0, expenses: 0, orders: 0 };
+    hourMap.set(slot, { ...curr, expenses: curr.expenses + e.amount });
   });
 
   const timeline = hours.map((h) => ({
     label: h,
     revenue: hourMap.get(h)?.revenue || 0,
+    expenses: hourMap.get(h)?.expenses || 0,
     orders: hourMap.get(h)?.orders || 0,
   }));
 
@@ -308,6 +342,7 @@ export default async function AdminDashboardPage() {
       totalRevenue,
       totalExpenses,
       netProfit,
+      netProfitMargin,
       avgOrderValue,
       totalOrders,
       completedCount,
@@ -316,6 +351,7 @@ export default async function AdminDashboardPage() {
       soldOutProducts: soldOutProductsCount,
     },
     balancePosition,
+    stockAssetValuation,
     pipeline,
     liveOperations: {
       activeCashiers: activeCashierShifts.map((s) => ({

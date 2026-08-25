@@ -48,8 +48,10 @@ export async function GET(req: NextRequest) {
     const [
       orders,
       allCompletedOrders,
+      periodExpensesList,
       periodExpensesAggregate,
       allTimeExpensesAggregate,
+      allIngredients,
       totalCustomers,
       totalProducts,
       soldOutProductsCount,
@@ -92,7 +94,18 @@ export async function GET(req: NextRequest) {
         },
       }),
 
-      // Expenses in chosen range
+      // Expenses in chosen range with details for timeline
+      prisma.expense.findMany({
+        where: expenseDateFilter,
+        select: {
+          id: true,
+          amount: true,
+          date: true,
+          category: true,
+        },
+      }),
+
+      // Expenses sum in chosen range
       prisma.expense.aggregate({
         _sum: { amount: true },
         where: expenseDateFilter,
@@ -101,6 +114,17 @@ export async function GET(req: NextRequest) {
       // All-time Expenses (Global for actual cash on hand deduction)
       prisma.expense.aggregate({
         _sum: { amount: true },
+      }),
+
+      // All Ingredients for stock valuation
+      prisma.ingredient.findMany({
+        select: {
+          id: true,
+          name: true,
+          stock: true,
+          unit: true,
+          costPerUnit: true,
+        },
       }),
 
       // Total registered customers
@@ -221,7 +245,22 @@ export async function GET(req: NextRequest) {
     const avgOrderValue = completedCount > 0 ? Math.round(totalRevenue / completedCount) : 0;
     const totalExpenses = periodExpensesAggregate._sum.amount || 0;
     const netProfit = totalRevenue - totalExpenses;
+    const netProfitMargin = totalRevenue > 0 ? Math.round((netProfit / totalRevenue) * 100) : 0;
     const activeProducts = totalProducts - soldOutProductsCount;
+
+    // Stock Asset Valuation
+    let totalStockAssetValue = 0;
+    let lowStockIngredientsCount = 0;
+    allIngredients.forEach((ing) => {
+      totalStockAssetValue += Math.round(ing.stock * ing.costPerUnit);
+      if (ing.stock <= 5) lowStockIngredientsCount++;
+    });
+
+    const stockAssetValuation = {
+      totalValue: totalStockAssetValue,
+      totalIngredientsCount: allIngredients.length,
+      lowStockCount: lowStockIngredientsCount,
+    };
 
     // Operational Pipeline Distribution
     const pipeline = {
@@ -248,20 +287,18 @@ export async function GET(req: NextRequest) {
     const productMap = new Map<string, { id: string; name: string; image: string | null; qty: number; revenue: number; categoryName: string }>();
     orderItems.forEach((item) => {
       if (item.product) {
-        const prodId = item.product.id;
-        const current = productMap.get(prodId) || {
-          id: prodId,
-          name: item.product.name,
-          image: item.product.image,
+        const p = item.product;
+        const existing = productMap.get(p.id) || {
+          id: p.id,
+          name: p.name,
+          image: p.image,
           qty: 0,
           revenue: 0,
-          categoryName: item.product.category?.name || 'Menu',
+          categoryName: p.category?.name || 'Uncategorized',
         };
-        productMap.set(prodId, {
-          ...current,
-          qty: current.qty + item.qty,
-          revenue: current.revenue + item.price * item.qty,
-        });
+        existing.qty += item.qty;
+        existing.revenue += item.qty * (item.price || 0);
+        productMap.set(p.id, existing);
       }
     });
 
@@ -269,37 +306,32 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
 
-    // 1. GLOBAL REAL-TIME BALANCE POSITION
-    // - Baseline Saldo Awal Toko: Kas Tunai Rp 245.000, QRIS Rp 722.000
-    // - Ditambah seluruh transaksi tunai & QRIS dari database
-    const BASE_CASH_BALANCE = 245000; // Modal kas tunai awal (320.000 - 75.000)
-    const BASE_QRIS_BALANCE = 722000; // Saldo QRIS awal / merchant settlement
-    const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + (s.openingCash || 0), 0);
-    const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
+    // 1. DYNAMIC BALANCE POSITION CALCULATION
+    const BASE_CASH_BALANCE = 245000;
+    const BASE_QRIS_BALANCE = 722000;
+
+    const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + s.openingCash, 0);
 
     let allTimeCash = 0;
+    let allTimeCashCount = 0;
     let allTimeQris = 0;
     let allTimeQrisCount = 0;
-    let allTimeCashCount = 0;
 
     allCompletedOrders.forEach((o) => {
-      const pmUpper = (o.paymentMethod || '').trim().toUpperCase();
-      if (pmUpper === 'CASH' || pmUpper === 'TUNAI' || pmUpper === 'COD') {
+      const pm = (o.paymentMethod || '').toUpperCase();
+      if (pm === 'CASH' || pm === 'TUNAI' || pm === 'COD') {
         allTimeCash += o.total;
-        allTimeCashCount += 1;
-      } else if (pmUpper.includes('QRIS')) {
+        allTimeCashCount++;
+      } else if (pm.includes('QRIS')) {
         allTimeQris += o.total;
-        allTimeQrisCount += 1;
+        allTimeQrisCount++;
       }
     });
 
-    // 1. Uang Tunai yang ada (Kas awal + shift + pesanan tunai)
+    const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
     const cashTotal = BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash;
-    // 2. Uang QRIS yang ada (QRIS awal + pesanan QRIS)
     const qrisTotal = BASE_QRIS_BALANCE + allTimeQris;
-    // 3. Total seluruh uang selama ini (Gross = Tunai + QRIS)
     const grossTotalMoney = cashTotal + qrisTotal;
-    // 4. Total uang bersih (Setelah dikurangi seluruh pengeluaran)
     const netTotalMoney = Math.max(0, grossTotalMoney - allTimeExpensesTotal);
 
     const balancePosition = {
@@ -318,7 +350,7 @@ export async function GET(req: NextRequest) {
       totalCompletedOrders: allCompletedOrders.length,
     };
 
-    // 2. PERIODIC PAYMENT METHODS BREAKDOWN (Filtered Range)
+    // 2. PERIODIC PAYMENT METHODS BREAKDOWN
     const paymentMap = new Map<string, { count: number; amount: number }>();
     completedOrders.forEach((o) => {
       const pmRaw = (o.paymentMethod || 'OTHER').trim();
@@ -337,7 +369,7 @@ export async function GET(req: NextRequest) {
       amountPercentage: totalRevenue > 0 ? Math.round((data.amount / totalRevenue) * 100) : 0,
     }));
 
-    // Order Types Breakdown (Filtered Range)
+    // Order Types Breakdown
     const typeMap = new Map<string, number>();
     orders.forEach((o) => {
       const ot = o.orderType || 'PICKUP';
@@ -349,13 +381,13 @@ export async function GET(req: NextRequest) {
       percentage: totalOrders > 0 ? Math.round((count / totalOrders) * 100) : 0,
     }));
 
-    // Timeline Calculations for Interactive Chart (Filtered Range)
-    let timeline: Array<{ label: string; revenue: number; orders: number }> = [];
+    // Timeline Calculations for Interactive Chart (Cash In vs Cash Out)
+    let timeline: Array<{ label: string; revenue: number; expenses: number; orders: number }> = [];
 
     if (range === 'today') {
       const hours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00', '22:00'];
-      const hourMap = new Map<string, { revenue: number; orders: number }>();
-      hours.forEach((h) => hourMap.set(h, { revenue: 0, orders: 0 }));
+      const hourMap = new Map<string, { revenue: number; expenses: number; orders: number }>();
+      hours.forEach((h) => hourMap.set(h, { revenue: 0, expenses: 0, orders: 0 }));
 
       completedOrders.forEach((o) => {
         const orderHour = new Date(o.createdAt).getHours();
@@ -368,25 +400,41 @@ export async function GET(req: NextRequest) {
         else if (orderHour < 20) slot = '18:00';
         else if (orderHour < 22) slot = '20:00';
 
-        const curr = hourMap.get(slot) || { revenue: 0, orders: 0 };
-        hourMap.set(slot, { revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+        const curr = hourMap.get(slot) || { revenue: 0, expenses: 0, orders: 0 };
+        hourMap.set(slot, { ...curr, revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+      });
+
+      periodExpensesList.forEach((e) => {
+        const expHour = new Date(e.date).getHours();
+        let slot = '22:00';
+        if (expHour < 10) slot = '08:00';
+        else if (expHour < 12) slot = '10:00';
+        else if (expHour < 14) slot = '12:00';
+        else if (expHour < 16) slot = '14:00';
+        else if (expHour < 18) slot = '16:00';
+        else if (expHour < 20) slot = '18:00';
+        else if (expHour < 22) slot = '20:00';
+
+        const curr = hourMap.get(slot) || { revenue: 0, expenses: 0, orders: 0 };
+        hourMap.set(slot, { ...curr, expenses: curr.expenses + e.amount });
       });
 
       timeline = hours.map((h) => ({
         label: h,
         revenue: hourMap.get(h)?.revenue || 0,
+        expenses: hourMap.get(h)?.expenses || 0,
         orders: hourMap.get(h)?.orders || 0,
       }));
     } else if (range === 'week') {
       const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-      const dayMap = new Map<string, { revenue: number; orders: number }>();
+      const dayMap = new Map<string, { revenue: number; expenses: number; orders: number }>();
       const last7Days: string[] = [];
 
       for (let i = 6; i >= 0; i--) {
         const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
         const dayLabel = `${days[d.getDay()]} (${d.getDate()}/${d.getMonth() + 1})`;
         last7Days.push(dayLabel);
-        dayMap.set(dayLabel, { revenue: 0, orders: 0 });
+        dayMap.set(dayLabel, { revenue: 0, expenses: 0, orders: 0 });
       }
 
       completedOrders.forEach((o) => {
@@ -394,19 +442,29 @@ export async function GET(req: NextRequest) {
         const dayLabel = `${days[d.getDay()]} (${d.getDate()}/${d.getMonth() + 1})`;
         if (dayMap.has(dayLabel)) {
           const curr = dayMap.get(dayLabel)!;
-          dayMap.set(dayLabel, { revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+          dayMap.set(dayLabel, { ...curr, revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+        }
+      });
+
+      periodExpensesList.forEach((e) => {
+        const d = new Date(e.date);
+        const dayLabel = `${days[d.getDay()]} (${d.getDate()}/${d.getMonth() + 1})`;
+        if (dayMap.has(dayLabel)) {
+          const curr = dayMap.get(dayLabel)!;
+          dayMap.set(dayLabel, { ...curr, expenses: curr.expenses + e.amount });
         }
       });
 
       timeline = last7Days.map((lbl) => ({
         label: lbl,
         revenue: dayMap.get(lbl)?.revenue || 0,
+        expenses: dayMap.get(lbl)?.expenses || 0,
         orders: dayMap.get(lbl)?.orders || 0,
       }));
     } else if (range === 'month') {
       const weekBuckets = ['Minggu 1', 'Minggu 2', 'Minggu 3', 'Minggu 4'];
-      const weekMap = new Map<string, { revenue: number; orders: number }>();
-      weekBuckets.forEach((w) => weekMap.set(w, { revenue: 0, orders: 0 }));
+      const weekMap = new Map<string, { revenue: number; expenses: number; orders: number }>();
+      weekBuckets.forEach((w) => weekMap.set(w, { revenue: 0, expenses: 0, orders: 0 }));
 
       completedOrders.forEach((o) => {
         const dateNum = new Date(o.createdAt).getDate();
@@ -416,24 +474,36 @@ export async function GET(req: NextRequest) {
         else if (dateNum <= 21) bucket = 'Minggu 3';
 
         const curr = weekMap.get(bucket)!;
-        weekMap.set(bucket, { revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+        weekMap.set(bucket, { ...curr, revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+      });
+
+      periodExpensesList.forEach((e) => {
+        const dateNum = new Date(e.date).getDate();
+        let bucket = 'Minggu 4';
+        if (dateNum <= 7) bucket = 'Minggu 1';
+        else if (dateNum <= 14) bucket = 'Minggu 2';
+        else if (dateNum <= 21) bucket = 'Minggu 3';
+
+        const curr = weekMap.get(bucket)!;
+        weekMap.set(bucket, { ...curr, expenses: curr.expenses + e.amount });
       });
 
       timeline = weekBuckets.map((w) => ({
         label: w,
         revenue: weekMap.get(w)?.revenue || 0,
+        expenses: weekMap.get(w)?.expenses || 0,
         orders: weekMap.get(w)?.orders || 0,
       }));
     } else {
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agt', 'Sep', 'Okt', 'Nov', 'Des'];
       const monthBuckets: string[] = [];
-      const monthMap = new Map<string, { revenue: number; orders: number }>();
+      const monthMap = new Map<string, { revenue: number; expenses: number; orders: number }>();
 
       for (let i = 5; i >= 0; i--) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const label = `${months[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`;
         monthBuckets.push(label);
-        monthMap.set(label, { revenue: 0, orders: 0 });
+        monthMap.set(label, { revenue: 0, expenses: 0, orders: 0 });
       }
 
       completedOrders.forEach((o) => {
@@ -441,18 +511,27 @@ export async function GET(req: NextRequest) {
         const label = `${months[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`;
         if (monthMap.has(label)) {
           const curr = monthMap.get(label)!;
-          monthMap.set(label, { revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+          monthMap.set(label, { ...curr, revenue: curr.revenue + o.total, orders: curr.orders + 1 });
+        }
+      });
+
+      periodExpensesList.forEach((e) => {
+        const d = new Date(e.date);
+        const label = `${months[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`;
+        if (monthMap.has(label)) {
+          const curr = monthMap.get(label)!;
+          monthMap.set(label, { ...curr, expenses: curr.expenses + e.amount });
         }
       });
 
       timeline = monthBuckets.map((lbl) => ({
         label: lbl,
         revenue: monthMap.get(lbl)?.revenue || 0,
+        expenses: monthMap.get(lbl)?.expenses || 0,
         orders: monthMap.get(lbl)?.orders || 0,
       }));
     }
 
-    // Tables Occupancy
     const occupiedTables = diningTables.filter((t) => t.status === 'OCCUPIED').length;
 
     return NextResponse.json(
@@ -461,6 +540,7 @@ export async function GET(req: NextRequest) {
           totalRevenue,
           totalExpenses,
           netProfit,
+          netProfitMargin,
           avgOrderValue,
           totalOrders,
           completedCount,
@@ -469,6 +549,7 @@ export async function GET(req: NextRequest) {
           soldOutProducts: soldOutProductsCount,
         },
         balancePosition,
+        stockAssetValuation,
         pipeline,
         liveOperations: {
           activeCashiers: activeCashierShifts.map((s) => ({

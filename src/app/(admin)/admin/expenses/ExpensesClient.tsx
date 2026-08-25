@@ -6,8 +6,9 @@ import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import {
   Search, Plus, Edit2, Trash2, X, Save, Loader2,
-  Receipt, Calendar, Tag, FileText
+  Receipt, Calendar, Tag, FileText, Filter, Wallet, ArrowUpRight
 } from 'lucide-react';
+import { UrlPagination } from '@/components/ui/UrlPagination';
 
 interface Expense {
   id: string;
@@ -17,8 +18,6 @@ interface Expense {
   date: Date;
   notes: string | null;
 }
-
-import { UrlPagination } from '@/components/ui/UrlPagination';
 
 interface Props {
   initialExpenses: Expense[];
@@ -30,12 +29,15 @@ interface Props {
 }
 
 const CATEGORIES = [
-  { value: 'RENT', label: 'Rent / Sewa' },
-  { value: 'UTILITIES', label: 'Utilities (Elec/Water)' },
-  { value: 'SALARY', label: 'Salary / Gaji' },
-  { value: 'MARKETING', label: 'Marketing' },
-  { value: 'SUPPLIES', label: 'Supplies / Office' },
-  { value: 'OTHER', label: 'Other' }
+  { value: 'RAW_MATERIAL', label: 'Bahan Baku / Restock', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { value: 'DAILY_OPS', label: 'Operasional Harian (Es/Gas/Galon/Cup)', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { value: 'UTILITIES', label: 'Listrik, Air & Wifi', color: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { value: 'SALARY', label: 'Gaji & Uang Makan', color: 'bg-violet-50 text-violet-700 border-violet-200' },
+  { value: 'RENT', label: 'Sewa Tempat Kedai', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  { value: 'MAINTENANCE', label: 'Maintenance / Servis Alat', color: 'bg-orange-50 text-orange-700 border-orange-200' },
+  { value: 'MARKETING', label: 'Marketing & Promosi', color: 'bg-pink-50 text-pink-700 border-pink-200' },
+  { value: 'SUPPLIES', label: 'Perlengkapan & Kebersihan', color: 'bg-teal-50 text-teal-700 border-teal-200' },
+  { value: 'OTHER', label: 'Lain-lain', color: 'bg-slate-100 text-slate-700 border-slate-200' }
 ];
 
 export default function ExpensesClient({ 
@@ -49,6 +51,7 @@ export default function ExpensesClient({
   const router = useRouter();
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [saving, setSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -57,15 +60,19 @@ export default function ExpensesClient({
   const [formData, setFormData] = useState({
     name: '',
     amount: '',
-    category: 'OTHER',
+    category: 'DAILY_OPS',
     date: new Date().toISOString().split('T')[0],
-    notes: ''
+    notes: '',
+    source: 'CASH_DRAWER'
   });
 
-  const filteredExpenses = initialExpenses.filter(e =>
-    e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.category.toLowerCase().includes(search.toLowerCase())
-  );
+  const filteredExpenses = initialExpenses.filter(e => {
+    const matchSearch = e.name.toLowerCase().includes(search.toLowerCase()) ||
+      e.category.toLowerCase().includes(search.toLowerCase()) ||
+      (e.notes && e.notes.toLowerCase().includes(search.toLowerCase()));
+    const matchCategory = selectedCategory === 'ALL' || e.category.toUpperCase() === selectedCategory.toUpperCase();
+    return matchSearch && matchCategory;
+  });
 
   const openModal = (expense?: Expense) => {
     if (expense) {
@@ -75,16 +82,18 @@ export default function ExpensesClient({
         amount: expense.amount.toString(),
         category: expense.category,
         date: new Date(expense.date).toISOString().split('T')[0],
-        notes: expense.notes || ''
+        notes: expense.notes || '',
+        source: expense.notes?.includes('Transfer') ? 'BANK_TRANSFER' : 'CASH_DRAWER'
       });
     } else {
       setEditingExpense(null);
       setFormData({
         name: '',
         amount: '',
-        category: 'OTHER',
+        category: 'DAILY_OPS',
         date: new Date().toISOString().split('T')[0],
-        notes: ''
+        notes: '',
+        source: 'CASH_DRAWER'
       });
     }
     setShowModal(true);
@@ -98,14 +107,22 @@ export default function ExpensesClient({
     setSaving(true);
     try {
       const url = editingExpense ? `/api/admin/expenses/${editingExpense.id}` : '/api/admin/expenses';
+      const sourceNote = formData.source === 'CASH_DRAWER' ? '[Kas Laci/Tunai]' : '[Transfer Bank]';
+      const cleanNotes = formData.notes.replace(/\[Kas Laci\/Tunai\]|\[Transfer Bank\]/g, '').trim();
+      const combinedNotes = cleanNotes ? `${cleanNotes} ${sourceNote}` : sourceNote;
+
       const res = await fetch(url, {
         method: editingExpense ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          notes: combinedNotes
+        }),
       });
       if (!res.ok) throw new Error('Failed to save');
       setShowModal(false);
       router.refresh();
+      showToast('Pengeluaran berhasil disimpan', 'success');
     } catch (err) {
       showToast('Gagal menyimpan pengeluaran', 'error');
     } finally {
@@ -120,76 +137,138 @@ export default function ExpensesClient({
       if (!res.ok) throw new Error('Failed to delete');
       setDeleteTarget(null);
       router.refresh();
+      showToast('Pengeluaran dihapus', 'success');
     } catch (err) {
       showToast('Gagal menghapus pengeluaran', 'error');
     }
   };
 
+  const getCategoryBadge = (catVal: string) => {
+    const found = CATEGORIES.find(c => c.value === catVal.toUpperCase());
+    if (found) {
+      return (
+        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border ${found.color}`}>
+          {found.label}
+        </span>
+      );
+    }
+    return (
+      <span className="px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200">
+        {catVal}
+      </span>
+    );
+  };
+
   return (
     <>
-      {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-          <input 
-            type="text" 
-            placeholder="Search expenses..." 
-            value={search} 
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-sm" 
-          />
+      {/* 1. Header Summary Card */}
+      <div className="bg-white border border-slate-150/80 rounded-3xl p-5 sm:p-6 shadow-sm mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-extrabold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
+            Biaya Operasional Toko
+          </span>
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
+            Daftar Pengeluaran (Expenses)
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium">
+            Total tercatat {totalExpenses} transaksi pengeluaran senilai <strong className="text-rose-600 font-extrabold">{formatRupiah(totalAmountSum)}</strong>
+          </p>
         </div>
+
         <button 
           onClick={() => openModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md active:scale-[0.98] whitespace-nowrap"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:opacity-95 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap self-start sm:self-auto"
         >
-          <Plus className="w-4 h-4" /> Add Expense
+          <Plus className="w-4 h-4" /> Catat Pengeluaran
         </button>
       </div>
 
-      {/* Table */}
-      <div className="bg-white border border-border/40 rounded-2xl shadow-sm overflow-hidden overflow-x-auto">
+      {/* 2. Toolbar & Category Filter */}
+      <div className="space-y-3 mb-4">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input 
+              type="text" 
+              placeholder="Cari pengeluaran atau catatan..." 
+              value={search} 
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 text-xs sm:text-sm bg-white border border-slate-200/80 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all shadow-sm" 
+            />
+          </div>
+        </div>
+
+        {/* Quick Category Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+          <button
+            onClick={() => setSelectedCategory('ALL')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap ${
+              selectedCategory === 'ALL'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            Semua Kategori
+          </button>
+          {CATEGORIES.map(c => (
+            <button
+              key={c.value}
+              onClick={() => setSelectedCategory(c.value)}
+              className={`px-3 py-1.5 rounded-xl font-bold transition-all whitespace-nowrap ${
+                selectedCategory === c.value
+                  ? 'bg-orange-600 text-white shadow-sm'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 3. Table */}
+      <div className="bg-white border border-slate-150/80 rounded-3xl shadow-sm overflow-hidden overflow-x-auto">
         <table className="w-full text-sm text-left">
           <thead>
-            <tr className="border-b border-border/40 bg-muted/20">
-              <th className="px-5 py-3.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
-              <th className="px-5 py-3.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Expense Name</th>
-              <th className="px-5 py-3.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Category</th>
-              <th className="px-5 py-3.5 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Amount</th>
-              <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Actions</th>
+            <tr className="border-b border-slate-150 bg-slate-50/70">
+              <th className="px-5 py-3.5 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Tanggal</th>
+              <th className="px-5 py-3.5 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Nama Pengeluaran</th>
+              <th className="px-5 py-3.5 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Kategori</th>
+              <th className="px-5 py-3.5 text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Nominal</th>
+              <th className="px-5 py-3.5 text-right text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">Aksi</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border/30">
+          <tbody className="divide-y divide-slate-100">
             {filteredExpenses.map((exp) => (
-              <tr key={exp.id} className="group hover:bg-muted/10 transition-colors">
-                <td className="px-5 py-3 text-muted-foreground font-medium">
+              <tr key={exp.id} className="group hover:bg-slate-50/70 transition-colors">
+                <td className="px-5 py-3 text-slate-500 font-medium text-xs whitespace-nowrap">
                   {new Date(exp.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex flex-col">
-                    <span className="font-semibold text-foreground">{exp.name}</span>
-                    {exp.notes && <span className="text-[10px] text-muted-foreground line-clamp-1">{exp.notes}</span>}
+                    <span className="font-bold text-slate-900 text-xs sm:text-sm">{exp.name}</span>
+                    {exp.notes && <span className="text-[11px] text-slate-400 line-clamp-1">{exp.notes}</span>}
                   </div>
                 </td>
-                <td className="px-5 py-3">
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-700">
-                    {exp.category}
-                  </span>
+                <td className="px-5 py-3 whitespace-nowrap">
+                  {getCategoryBadge(exp.category)}
                 </td>
-                <td className="px-5 py-3 font-bold text-rose-600">
+                <td className="px-5 py-3 font-black text-rose-600 text-xs sm:text-sm whitespace-nowrap">
                   {formatRupiah(exp.amount)}
                 </td>
-                <td className="px-5 py-3 text-right">
+                <td className="px-5 py-3 text-right whitespace-nowrap">
                   <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button 
                       onClick={() => openModal(exp)} 
-                      className="p-1.5 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors"
+                      className="p-1.5 hover:bg-blue-50 rounded-xl text-blue-600 transition-colors"
+                      title="Edit"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button 
                       onClick={() => setDeleteTarget(exp)} 
-                      className="p-1.5 hover:bg-rose-50 rounded-lg text-rose-600 transition-colors"
+                      className="p-1.5 hover:bg-rose-50 rounded-xl text-rose-600 transition-colors"
+                      title="Delete"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -200,127 +279,144 @@ export default function ExpensesClient({
           </tbody>
         </table>
         {filteredExpenses.length === 0 && (
-          <div className="py-12 text-center text-muted-foreground/50">
-            <Receipt className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No expenses recorded</p>
+          <div className="py-12 text-center text-slate-400">
+            <Receipt className="w-10 h-10 mx-auto mb-2 opacity-30 text-slate-400" />
+            <p className="text-xs font-semibold">Tidak ada pengeluaran yang ditemukan</p>
           </div>
         )}
-
-        {/* Pagination */}
-        <div className="p-4 border-t border-border/30 bg-gray-50/50">
-          <UrlPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalItems={totalExpenses}
-            pageSize={pageSize}
-          />
-        </div>
       </div>
 
-      {/* Total Summary */}
-      <div className="mt-4 p-4 bg-rose-50 rounded-2xl border border-rose-100 flex flex-wrap gap-4 justify-between items-center">
-        <div>
-          <p className="text-[10px] font-bold text-rose-700 uppercase tracking-wider">Total Seluruh Pengeluaran ({totalExpenses} Catatan)</p>
-          <p className="text-xl font-extrabold text-rose-900">
-            {formatRupiah(totalAmountSum || filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0))}
-          </p>
-          {search && (
-            <p className="text-[11px] text-rose-600 mt-0.5">
-              Halaman Ini (Terfilter): {formatRupiah(filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0))}
-            </p>
-          )}
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-4 flex justify-center">
+          <UrlPagination totalPages={totalPages} currentPage={currentPage} />
         </div>
-        <Receipt className="w-8 h-8 text-rose-200" />
-      </div>
+      )}
 
-      {/* Add/Edit Modal */}
+      {/* 4. Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/30">
-              <h3 className="text-base font-bold font-heading">{editingExpense ? 'Edit Expense' : 'New Expense'}</h3>
-              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-muted-foreground" /></button>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-150">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/70">
+              <h3 className="text-base font-extrabold text-slate-900">
+                {editingExpense ? 'Edit Pengeluaran' : 'Catat Pengeluaran Baru'}
+              </h3>
+              <button onClick={() => setShowModal(false)} className="p-1 hover:bg-slate-200/50 rounded-xl text-slate-400">
+                <X className="w-5 h-5" />
+              </button>
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Expense Name / Item *</label>
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Nama Pengeluaran *</label>
                 <div className="relative">
-                  <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
+                  <Tag className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
+                    type="text" 
                     value={formData.name} 
                     onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" 
-                    placeholder="e.g. Listrik Mei, Sewa Ruko"
+                    className="w-full pl-10 pr-4 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:bg-white transition-all" 
+                    placeholder="e.g. Beli Es Batu, Gas LPG, Sewa Ruko"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Amount (Rp) *</label>
+                  <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Nominal (Rp) *</label>
                   <input 
                     type="number"
                     value={formData.amount} 
                     onChange={e => setFormData(p => ({ ...p, amount: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" 
+                    className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:bg-white transition-all font-bold" 
+                    placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Category</label>
+                  <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Kategori</label>
                   <select 
                     value={formData.category} 
                     onChange={e => setFormData(p => ({ ...p, category: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all"
+                    className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:bg-white transition-all font-semibold"
                   >
                     {CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
               </div>
+
+              {/* Sumber Pembayaran */}
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Date</label>
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Sumber Kas Pembiayaan</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(p => ({ ...p, source: 'CASH_DRAWER' }))}
+                    className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all ${
+                      formData.source === 'CASH_DRAWER'
+                        ? 'bg-amber-100 border-amber-300 text-amber-900 shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Kas Laci (Tunai)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(p => ({ ...p, source: 'BANK_TRANSFER' }))}
+                    className={`px-3 py-2 text-xs font-bold rounded-xl border transition-all ${
+                      formData.source === 'BANK_TRANSFER'
+                        ? 'bg-sky-100 border-sky-300 text-sky-900 shadow-sm'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    Transfer Bank / Rekening
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Tanggal</label>
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/30" />
+                  <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input 
-                    type="date"
+                    type="date" 
                     value={formData.date} 
                     onChange={e => setFormData(p => ({ ...p, date: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" 
+                    className="w-full pl-10 pr-4 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:bg-white transition-all font-semibold" 
                   />
                 </div>
               </div>
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Notes (Optional)</label>
+                <label className="text-[11px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1.5">Catatan Tambahan (Opsional)</label>
                 <textarea 
                   value={formData.notes} 
                   onChange={e => setFormData(p => ({ ...p, notes: e.target.value }))}
                   rows={2}
-                  className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all resize-none"
-                  placeholder="Additional details..."
+                  className="w-full px-3.5 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:bg-white transition-all resize-none"
+                  placeholder="Keterangan toko / suplier / PIC..."
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-border/30 flex justify-end gap-2 bg-muted/10">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50/70">
+              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-xs sm:text-sm font-bold text-slate-600 rounded-2xl hover:bg-slate-200/50 transition-colors">Batal</button>
               <button onClick={handleSave} disabled={saving}
-                className="px-5 py-2 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-50">
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Save Expense
+                className="px-5 py-2 text-xs sm:text-sm font-extrabold rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:opacity-95 transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-orange-500/20">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirm */}
+      {/* 5. Delete Confirm */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center mx-auto mb-4">
-              <Trash2 className="w-5 h-5 text-rose-500" />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 text-center border border-slate-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 flex items-center justify-center mx-auto mb-4 text-rose-600">
+              <Trash2 className="w-5 h-5" />
             </div>
-            <h3 className="text-base font-bold mb-1">Delete Expense?</h3>
-            <p className="text-sm text-muted-foreground mb-5"><strong>{deleteTarget.name}</strong> will be permanently removed.</p>
+            <h3 className="text-base font-extrabold mb-1 text-slate-900">Hapus Pengeluaran?</h3>
+            <p className="text-xs text-slate-500 mb-5"><strong>{deleteTarget.name}</strong> ({formatRupiah(deleteTarget.amount)}) akan dihapus permanen dari sistem.</p>
             <div className="flex gap-2">
-              <button onClick={() => setDeleteTarget(null)} className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl hover:bg-muted transition-colors">Cancel</button>
-              <button onClick={handleDelete} className="flex-1 px-4 py-2.5 text-sm font-semibold rounded-xl bg-rose-600 text-white hover:bg-rose-700 transition-colors">Delete</button>
+              <button onClick={() => setDeleteTarget(null)} className="flex-1 px-4 py-2.5 text-xs font-bold rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors">Batal</button>
+              <button onClick={handleDelete} className="flex-1 px-4 py-2.5 text-xs font-extrabold rounded-2xl bg-rose-600 hover:bg-rose-700 text-white transition-colors">Hapus</button>
             </div>
           </div>
         </div>
