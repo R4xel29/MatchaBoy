@@ -24,7 +24,7 @@ export default async function AdminDashboardPage() {
     allCompletedOrders,
     periodExpensesList,
     periodExpensesAggregate,
-    allTimeExpensesAggregate,
+    allTimeExpensesList,
     allIngredients,
     totalCustomers,
     totalProducts,
@@ -72,8 +72,8 @@ export default async function AdminDashboardPage() {
       _sum: { amount: true },
       where: expenseDateFilter,
     }),
-    prisma.expense.aggregate({
-      _sum: { amount: true },
+    prisma.expense.findMany({
+      select: { id: true, amount: true, notes: true },
     }),
     prisma.ingredient.findMany({
       select: { id: true, name: true, stock: true, unit: true, costPerUnit: true },
@@ -222,7 +222,7 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
-  // Balance calculations
+  // Balance calculations (Cash & QRIS Saat Ini)
   const BASE_CASH_BALANCE = 245000;
   const BASE_QRIS_BALANCE = 722000;
   const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + s.openingCash, 0);
@@ -243,21 +243,39 @@ export default async function AdminDashboardPage() {
     }
   });
 
-  const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
-  const cashTotal = BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash;
-  const qrisTotal = BASE_QRIS_BALANCE + allTimeQris;
-  const grossTotalMoney = cashTotal + qrisTotal;
-  const netTotalMoney = Math.max(0, grossTotalMoney - allTimeExpensesTotal);
+  let allTimeCashExpenses = 0;
+  let allTimeTransferExpenses = 0;
+  allTimeExpensesList.forEach((e) => {
+    if (e.notes && e.notes.toLowerCase().includes('transfer')) {
+      allTimeTransferExpenses += e.amount;
+    } else {
+      allTimeCashExpenses += e.amount;
+    }
+  });
+
+  const allTimeExpensesTotal = allTimeCashExpenses + allTimeTransferExpenses;
+  const cashInflowTotal = BASE_CASH_BALANCE + activeShiftOpeningCash + allTimeCash;
+  const qrisInflowTotal = BASE_QRIS_BALANCE + allTimeQris;
+  const currentCash = Math.max(0, cashInflowTotal - allTimeCashExpenses);
+  const currentQris = Math.max(0, qrisInflowTotal - allTimeTransferExpenses);
+  const grossTotalMoney = cashInflowTotal + qrisInflowTotal;
+  const netTotalMoney = currentCash + currentQris;
 
   const balancePosition = {
     baseCashBalance: BASE_CASH_BALANCE,
     baseQrisBalance: BASE_QRIS_BALANCE,
     activeShiftOpeningCash,
     allTimeExpensesTotal,
-    cashTotal,
+    allTimeCashExpenses,
+    allTimeTransferExpenses,
+    cashInflowTotal,
+    qrisInflowTotal,
+    currentCash,
+    currentQris,
+    cashTotal: currentCash,
     cashOrdersTotal: allTimeCash,
     cashCount: allTimeCashCount,
-    qrisTotal,
+    qrisTotal: currentQris,
     qrisOrdersTotal: allTimeQris,
     qrisCount: allTimeQrisCount,
     grossTotalMoney,

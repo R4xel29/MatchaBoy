@@ -54,6 +54,12 @@ interface BalancePosition {
   baseQrisBalance?: number;
   activeShiftOpeningCash: number;
   allTimeExpensesTotal: number;
+  allTimeCashExpenses?: number;
+  allTimeTransferExpenses?: number;
+  cashInflowTotal?: number;
+  qrisInflowTotal?: number;
+  currentCash?: number;
+  currentQris?: number;
   cashTotal: number;
   cashOrdersTotal: number;
   cashCount: number;
@@ -350,68 +356,66 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
         {/* 4 Kolom Rincian Saldo (Light Theme Dinamis) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* 1. Uang Tunai di Kas / Laci */}
-          <div className="bg-amber-50/60 hover:bg-amber-50/90 border border-amber-200/80 rounded-2xl p-4 space-y-2 transition-all group">
+          {/* 1. Uang Cash Saat Ini */}
+          <div className="bg-amber-50/60 hover:bg-amber-50/90 border border-amber-200/80 rounded-2xl p-4 space-y-2 transition-all group shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-amber-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Banknote className="w-4 h-4 text-amber-600" />
-                Uang Tunai (Cash)
+                Uang Cash Saat Ini
               </span>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-amber-200/60 text-amber-900 border border-amber-300">
-                Fisik / Laci
+                Fisik Kasir / Laci
               </span>
             </div>
             <p className="text-2xl font-black text-slate-900 tracking-tight">
-              {formatRupiah(balance.cashTotal)}
+              {formatRupiah(balance.currentCash ?? balance.cashTotal)}
             </p>
             <p className="text-[11px] text-amber-900/80 font-medium">
-              Tersedia {formatRupiah(balance.baseCashBalance || 245000)} (kas awal)
-              {balance.activeShiftOpeningCash > 0
-                ? ` + ${formatRupiah(balance.activeShiftOpeningCash)} (shift)`
-                : ''}
-              {balance.cashOrdersTotal > 0 ? ` + ${formatRupiah(balance.cashOrdersTotal)} tunai` : ''}
+              Masuk: {formatRupiah(balance.cashInflowTotal ?? balance.cashTotal)}
+              {balance.allTimeCashExpenses && balance.allTimeCashExpenses > 0
+                ? ` • Keluar: ${formatRupiah(balance.allTimeCashExpenses)}`
+                : ' • Belum ada beban tunai'}
             </p>
           </div>
 
-          {/* 2. Saldo QRIS Merchant */}
-          <div className="bg-sky-50/60 hover:bg-sky-50/90 border border-sky-200/80 rounded-2xl p-4 space-y-2 transition-all group">
+          {/* 2. Saldo QRIS Saat Ini */}
+          <div className="bg-sky-50/60 hover:bg-sky-50/90 border border-sky-200/80 rounded-2xl p-4 space-y-2 transition-all group shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-sky-800 uppercase tracking-wider flex items-center gap-1.5">
                 <QrCode className="w-4 h-4 text-sky-600" />
-                Saldo QRIS Masuk
+                Uang QRIS Saat Ini
               </span>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-sky-200/60 text-sky-900 border border-sky-300">
-                Rekening
+                Rekening Bank
               </span>
             </div>
             <p className="text-2xl font-black text-slate-900 tracking-tight">
-              {formatRupiah(balance.qrisTotal)}
+              {formatRupiah(balance.currentQris ?? balance.qrisTotal)}
             </p>
             <p className="text-[11px] text-sky-900/80 font-medium">
-              Tersedia {formatRupiah(balance.baseQrisBalance || 722000)} (saldo awal)
-              {balance.qrisOrdersTotal && balance.qrisOrdersTotal > 0
-                ? ` + ${formatRupiah(balance.qrisOrdersTotal)} QRIS`
+              Masuk: {formatRupiah(balance.qrisInflowTotal ?? balance.qrisTotal)}
+              {balance.allTimeTransferExpenses && balance.allTimeTransferExpenses > 0
+                ? ` • Beban: ${formatRupiah(balance.allTimeTransferExpenses)}`
                 : ''}
-              {balance.qrisCount > 0 ? ` (${balance.qrisCount} transaksi)` : ''}
             </p>
           </div>
 
           {/* 3. Total Seluruh Uang Selama Ini (Bruto) */}
-          <div className="bg-indigo-50/60 hover:bg-indigo-50/90 border border-indigo-200/80 rounded-2xl p-4 space-y-2 transition-all group">
+          <div className="bg-indigo-50/60 hover:bg-indigo-50/90 border border-indigo-200/80 rounded-2xl p-4 space-y-2 transition-all group shadow-sm">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Coins className="w-4 h-4 text-indigo-600" />
-                Total Uang Selama Ini
+                Total Uang Masuk Selama Ini
               </span>
               <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-indigo-200/60 text-indigo-900 border border-indigo-300">
-                Tunai + QRIS
+                Bruto (Gross)
               </span>
             </div>
             <p className="text-2xl font-black text-slate-900 tracking-tight">
               {formatRupiah(balance.grossTotalMoney)}
             </p>
             <p className="text-[11px] text-indigo-900/80 font-medium">
-              Akumulasi seluruh uang masuk (sebelum pengeluaran)
+              Akumulasi seluruh modal awal + seluruh omset penjualan
             </p>
           </div>
 
@@ -420,17 +424,17 @@ export default function AdminDashboardClient({ initialData }: Props) {
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-white uppercase tracking-wider flex items-center gap-1.5">
                 <TrendingUp className="w-4 h-4 text-orange-100" />
-                Total Uang Bersih (Sisa)
+                Total Sisa Uang Bersih
               </span>
               <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/20 text-white">
-                Kas Akhir
+                Kas & Rekening Riil
               </span>
             </div>
             <p className="text-2xl sm:text-3xl font-black text-white tracking-tight">
               {formatRupiah(balance.netTotalMoney)}
             </p>
             <p className="text-[11px] text-orange-100 font-semibold">
-              Sudah dikurangi total pengeluaran {formatRupiah(balance.allTimeExpensesTotal)}
+              Cash ({formatRupiah(balance.currentCash ?? balance.cashTotal)}) + QRIS ({formatRupiah(balance.currentQris ?? balance.qrisTotal)})
             </p>
           </div>
         </div>
