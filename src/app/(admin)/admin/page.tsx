@@ -4,8 +4,6 @@ import AdminDashboardClient from './AdminDashboardClient';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const BASE_CASH_AVAILABLE = 245000; // Rp 320.000 - Rp 75.000 = Rp 245.000 modal kas tunai awal tersedia
-
 export default async function AdminDashboardPage() {
   const now = new Date();
   const currentStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
@@ -24,7 +22,8 @@ export default async function AdminDashboardPage() {
   const [
     orders,
     allCompletedOrders,
-    expensesAggregate,
+    periodExpensesAggregate,
+    allTimeExpensesAggregate,
     totalCustomers,
     totalProducts,
     soldOutProductsCount,
@@ -66,6 +65,9 @@ export default async function AdminDashboardPage() {
     prisma.expense.aggregate({
       _sum: { amount: true },
       where: expenseDateFilter,
+    }),
+    prisma.expense.aggregate({
+      _sum: { amount: true },
     }),
     prisma.user.count({ where: { role: 'CUSTOMER' } }),
     prisma.product.count(),
@@ -153,7 +155,7 @@ export default async function AdminDashboardPage() {
   const totalOrders = orders.length;
   const completedCount = completedOrders.length;
   const avgOrderValue = completedCount > 0 ? Math.round(totalRevenue / completedCount) : 0;
-  const totalExpenses = expensesAggregate._sum.amount || 0;
+  const totalExpenses = periodExpensesAggregate._sum.amount || 0;
   const netProfit = totalRevenue - totalExpenses;
   const activeProducts = totalProducts - soldOutProductsCount;
 
@@ -201,7 +203,10 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
-  // Global All-Time Balance Position
+  // 100% Dynamic Real-Time Balance Position from Database
+  const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + (s.openingCash || 0), 0);
+  const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
+
   let allTimeCash = 0;
   let allTimeQris = 0;
   let allTimeWallet = 0;
@@ -232,12 +237,13 @@ export default async function AdminDashboardPage() {
     }
   });
 
-  const totalCashOnHand = BASE_CASH_AVAILABLE + allTimeCash;
+  const totalCashOnHand = Math.max(0, (activeShiftOpeningCash + allTimeCash) - allTimeExpensesTotal);
   const totalFundsAvailable =
     totalCashOnHand + allTimeQris + allTimeWallet + allTimeTransfer + allTimeOther;
 
   const balancePosition = {
-    baseCashFloat: BASE_CASH_AVAILABLE,
+    activeShiftOpeningCash,
+    allTimeExpensesTotal,
     cashOnHand: totalCashOnHand,
     cashOrdersTotal: allTimeCash,
     cashCount: allTimeCashCount,

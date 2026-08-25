@@ -37,8 +37,7 @@ import {
   ExternalLink,
   QrCode,
   Banknote,
-  Coins,
-  Vault
+  Coins
 } from 'lucide-react';
 
 type Range = 'today' | 'week' | 'month' | 'all';
@@ -51,7 +50,8 @@ const RANGE_LABELS: Record<Range, { label: string; subtext: string }> = {
 };
 
 interface BalancePosition {
-  baseCashFloat: number;
+  activeShiftOpeningCash: number;
+  allTimeExpensesTotal: number;
   cashOnHand: number;
   cashOrdersTotal: number;
   cashCount: number;
@@ -185,8 +185,9 @@ export default function AdminDashboardClient({ initialData }: Props) {
 
   const kpis = data.kpis;
   const balance = data.balancePosition || {
-    baseCashFloat: 245000,
-    cashOnHand: 245000,
+    activeShiftOpeningCash: 0,
+    allTimeExpensesTotal: 0,
+    cashOnHand: 0,
     cashOrdersTotal: 0,
     cashCount: 0,
     qrisBalance: 0,
@@ -194,7 +195,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
     walletBalance: 0,
     transferBalance: 0,
     otherBalance: 0,
-    totalFunds: 245000,
+    totalFunds: 0,
     totalCompletedOrders: 0,
   };
   const pipeline = data.pipeline;
@@ -288,7 +289,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       </div>
 
-      {/* 2. Posisi Saldo Kas & Rekening Toko (Clean Light Theme - Tidak terpengaruh filter) */}
+      {/* 2. Posisi Saldo Kas & Rekening Toko (Clean Light Theme - 100% Dinamis dari Database) */}
       <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-150/80 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-100 pb-3.5">
           <div className="flex items-center gap-3">
@@ -301,11 +302,11 @@ export default function AdminDashboardClient({ initialData }: Props) {
                   Posisi Saldo Kas & Dompet
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Real-time Kumulatif
+                  Real-time Database
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
-                Total uang tunai fisik di laci, saldo QRIS merchant, dompet digital, dan total dana riil yang tersedia
+                Total uang fisik di laci kasir, saldo QRIS merchant, dompet digital, dan total dana riil toko saat ini
               </p>
             </div>
           </div>
@@ -314,7 +315,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
           </span>
         </div>
 
-        {/* 4 Kolom Rincian Saldo (Light Theme) */}
+        {/* 4 Kolom Rincian Saldo (Light Theme Dinamis) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           {/* Uang Tunai di Kas / Laci */}
           <div className="bg-amber-50/60 hover:bg-amber-50/90 border border-amber-200/80 rounded-2xl p-4 space-y-2 transition-all group">
@@ -331,7 +332,13 @@ export default function AdminDashboardClient({ initialData }: Props) {
               {formatRupiah(balance.cashOnHand)}
             </p>
             <p className="text-[11px] text-amber-900/80 font-medium">
-              Tersedia Rp 245.000 (modal kas awal) {balance.cashOrdersTotal > 0 ? `+ ${formatRupiah(balance.cashOrdersTotal)} tunai` : ''}
+              {balance.activeShiftOpeningCash > 0
+                ? `${formatRupiah(balance.activeShiftOpeningCash)} (modal shift) + `
+                : ''}
+              {formatRupiah(balance.cashOrdersTotal)} tunai
+              {balance.allTimeExpensesTotal > 0
+                ? ` - ${formatRupiah(balance.allTimeExpensesTotal)} expense`
+                : ''}
             </p>
           </div>
 

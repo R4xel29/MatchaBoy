@@ -5,8 +5,6 @@ import { prisma } from '@/lib/prisma';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-const BASE_CASH_AVAILABLE = 245000; // Rp 320.000 - Rp 75.000 = Rp 245.000 modal kas tunai awal tersedia
-
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
@@ -50,7 +48,8 @@ export async function GET(req: NextRequest) {
     const [
       orders,
       allCompletedOrders,
-      expensesAggregate,
+      periodExpensesAggregate,
+      allTimeExpensesAggregate,
       totalCustomers,
       totalProducts,
       soldOutProductsCount,
@@ -93,10 +92,15 @@ export async function GET(req: NextRequest) {
         },
       }),
 
-      // Expenses in range
+      // Expenses in chosen range
       prisma.expense.aggregate({
         _sum: { amount: true },
         where: expenseDateFilter,
+      }),
+
+      // All-time Expenses (Global for actual cash on hand deduction)
+      prisma.expense.aggregate({
+        _sum: { amount: true },
       }),
 
       // Total registered customers
@@ -215,7 +219,7 @@ export async function GET(req: NextRequest) {
     const totalOrders = orders.length;
     const completedCount = completedOrders.length;
     const avgOrderValue = completedCount > 0 ? Math.round(totalRevenue / completedCount) : 0;
-    const totalExpenses = expensesAggregate._sum.amount || 0;
+    const totalExpenses = periodExpensesAggregate._sum.amount || 0;
     const netProfit = totalRevenue - totalExpenses;
     const activeProducts = totalProducts - soldOutProductsCount;
 
@@ -265,7 +269,13 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
 
-    // 1. GLOBAL REAL-TIME BALANCE POSITION (Permanent Vault & Cash, NOT affected by time filter)
+    // 1. GLOBAL REAL-TIME BALANCE POSITION (100% DINAMIS DARI DATABASE TANPA HARDCODE)
+    // - Kas Awal Shift: Diambil dari openingCash di tabel CashierShift
+    // - Kas Masuk Tunai: Diambil dari seluruh pesanan tunai di tabel Order
+    // - Total Pengeluaran: Diambil dari seluruh pengeluaran di tabel Expense
+    const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + (s.openingCash || 0), 0);
+    const allTimeExpensesTotal = allTimeExpensesAggregate._sum.amount || 0;
+
     let allTimeCash = 0;
     let allTimeQris = 0;
     let allTimeWallet = 0;
@@ -296,12 +306,14 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const totalCashOnHand = BASE_CASH_AVAILABLE + allTimeCash;
+    // Uang tunai fisik = (Kas Awal Shift + Penerimaan Tunai) - Pengeluaran
+    const totalCashOnHand = Math.max(0, (activeShiftOpeningCash + allTimeCash) - allTimeExpensesTotal);
     const totalFundsAvailable =
       totalCashOnHand + allTimeQris + allTimeWallet + allTimeTransfer + allTimeOther;
 
     const balancePosition = {
-      baseCashFloat: BASE_CASH_AVAILABLE,
+      activeShiftOpeningCash,
+      allTimeExpensesTotal,
       cashOnHand: totalCashOnHand,
       cashOrdersTotal: allTimeCash,
       cashCount: allTimeCashCount,
