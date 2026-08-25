@@ -168,16 +168,40 @@ export async function deductStockForOrder(orderId: string) {
         const recipe = item.product.productIngredients;
         if (!recipe || recipe.length === 0) continue;
 
-        // Scale recipe slightly if Large / Jumbo (e.g. 1.25x portion for liquids/powder)
+        // Scale recipe or use custom jumboRecipe if Large / Jumbo
         const isLarge = itemSize.toLowerCase().includes('large') || itemSize.toLowerCase().includes('jumbo');
         const sizeMultiplier = isLarge ? 1.25 : 1.0;
+
+        let customJumboRecipe: any[] | null = null;
+        if (isLarge && item.product.modifiers) {
+          try {
+            const mods = JSON.parse(item.product.modifiers);
+            if (Array.isArray(mods.jumboRecipe) && mods.jumboRecipe.length > 0) {
+              customJumboRecipe = mods.jumboRecipe;
+            }
+          } catch {}
+        }
 
         for (const recipeItem of recipe) {
           // Skip if this ingredient is a cup packaging (already deducted dynamically per order size above)
           if (cupRegular && recipeItem.ingredientId === cupRegular.id) continue;
           if (cupJumbo && recipeItem.ingredientId === cupJumbo.id) continue;
 
-          const totalQtyToDeduct = Math.round(recipeItem.quantity * sizeMultiplier * item.qty * 100) / 100;
+          let perItemQty = recipeItem.quantity;
+          if (isLarge) {
+            if (customJumboRecipe) {
+              const customMatch = customJumboRecipe.find((j: any) => j.ingredientId === recipeItem.ingredientId);
+              if (customMatch && customMatch.quantity > 0) {
+                perItemQty = customMatch.quantity;
+              } else {
+                perItemQty = recipeItem.quantity * sizeMultiplier;
+              }
+            } else {
+              perItemQty = recipeItem.quantity * sizeMultiplier;
+            }
+          }
+
+          const totalQtyToDeduct = Math.round(perItemQty * item.qty * 100) / 100;
 
           await prisma.$transaction([
             prisma.ingredient.update({

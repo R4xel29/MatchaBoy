@@ -24,7 +24,37 @@ async function handleSaveRecipe(
         quantity: parseFloat(ing.quantity),
       }));
 
-    // Use transaction to update recipe
+    // Handle jumbo specific recipe if provided
+    if (body.jumboItems !== undefined || body.jumboRecipe !== undefined) {
+      const rawJumbo = body.jumboItems || body.jumboRecipe || [];
+      const validJumbo = rawJumbo
+        .filter((ing: any) => ing.ingredientId && parseFloat(ing.quantity) > 0)
+        .map((ing: any) => ({
+          ingredientId: ing.ingredientId,
+          quantity: parseFloat(ing.quantity),
+        }));
+
+      const currentProduct = await prisma.product.findUnique({
+        where: { id },
+        select: { modifiers: true },
+      });
+
+      let mods: any = {};
+      if (currentProduct?.modifiers) {
+        try {
+          mods = JSON.parse(currentProduct.modifiers);
+        } catch {}
+      }
+
+      mods.jumboRecipe = validJumbo;
+
+      await prisma.product.update({
+        where: { id },
+        data: { modifiers: JSON.stringify(mods) },
+      });
+    }
+
+    // Use transaction to update base regular recipe
     await prisma.$transaction([
       // Delete existing recipe items
       prisma.productIngredient.deleteMany({
@@ -40,12 +70,32 @@ async function handleSaveRecipe(
         : []),
     ]);
 
-    const updatedRecipe = await prisma.productIngredient.findMany({
-      where: { productId: id },
-      include: { ingredient: true },
-    });
+    const [updatedRecipe, updatedProduct] = await Promise.all([
+      prisma.productIngredient.findMany({
+        where: { productId: id },
+        include: { ingredient: true },
+      }),
+      prisma.product.findUnique({
+        where: { id },
+        select: { modifiers: true },
+      }),
+    ]);
 
-    return NextResponse.json({ success: true, recipe: updatedRecipe });
+    let jumboRecipe: any[] = [];
+    if (updatedProduct?.modifiers) {
+      try {
+        const parsed = JSON.parse(updatedProduct.modifiers);
+        if (Array.isArray(parsed.jumboRecipe)) {
+          jumboRecipe = parsed.jumboRecipe;
+        }
+      } catch {}
+    }
+
+    return NextResponse.json({
+      success: true,
+      recipe: updatedRecipe,
+      jumboRecipe,
+    });
   } catch (error) {
     console.error('Error updating product recipe:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
@@ -63,12 +113,31 @@ export async function GET(
     }
 
     const { id } = await params;
-    const recipe = await prisma.productIngredient.findMany({
-      where: { productId: id },
-      include: { ingredient: true },
-    });
+    const [recipe, product] = await Promise.all([
+      prisma.productIngredient.findMany({
+        where: { productId: id },
+        include: { ingredient: true },
+      }),
+      prisma.product.findUnique({
+        where: { id },
+        select: { modifiers: true },
+      }),
+    ]);
 
-    return NextResponse.json(recipe);
+    let jumboRecipe: any[] = [];
+    if (product?.modifiers) {
+      try {
+        const parsed = JSON.parse(product.modifiers);
+        if (Array.isArray(parsed.jumboRecipe)) {
+          jumboRecipe = parsed.jumboRecipe;
+        }
+      } catch {}
+    }
+
+    return NextResponse.json({
+      recipe,
+      jumboRecipe,
+    });
   } catch (error) {
     console.error('Error fetching product recipe:', error);
     return new NextResponse('Internal Server Error', { status: 500 });
