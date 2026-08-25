@@ -9,6 +9,7 @@ export interface IngredientItem {
   name: string;
   unit: string;
   costPerUnit: number;
+  isPackaging?: boolean;
 }
 
 export interface AddOnItem {

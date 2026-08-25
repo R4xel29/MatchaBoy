@@ -173,6 +173,10 @@ export async function deductStockForOrder(orderId: string) {
         const sizeMultiplier = isLarge ? 1.25 : 1.0;
 
         for (const recipeItem of recipe) {
+          // Skip if this ingredient is a cup packaging (already deducted dynamically per order size above)
+          if (cupRegular && recipeItem.ingredientId === cupRegular.id) continue;
+          if (cupJumbo && recipeItem.ingredientId === cupJumbo.id) continue;
+
           const totalQtyToDeduct = Math.round(recipeItem.quantity * sizeMultiplier * item.qty * 100) / 100;
 
           await prisma.$transaction([
