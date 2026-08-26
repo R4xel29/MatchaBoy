@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef, useEffect } from "react";
 import {
@@ -18,7 +18,11 @@ import {
   Receipt,
   PackagePlus,
   Coins,
-  FileCheck
+  FileCheck,
+  Mic,
+  MicOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -77,15 +81,18 @@ export function AdminAIAssistantWidget() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ data: string; mimeType: string; preview: string } | null>(null);
+  const [isListening, setIsListening] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const recognitionRef = useRef<any>(null);
 
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: "Halo Bos! 🍵 Saya **Asisten Toko Matchaboy (Autonomous Operator)**.\n\nSaya bisa **menganalisa data bisnis**, **mengecek resep & HPP modal**, **membuat voucher**, **mengubah harga/status menu**, hingga **membaca foto struk belanja supplier (Level 1 & 2)**.\n\nSetiap aksi perubahan data akan selalu saya konfirmasikan ke Bos terlebih dahulu sebelum dieksekusi. Ada yang bisa saya bantu?",
+      content: "Halo Bos! 🍵 Saya **Asisten Toko Matchaboy (Autonomous Operator)**.\n\nSaya sudah dilengkapi dengan **Perintah Suara (Voice)**, **Eksekusi Aksi Toko**, dan **Scan Struk Belanjaan**.\n\nBos bisa bicara langsung lewat tombol mikrofon (🎙️) atau ketik pesan. Ada yang bisa saya bantu analisa atau eksekusi?",
       timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -125,6 +132,110 @@ export function AdminAIAssistantWidget() {
       scrollToBottom();
     }
   }, [messages, isOpen]);
+
+  // Stop listening/speaking when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      stopListening();
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setSpeakingMsgId(null);
+    }
+  }, [isOpen]);
+
+  const startListening = () => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Browser Anda belum mendukung Web Speech Recognition. Gunakan Google Chrome/Edge.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "id-ID";
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = 0; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setInput(transcript);
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn("[ASSISTANT_VOICE_ERROR]", event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (err) {
+      console.error("Failed to start speech recognition:", err);
+      setIsListening(false);
+    }
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (_) {}
+      recognitionRef.current = null;
+    }
+    setIsListening(false);
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      stopListening();
+    } else {
+      startListening();
+    }
+  };
+
+  const handleSpeak = (msgId: string, text: string) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    // Clean text for speech synthesis
+    const cleanText = text
+      .replace(/<<<ACTION_PROPOSAL>>>[\s\S]*?<<<END_ACTION_PROPOSAL>>>/g, "")
+      .replace(/[*_#•`]/g, "")
+      .replace(/\bRp\s?([\d.]+)/g, "$1 rupiah")
+      .trim();
+
+    if (!cleanText) return;
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.lang = "id-ID";
+    utterance.rate = 1.05;
+
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+
+    setSpeakingMsgId(msgId);
+    window.speechSynthesis.speak(utterance);
+  };
 
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -638,13 +749,41 @@ export function AdminAIAssistantWidget() {
                       </div>
                     )}
 
-                    <p
-                      className={`text-[9px] text-right font-medium mt-1 ${
-                        msg.role === "user" ? "text-amber-100" : "text-slate-400"
-                      }`}
-                    >
-                      {msg.timestamp}
-                    </p>
+                    {/* Timestamp & Read Aloud Audio Trigger */}
+                    <div className="flex items-center justify-between pt-1 border-t border-slate-100/50">
+                      {msg.role === "assistant" && msg.content && (
+                        <button
+                          type="button"
+                          onClick={() => handleSpeak(msg.id, msg.content)}
+                          title={speakingMsgId === msg.id ? "Hentikan Suara" : "Dengarkan Jawaban AI"}
+                          className={`p-1 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-semibold cursor-pointer ${
+                            speakingMsgId === msg.id
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "text-slate-400 hover:text-emerald-700 hover:bg-slate-100"
+                          }`}
+                        >
+                          {speakingMsgId === msg.id ? (
+                            <>
+                              <VolumeX className="w-3.5 h-3.5 text-emerald-600 animate-pulse" />
+                              <span>Membaca...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Volume2 className="w-3.5 h-3.5" />
+                              <span>Dengarkan</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      <p
+                        className={`text-[9px] font-medium ml-auto ${
+                          msg.role === "user" ? "text-amber-100" : "text-slate-400"
+                        }`}
+                      >
+                        {msg.timestamp}
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -658,7 +797,7 @@ export function AdminAIAssistantWidget() {
                 <button
                   key={idx}
                   type="button"
-                  disabled={isLoading}
+                  disabled={isLoading || isListening}
                   onClick={() => handleSendMessage(qp.prompt)}
                   className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-slate-600 border border-slate-200 text-[10px] font-bold whitespace-nowrap transition-all shrink-0 active:scale-95 disabled:opacity-50"
                 >
@@ -684,21 +823,48 @@ export function AdminAIAssistantWidget() {
               </div>
             )}
 
-            {/* Input Bar with Attachment */}
+            {/* Input Bar with Attachment and Voice Mic */}
             <div className="p-3 bg-white border-t border-slate-150 flex items-center gap-2">
+              {/* Attachment Button */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
+                disabled={isLoading || isListening}
                 title="Unggah Foto Struk / Nota Belanja"
                 className="p-2.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
 
+              {/* Voice Input Button */}
+              <button
+                type="button"
+                onClick={toggleListening}
+                disabled={isLoading}
+                title={isListening ? "Hentikan perekaman suara" : "Bicara dengan Asisten AI"}
+                className={`p-2.5 rounded-xl border transition-all active:scale-95 cursor-pointer shrink-0 ${
+                  isListening
+                    ? "bg-rose-500 text-white border-rose-600 shadow-md shadow-rose-500/30 animate-pulse"
+                    : "bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border-slate-200 hover:border-emerald-300"
+                }`}
+              >
+                {isListening ? (
+                  <Mic className="w-4 h-4 animate-bounce" />
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Text Input */}
               <input
                 type="text"
-                placeholder={selectedImage ? "Ketik instruksi struk (opsional)..." : "Ketik instruksi aksi atau pertanyaan toko..."}
+                placeholder={
+                  isListening
+                    ? "Sedang mendengarkan suara Bos..."
+                    : selectedImage
+                    ? "Ketik instruksi struk (opsional)..."
+                    : "Ketik atau klik mic untuk bicara..."
+                }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -708,9 +874,14 @@ export function AdminAIAssistantWidget() {
                   }
                 }}
                 disabled={isLoading}
-                className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium disabled:opacity-50"
+                className={`flex-1 px-3.5 py-2.5 border rounded-xl text-xs focus:outline-none focus:ring-2 transition-all font-medium disabled:opacity-50 ${
+                  isListening
+                    ? "bg-rose-50 border-rose-300 text-rose-900 focus:ring-rose-500/20"
+                    : "bg-slate-50 border-slate-200 focus:bg-white focus:ring-emerald-500/20 focus:border-emerald-500"
+                }`}
               />
 
+              {/* Send Button */}
               <button
                 type="button"
                 onClick={() => handleSendMessage()}
