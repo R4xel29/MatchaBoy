@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateStoreAIStream } from "@/lib/gemini";
@@ -22,6 +22,7 @@ export async function POST(req: Request) {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const nonSpmbFilter = {
       NOT: {
@@ -40,7 +41,8 @@ export async function POST(req: Request) {
       expensesThisMonth,
       diningTables,
       customRecipes,
-      storeSettings
+      storeSettings,
+      categories
     ] = await Promise.all([
       // Today's orders
       prisma.order.findMany({
@@ -54,6 +56,7 @@ export async function POST(req: Request) {
           status: true,
           orderType: true,
           paymentMethod: true,
+          createdAt: true,
         },
       }),
       // Last 30 days completed orders & items
@@ -93,7 +96,7 @@ export async function POST(req: Request) {
       }),
       // Stock ingredients
       prisma.ingredient.findMany({
-        select: { id: true, name: true, stock: true, unit: true, costPerUnit: true, isPackaging: true },
+        select: { id: true, name: true, stock: true, unit: true, costPerUnit: true, minStockAlert: true, isPackaging: true },
         orderBy: { stock: "asc" },
       }),
       // Toppings with ingredient relations
@@ -119,229 +122,220 @@ export async function POST(req: Request) {
       }),
       // Store settings
       prisma.storeSettings.findFirst({
-        select: { storeName: true, openTime: true, closeTime: true },
+        select: { storeStatus: true, openingHour: true, closingHour: true, isRamadanTheme: true },
+      }),
+      // Categories
+      prisma.category.findMany({
+        select: { id: true, name: true, slug: true },
       }),
     ]);
 
-    // Calculate Today Metrics
-    const todayCompleted = todayOrders.filter((o) => ["COMPLETED", "DELIVERED"].includes(o.status));
-    const todayRevenue = todayCompleted.reduce((sum, o) => sum + o.total, 0);
+    // ──────────────────────────────────────────────────────────────────────────
+    // PREDICTIVE ANALYTICS & BURN-RATE FORECAST
+    // ──────────────────────────────────────────────────────────────────────────
+    const last7DaysOrders = monthOrders.filter((o) => new Date(o.createdAt) >= sevenDaysAgo);
 
-    // Calculate 30-Day Metrics
-    const monthRevenue = monthOrders.reduce((sum, o) => sum + o.total, 0);
-    const monthOrderCount = monthOrders.length;
-    const avgOrderValue = monthOrderCount > 0 ? Math.round(monthRevenue / monthOrderCount) : 0;
+    // Product velocity (units sold in 7 days)
+    const productSalesVelocity: Record<string, number> = {};
+    for (const ord of last7DaysOrders) {
+      for (const item of ord.items) {
+        if (item.product?.name) {
+          productSalesVelocity[item.product.name] = (productSalesVelocity[item.product.name] || 0) + item.qty;
+        }
+      }
+    }
 
-    // Detailed Product HPP, Recipe & Margin Map
-    const detailedMenuCatalog = allProducts.map((p) => {
-      let totalHPP = 0;
+    // Daily burn-rate per ingredient & forecast days until empty
+    const ingredientBurnRateForecast: Record<string, any> = {};
+    const criticalStockAlerts: string[] = [];
+
+    for (const ing of ingredients) {
+      let totalUsed7d = 0;
+      for (const prod of allProducts) {
+        const matchRec = prod.productIngredients.find((pi) => pi.ingredient.id === ing.id);
+        if (matchRec) {
+          const sold = productSalesVelocity[prod.name] || 0;
+          totalUsed7d += matchRec.quantity * sold;
+        }
+      }
+
+      const dailyBurn = Math.round((totalUsed7d / 7) * 10) / 10;
+      const daysLeft = dailyBurn > 0 ? Math.round(ing.stock / dailyBurn) : 999;
+
+      ingredientBurnRateForecast[ing.name] = {
+        currentStock: `${ing.stock} ${ing.unit}`,
+        dailyBurnRate: `${dailyBurn} ${ing.unit}/hari`,
+        estimatedDaysRemaining: daysLeft < 999 ? `${daysLeft} hari` : "Aman (>30 hari)",
+        costPerUnit: `Rp ${ing.costPerUnit}/${ing.unit}`,
+      };
+
+      if (daysLeft <= 4 && dailyBurn > 0) {
+        criticalStockAlerts.push(`⚠️ ${ing.name} tersisa ${ing.stock} ${ing.unit} (Burn-rate: ${dailyBurn} ${ing.unit}/hari, diprediksi habis dalam ${daysLeft} hari!).`);
+      }
+    }
+
+    // Hourly traffic heatmap
+    const hourlyTraffic: Record<number, number> = {};
+    for (const ord of last7DaysOrders) {
+      const h = new Date(ord.createdAt).getHours();
+      hourlyTraffic[h] = (hourlyTraffic[h] || 0) + 1;
+    }
+
+    // Calculate aggregated stats
+    const todayRevenue = todayOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const monthRevenue = monthOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+    const totalExpenses = expensesThisMonth.reduce((sum, e) => sum + (e.amount || 0), 0);
+
+    // Deep Catalog Matrix with Exact Recipe & COGS HPP
+    const detailedProductCatalog = allProducts.map((p) => {
+      let hppModalPerCup = 0;
       const recipeBreakdown = p.productIngredients.map((pi) => {
-        const cost = (pi.quantity || 0) * (pi.ingredient.costPerUnit || 0);
-        totalHPP += cost;
+        const costForItem = pi.quantity * pi.ingredient.costPerUnit;
+        hppModalPerCup += costForItem;
         return {
-          bahan: pi.ingredient.name,
-          takaranPerPorsi: `${pi.quantity} ${pi.ingredient.unit}`,
-          hargaBeliBahan: `Rp ${pi.ingredient.costPerUnit.toLocaleString("id-ID")}/${pi.ingredient.unit}`,
-          biayaKomponen: `Rp ${Math.round(cost).toLocaleString("id-ID")}`,
-          sisaStokBahanDiGudang: `${pi.ingredient.stock} ${pi.ingredient.unit}`,
-          tipe: pi.ingredient.isPackaging ? "Kemasan/Packaging" : "Bahan Baku Resep",
+          ingredient: pi.ingredient.name,
+          quantity: `${pi.quantity} ${pi.ingredient.unit}`,
+          unitCost: `Rp ${pi.ingredient.costPerUnit}/${pi.ingredient.unit}`,
+          subtotalCost: `Rp ${costForItem}`,
         };
       });
 
-      const profitRupiah = p.price - totalHPP;
-      const profitMarginPercent = p.price > 0 ? Math.round((profitRupiah / p.price) * 100) : 0;
-
-      // Estimate max cups that can be made with current remaining stock
-      let maxCupsCanMake = 999999;
-      if (p.productIngredients.length > 0) {
-        p.productIngredients.forEach((pi) => {
-          if (pi.quantity > 0) {
-            const possible = Math.floor(pi.ingredient.stock / pi.quantity);
-            if (possible < maxCupsCanMake) maxCupsCanMake = Math.max(0, possible);
-          }
-        });
-      } else {
-        maxCupsCanMake = 0; // No recipe configured
-      }
+      const marginNominal = p.price - hppModalPerCup;
+      const marginPercent = p.price > 0 ? Math.round((marginNominal / p.price) * 100) : 0;
 
       return {
         id: p.id,
-        namaMenu: p.name,
-        kategori: p.category?.name || "Matcha",
-        deskripsi: p.description || "-",
-        hargaJual: `Rp ${p.price.toLocaleString("id-ID")}`,
-        hppModalBahan: `Rp ${Math.round(totalHPP).toLocaleString("id-ID")}`,
-        keuntunganKotorPerCup: `Rp ${Math.round(profitRupiah).toLocaleString("id-ID")}`,
-        marginLabaPersen: `${profitMarginPercent}%`,
-        estimasiPorsiTersediaDariStok: maxCupsCanMake === 999999 ? "Tidak terbatas (belum ada resep)" : `${maxCupsCanMake} porsi`,
-        rincianResepDanKomposisi: recipeBreakdown.length > 0 ? recipeBreakdown : "Belum di-mapping resep bahan baku",
+        name: p.name,
+        price: p.price,
+        category: p.category?.name || "Uncategorized",
+        badge: p.badge || "normal",
+        hppModalPerCup: Math.round(hppModalPerCup),
+        marginNominal: Math.round(marginNominal),
+        marginPercent: `${marginPercent}%`,
+        recipeBreakdown,
+        sevenDaySalesCount: productSalesVelocity[p.name] || 0,
       };
     });
 
-    // Calculate Product Performance (Sales Frequency)
-    const productSalesMap = new Map<string, { name: string; qty: number; revenue: number; category: string }>();
-    allProducts.forEach((p) => {
-      productSalesMap.set(p.id, { name: p.name, qty: 0, revenue: 0, category: p.category?.name || "Matcha" });
-    });
-
-    monthOrders.forEach((order) => {
-      order.items.forEach((item) => {
-        if (item.product) {
-          const curr = productSalesMap.get(item.product.id) || {
-            name: item.product.name,
-            qty: 0,
-            revenue: 0,
-            category: "Matcha",
-          };
-          curr.qty += item.qty;
-          curr.revenue += item.qty * item.price;
-          productSalesMap.set(item.product.id, curr);
-        }
-      });
-    });
-
-    const sortedProducts = Array.from(productSalesMap.values()).sort((a, b) => b.qty - a.qty);
-    const topProducts = sortedProducts.slice(0, 5);
-    const slowestProducts = sortedProducts.filter((p) => p.qty <= 3).slice(0, 5);
-
-    // Master Ingredients stock list & valuation
-    let totalInventoryValuation = 0;
-    const masterIngredientList = ingredients.map((ing) => {
-      const valuation = ing.stock * ing.costPerUnit;
-      totalInventoryValuation += valuation;
-      return {
-        namaBahan: ing.name,
-        sisaStok: `${ing.stock} ${ing.unit}`,
-        hargaBeliPerUnit: `Rp ${ing.costPerUnit.toLocaleString("id-ID")}/${ing.unit}`,
-        totalNilaiStok: `Rp ${Math.round(valuation).toLocaleString("id-ID")}`,
-        status: ing.stock <= 5 ? "⚠️ MENIPIS / KRITIS" : "✅ AMAN",
-      };
-    });
-
-    // Toppings catalog
-    const toppingsCatalog = toppings.map((t) => ({
-      namaTopping: t.name,
-      hargaJual: `Rp ${t.price.toLocaleString("id-ID")}`,
-      bahanTerkait: t.ingredient ? `${t.ingredient.name} (${t.ingredientQty} ${t.ingredient.unit})` : "Manual",
-      biayaModal: t.ingredient ? `Rp ${Math.round(t.ingredientQty * t.ingredient.costPerUnit).toLocaleString("id-ID")}` : "-",
-    }));
-
-    const totalExpenses = expensesThisMonth.reduce((sum, e) => sum + e.amount, 0);
-
-    // Build Comprehensive Context Snapshot
     const storeContext = {
-      namaToko: storeSettings?.storeName || "Matchaboy",
-      jamOperasional: `${storeSettings?.openTime || "08:00"} - ${storeSettings?.closeTime || "21:00"}`,
-      ringkasanPenjualanHariIni: {
-        omzet: `Rp ${todayRevenue.toLocaleString("id-ID")}`,
-        transaksiSelesai: todayCompleted.length,
-        totalPesananMasuk: todayOrders.length,
+      realTimeDate: now.toLocaleDateString("id-ID", { weekday: "long", year: "numeric", month: "long", day: "numeric" }),
+      businessOverview: {
+        todayOrdersCount: todayOrders.length,
+        todayRevenue: `Rp ${todayRevenue.toLocaleString("id-ID")}`,
+        monthCompletedOrders: monthOrders.length,
+        monthRevenue: `Rp ${monthRevenue.toLocaleString("id-ID")}`,
+        monthExpenses: `Rp ${totalExpenses.toLocaleString("id-ID")}`,
+        netProfitEstimate: `Rp ${(monthRevenue - totalExpenses).toLocaleString("id-ID")}`,
       },
-      ringkasanPerforma30Hari: {
-        totalOmzet: `Rp ${monthRevenue.toLocaleString("id-ID")}`,
-        totalTransaksi: monthOrderCount,
-        rataRataNilaiTransaksi: `Rp ${avgOrderValue.toLocaleString("id-ID")}`,
-        totalPengeluaranOperasional: `Rp ${totalExpenses.toLocaleString("id-ID")}`,
-        estimasiLabaBersihSetelahExpense: `Rp ${(monthRevenue - totalExpenses).toLocaleString("id-ID")}`,
+      predictiveAnalytics: {
+        criticalStockAlerts,
+        ingredientBurnRateForecast,
+        hourlySalesPattern: hourlyTraffic,
       },
-      menuTerlaris30Hari: topProducts.map((p) => `${p.name} (${p.qty} cup terjual, omzet Rp ${p.revenue.toLocaleString("id-ID")})`),
-      menuPalingSepi30Hari: slowestProducts.map((p) => `${p.name} (hanya ${p.qty} cup terjual)`),
-      katalogLengkapMenuDanHPPResep: detailedMenuCatalog,
-      stokGudangDanBahanBaku: masterIngredientList,
-      totalNilaiAsetStokGudang: `Rp ${Math.round(totalInventoryValuation).toLocaleString("id-ID")}`,
-      katalogTopping: toppingsCatalog,
-      resepKustomFavoritPelanggan: customRecipes.map((cr) => `${cr.recipeName} (${cr.milkType}, Matcha Lvl ${cr.matchaLevel}, dipesan ${cr.orderCount}x)`),
-      mejaDineIn: `${diningTables.filter((t) => t.status === "OCCUPIED").length} terisi dari ${diningTables.length} meja total`,
+      productCatalogWithHpp: detailedProductCatalog,
+      categories: categories.map((c) => c.name),
+      inventoryStock: ingredients.map((i) => ({
+        id: i.id,
+        name: i.name,
+        stock: `${i.stock} ${i.unit}`,
+        costPerUnit: `Rp ${i.costPerUnit}/${i.unit}`,
+        minAlert: i.minStockAlert,
+      })),
+      toppings: toppings.map((t) => ({ name: t.name, price: t.price, ingredientLinked: t.ingredient?.name })),
+      diningTables: diningTables.map((t) => ({ table: t.number, capacity: t.capacity, status: t.status })),
+      popularCustomRecipes: customRecipes,
+      storeSettings,
     };
 
-    const systemInstruction = `Kamu adalah "Asisten Toko Matchaboy", asisten bisnis digital dan manajer operasional internal kedai Matcha.
+    const systemInstruction = `Kamu adalah ASISTEN TOKO MATCHABOY (AUTONOMOUS OPERATOR & CHIEF OPERATING OFFICER).
+Kamu memiliki kendali eksekutif penuh (Omnipotent) atas seluruh data toko, manajemen menu, kalkulasi HPP modal, scan struk belanja multi-entitas, dan analitik prediktif.
 
-ATURAN FORMATTING & TAMPILAN KETAT:
+KEPRIBADIAN & GAYA KOMUNIKASI:
+- Berwibawa, proaktif, ramah, solutif, dan berorientasi pada profitabilitas bisnis Matchaboy.
+- Panggil bos/pemilik toko dengan sebutan "Bos" yang sopan dan hangat.
+- Berikan wawasan analitik prediktif (seperti burn rate bahan baku dan potensi kehabisan stok) secara berkala.
+
+ATURAN FORMATTING TEKS CHAT (WAJIB DIPATUHI):
 1. DILARANG KERAS MENGGUNAKAN SIMBOL HASHTAG MARKDOWN SEPERTI "###", "##", "#" DAN GARIS PEMISAH "---".
 2. DILARANG MENINGGALKAN BINTANG GANTUNG seperti "Harga Jual:*".
-3. Gunakan formatting chat yang bersih:
+3. Gunakan format chat yang bersih:
    - Judul / Nama Menu: gunakan huruf tebal **Nama Menu**, misal: **1. Matcha Latte (Rp 28.000)**
    - Poin-poin: gunakan bullet point "• " atau penomoran "1.", "2."
-   - Gunakan emoji pendukung yang relevan: 🍵, 💰, 📦, 📊, ⚠️, ✨
+   - Gunakan emoji pendukung: 🍵, 💰, 📦, 📊, ⚠️, 🎨, ✨
 
 FITUR EKSEKUTIF & PROPOSAL AKSI (ACTION PROPOSALS):
-Jika pengguna meminta untuk melakukan perubahan data toko nyata (misal: memesan/menambahkan pesanan menu baru, buat voucher baru, ubah harga produk, ubah status menu jadi sold-out/aktif, restock bahan baku, catat pengeluaran, atau menganalisis foto struk belanjaan yang dilampirkan), kamu HARUS memberikan penjelasan ramah terlebih dahulu, lalu di akhir jawaban cantumkan SATU blok JSON Action Proposal dengan format persis seperti ini:
+Jika pengguna meminta aksi nyata (buat menu baru, ubah harga, scan struk supplier, flash sale, restock, atau buat pesanan), kamu HARUS memberikan analisa ramah terlebih dahulu, lalu di akhir jawaban cantumkan SATU blok JSON Action Proposal dengan format persis:
 
 <<<ACTION_PROPOSAL>>>
 {
-  "actionType": "CREATE_ORDER" | "CREATE_VOUCHER" | "UPDATE_PRODUCT" | "RESTOCK_INGREDIENT" | "RECORD_EXPENSE" | "BATCH_RECEIPT_RESTOCK",
-  "title": "Judul Singkat Proposal",
-  "summary": "Rangkuman ringkas apa yang akan diubah/dipesan",
+  "actionType": "CREATE_PRODUCT" | "FULL_RECEIPT_PIPELINE" | "CHAINED_BATCH_ACTION" | "SET_FLASH_SALE" | "SET_PRODUCT_RECIPE" | "CREATE_ORDER" | "CREATE_VOUCHER" | "UPDATE_PRODUCT" | "DELETE_PRODUCT" | "RESTOCK_INGREDIENT" | "RECORD_EXPENSE",
+  "title": "Judul Proposal Aksi",
+  "summary": "Rangkuman ringkas perubahan",
   "payload": { ... }
 }
 <<<END_ACTION_PROPOSAL>>>
 
 PANDUAN PAYLOAD AKSI:
-1. CREATE_ORDER (UNTUK MENAMBAH PESANAN TOKO):
-   - Jika pengguna meminta pesankan menu (misal: "pesankan 2 matcha latte meja 3 atas nama Budi" atau "tambah pesanan 1 croissant"):
-   - payload: { "customerName": "Budi", "orderType": "DINE_IN" | "PICKUP", "tableNumber": "3", "items": [{ "productName": "Matcha Latte", "quantity": 2, "sugarLevel": "Biasa", "iceLevel": "Normal Ice", "matchaLevel": 5, "size": "Regular", "shotName": "Single Shot" }], "notes": "Pesanan dibuat via Asisten Bot AI" }
-2. CREATE_VOUCHER:
-   - payload: { "code": "KODE", "title": "Nama Promo", "type": "PERCENTAGE" | "FIXED", "discountValue": 20, "minPurchase": 50000, "maxDiscount": 20000, "usageLimit": 30, "terms": "S&K promo" }
-3. UPDATE_PRODUCT:
-   - payload: { "productName": "Nama Produk", "price": 28000 (opsional), "badge": "sold-out" | "best-seller" | "none" (opsional), "description": "..." (opsional) }
-4. RESTOCK_INGREDIENT:
-   - payload: { "ingredientName": "Nama Bahan", "quantity": 5, "totalCost": 250000, "notes": "...", "source": "CASH_DRAWER" | "BANK_TRANSFER" }
-5. RECORD_EXPENSE:
-   - payload: { "name": "Beli Es Batu", "amount": 25000, "category": "RAW_MATERIAL" | "OPERATIONAL" | "MARKETING", "notes": "..." }
-6. BATCH_RECEIPT_RESTOCK (untuk struk belanja):
-   - payload: { "receiptStoreName": "Nama Toko / Supplier", "receiptDate": "2026-08-26", "totalExpense": 150000, "items": [{ "ingredientName": "Fresh Milk", "quantity": 10, "unitPrice": 15000, "totalCost": 150000 }] }
+1. CREATE_PRODUCT (BUAT MENU BARU LENGKAP DENGAN FOTO AI & RESEP):
+   - payload: {
+       "name": "Matcha Mango Cloud",
+       "description": "Artisan matcha dengan puree mangga manis dan cloud foam.",
+       "price": 32000,
+       "categoryName": "Signature Matcha",
+       "badge": "new",
+       "aiImagePrompt": "artisanal layered matcha mango cloud drink in ribbed glass with foam on wooden cafe table, soft cinematic sunlight, 8k resolution",
+       "imageUrl": "https://image.pollinations.ai/prompt/artisanal%20layered%20matcha%20mango%20cloud%20drink%20in%20ribbed%20glass%20with%20foam%20on%20wooden%20cafe%20table%20cinematic%208k?width=800&height=800&nologo=true",
+       "modifiers": { "sugarLevel": ["Less Sugar (50%)", "Normal (100%)"], "iceLevel": ["Normal Ice", "Less Ice"] },
+       "recipes": [{ "ingredientName": "Bubuk Matcha Premium", "quantity": 6 }, { "ingredientName": "Fresh Milk", "quantity": 140 }, { "ingredientName": "Cup 16oz & Lid", "quantity": 1 }]
+     }
+2. FULL_RECEIPT_PIPELINE (SCAN STRUK SUPPLIER MULTI-ENTITAS):
+   - payload: {
+       "receiptStoreName": "Nama Toko Supplier",
+       "receiptDate": "2026-08-26",
+       "totalExpense": 350000,
+       "source": "CASH_DRAWER" | "BANK_TRANSFER",
+       "items": [{ "ingredientName": "Fresh Milk", "quantity": 12000, "unit": "ml", "totalCost": 216000 }]
+     }
+3. SET_FLASH_SALE:
+   - payload: { "productName": "Matcha Croissant", "promoPrice": 18000 }
+4. CREATE_ORDER:
+   - payload: { "customerName": "Budi", "orderType": "DINE_IN" | "PICKUP", "tableNumber": "3", "items": [{ "productName": "Matcha Latte", "quantity": 2 }] }
+5. SET_PRODUCT_RECIPE:
+   - payload: { "productName": "Matcha Latte", "ingredients": [{ "ingredientName": "Bubuk Matcha Premium", "quantity": 8 }, { "ingredientName": "Fresh Milk", "quantity": 180 }] }
+6. CREATE_VOUCHER:
+   - payload: { "code": "HEMAT20", "title": "Diskon 20%", "discountValue": 20, "minPurchase": 40000 }
 
-AKURASI TINGGI PADA HPP & RESEP:
-- Sebutkan angka pasti HPP modal, takaran gram/ml, harga beli bahan baku, dan margin keuntungan (%) sesuai data katalog di bawah.
-
-DATABASE RESEP, HPP, STOK, & DATA TOKO REAL-TIME:
+DATABASE STORE REAL-TIME, HPP, RESEP, & PREDICTIVE ANALYTICS:
 ${JSON.stringify(storeContext, null, 2)}`;
 
-    // Build history prompt if provided
+    // Build history prompt
     let conversationPrompt = "";
     if (Array.isArray(history) && history.length > 0) {
       const recentHistory = history.slice(-6);
-      recentHistory.forEach((h: { role: string; content: string }) => {
-        conversationPrompt += `${h.role === "user" ? "Pengguna" : "Asisten"}: ${h.content}\n`;
-      });
+      conversationPrompt = recentHistory
+        .map((h: any) => `${h.role === "user" ? "Bos" : "Asisten"}: ${h.content}`)
+        .join("\n\n");
+      conversationPrompt += `\n\nBos: ${message || "Tolong analisa gambar/struk terlampir."}\nAsisten:`;
+    } else {
+      conversationPrompt = `Bos: ${message || "Tolong analisa gambar/struk terlampir."}\nAsisten:`;
     }
-    const currentInputText = message || (image ? "Tolong analisa foto struk/gambar terlampir ini dan buatkan proposal restock/expense-nya jika relevan." : "");
-    conversationPrompt += `Pengguna: ${currentInputText}\nAsisten:`;
 
-    const responseStream = await generateStoreAIStream({
+    // Call Gemini streaming API with optional image payload
+    const stream = await generateStoreAIStream(
+      conversationPrompt,
       systemInstruction,
-      prompt: conversationPrompt,
-      image: image ? { mimeType: image.mimeType || "image/jpeg", data: image.data } : undefined,
-    });
-
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        try {
-          for await (const chunk of responseStream) {
-            const chunkText = chunk.text;
-            if (chunkText) {
-              controller.enqueue(encoder.encode(chunkText));
-            }
-          }
-        } catch (streamErr) {
-          console.error("[ADMIN_AI_CHAT_STREAM] Error in stream:", streamErr);
-          controller.error(streamErr);
-        } finally {
-          controller.close();
-        }
-      },
-    });
+      image ? { data: image.data, mimeType: image.mimeType } : undefined
+    );
 
     return new Response(stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
         "Transfer-Encoding": "chunked",
+        "Cache-Control": "no-cache, no-transform",
       },
     });
   } catch (error: any) {
-    console.error("[ADMIN_AI_CHAT] Error:", error);
+    console.error("[ADMIN_AI_CHAT_STREAM_ERROR]", error);
     return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
   }
 }

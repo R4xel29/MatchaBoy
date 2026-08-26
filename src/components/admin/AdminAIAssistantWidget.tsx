@@ -28,7 +28,19 @@ import { motion, AnimatePresence } from "framer-motion";
 
 interface ActionProposal {
   id: string;
-  actionType: "CREATE_ORDER" | "CREATE_VOUCHER" | "UPDATE_PRODUCT" | "RESTOCK_INGREDIENT" | "RECORD_EXPENSE" | "BATCH_RECEIPT_RESTOCK";
+  actionType:
+    | "CREATE_PRODUCT"
+    | "FULL_RECEIPT_PIPELINE"
+    | "CHAINED_BATCH_ACTION"
+    | "SET_FLASH_SALE"
+    | "SET_PRODUCT_RECIPE"
+    | "CREATE_ORDER"
+    | "CREATE_VOUCHER"
+    | "UPDATE_PRODUCT"
+    | "DELETE_PRODUCT"
+    | "RESTOCK_INGREDIENT"
+    | "RECORD_EXPENSE"
+    | "BATCH_RECEIPT_RESTOCK";
   title: string;
   summary: string;
   payload: any;
@@ -46,11 +58,12 @@ interface Message {
 }
 
 const QUICK_PROMPTS = [
+  { label: "✨ Buat Menu Baru AI", prompt: "Bikinin menu baru 'Matcha Mango Cloud Float' harga 32rb lengkap dengan foto studio AI, takaran resep, dan kalkulasi HPP." },
+  { label: "⚠️ Analisa Burn-Rate Stok", prompt: "Bahan baku apa yang diprediksi habis dalam beberapa hari ke depan berdasarkan rata-rata penjualan?" },
+  { label: "🏷️ Pasang Flash Sale", prompt: "Apakah ada jam sepi hari ini yang cocok dipasang Flash Sale untuk mendongkrak omset?" },
   { label: "🛍️ Tambah Pesanan", prompt: "Tolong pesankan 2 Matcha Latte meja 3 atas nama Budi." },
   { label: "🎟️ Buat Voucher Promo", prompt: "Bikinin voucher diskon 20% kode MATCHAWEEKEND minimal belanja 40rb kuota 30 orang buat weekend ini." },
-  { label: "🏷️ Ubah Harga Menu", prompt: "Tolong ubah harga menu Matcha Latte jadi Rp 29.000." },
   { label: "💰 Analisa HPP & Resep", prompt: "Tolong tampilkan rincian HPP, modal bahan baku per cup, takaran resep, dan margin keuntungan dari menu-menu kita." },
-  { label: "📦 Cek Bahan Baku", prompt: "Apakah ada bahan baku yang persediaannya menipis atau perlu restock segera?" },
 ];
 
 function parseProposalFromText(text: string): { cleanText: string; proposal: ActionProposal | null } {
@@ -689,9 +702,31 @@ export function AdminAIAssistantWidget() {
                           <p className="text-[11px] text-slate-600 leading-snug">{msg.proposal.summary}</p>
                         </div>
 
+                        {/* AI-Generated Image Preview if available */}
+                        {(msg.proposal.payload.imageUrl || msg.proposal.payload.aiImagePrompt) && (
+                          <div className="rounded-xl overflow-hidden border border-emerald-400/50 shadow-sm relative group bg-slate-900">
+                            <img
+                              src={
+                                msg.proposal.payload.imageUrl?.startsWith("http")
+                                  ? msg.proposal.payload.imageUrl
+                                  : `https://image.pollinations.ai/prompt/${encodeURIComponent(
+                                      `professional high-end food studio photography of ${msg.proposal.payload.name || "Matcha Drink"}, ${msg.proposal.payload.aiImagePrompt || ""}, cafe aesthetic, cinematic lighting, 8k resolution`
+                                    )}?width=600&height=360&nologo=true`
+                              }
+                              alt="AI Product Preview"
+                              className="w-full h-32 object-cover transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-emerald-950/80 backdrop-blur-xs text-[9px] font-black text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                              <Sparkles className="w-3 h-3 text-amber-400" />
+                              <span>Foto AI Studio (Auto-Generated)</span>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Payload summary badge grid */}
                         <div className="p-2.5 rounded-xl bg-white/80 border border-slate-200/80 text-[11px] space-y-1 font-mono text-slate-700">
                           {Object.entries(msg.proposal.payload).map(([k, v]) => {
+                            if (k === "imageUrl" || k === "aiImagePrompt") return null;
                             if (typeof v === "object" && v !== null) {
                               return (
                                 <div key={k} className="flex justify-between gap-2 border-b border-slate-100 pb-0.5">

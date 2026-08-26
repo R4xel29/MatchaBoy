@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { persistAiProductImage } from "@/lib/ai-image-helper";
 
 export const dynamic = "force-dynamic";
 
@@ -57,8 +58,8 @@ export async function POST(req: Request) {
           discountValue: Number(discountValue) || 10,
           minPurchase: Number(minPurchase) || 0,
           maxDiscount: maxDiscount ? Number(maxDiscount) : null,
-          terms: terms || "Berlaku untuk seluruh menu Arum Seduh.",
-          expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // default 30 days
+          terms: terms || "Berlaku untuk seluruh menu Matchaboy.",
+          expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           usageLimit: Number(usageLimit) || 50,
           targetNewUserOnly: false,
           hideFromVoucherPack: false,
@@ -73,10 +74,131 @@ export async function POST(req: Request) {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 2. UPDATE PRODUCT (PRICE / BADGE / STATUS)
+    // 2. CREATE PRODUCT (WITH AI IMAGE GENERATOR & RECIPE COGS LINK)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "CREATE_PRODUCT") {
+      const {
+        name,
+        description = "",
+        price,
+        categoryName = "Signature Matcha",
+        badge = "new",
+        imageUrl,
+        aiImagePrompt,
+        modifiers,
+        recipes = [],
+      } = payload;
+
+      if (!name || price === undefined) {
+        return NextResponse.json({ error: "Nama produk dan harga jual wajib diisi." }, { status: 400 });
+      }
+
+      // Find or create category
+      let category = await prisma.category.findFirst({
+        where: { name: { contains: categoryName, mode: "insensitive" } },
+      });
+
+      if (!category) {
+        const slug = categoryName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+        category = await prisma.category.create({
+          data: {
+            name: categoryName,
+            slug: slug || `cat-${Date.now()}`,
+          },
+        });
+      }
+
+      // Persist AI Image to Supabase CDN
+      const finalImage = await persistAiProductImage(imageUrl || aiImagePrompt || name, name);
+
+      // Default standard modifiers if not provided
+      const defaultMods = {
+        sugarLevel: ["Tanpa Gula (0%)", "Less Sugar (50%)", "Normal (100%)", "Extra Sweet (120%)"],
+        iceLevel: ["No Ice", "Less Ice", "Normal Ice", "Extra Ice"],
+        sizes: [
+          { name: "Regular", price: 0 },
+          { name: "Large (+Rp 4.000)", price: 4000 },
+        ],
+      };
+
+      const finalModifiersStr = typeof modifiers === "string" 
+        ? modifiers 
+        : JSON.stringify(modifiers || defaultMods);
+
+      let totalCalculatedHpp = 0;
+      const createdProduct = await prisma.$transaction(async (tx) => {
+        const prod = await tx.product.create({
+          data: {
+            name,
+            description: description || `Menu spesial ${name} khas Matchaboy.`,
+            price: Number(price) || 0,
+            image: finalImage,
+            badge: badge === "none" ? null : badge,
+            categoryId: category.id,
+            modifiers: finalModifiersStr,
+          },
+        });
+
+        // Link recipes (ProductIngredient)
+        if (Array.isArray(recipes) && recipes.length > 0) {
+          for (const rec of recipes) {
+            let ingredient = null;
+            if (rec.ingredientId) {
+              ingredient = await tx.ingredient.findUnique({ where: { id: rec.ingredientId } });
+            } else if (rec.ingredientName) {
+              ingredient = await tx.ingredient.findFirst({
+                where: { name: { contains: rec.ingredientName, mode: "insensitive" } },
+              });
+
+              // If ingredient doesn't exist, create master data for it!
+              if (!ingredient) {
+                ingredient = await tx.ingredient.create({
+                  data: {
+                    name: rec.ingredientName,
+                    unit: rec.unit || "g",
+                    stock: 1000,
+                    costPerUnit: rec.costPerUnit || 100,
+                    minStockAlert: 100,
+                  },
+                });
+              }
+            }
+
+            if (ingredient) {
+              const qty = Number(rec.quantity) || 1;
+              await tx.productIngredient.create({
+                data: {
+                  productId: prod.id,
+                  ingredientId: ingredient.id,
+                  quantity: qty,
+                },
+              });
+              totalCalculatedHpp += qty * ingredient.costPerUnit;
+            }
+          }
+        }
+
+        return prod;
+      });
+
+      const marginPct = createdProduct.price > 0 
+        ? Math.round(((createdProduct.price - totalCalculatedHpp) / createdProduct.price) * 100) 
+        : 0;
+
+      return NextResponse.json({
+        success: true,
+        message: `Menu baru "${createdProduct.name}" berhasil dibuat di kategori "${category.name}" seharga Rp ${createdProduct.price.toLocaleString("id-ID")}! Foto produk studio AI telah disimpan. (HPP Modal: Rp ${totalCalculatedHpp.toLocaleString("id-ID")}, Margin: ${marginPct}%).`,
+        product: createdProduct,
+        hpp: totalCalculatedHpp,
+        margin: marginPct,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 3. UPDATE PRODUCT (PRICE / BADGE / IMAGE / STATUS)
     // ──────────────────────────────────────────────────────────────────────────
     if (actionType === "UPDATE_PRODUCT") {
-      const { productId, productName, price, badge, description, name } = payload;
+      const { productId, productName, price, badge, description, name, imageUrl, aiImagePrompt } = payload;
 
       let targetProduct = null;
       if (productId) {
@@ -97,6 +219,10 @@ export async function POST(req: Request) {
       if (description !== undefined) updateData.description = description;
       if (name !== undefined) updateData.name = name;
 
+      if (imageUrl || aiImagePrompt) {
+        updateData.image = await persistAiProductImage(imageUrl || aiImagePrompt, name || targetProduct.name);
+      }
+
       const updated = await prisma.product.update({
         where: { id: targetProduct.id },
         data: updateData,
@@ -110,7 +236,128 @@ export async function POST(req: Request) {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 3. RESTOCK INGREDIENT
+    // 4. DELETE / ARCHIVE PRODUCT
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "DELETE_PRODUCT") {
+      const { productId, productName } = payload;
+
+      let targetProduct = null;
+      if (productId) {
+        targetProduct = await prisma.product.findUnique({ where: { id: productId } });
+      } else if (productName) {
+        targetProduct = await prisma.product.findFirst({
+          where: { name: { contains: productName, mode: "insensitive" } },
+        });
+      }
+
+      if (!targetProduct) {
+        return NextResponse.json({ error: `Menu "${productName || productId}" tidak ditemukan.` }, { status: 404 });
+      }
+
+      // Check if product has active orders, if so mark sold-out instead of hard delete
+      const orderCount = await prisma.orderItem.count({
+        where: { productId: targetProduct.id },
+      });
+
+      if (orderCount > 0) {
+        await prisma.product.update({
+          where: { id: targetProduct.id },
+          data: { badge: "sold-out" },
+        });
+        return NextResponse.json({
+          success: true,
+          message: `Menu "${targetProduct.name}" telah memiliki riwayat pesanan, sehingga statusnya berhasil diubah menjadi Nonaktif / Sold-out.`,
+        });
+      }
+
+      await prisma.product.delete({
+        where: { id: targetProduct.id },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Menu "${targetProduct.name}" berhasil dihapus secara permanen dari sistem.`,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 5. SET PRODUCT RECIPE & RECALCULATE COGS (HPP)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "SET_PRODUCT_RECIPE") {
+      const { productId, productName, ingredients = [] } = payload;
+
+      let targetProduct = null;
+      if (productId) {
+        targetProduct = await prisma.product.findUnique({ where: { id: productId } });
+      } else if (productName) {
+        targetProduct = await prisma.product.findFirst({
+          where: { name: { contains: productName, mode: "insensitive" } },
+        });
+      }
+
+      if (!targetProduct) {
+        return NextResponse.json({ error: `Menu "${productName || productId}" tidak ditemukan.` }, { status: 404 });
+      }
+
+      let totalNewHpp = 0;
+      const recipeResults: string[] = [];
+
+      await prisma.$transaction(async (tx) => {
+        // Delete old recipe links
+        await tx.productIngredient.deleteMany({
+          where: { productId: targetProduct.id },
+        });
+
+        for (const item of ingredients) {
+          let ing = null;
+          if (item.ingredientId) {
+            ing = await tx.ingredient.findUnique({ where: { id: item.ingredientId } });
+          } else if (item.ingredientName) {
+            ing = await tx.ingredient.findFirst({
+              where: { name: { contains: item.ingredientName, mode: "insensitive" } },
+            });
+            if (!ing) {
+              ing = await tx.ingredient.create({
+                data: {
+                  name: item.ingredientName,
+                  unit: item.unit || "g",
+                  stock: 1000,
+                  costPerUnit: item.costPerUnit || 100,
+                  minStockAlert: 100,
+                },
+              });
+            }
+          }
+
+          if (ing) {
+            const qty = Number(item.quantity) || 1;
+            await tx.productIngredient.create({
+              data: {
+                productId: targetProduct.id,
+                ingredientId: ing.id,
+                quantity: qty,
+              },
+            });
+            totalNewHpp += qty * ing.costPerUnit;
+            recipeResults.push(`${ing.name} (${qty} ${ing.unit})`);
+          }
+        }
+      });
+
+      const newMargin = targetProduct.price > 0 
+        ? Math.round(((targetProduct.price - totalNewHpp) / targetProduct.price) * 100) 
+        : 0;
+
+      return NextResponse.json({
+        success: true,
+        message: `Resep menu "${targetProduct.name}" berhasil diperbarui! Komposisi: ${recipeResults.join(", ")}. HPP Baru: Rp ${totalNewHpp.toLocaleString("id-ID")}, Margin: ${newMargin}%.`,
+        newHpp: totalNewHpp,
+        margin: newMargin,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 6. RESTOCK INGREDIENT
     // ──────────────────────────────────────────────────────────────────────────
     if (actionType === "RESTOCK_INGREDIENT") {
       const { ingredientId, ingredientName, quantity, totalCost, notes, source = "CASH_DRAWER" } = payload;
@@ -177,7 +424,7 @@ export async function POST(req: Request) {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 4. RECORD EXPENSE
+    // 7. RECORD EXPENSE
     // ──────────────────────────────────────────────────────────────────────────
     if (actionType === "RECORD_EXPENSE") {
       const { name, amount, category = "OPERATIONAL", notes } = payload;
@@ -204,13 +451,19 @@ export async function POST(req: Request) {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 5. BATCH RECEIPT RESTOCK & EXPENSES (SCAN STRUK)
+    // 8. FULL MULTI-ENTITY RECEIPT PIPELINE (SCAN STRUK ➔ EXPENSE + RESTOCK + CREATE INGREDIENT)
     // ──────────────────────────────────────────────────────────────────────────
-    if (actionType === "BATCH_RECEIPT_RESTOCK") {
-      const { receiptStoreName = "Supplier", receiptDate, items = [], totalExpense = 0, source = "CASH_DRAWER" } = payload;
+    if (actionType === "FULL_RECEIPT_PIPELINE" || actionType === "BATCH_RECEIPT_RESTOCK") {
+      const {
+        receiptStoreName = "Supplier",
+        receiptDate,
+        items = [],
+        totalExpense = 0,
+        source = "CASH_DRAWER",
+      } = payload;
 
       if (!Array.isArray(items) || items.length === 0) {
-        return NextResponse.json({ error: "Daftar item belanjaan kosong" }, { status: 400 });
+        return NextResponse.json({ error: "Daftar item belanjaan struk kosong" }, { status: 400 });
       }
 
       const results: string[] = [];
@@ -228,8 +481,32 @@ export async function POST(req: Request) {
 
           const qty = parseFloat(item.quantity) || 0;
           const cost = parseInt(item.totalCost) || 0;
+          const unit = item.unit || "g";
 
-          if (ingredient && qty > 0) {
+          // If ingredient does not exist, create new master data!
+          if (!ingredient && item.ingredientName && qty > 0) {
+            const unitCost = qty > 0 ? Math.round(cost / qty) : 100;
+            ingredient = await tx.ingredient.create({
+              data: {
+                name: item.ingredientName,
+                unit: unit,
+                stock: qty,
+                costPerUnit: unitCost,
+                minStockAlert: item.minStockAlert || Math.round(qty * 0.2),
+              },
+            });
+
+            await tx.stockMovement.create({
+              data: {
+                ingredientId: ingredient.id,
+                quantity: qty,
+                type: "IN",
+                reason: `Scan Struk [${receiptStoreName}]: Registrasi Bahan Baru (+${qty} ${unit})`,
+              },
+            });
+
+            results.push(`${ingredient.name} (Baru: +${qty} ${unit})`);
+          } else if (ingredient && qty > 0) {
             const newStock = ingredient.stock + qty;
             const currentTotalValue = ingredient.stock * ingredient.costPerUnit;
             const newTotalValue = currentTotalValue + cost;
@@ -271,13 +548,93 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        message: `Berhasil memproses struk belanja dari "${receiptStoreName}". Stok terupdate: ${results.join(", ")}. Total pengeluaran: Rp ${totalExpense.toLocaleString("id-ID")}.`,
+        message: `Berhasil memproses struk belanja dari "${receiptStoreName}". Bahan terupdate: ${results.join(", ")}. Total pengeluaran: Rp ${totalExpense.toLocaleString("id-ID")}.`,
         updatedItems: results,
       });
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 6. CREATE REAL ORDER (LANGSUNG MASUK PREPARING & POTONG STOK INVENTARIS)
+    // 9. CHAINED BATCH ACTIONS (MULTI-STEP ATOMIC EXECUTION)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "CHAINED_BATCH_ACTION") {
+      const { actions = [] } = payload;
+      if (!Array.isArray(actions) || actions.length === 0) {
+        return NextResponse.json({ error: "Daftar batch action kosong." }, { status: 400 });
+      }
+
+      const batchResults: string[] = [];
+
+      for (const singleAction of actions) {
+        const subRes = await fetch(`${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/admin/ai/actions/execute`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: req.headers.get("cookie") || "",
+          },
+          body: JSON.stringify(singleAction),
+        });
+
+        if (subRes.ok) {
+          const subData = await subRes.json();
+          batchResults.push(subData.message || `Aksi ${singleAction.actionType} berhasil.`);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Rangkaian aksi multi-langkah berhasil dieksekusi!\n${batchResults.map((r, idx) => `${idx + 1}. ${r}`).join("\n")}`,
+        results: batchResults,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 10. SET FLASH SALE
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "SET_FLASH_SALE") {
+      const { productName, productId, promoPrice } = payload;
+
+      let product = null;
+      if (productId) {
+        product = await prisma.product.findUnique({ where: { id: productId } });
+      } else if (productName) {
+        product = await prisma.product.findFirst({
+          where: { name: { contains: productName, mode: "insensitive" } },
+        });
+      }
+
+      if (!product) {
+        return NextResponse.json({ error: `Menu "${productName || productId}" tidak ditemukan.` }, { status: 404 });
+      }
+
+      // Update product badge and store promo price in modifiers
+      let mods: any = {};
+      try {
+        mods = product.modifiers ? JSON.parse(product.modifiers) : {};
+      } catch (_) {}
+
+      mods.flashSale = {
+        active: true,
+        promoPrice: Number(promoPrice),
+        startedAt: new Date().toISOString(),
+      };
+
+      const updated = await prisma.product.update({
+        where: { id: product.id },
+        data: {
+          badge: "best-seller",
+          modifiers: JSON.stringify(mods),
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Flash Sale berhasil diaktifkan untuk menu "${updated.name}" dengan harga promo Rp ${Number(promoPrice).toLocaleString("id-ID")}!`,
+        product: updated,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 11. CREATE REAL ORDER (LANGSUNG MASUK PREPARING & POTONG STOK INVENTARIS)
     // ──────────────────────────────────────────────────────────────────────────
     if (actionType === "CREATE_ORDER") {
       const {
