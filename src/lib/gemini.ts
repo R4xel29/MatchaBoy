@@ -5,11 +5,12 @@ function getCleanApiKey(): string {
   return raw.replace(/^["']|["']$/g, '').trim();
 }
 
-const apiKey = getCleanApiKey();
-
-export const geminiClient = new GoogleGenAI({ apiKey });
-
-const DEFAULT_MODEL = 'gemini-3.6-flash';
+const ACTIVE_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3-flash-preview',
+];
 
 interface GenAIOptions {
   systemInstruction?: string;
@@ -29,7 +30,7 @@ function normalizeArgs(
       prompt: firstArg.prompt || 'Halo, tolong berikan analisa toko Matchaboy.',
       systemInstruction: firstArg.systemInstruction,
       image: firstArg.image,
-      model: firstArg.model || DEFAULT_MODEL,
+      model: firstArg.model || ACTIVE_MODELS[0],
     };
   }
 
@@ -37,12 +38,12 @@ function normalizeArgs(
     prompt: firstArg || 'Halo, tolong berikan analisa toko Matchaboy.',
     systemInstruction,
     image,
-    model: model || DEFAULT_MODEL,
+    model: model || ACTIVE_MODELS[0],
   };
 }
 
 /**
- * Generate completion text using Gemini model (gemini-3.6-flash, supports multimodal)
+ * Generate completion text using Gemini model with active quota failover (supports multimodal)
  */
 export async function generateStoreAIResponse(
   optionsOrPrompt: string | GenAIOptions,
@@ -66,30 +67,39 @@ export async function generateStoreAIResponse(
     : cleanPrompt;
 
   const client = new GoogleGenAI({ apiKey: key });
-  const selectedModel = model || DEFAULT_MODEL;
+  const modelsToTry = [model || ACTIVE_MODELS[0], ...ACTIVE_MODELS.filter((m) => m !== model)];
+  let lastError: any = null;
 
-  const response = await client.models.generateContent({
-    model: selectedModel,
-    contents: contentsPayload,
-    config: systemInstruction
-      ? {
-          systemInstruction,
-          temperature: 0.7,
-        }
-      : {
-          temperature: 0.7,
-        },
-  });
+  for (const currentModel of modelsToTry) {
+    try {
+      const response = await client.models.generateContent({
+        model: currentModel,
+        contents: contentsPayload,
+        config: systemInstruction
+          ? {
+              systemInstruction,
+              temperature: 0.7,
+            }
+          : {
+              temperature: 0.7,
+            },
+      });
 
-  const text = response.text?.trim();
-  if (!text) {
-    throw new Error('Model Gemini tidak menghasilkan teks.');
+      const text = response.text?.trim();
+      if (text) {
+        return text;
+      }
+    } catch (error: any) {
+      console.warn(`[GEMINI_FAILOVER] Model ${currentModel} error (${error?.status || error?.message}), falling over to next model...`);
+      lastError = error;
+    }
   }
-  return text;
+
+  throw lastError || new Error('Semua model Gemini aktif gagal merespon.');
 }
 
 /**
- * Generate streaming response using Gemini model (gemini-3.6-flash, supports multimodal)
+ * Generate streaming response using Gemini model with active quota failover (supports multimodal)
  */
 export async function generateStoreAIStream(
   optionsOrPrompt: string | GenAIOptions,
@@ -113,20 +123,30 @@ export async function generateStoreAIStream(
     : cleanPrompt;
 
   const client = new GoogleGenAI({ apiKey: key });
-  const selectedModel = model || DEFAULT_MODEL;
+  const modelsToTry = [model || ACTIVE_MODELS[0], ...ACTIVE_MODELS.filter((m) => m !== model)];
+  let lastError: any = null;
 
-  const responseStream = await client.models.generateContentStream({
-    model: selectedModel,
-    contents: contentsPayload,
-    config: systemInstruction
-      ? {
-          systemInstruction,
-          temperature: 0.7,
-        }
-      : {
-          temperature: 0.7,
-        },
-  });
+  for (const currentModel of modelsToTry) {
+    try {
+      const responseStream = await client.models.generateContentStream({
+        model: currentModel,
+        contents: contentsPayload,
+        config: systemInstruction
+          ? {
+              systemInstruction,
+              temperature: 0.7,
+            }
+          : {
+              temperature: 0.7,
+            },
+      });
 
-  return responseStream;
+      return responseStream;
+    } catch (error: any) {
+      console.warn(`[GEMINI_STREAM_FAILOVER] Model ${currentModel} error (${error?.status || error?.message}), trying next active model...`);
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Semua model Gemini aktif gagal memulai stream.');
 }
