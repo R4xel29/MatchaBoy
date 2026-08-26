@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { generateStoreAIResponse } from "@/lib/gemini";
+import { generateStoreAIStream } from "@/lib/gemini";
 
 export const dynamic = "force-dynamic";
 
@@ -285,16 +285,36 @@ ${JSON.stringify(storeContext, null, 2)}`;
         conversationPrompt += `${h.role === "user" ? "Pengguna" : "Asisten"}: ${h.content}\n`;
       });
     }
-    conversationPrompt += `Pengguna: ${message}\nAsisten:`;
-
-    const aiReply = await generateStoreAIResponse({
+    const responseStream = await generateStoreAIStream({
       systemInstruction,
       prompt: conversationPrompt,
     });
 
-    return NextResponse.json({
-      success: true,
-      reply: aiReply,
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of responseStream) {
+            const chunkText = chunk.text;
+            if (chunkText) {
+              controller.enqueue(encoder.encode(chunkText));
+            }
+          }
+        } catch (streamErr) {
+          console.error("[ADMIN_AI_CHAT_STREAM] Error in stream:", streamErr);
+          controller.error(streamErr);
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Transfer-Encoding": "chunked",
+      },
     });
   } catch (error: any) {
     console.error("[ADMIN_AI_CHAT] Error:", error);

@@ -59,6 +59,20 @@ export function AdminAIAssistantWidget() {
     if (!textToSend) setInput("");
     setIsLoading(true);
 
+    const assistantMsgId = (Date.now() + 1).toString();
+    const currentTimestamp = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+
+    // Pre-insert empty assistant message container
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantMsgId,
+        role: "assistant",
+        content: "",
+        timestamp: currentTimestamp,
+      },
+    ]);
+
     try {
       const historyPayload = messages.map((m) => ({
         role: m.role,
@@ -74,32 +88,51 @@ export function AdminAIAssistantWidget() {
         }),
       });
 
-      const data = await res.json();
-      if (res.ok && data.reply) {
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: data.reply,
-          timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-      } else {
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: `⚠️ Maaf Bos, terjadi kendala: ${data.error || "Gagal memproses jawaban."}`,
-          timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-        };
-        setMessages((prev) => [...prev, errorMessage]);
+      if (!res.ok) {
+        let errMessage = "Gagal memproses jawaban.";
+        try {
+          const errData = await res.json();
+          errMessage = errData.error || errMessage;
+        } catch (_) {}
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: `⚠️ Maaf Bos, terjadi kendala: ${errMessage}` }
+              : m
+          )
+        );
+        return;
+      }
+
+      if (!res.body) {
+        throw new Error("No response stream body");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let streamedContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        streamedContent += chunk;
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId ? { ...m, content: streamedContent } : m
+          )
+        );
       }
     } catch (err: any) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: "⚠️ Gagal terhubung ke server asisten. Silakan coba lagi.",
-        timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsgId
+            ? { ...m, content: "⚠️ Gagal terhubung ke server asisten. Silakan coba lagi." }
+            : m
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -289,7 +322,14 @@ export function AdminAIAssistantWidget() {
                     }`}
                   >
                     <div className="text-[12px] whitespace-pre-wrap leading-relaxed">
-                      {renderFormattedText(msg.content)}
+                      {!msg.content && msg.role === "assistant" ? (
+                        <div className="flex items-center gap-2 py-1 text-slate-400">
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                          <span className="text-[11px] font-semibold text-slate-500">Menganalisis data toko...</span>
+                        </div>
+                      ) : (
+                        renderFormattedText(msg.content)
+                      )}
                     </div>
                     <p
                       className={`text-[9px] text-right font-medium mt-1 ${
@@ -301,18 +341,6 @@ export function AdminAIAssistantWidget() {
                   </div>
                 </div>
               ))}
-
-              {isLoading && (
-                <div className="flex items-start gap-2.5">
-                  <div className="w-7 h-7 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                    <Bot className="w-3.5 h-3.5 animate-bounce" />
-                  </div>
-                  <div className="bg-white p-3.5 rounded-2xl rounded-tl-none border border-slate-200/70 shadow-sm flex items-center gap-2 text-slate-500">
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-600" />
-                    <span className="text-[11px] font-semibold">Sedang menganalisis data toko...</span>
-                  </div>
-                </div>
-              )}
 
               <div ref={messagesEndRef} />
             </div>
