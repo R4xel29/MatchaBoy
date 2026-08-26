@@ -34,6 +34,32 @@ export function AdminAIAssistantWidget() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Load chat history from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedHistory = localStorage.getItem("matchaboy_ai_chat_history");
+      if (savedHistory) {
+        const parsed = JSON.parse(savedHistory);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to load chat history from localStorage:", err);
+    }
+  }, []);
+
+  // Auto-save chat history to localStorage on changes
+  useEffect(() => {
+    if (messages.length > 1 || (messages.length === 1 && messages[0].id !== "welcome")) {
+      try {
+        localStorage.setItem("matchaboy_ai_chat_history", JSON.stringify(messages));
+      } catch (err) {
+        console.warn("Failed to save chat history to localStorage:", err);
+      }
+    }
+  }, [messages]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -139,9 +165,12 @@ export function AdminAIAssistantWidget() {
   };
 
   const handleClearChat = () => {
+    try {
+      localStorage.removeItem("matchaboy_ai_chat_history");
+    } catch (_) {}
     setMessages([
       {
-        id: "welcome-reset",
+        id: "welcome-reset-" + Date.now(),
         role: "assistant",
         content: "Riwayat percakapan telah dibersihkan. Ada data toko yang ingin ditanyakan lagi, Bos?",
         timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
