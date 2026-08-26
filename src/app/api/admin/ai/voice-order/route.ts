@@ -1,7 +1,8 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateStoreAIResponse } from "@/lib/gemini";
+import { normalizeVoiceTranscript } from "@/lib/voice-dictionary";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export async function POST(req: Request) {
     if (!transcript || typeof transcript !== "string" || !transcript.trim()) {
       return NextResponse.json({ error: "Transcript is required" }, { status: 400 });
     }
+
+    const normalizedTranscript = normalizeVoiceTranscript(transcript.trim());
 
     // Fetch all active products and categories
     const products = await prisma.product.findMany({
@@ -86,8 +89,7 @@ OUTPUT WAJIB HANYA BERUPA JSON VALID (tanpa markdown backtick atau teks lain) de
 
     const rawResponse = await generateStoreAIResponse({
       systemInstruction,
-      prompt: `Ucapan Kasir / Pelanggan: "${transcript}"`,
-      model: "gemini-3.6-flash",
+      prompt: `Ucapan Kasir / Pelanggan: "${normalizedTranscript}"`,
     });
 
     let parsedResult = null;

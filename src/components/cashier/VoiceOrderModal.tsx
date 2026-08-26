@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mic, MicOff, Sparkles, X, Loader2, CheckCircle2, Volume2, AlertCircle } from "lucide-react";
+import { normalizeVoiceTranscript } from "@/lib/voice-dictionary";
 
 interface VoiceOrderItem {
   productId: string;
@@ -83,7 +84,8 @@ export function VoiceOrderModal({ isOpen, onClose, onOrderParsed }: Props) {
         for (let i = 0; i < event.results.length; i++) {
           currentTranscript += event.results[i][0].transcript + " ";
         }
-        setTranscript(currentTranscript.trim());
+        const cleaned = normalizeVoiceTranscript(currentTranscript.trim());
+        setTranscript(cleaned);
       };
 
       recognition.onerror = (event: any) => {

@@ -25,6 +25,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { normalizeVoiceTranscript } from "@/lib/voice-dictionary";
 
 interface ActionProposal {
   id: string;
@@ -196,7 +197,8 @@ export function AdminAIAssistantWidget() {
         for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        setInput(transcript);
+        const cleanedTranscript = normalizeVoiceTranscript(transcript);
+        setInput(cleanedTranscript);
       };
 
       recognition.onerror = (event: any) => {
