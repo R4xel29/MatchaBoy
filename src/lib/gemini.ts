@@ -11,20 +11,29 @@ const CANDIDATE_MODELS = [
 ];
 
 /**
- * Generate completion text using Gemini model with cascading fallbacks
+ * Generate completion text using Gemini model with cascading fallbacks (supports multimodal)
  */
 export async function generateStoreAIResponse({
   systemInstruction,
   prompt,
+  image,
   model = 'gemini-3.6-flash',
 }: {
   systemInstruction?: string;
   prompt: string;
+  image?: { mimeType: string; data: string };
   model?: string;
 }): Promise<string> {
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured in .env');
   }
+
+  const contentsPayload: any = image
+    ? [
+        { text: prompt },
+        { inlineData: { mimeType: image.mimeType, data: image.data } },
+      ]
+    : prompt;
 
   const modelsToTry = [model, ...CANDIDATE_MODELS.filter((m) => m !== model)];
   let lastError: any = null;
@@ -33,7 +42,7 @@ export async function generateStoreAIResponse({
     try {
       const response = await geminiClient.models.generateContent({
         model: currentModel,
-        contents: prompt,
+        contents: contentsPayload,
         config: systemInstruction
           ? {
               systemInstruction,
@@ -58,20 +67,29 @@ export async function generateStoreAIResponse({
 }
 
 /**
- * Generate streaming response using Gemini model with cascading fallbacks
+ * Generate streaming response using Gemini model with cascading fallbacks (supports multimodal)
  */
 export async function generateStoreAIStream({
   systemInstruction,
   prompt,
+  image,
   model = 'gemini-3.6-flash',
 }: {
   systemInstruction?: string;
   prompt: string;
+  image?: { mimeType: string; data: string };
   model?: string;
 }) {
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY is not configured in .env');
   }
+
+  const contentsPayload: any = image
+    ? [
+        { text: prompt },
+        { inlineData: { mimeType: image.mimeType, data: image.data } },
+      ]
+    : prompt;
 
   const modelsToTry = [model, ...CANDIDATE_MODELS.filter((m) => m !== model)];
   let lastError: any = null;
@@ -80,7 +98,7 @@ export async function generateStoreAIStream({
     try {
       const responseStream = await geminiClient.models.generateContentStream({
         model: currentModel,
-        contents: prompt,
+        contents: contentsPayload,
         config: systemInstruction
           ? {
               systemInstruction,

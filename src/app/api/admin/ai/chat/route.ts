@@ -13,10 +13,10 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { message, history } = body;
+    const { message, history, image } = body;
 
-    if (!message || typeof message !== "string" || !message.trim()) {
-      return NextResponse.json({ error: "Message is required" }, { status: 400 });
+    if ((!message || typeof message !== "string" || !message.trim()) && !image) {
+      return NextResponse.json({ error: "Message or image is required" }, { status: 400 });
     }
 
     const now = new Date();
@@ -263,16 +263,33 @@ ATURAN FORMATTING & TAMPILAN KETAT:
    - Judul / Nama Menu: gunakan huruf tebal **Nama Menu**, misal: **1. Matcha Latte (Rp 28.000)**
    - Poin-poin: gunakan bullet point "• " atau penomoran "1.", "2."
    - Gunakan emoji pendukung yang relevan: 🍵, 💰, 📦, 📊, ⚠️, ✨
-4. AKURASI TINGGI PADA HPP & RESEP:
-   - Sebutkan angka pasti HPP modal, takaran gram/ml, harga beli bahan baku, dan margin keuntungan (%) sesuai data katalog di bawah.
-   - Jika ditanya resep atau HPP, format dengan rapi:
-     **1. Nama Menu** (Harga Jual: Rp XX.XXX)
-     • Takaran Resep: [Bahan A: XX gr (@Rp XX), Bahan B: XX ml (@Rp XX)]
-     • Total HPP Modal: Rp XX.XXX
-     • Laba Kotor per Cup: Rp XX.XXX (Margin: XX%)
-     • Estimasi Sisa Porsi dari Stok: XX porsi
-5. GAYA BAHASA:
-   - Ramah, cerdas, solutif, panggil pemilik dengan "Bos" atau "Kak".
+
+FITUR EKSEKUTIF & PROPOSAL AKSI (ACTION PROPOSALS):
+Jika pengguna meminta untuk melakukan perubahan data toko nyata (misal: buat voucher baru, ubah harga produk, ubah status menu jadi sold-out/aktif, restock bahan baku, catat pengeluaran, atau menganalisis foto struk belanjaan yang dilampirkan), kamu HARUS memberikan penjelasan ramah terlebih dahulu, lalu di akhir jawaban cantumkan SATU blok JSON Action Proposal dengan format persis seperti ini:
+
+<<<ACTION_PROPOSAL>>>
+{
+  "actionType": "CREATE_VOUCHER" | "UPDATE_PRODUCT" | "RESTOCK_INGREDIENT" | "RECORD_EXPENSE" | "BATCH_RECEIPT_RESTOCK",
+  "title": "Judul Singkat Proposal",
+  "summary": "Rangkuman ringkas apa yang akan diubah",
+  "payload": { ... }
+}
+<<<END_ACTION_PROPOSAL>>>
+
+PANDUAN PAYLOAD AKSI:
+1. CREATE_VOUCHER:
+   - payload: { "code": "KODE", "title": "Nama Promo", "type": "PERCENTAGE" | "FIXED", "discountValue": 20, "minPurchase": 50000, "maxDiscount": 20000, "usageLimit": 30, "terms": "S&K promo" }
+2. UPDATE_PRODUCT:
+   - payload: { "productName": "Nama Produk", "price": 28000 (opsional), "badge": "sold-out" | "best-seller" | "none" (opsional), "description": "..." (opsional) }
+3. RESTOCK_INGREDIENT:
+   - payload: { "ingredientName": "Nama Bahan", "quantity": 5, "totalCost": 250000, "notes": "...", "source": "CASH_DRAWER" | "BANK_TRANSFER" }
+4. RECORD_EXPENSE:
+   - payload: { "name": "Beli Es Batu", "amount": 25000, "category": "RAW_MATERIAL" | "OPERATIONAL" | "MARKETING", "notes": "..." }
+5. BATCH_RECEIPT_RESTOCK (untuk struk belanja):
+   - payload: { "receiptStoreName": "Nama Toko / Supplier", "receiptDate": "2026-08-26", "totalExpense": 150000, "items": [{ "ingredientName": "Fresh Milk", "quantity": 10, "unitPrice": 15000, "totalCost": 150000 }] }
+
+AKURASI TINGGI PADA HPP & RESEP:
+- Sebutkan angka pasti HPP modal, takaran gram/ml, harga beli bahan baku, dan margin keuntungan (%) sesuai data katalog di bawah.
 
 DATABASE RESEP, HPP, STOK, & DATA TOKO REAL-TIME:
 ${JSON.stringify(storeContext, null, 2)}`;
@@ -285,9 +302,13 @@ ${JSON.stringify(storeContext, null, 2)}`;
         conversationPrompt += `${h.role === "user" ? "Pengguna" : "Asisten"}: ${h.content}\n`;
       });
     }
+    const currentInputText = message || (image ? "Tolong analisa foto struk/gambar terlampir ini dan buatkan proposal restock/expense-nya jika relevan." : "");
+    conversationPrompt += `Pengguna: ${currentInputText}\nAsisten:`;
+
     const responseStream = await generateStoreAIStream({
       systemInstruction,
       prompt: conversationPrompt,
+      image: image ? { mimeType: image.mimeType || "image/jpeg", data: image.data } : undefined,
     });
 
     const encoder = new TextEncoder();
