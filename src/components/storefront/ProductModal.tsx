@@ -30,6 +30,7 @@ interface ProductModalProps {
   editCartItemId?: string;
   initialData?: any; // To preload ice, sugar, addOns, qty
   allProducts?: Product[];
+  packagingStock?: { cupRegular: number; cupJumbo: number };
 }
 
 const ICE_LEVELS: IceLevel[] = ['Normal Ice', 'Less Ice', 'No Ice'];
@@ -41,7 +42,8 @@ export function ProductModal({
   onClose, 
   editCartItemId, 
   initialData, 
-  allProducts = [] 
+  allProducts = [],
+  packagingStock: propPackagingStock
 }: ProductModalProps) {
   const addItem = useCartStore((s) => s.addItem);
   const editItem = useCartStore((s) => s.editItem);
@@ -58,11 +60,19 @@ export function ProductModal({
   const [matchaLevel, setMatchaLevel] = useState<number>(5);
   const [hasTumbler, setHasTumbler] = useState(false);
   const [loyaltySettings, setLoyaltySettings] = useState<any>(null);
-  const [packagingStock, setPackagingStock] = useState<{ cupRegular: number; cupJumbo: number }>({
-    cupRegular: 999,
-    cupJumbo: 999,
-  });
+  const [packagingStock, setPackagingStock] = useState<{ cupRegular: number; cupJumbo: number }>(
+    propPackagingStock || {
+      cupRegular: 999,
+      cupJumbo: 999,
+    }
+  );
   
+  useEffect(() => {
+    if (propPackagingStock) {
+      setPackagingStock(propPackagingStock);
+    }
+  }, [propPackagingStock]);
+
   // Bundle Selection State
   const [bundleSelections, setBundleSelections] = useState<{ [groupId: string]: any }>({});
 
@@ -76,20 +86,25 @@ export function ProductModal({
         .then((data) => setLoyaltySettings(data))
         .catch((err) => console.error('Error fetching settings in modal:', err));
 
-      fetch('/api/products')
-        .then((r) => (r.ok ? r.json() : {}))
-        .then((data: any) => {
-          if (data && data.packagingStock) {
-            setPackagingStock(data.packagingStock);
-            if (data.packagingStock.cupRegular <= 0 && data.packagingStock.cupJumbo > 0 && !hasTumbler) {
-              setSize('Large');
-              setSizePrice(3000);
+      if (!propPackagingStock) {
+        fetch('/api/products')
+          .then((r) => (r.ok ? r.json() : {}))
+          .then((data: any) => {
+            if (data && data.packagingStock) {
+              setPackagingStock(data.packagingStock);
+              if (data.packagingStock.cupRegular <= 0 && data.packagingStock.cupJumbo > 0 && !hasTumbler && !initialData) {
+                const largeOpt = product?.modifiers?.sizes?.find(
+                  (s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')
+                );
+                setSize(largeOpt?.name || 'Large');
+                setSizePrice(largeOpt?.price ?? 3000);
+              }
             }
-          }
-        })
-        .catch((err) => console.error('Error fetching packaging stock:', err));
+          })
+          .catch((err) => console.error('Error fetching packaging stock:', err));
+      }
     }
-  }, [isOpen, hasTumbler]);
+  }, [isOpen, hasTumbler, propPackagingStock, initialData, product]);
   
   // Reviews state
   const [reviews, setReviews] = useState<any[]>([]);
@@ -248,11 +263,18 @@ export function ProductModal({
           setBundleSelections(loaded);
         }
       } else {
+        const isRegularOut = !product?.modifiers?.isBundle && packagingStock.cupRegular <= 0 && packagingStock.cupJumbo > 0;
+        const largeOpt = product?.modifiers?.sizes?.find(
+          (s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')
+        );
+        const defaultSize = isRegularOut ? (largeOpt?.name || 'Large') : 'Normal';
+        const defaultSizePrice = isRegularOut ? (largeOpt?.price ?? 3000) : 0;
+
         setIceLevel((product?.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
         setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Biasa');
         setSelectedAddOns([]);
-        setSize('Normal');
-        setSizePrice(0);
+        setSize(defaultSize);
+        setSizePrice(defaultSizePrice);
         setShot('Single Shot');
         setShotPrice(0);
         setQuantity(1);
@@ -282,16 +304,23 @@ export function ProductModal({
         }
       }
     }
-  }, [isOpen, initialData, product, allProducts]);
+  }, [isOpen, initialData, product, allProducts, packagingStock]);
 
   // Reset state on explicit close (fallback)
   const resetState = () => {
     if (!initialData) {
+      const isRegularOut = !product?.modifiers?.isBundle && packagingStock.cupRegular <= 0 && packagingStock.cupJumbo > 0;
+      const largeOpt = product?.modifiers?.sizes?.find(
+        (s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')
+      );
+      const defaultSize = isRegularOut ? (largeOpt?.name || 'Large') : 'Normal';
+      const defaultSizePrice = isRegularOut ? (largeOpt?.price ?? 3000) : 0;
+
       setIceLevel((product?.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
       setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Biasa');
       setSelectedAddOns([]);
-      setSize('Normal');
-      setSizePrice(0);
+      setSize(defaultSize);
+      setSizePrice(defaultSizePrice);
       setShot('Single Shot');
       setShotPrice(0);
       setQuantity(1);

@@ -393,8 +393,11 @@ export async function POST(req: Request) {
           }
         }
 
+        const queueNumberStr = String(queueNumber);
+
         const newOrder = await tx.order.create({
           data: {
+            cashierId: session.user.id,
             customerName,
             customerPhone: customerPhone || "-",
             orderType: orderType === "DINE_IN" ? "DINE_IN" : "PICKUP",
@@ -403,10 +406,11 @@ export async function POST(req: Request) {
             status: "PREPARING",
             paymentMethod: "CASH",
             paymentProofUrl: "/verified-cashier.svg",
-            subtotal: calculatedSubtotal,
-            total: calculatedSubtotal,
+            subtotal: Math.round(calculatedSubtotal),
+            total: Math.round(calculatedSubtotal),
+            deliveryFee: 0,
             notes,
-            queueNumber,
+            queueNumber: queueNumberStr,
             items: {
               create: orderItemsToCreate,
             },

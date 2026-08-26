@@ -39,13 +39,22 @@ function calculateSecureItemPrice(item: any, dbProduct: any) {
     secureItemPrice += secureBundleAdjustments;
   } else {
     let secureSizePrice = 0;
-    if (item.size && item.size !== 'Normal' && item.size !== 'Regular') {
+    const sizeStr = (item.size || '').toString().trim().toLowerCase();
+    const isExplicitLarge = sizeStr.includes('large') || sizeStr.includes('jumbo');
+    const isExplicitRegular = sizeStr === 'normal' || sizeStr === 'regular';
+
+    if (item.size && !isExplicitRegular) {
       if (dbModifiers.sizes && Array.isArray(dbModifiers.sizes)) {
-        const validSize = dbModifiers.sizes.find((s: any) => s.name === item.size);
+        const validSize = dbModifiers.sizes.find((s: any) => 
+          s.name?.toString().trim().toLowerCase() === sizeStr ||
+          (isExplicitLarge && (s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')))
+        );
         if (validSize) {
           secureSizePrice = validSize.price;
+        } else if (isExplicitLarge) {
+          secureSizePrice = 3000;
         }
-      } else if (item.size === 'Large') {
+      } else if (isExplicitLarge) {
         secureSizePrice = 3000;
       }
     }

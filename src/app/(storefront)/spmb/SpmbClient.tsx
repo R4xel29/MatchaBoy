@@ -283,9 +283,11 @@ export default function SpmbClient({
         name: item.name,
         quantity: item.quantity,
         size: item.size || 'Normal',
+        sizePrice: (item as any).sizePrice || 0,
         shot: (item as any).shot || undefined,
         addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
-        modsString: (item.matchaLevel !== undefined && item.matchaLevel !== null ? `Matcha: Level ${item.matchaLevel}, ` : '') +
+        modsString: (item.size && item.size !== 'Normal' && item.size !== 'Regular' ? `Size: ${item.size}, ` : '') +
+          (item.matchaLevel !== undefined && item.matchaLevel !== null ? `Matcha: Level ${item.matchaLevel}, ` : '') +
           ((item as any).shot ? `${(item as any).shot}, ` : '') +
           item.iceLevel + ', ' + item.sugarLevel +
           (item.addOns && item.addOns.length > 0 ? ', ' + item.addOns.map((a: any) => a.name).join(', ') : ''),
@@ -1881,6 +1883,7 @@ export default function SpmbClient({
           setSelectedProduct(null);
         }}
         allProducts={products}
+        packagingStock={packagingStock}
       />
 
       {/* Dynamic QRIS Payment Modal */}

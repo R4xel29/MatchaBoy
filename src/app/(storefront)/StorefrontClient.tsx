@@ -1709,6 +1709,7 @@ export default function StorefrontClient({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         allProducts={products}
+        packagingStock={packagingStock}
       />
 
       <SearchOverlay

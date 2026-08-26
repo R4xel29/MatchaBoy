@@ -716,27 +716,45 @@ export async function POST(req: Request) {
     // CONVERSATIONAL ORDER STATE MACHINE
     // -------------------------------------------------------------
 
-    // Fetch active products (not archived, not sold-out)
-    const products = await prisma.product.findMany({
-      where: {
-        AND: [
-          {
-            OR: [
-              { badge: null },
-              { badge: { not: "archived" } }
-            ]
-          },
-          {
-            OR: [
-              { badge: null },
-              { badge: { not: "sold-out" } }
-            ]
-          }
-        ]
-      },
-      include: { category: true },
-      orderBy: { name: "asc" }
+    // Fetch active products (not archived, not sold-out) and packaging stock
+    const [products, packagingIngredients] = await Promise.all([
+      prisma.product.findMany({
+        where: {
+          AND: [
+            {
+              OR: [
+                { badge: null },
+                { badge: { not: "archived" } }
+              ]
+            },
+            {
+              OR: [
+                { badge: null },
+                { badge: { not: "sold-out" } }
+              ]
+            }
+          ]
+        },
+        include: { category: true },
+        orderBy: { name: "asc" }
+      }),
+      prisma.ingredient.findMany({
+        where: { isPackaging: true }
+      })
+    ]);
+
+    let cupRegularStock = 999;
+    let cupJumboStock = 999;
+    packagingIngredients.forEach((p) => {
+      const name = p.name.toLowerCase();
+      if (name.includes('jumbo') || name.includes('large') || name.includes('22')) {
+        cupJumboStock = p.stock;
+      } else if (name.includes('regular') || name.includes('14') || name.includes('16') || name.includes('gelas')) {
+        cupRegularStock = p.stock;
+      }
     });
+
+    const isRegularOut = cupRegularStock <= 0 && cupJumboStock > 0;
 
     const sessionKey = `wa_order_session_${phone}`;
     const sessionRow = await prisma.waBotSession.findUnique({ where: { key: sessionKey } });
@@ -762,12 +780,29 @@ export async function POST(req: Request) {
       for (const catName of Object.keys(categoriesMap)) {
         menuListText += `${catName}:\n`;
         for (const item of categoriesMap[catName]) {
-          const activePrice = getCurrentProductPrice(item.product);
+          const isItemBeverage = item.product.category?.slug !== 'pastries';
+          const isItemRegularOut = isRegularOut && isItemBeverage;
+          let activePrice = getCurrentProductPrice(item.product);
+          let sizeBadge = '';
+          
+          if (isItemRegularOut) {
+            let dbMods: any = {};
+            if (item.product.modifiers) {
+              try {
+                dbMods = typeof item.product.modifiers === 'string' ? JSON.parse(item.product.modifiers) : item.product.modifiers;
+              } catch {}
+            }
+            const largeOpt = dbMods?.sizes?.find((s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo'));
+            const largeExtra = largeOpt?.price ?? 3000;
+            activePrice += largeExtra;
+            sizeBadge = ' (Hanya Jumbo)';
+          }
+
           const hasPromo = activePrice !== item.product.price;
           const priceText = hasPromo 
-            ? `~Rp${item.product.price.toLocaleString("id-ID")}~ *Rp${activePrice.toLocaleString("id-ID")}* 🔥`
-            : `Rp${item.product.price.toLocaleString("id-ID")}`;
-          menuListText += `${item.globalIndex}. ${item.product.name} - ${priceText} (Ketik *ORDER ${item.globalIndex}*)\n`;
+            ? `~Rp${(isItemRegularOut ? item.product.price + 3000 : item.product.price).toLocaleString("id-ID")}~ *Rp${activePrice.toLocaleString("id-ID")}* 🔥`
+            : `Rp${activePrice.toLocaleString("id-ID")}`;
+          menuListText += `${item.globalIndex}. ${item.product.name}${sizeBadge} - ${priceText} (Ketik *ORDER ${item.globalIndex}*)\n`;
         }
         menuListText += "\n";
       }
@@ -1102,7 +1137,8 @@ export async function POST(req: Request) {
                   {
                     productId: session.productId,
                     qty: session.quantity,
-                    price: session.price
+                    price: session.price,
+                    modifiers: session.size && session.size !== 'Normal' && session.size !== 'Regular' ? `Size: ${session.size}` : null
                   }
                 ]
               }
@@ -1478,12 +1514,35 @@ export async function POST(req: Request) {
         const productItem = products[productIndex - 1]; // 1-indexed to 0-indexed
 
         if (productItem) {
-          const activePrice = getCurrentProductPrice(productItem);
+          const isItemBeverage = productItem.category?.slug !== 'pastries';
+          const isItemRegularOut = isRegularOut && isItemBeverage;
+          const baseActivePrice = getCurrentProductPrice(productItem);
+          let activePrice = baseActivePrice;
+          let productName = productItem.name;
+          let sizeLabel = 'Normal';
+          let sizePrice = 0;
+
+          if (isItemRegularOut) {
+            let dbMods: any = {};
+            if (productItem.modifiers) {
+              try {
+                dbMods = typeof productItem.modifiers === 'string' ? JSON.parse(productItem.modifiers) : productItem.modifiers;
+              } catch {}
+            }
+            const largeOpt = dbMods?.sizes?.find((s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo'));
+            sizePrice = largeOpt?.price ?? 3000;
+            sizeLabel = largeOpt?.name || 'Large';
+            activePrice = baseActivePrice + sizePrice;
+            productName = `${productItem.name} (${sizeLabel})`;
+          }
+
           const sessionData = {
             state: "SELECTING_QUANTITY",
             productId: productItem.id,
-            productName: productItem.name,
-            price: activePrice
+            productName: productName,
+            price: activePrice,
+            size: sizeLabel,
+            sizePrice: sizePrice
           };
 
           await prisma.waBotSession.upsert({
@@ -1498,7 +1557,8 @@ export async function POST(req: Request) {
             productImage = `${appUrl}${slash}${productImage}`;
           }
 
-          const reply = `Anda memilih *${productItem.name}* (Rp${activePrice.toLocaleString("id-ID")}).\n\nSilakan masukkan jumlah pesanan (angka saja, contoh: *2*):`;
+          const sizeOutNotice = isItemRegularOut ? ' _(Ukuran Large terpilih otomatis karena cup Regular habis)_' : '';
+          const reply = `Anda memilih *${productName}* (Rp${activePrice.toLocaleString("id-ID")})${sizeOutNotice}.\n\nSilakan masukkan jumlah pesanan (angka saja, contoh: *2*):`;
           return NextResponse.json({
             success: true,
             replyMessage: reply,
