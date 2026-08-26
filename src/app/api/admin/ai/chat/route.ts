@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateStoreAIResponse } from "@/lib/gemini";
@@ -30,14 +30,16 @@ export async function POST(req: Request) {
       },
     };
 
-    // Fetch live store intelligence context
+    // Fetch live store intelligence context with deep recipe & HPP relations
     const [
       todayOrders,
       monthOrders,
       allProducts,
       ingredients,
+      toppings,
       expensesThisMonth,
       diningTables,
+      customRecipes,
       storeSettings
     ] = await Promise.all([
       // Today's orders
@@ -69,22 +71,51 @@ export async function POST(req: Request) {
           },
         },
       }),
-      // All active products
+      // All active products WITH complete recipe composition & ingredient costs
       prisma.product.findMany({
-        select: { id: true, name: true, price: true, badge: true, category: { select: { name: true } } },
+        include: {
+          category: { select: { name: true } },
+          productIngredients: {
+            include: {
+              ingredient: {
+                select: {
+                  id: true,
+                  name: true,
+                  unit: true,
+                  stock: true,
+                  costPerUnit: true,
+                  isPackaging: true,
+                },
+              },
+            },
+          },
+        },
       }),
       // Stock ingredients
       prisma.ingredient.findMany({
-        select: { id: true, name: true, stock: true, unit: true, costPerUnit: true },
+        select: { id: true, name: true, stock: true, unit: true, costPerUnit: true, isPackaging: true },
+        orderBy: { stock: "asc" },
+      }),
+      // Toppings with ingredient relations
+      prisma.topping.findMany({
+        include: {
+          ingredient: { select: { name: true, unit: true, costPerUnit: true, stock: true } },
+        },
       }),
       // Expenses this month
       prisma.expense.findMany({
         where: { date: { gte: thirtyDaysAgo } },
-        select: { name: true, amount: true, category: true },
+        select: { name: true, amount: true, category: true, date: true },
       }),
       // Dining tables
       prisma.diningTable.findMany({
         select: { number: true, status: true, capacity: true, occupiedSeats: true },
+      }),
+      // Popular custom recipes created by users
+      prisma.customRecipe.findMany({
+        take: 5,
+        orderBy: { orderCount: "desc" },
+        select: { recipeName: true, matchaLevel: true, milkType: true, sweetness: true, orderCount: true },
       }),
       // Store settings
       prisma.storeSettings.findFirst({
@@ -100,6 +131,52 @@ export async function POST(req: Request) {
     const monthRevenue = monthOrders.reduce((sum, o) => sum + o.total, 0);
     const monthOrderCount = monthOrders.length;
     const avgOrderValue = monthOrderCount > 0 ? Math.round(monthRevenue / monthOrderCount) : 0;
+
+    // Detailed Product HPP, Recipe & Margin Map
+    const detailedMenuCatalog = allProducts.map((p) => {
+      let totalHPP = 0;
+      const recipeBreakdown = p.productIngredients.map((pi) => {
+        const cost = (pi.quantity || 0) * (pi.ingredient.costPerUnit || 0);
+        totalHPP += cost;
+        return {
+          bahan: pi.ingredient.name,
+          takaranPerPorsi: `${pi.quantity} ${pi.ingredient.unit}`,
+          hargaBeliBahan: `Rp ${pi.ingredient.costPerUnit.toLocaleString("id-ID")}/${pi.ingredient.unit}`,
+          biayaKomponen: `Rp ${Math.round(cost).toLocaleString("id-ID")}`,
+          sisaStokBahanDiGudang: `${pi.ingredient.stock} ${pi.ingredient.unit}`,
+          tipe: pi.ingredient.isPackaging ? "Kemasan/Packaging" : "Bahan Baku Resep",
+        };
+      });
+
+      const profitRupiah = p.price - totalHPP;
+      const profitMarginPercent = p.price > 0 ? Math.round((profitRupiah / p.price) * 100) : 0;
+
+      // Estimate max cups that can be made with current remaining stock
+      let maxCupsCanMake = 999999;
+      if (p.productIngredients.length > 0) {
+        p.productIngredients.forEach((pi) => {
+          if (pi.quantity > 0) {
+            const possible = Math.floor(pi.ingredient.stock / pi.quantity);
+            if (possible < maxCupsCanMake) maxCupsCanMake = Math.max(0, possible);
+          }
+        });
+      } else {
+        maxCupsCanMake = 0; // No recipe configured
+      }
+
+      return {
+        id: p.id,
+        namaMenu: p.name,
+        kategori: p.category?.name || "Matcha",
+        deskripsi: p.description || "-",
+        hargaJual: `Rp ${p.price.toLocaleString("id-ID")}`,
+        hppModalBahan: `Rp ${Math.round(totalHPP).toLocaleString("id-ID")}`,
+        keuntunganKotorPerCup: `Rp ${Math.round(profitRupiah).toLocaleString("id-ID")}`,
+        marginLabaPersen: `${profitMarginPercent}%`,
+        estimasiPorsiTersediaDariStok: maxCupsCanMake === 999999 ? "Tidak terbatas (belum ada resep)" : `${maxCupsCanMake} porsi`,
+        rincianResepDanKomposisi: recipeBreakdown.length > 0 ? recipeBreakdown : "Belum di-mapping resep bahan baku",
+      };
+    });
 
     // Calculate Product Performance (Sales Frequency)
     const productSalesMap = new Map<string, { name: string; qty: number; revenue: number; category: string }>();
@@ -127,44 +204,76 @@ export async function POST(req: Request) {
     const topProducts = sortedProducts.slice(0, 5);
     const slowestProducts = sortedProducts.filter((p) => p.qty <= 3).slice(0, 5);
 
-    // Low stock alerts
-    const lowStockIngredients = ingredients
-      .filter((ing) => ing.stock <= 5)
-      .map((ing) => `${ing.name} (sisa ${ing.stock} ${ing.unit})`);
+    // Master Ingredients stock list & valuation
+    let totalInventoryValuation = 0;
+    const masterIngredientList = ingredients.map((ing) => {
+      const valuation = ing.stock * ing.costPerUnit;
+      totalInventoryValuation += valuation;
+      return {
+        namaBahan: ing.name,
+        sisaStok: `${ing.stock} ${ing.unit}`,
+        hargaBeliPerUnit: `Rp ${ing.costPerUnit.toLocaleString("id-ID")}/${ing.unit}`,
+        totalNilaiStok: `Rp ${Math.round(valuation).toLocaleString("id-ID")}`,
+        status: ing.stock <= 5 ? "⚠️ MENIPIS / KRITIS" : "✅ AMAN",
+      };
+    });
+
+    // Toppings catalog
+    const toppingsCatalog = toppings.map((t) => ({
+      namaTopping: t.name,
+      hargaJual: `Rp ${t.price.toLocaleString("id-ID")}`,
+      bahanTerkait: t.ingredient ? `${t.ingredient.name} (${t.ingredientQty} ${t.ingredient.unit})` : "Manual",
+      biayaModal: t.ingredient ? `Rp ${Math.round(t.ingredientQty * t.ingredient.costPerUnit).toLocaleString("id-ID")}` : "-",
+    }));
 
     const totalExpenses = expensesThisMonth.reduce((sum, e) => sum + e.amount, 0);
 
-    // Build Context Snapshot
+    // Build Comprehensive Context Snapshot
     const storeContext = {
       namaToko: storeSettings?.storeName || "Matchaboy",
       jamOperasional: `${storeSettings?.openTime || "08:00"} - ${storeSettings?.closeTime || "21:00"}`,
-      performaHariIni: {
+      ringkasanPenjualanHariIni: {
         omzet: `Rp ${todayRevenue.toLocaleString("id-ID")}`,
         transaksiSelesai: todayCompleted.length,
         totalPesananMasuk: todayOrders.length,
       },
-      performa30Hari: {
+      ringkasanPerforma30Hari: {
         totalOmzet: `Rp ${monthRevenue.toLocaleString("id-ID")}`,
         totalTransaksi: monthOrderCount,
-        rataRataPerTransaksi: `Rp ${avgOrderValue.toLocaleString("id-ID")}`,
-        totalPengeluaran: `Rp ${totalExpenses.toLocaleString("id-ID")}`,
-        estimasiLabaOperasional: `Rp ${(monthRevenue - totalExpenses).toLocaleString("id-ID")}`,
+        rataRataNilaiTransaksi: `Rp ${avgOrderValue.toLocaleString("id-ID")}`,
+        totalPengeluaranOperasional: `Rp ${totalExpenses.toLocaleString("id-ID")}`,
+        estimasiLabaBersihSetelahExpense: `Rp ${(monthRevenue - totalExpenses).toLocaleString("id-ID")}`,
       },
       menuTerlaris30Hari: topProducts.map((p) => `${p.name} (${p.qty} cup terjual, omzet Rp ${p.revenue.toLocaleString("id-ID")})`),
-      menuPalingSepi: slowestProducts.map((p) => `${p.name} (hanya ${p.qty} cup terjual)`),
-      stokBahanKritis: lowStockIngredients.length > 0 ? lowStockIngredients : ["Semua persediaan bahan baku aman (>5 unit)"],
+      menuPalingSepi30Hari: slowestProducts.map((p) => `${p.name} (hanya ${p.qty} cup terjual)`),
+      katalogLengkapMenuDanHPPResep: detailedMenuCatalog,
+      stokGudangDanBahanBaku: masterIngredientList,
+      totalNilaiAsetStokGudang: `Rp ${Math.round(totalInventoryValuation).toLocaleString("id-ID")}`,
+      katalogTopping: toppingsCatalog,
+      resepKustomFavoritPelanggan: customRecipes.map((cr) => `${cr.recipeName} (${cr.milkType}, Matcha Lvl ${cr.matchaLevel}, dipesan ${cr.orderCount}x)`),
       mejaDineIn: `${diningTables.filter((t) => t.status === "OCCUPIED").length} terisi dari ${diningTables.length} meja total`,
     };
 
-    const systemInstruction = `Kamu adalah "Asisten Toko Matchaboy", asisten bisnis digital internal & penasihat operasional pemilik toko.
-Kepribadianmu:
-- Ramah, cerdas, proaktif, dan fokus pada solusi praktis bagi pemilik usaha F&B (Matcha).
-- Panggil pengguna dengan "Bos" atau "Kak".
-- Jawab secara ringkas, jelas, dan akurat berdasarkan data toko nyata yang diberikan di bawah.
-- Jika pengguna meminta ide promo/strategi penjualan, berikan ide kreatif yang mudah dieksekusi dengan memperhitungkan menu yang sepi vs menu terlaris.
-- Gunakan formatting markdown (tebal, bullet points, numbering) agar mudah dibaca di layar dashboard.
+    const systemInstruction = `Kamu adalah "Asisten Toko Matchaboy", asisten bisnis digital dan manajer operasional internal kedai Matcha.
+Kepribadian & Aturan Menjawab:
+1. AKURASI TINGGI PADA HPP & RESEP:
+   - Kamu memiliki data lengkap tentang seluruh RESEP, KOMPOSISI BAHAN, TAKARAN PER PORSI, HARGA BELI BAHAN BAKU (cost per unit), HPP (Harga Pokok Penjualan / Cost of Goods Sold), serta MARGIN KEUNTUNGAN setiap menu.
+   - JANGAN MENJAWAB SECARA UMUM/ASUMSI. Jika pengguna bertanya tentang resep, modal HPP, margin keuntungan, atau sisa stok menu tertentu, sebutkan angka dan rincian pasti sesuai data "katalogLengkapMenuDanHPPResep" di bawah.
+   - Contoh format saat ditanya resep / HPP menu:
+     * Nama Menu & Harga Jual
+     * Rincian Bahan & Takaran per porsi
+     * Biaya tiap komponen bahan
+     * Total HPP Modal Bahan
+     * Keuntungan Kotor per Cup & Margin Laba (%)
+     * Estimasi porsi yang bisa dibuat dari sisa stok gudang saat ini.
+2. ANALISIS STRATEGI BISNIS F&B:
+   - Jika ditanya rekomendasi promo atau cara menaikkan omzet, berikan saran bundling antara menu high-margin (margin tinggi) dengan menu yang sepi peminat.
+   - Berikan peringatan jika ada bahan baku penting yang menipis.
+3. GAYA BAHASA:
+   - Ramah, cerdas, solutif, sapa pemilik dengan "Bos" atau "Kak".
+   - Gunakan format markdown yang rapi (bold, bullet points, tabel jika perlu).
 
-DATA OPERASIONAL TOKO TERKINI:
+DATABASE RESEP, HPP, STOK, & DATA TOKO REAL-TIME:
 ${JSON.stringify(storeContext, null, 2)}`;
 
     // Build history prompt if provided

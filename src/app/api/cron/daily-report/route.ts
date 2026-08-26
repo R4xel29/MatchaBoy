@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage, standardizeJid } from "@/lib/whatsapp-service";
 import { generateStoreAIResponse } from "@/lib/gemini";
@@ -59,7 +59,16 @@ async function executeDailyReport() {
         },
       },
       include: {
-        product: { select: { name: true } },
+        product: {
+          select: {
+            name: true,
+            productIngredients: {
+              include: {
+                ingredient: { select: { costPerUnit: true } },
+              },
+            },
+          },
+        },
       },
     }),
     prisma.ingredient.findMany({
@@ -75,6 +84,17 @@ async function executeDailyReport() {
   const completedToday = todayOrders.filter((o) => ["COMPLETED", "DELIVERED"].includes(o.status));
   const todayRevenue = completedToday.reduce((sum, o) => sum + o.total, 0);
   const yesterdayRevenue = yesterdayOrders.reduce((sum, o) => sum + o.total, 0);
+
+  // Calculate actual HPP modal of sold items
+  let todayEstimatedHPP = 0;
+  todayOrderItems.forEach((item) => {
+    if (item.product?.productIngredients) {
+      item.product.productIngredients.forEach((pi) => {
+        todayEstimatedHPP += (pi.quantity || 0) * (pi.ingredient?.costPerUnit || 0) * item.qty;
+      });
+    }
+  });
+  const todayGrossProfit = todayRevenue - todayEstimatedHPP;
 
   // Revenue diff percentage
   let diffText = "stabil";
@@ -114,6 +134,8 @@ async function executeDailyReport() {
     tanggal: now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
     namaToko: storeSettings?.storeName || "Matchaboy",
     totalOmzet: `Rp ${todayRevenue.toLocaleString("id-ID")}`,
+    estimasiHppModalBahan: `Rp ${Math.round(todayEstimatedHPP).toLocaleString("id-ID")}`,
+    estimasiLabaKotor: `Rp ${Math.round(todayGrossProfit).toLocaleString("id-ID")}`,
     totalTransaksi: `${completedToday.length} transaksi selesai (dari ${todayOrders.length} pesanan masuk)`,
     totalCupTerjual: `${totalCups} cup/item`,
     trenVsKemarin: diffText,

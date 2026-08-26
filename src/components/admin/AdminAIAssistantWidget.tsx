@@ -12,6 +12,7 @@ interface Message {
 }
 
 const QUICK_PROMPTS = [
+  { label: "💰 Analisa HPP & Resep", prompt: "Tolong tampilkan rincian HPP, modal bahan baku per cup, takaran resep, dan margin keuntungan dari menu-menu kita." },
   { label: "📊 Performa 30 Hari", prompt: "Bagaimana ringkasan performa penjualan toko kita dalam 30 hari terakhir?" },
   { label: "🍵 Menu Laris vs Sepi", prompt: "Menu apa yang paling laris dan menu mana yang penjualannya paling sepi?" },
   { label: "💡 Ide Promo Akhir Pekan", prompt: "Beri saya 2 ide promo bundling menarik untuk akhir pekan ini guna mendongkrak omzet." },
@@ -26,7 +27,7 @@ export function AdminAIAssistantWidget() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Halo Bos! 🍵 Saya **Asisten Toko Matchaboy**. Ada yang bisa saya bantu analisa mengenai penjualan, performa menu, stok bahan, atau ide promosi hari ini?",
+      content: "Halo Bos! 🍵 Saya **Asisten Toko Matchaboy**. Saya sudah memegang data lengkap **resep**, **modal HPP per cup**, **stok gudang**, dan **penjualan real-time**. Ada yang ingin ditanyakan atau dianalisa hari ini?",
       timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
