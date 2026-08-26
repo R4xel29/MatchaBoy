@@ -319,18 +319,36 @@ ${JSON.stringify(storeContext, null, 2)}`;
       conversationPrompt = `Bos: ${message || "Tolong analisa gambar/struk terlampir."}\nAsisten:`;
     }
 
-    // Call Gemini streaming API with optional image payload
-    const stream = await generateStoreAIStream(
-      conversationPrompt,
+    const responseStream = await generateStoreAIStream({
       systemInstruction,
-      image ? { data: image.data, mimeType: image.mimeType } : undefined
-    );
+      prompt: conversationPrompt,
+      image: image ? { mimeType: image.mimeType || "image/jpeg", data: image.data } : undefined,
+    });
+
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of responseStream) {
+            const chunkText = chunk.text;
+            if (chunkText) {
+              controller.enqueue(encoder.encode(chunkText));
+            }
+          }
+        } catch (streamErr) {
+          console.error("[ADMIN_AI_CHAT_STREAM] Error in stream:", streamErr);
+          controller.error(streamErr);
+        } finally {
+          controller.close();
+        }
+      },
+    });
 
     return new Response(stream, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Transfer-Encoding": "chunked",
         "Cache-Control": "no-cache, no-transform",
+        "Transfer-Encoding": "chunked",
       },
     });
   } catch (error: any) {
