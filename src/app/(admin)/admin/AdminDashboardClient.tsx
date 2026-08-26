@@ -38,7 +38,9 @@ import {
   QrCode,
   Banknote,
   Coins,
-  Plus
+  Plus,
+  Send,
+  Bot
 } from 'lucide-react';
 import { InjectCapitalModal } from '@/components/admin/finances/InjectCapitalModal';
 
@@ -165,6 +167,27 @@ export default function AdminDashboardClient({ initialData }: Props) {
   const [activeChartMetric, setActiveChartMetric] = useState<'revenue' | 'orders' | 'cashflow'>('revenue');
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
   const [showInjectModal, setShowInjectModal] = useState(false);
+  const [sendingReport, setSendingReport] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState<string | null>(null);
+
+  const handleSendDailyReport = async () => {
+    setSendingReport(true);
+    setReportSuccess(null);
+    try {
+      const res = await fetch('/api/cron/daily-report', { method: 'POST' });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        setReportSuccess('Rekap penjualan berhasil dikirim ke WhatsApp!');
+        setTimeout(() => setReportSuccess(null), 5000);
+      } else {
+        alert(result.error || 'Gagal mengirim rekap harian.');
+      }
+    } catch (err: any) {
+      alert('Terjadi kesalahan saat memproses rekap harian.');
+    } finally {
+      setSendingReport(false);
+    }
+  };
 
   const fetchData = useCallback(async (selectedRange: Range, isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -315,6 +338,16 @@ export default function AdminDashboardClient({ initialData }: Props) {
           </div>
 
           <button
+            onClick={handleSendDailyReport}
+            disabled={sendingReport}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            title="Kirim Laporan Rekap Penjualan ke WhatsApp Pemilik Sekarang"
+          >
+            <Send className={`w-3.5 h-3.5 ${sendingReport ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">{sendingReport ? 'Mengirim Rekap...' : 'Kirim Rekap WA'}</span>
+          </button>
+
+          <button
             onClick={() => fetchData(range)}
             disabled={loading}
             className="p-2.5 rounded-2xl bg-slate-100 hover:bg-orange-50 text-slate-600 hover:text-orange-600 border border-slate-200/70 transition-all duration-200 active:scale-95 disabled:opacity-50"
@@ -324,6 +357,13 @@ export default function AdminDashboardClient({ initialData }: Props) {
           </button>
         </div>
       </div>
+
+      {reportSuccess && (
+        <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{reportSuccess}</span>
+        </div>
+      )}
 
       {/* 2. Posisi Saldo Kas & Rekening Toko (Clean Light Theme - 100% Dinamis dari Database) */}
       <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-sm border border-slate-150/80 space-y-4">

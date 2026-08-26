@@ -3,6 +3,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminIncomingOrderAlarm } from './AdminIncomingOrderAlarm';
+import { AdminAIAssistantWidget } from './AdminAIAssistantWidget';
 
 export function AdminLayoutClient({ children }: { children: ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -37,6 +38,7 @@ export function AdminLayoutClient({ children }: { children: ReactNode }) {
           {children}
         </div>
       </main>
+      <AdminAIAssistantWidget />
     </div>
   );
 }
