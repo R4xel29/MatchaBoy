@@ -116,21 +116,78 @@ export function AdminAIAssistantWidget() {
     ]);
   };
 
-  // Helper format simple markdown text
+  // Helper format clean markdown text (eliminates raw ###, ---, and dangling *)
   const renderFormattedText = (text: string) => {
-    return text.split("\n").map((line, lineIdx) => {
-      // Bold rendering
-      const parts = line.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+    const lines = text.split("\n");
+    return lines.map((rawLine, lineIdx) => {
+      let line = rawLine.trim();
+
+      // Empty line
+      if (!line) {
+        return <div key={lineIdx} className="h-1.5" />;
+      }
+
+      // Horizontal Divider --- or ***
+      if (line === "---" || line === "***" || line === "___") {
+        return <div key={lineIdx} className="border-t border-slate-200/80 my-2" />;
+      }
+
+      // Header lines starting with ### or ## or #
+      const isHeader = /^#{1,4}\s+/.test(line);
+      if (isHeader) {
+        const cleanHeader = line.replace(/^#{1,4}\s+/, "").replace(/^\*+|\*+$/g, "");
+        return (
+          <div
+            key={lineIdx}
+            className="my-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200/80 font-heading font-extrabold text-slate-900 text-[12px] flex items-center gap-1.5 shadow-sm"
+          >
+            <span>{cleanHeader}</span>
+          </div>
+        );
+      }
+
+      // Bullet points (* or - or •)
+      const isBullet = /^[\*\-\•]\s+/.test(line);
+      if (isBullet) {
+        line = line.replace(/^[\*\-\•]\s+/, "");
+      }
+
+      // Numbered items (1. or 2.)
+      const isNumbered = /^\d+\.\s+/.test(line);
+
+      // Clean up any dangling asterisks like "Harga Jual:*" -> "Harga Jual:"
+      const cleanedLine = line.replace(/:\*/g, ":");
+
+      // Split bold segments (**bold** or *bold*)
+      const parts = cleanedLine.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+
       return (
-        <p key={lineIdx} className={line.trim() === "" ? "h-2" : "min-h-[1.2rem] leading-relaxed"}>
-          {parts.map((part, pIdx) => {
-            if ((part.startsWith("**") && part.endsWith("**")) || (part.startsWith("*") && part.endsWith("*"))) {
-              const clean = part.replace(/^\*+|\*+$/g, "");
-              return <strong key={pIdx} className="font-extrabold text-foreground">{clean}</strong>;
-            }
-            return <span key={pIdx}>{part}</span>;
-          })}
-        </p>
+        <div
+          key={lineIdx}
+          className={`leading-relaxed text-[12px] ${
+            isBullet ? "flex items-start gap-2 pl-2 my-0.5" : isNumbered ? "font-semibold my-1" : "my-0.5"
+          }`}
+        >
+          {isBullet && (
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 mt-1.5" />
+          )}
+          <p className="flex-1">
+            {parts.map((part, pIdx) => {
+              if (
+                (part.startsWith("**") && part.endsWith("**")) ||
+                (part.startsWith("*") && part.endsWith("*"))
+              ) {
+                const clean = part.replace(/^\*+|\*+$/g, "");
+                return (
+                  <strong key={pIdx} className="font-extrabold text-slate-900">
+                    {clean}
+                  </strong>
+                );
+              }
+              return <span key={pIdx}>{part.replace(/\*/g, "")}</span>;
+            })}
+          </p>
+        </div>
       );
     });
   };
