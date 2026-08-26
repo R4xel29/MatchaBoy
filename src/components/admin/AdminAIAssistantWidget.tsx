@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef, useEffect } from "react";
 import { Sparkles, Bot, Send, X, RefreshCw, ChevronDown, MessageSquare, TrendingUp, Package, Lightbulb, User } from "lucide-react";
@@ -176,7 +176,7 @@ export function AdminAIAssistantWidget() {
                   <h3 className="font-heading font-extrabold text-sm flex items-center gap-1.5">
                     <span>Asisten Toko Matchaboy</span>
                     <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-400/30 text-amber-200 border border-amber-300/40">
-                      Gemini 2.5
+                      Gemini 3.6
                     </span>
                   </h3>
                   <p className="text-[10px] text-emerald-100 flex items-center gap-1">

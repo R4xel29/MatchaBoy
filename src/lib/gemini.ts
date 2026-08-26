@@ -1,16 +1,22 @@
-﻿import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 
 export const geminiClient = new GoogleGenAI({ apiKey });
 
+const CANDIDATE_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+];
+
 /**
- * Generate completion text using Gemini model with fallback
+ * Generate completion text using Gemini model with cascading fallbacks
  */
 export async function generateStoreAIResponse({
   systemInstruction,
   prompt,
-  model = 'gemini-2.5-flash',
+  model = 'gemini-3.6-flash',
 }: {
   systemInstruction?: string;
   prompt: string;
@@ -20,37 +26,33 @@ export async function generateStoreAIResponse({
     throw new Error('GEMINI_API_KEY is not configured in .env');
   }
 
-  try {
-    const response = await geminiClient.models.generateContent({
-      model,
-      contents: prompt,
-      config: systemInstruction
-        ? {
-            systemInstruction,
-            temperature: 0.7,
-          }
-        : {
-            temperature: 0.7,
-          },
-    });
+  const modelsToTry = [model, ...CANDIDATE_MODELS.filter((m) => m !== model)];
+  let lastError: any = null;
 
-    return response.text?.trim() || 'Maaf, saya tidak dapat menghasilkan respon saat ini.';
-  } catch (error: any) {
-    console.error('[GEMINI_HELPER] Primary model error, trying fallback:', error?.message);
-    
-    // Fallback to gemini-2.0-flash
+  for (const currentModel of modelsToTry) {
     try {
-      const fallbackResponse = await geminiClient.models.generateContent({
-        model: 'gemini-2.0-flash',
+      const response = await geminiClient.models.generateContent({
+        model: currentModel,
         contents: prompt,
         config: systemInstruction
-          ? { systemInstruction, temperature: 0.7 }
-          : { temperature: 0.7 },
+          ? {
+              systemInstruction,
+              temperature: 0.7,
+            }
+          : {
+              temperature: 0.7,
+            },
       });
-      return fallbackResponse.text?.trim() || 'Maaf, saya tidak dapat menghasilkan respon saat ini.';
-    } catch (fallbackError) {
-      console.error('[GEMINI_HELPER] Fallback error:', fallbackError);
-      throw error;
+
+      const text = response.text?.trim();
+      if (text) {
+        return text;
+      }
+    } catch (error: any) {
+      console.warn(`[GEMINI_HELPER] Model ${currentModel} failed:`, error?.message);
+      lastError = error;
     }
   }
+
+  throw lastError || new Error('Semua model Gemini gagal merespon.');
 }
