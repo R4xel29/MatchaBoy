@@ -96,7 +96,7 @@ export async function POST(req: Request) {
       }),
       // Stock ingredients
       prisma.ingredient.findMany({
-        select: { id: true, name: true, stock: true, unit: true, costPerUnit: true, minStockAlert: true, isPackaging: true },
+        select: { id: true, name: true, stock: true, unit: true, costPerUnit: true, isPackaging: true },
         orderBy: { stock: "asc" },
       }),
       // Toppings with ingredient relations
@@ -239,7 +239,6 @@ export async function POST(req: Request) {
         name: i.name,
         stock: `${i.stock} ${i.unit}`,
         costPerUnit: `Rp ${i.costPerUnit}/${i.unit}`,
-        minAlert: i.minStockAlert,
       })),
       toppings: toppings.map((t) => ({ name: t.name, price: t.price, ingredientLinked: t.ingredient?.name })),
       diningTables: diningTables.map((t) => ({ table: t.number, capacity: t.capacity, status: t.status })),

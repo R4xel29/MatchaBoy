@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { persistAiProductImage } from "@/lib/ai-image-helper";
@@ -158,7 +158,6 @@ export async function POST(req: Request) {
                     unit: rec.unit || "g",
                     stock: 1000,
                     costPerUnit: rec.costPerUnit || 100,
-                    minStockAlert: 100,
                   },
                 });
               }
@@ -323,7 +322,6 @@ export async function POST(req: Request) {
                   unit: item.unit || "g",
                   stock: 1000,
                   costPerUnit: item.costPerUnit || 100,
-                  minStockAlert: 100,
                 },
               });
             }
@@ -492,7 +490,6 @@ export async function POST(req: Request) {
                 unit: unit,
                 stock: qty,
                 costPerUnit: unitCost,
-                minStockAlert: item.minStockAlert || Math.round(qty * 0.2),
               },
             });
 
