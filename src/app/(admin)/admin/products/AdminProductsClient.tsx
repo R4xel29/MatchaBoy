@@ -367,7 +367,28 @@ export default function AdminProductsClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start md:self-auto">
+        <div className="flex items-center gap-2.5 self-start md:self-auto flex-wrap">
+          {/* AI Menu Creator Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('open-ai-assistant', {
+                    detail: {
+                      prompt: "Bikinin menu baru lengkap dengan foto studio AI 8K, varian modifier, komposisi takaran resep, dan kalkulasi HPP modalnya.",
+                    },
+                  })
+                );
+              }
+            }}
+            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            title="Rancang Menu Baru Otonom Menggunakan AI Image Studio & Resep"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300 animate-spin" />
+            <span>Buat Menu via AI Studio</span>
+          </button>
+
           {/* Export CSV Button */}
           <button
             type="button"
@@ -386,7 +407,7 @@ export default function AdminProductsClient({
             className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-lg shadow-orange-500/20 flex items-center gap-2 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            Tambah Menu Baru
+            Tambah Menu Manual
           </button>
         </div>
       </div>

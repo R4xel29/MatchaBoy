@@ -193,9 +193,29 @@ export default function ExpensesClient({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          {/* AI Expense Scanner Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('open-ai-assistant', {
+                    detail: {
+                      prompt: "Tolong bantu saya scan foto struk/nota belanja ini untuk dicatat ke daftar pengeluaran toko dan restock bahan baku.",
+                    },
+                  })
+                );
+              }
+            }}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white transition-all shadow-md shadow-emerald-600/20 active:scale-95 whitespace-nowrap cursor-pointer"
+            title="Scan Foto Struk Belanja dengan AI"
+          >
+            <span>📸 Scan Nota / Struk AI</span>
+          </button>
+
           <button
             onClick={() => setShowInjectModal(true)}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md shadow-emerald-600/20 active:scale-95 whitespace-nowrap cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-slate-800 hover:bg-slate-900 text-white transition-all shadow-sm active:scale-95 whitespace-nowrap cursor-pointer"
           >
             <Plus className="w-4 h-4" /> Suntik Modal
           </button>
@@ -211,7 +231,7 @@ export default function ExpensesClient({
             onClick={() => openModal()}
             className="flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:opacity-95 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap cursor-pointer"
           >
-            <Plus className="w-4 h-4" /> Catat Pengeluaran
+            <Plus className="w-4 h-4" /> Catat Manual
           </button>
         </div>
       </div>

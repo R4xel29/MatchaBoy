@@ -148,8 +148,8 @@ export default function InventoryClient({ initialIngredients }: Props) {
   return (
     <>
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-4">
-        <div className="relative flex-1">
+      <div className="flex flex-col sm:flex-row gap-2.5 mb-4 flex-wrap">
+        <div className="relative flex-1 min-w-[240px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
           <input 
             type="text" 
@@ -159,9 +159,50 @@ export default function InventoryClient({ initialIngredients }: Props) {
             className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-sm" 
           />
         </div>
+
+        {/* AI Action Triggers */}
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('open-ai-assistant', {
+                  detail: {
+                    prompt: "Tolong bantu saya scan struk belanja supplier dan restock bahan baku ke sistem gudang.",
+                  },
+                })
+              );
+            }
+          }}
+          className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+          title="Buka Scanner Struk Belanja Supplier AI"
+        >
+          <span>📸 Scan Struk / Restock AI</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(
+                new CustomEvent('open-ai-assistant', {
+                  detail: {
+                    prompt: "Analisa burn-rate seluruh bahan baku dan prediksi bahan apa yang akan habis dalam waktu dekat.",
+                  },
+                })
+              );
+            }
+          }}
+          className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 text-xs font-bold rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 shadow-xs transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+          title="Lihat Proyeksi Kehabisan Stok Berdasarkan Laju Penjualan"
+        >
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+          <span>Analisa Burn-Rate</span>
+        </button>
+
         <button 
           onClick={() => openModal()}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md active:scale-[0.98] whitespace-nowrap"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl gradient-brand text-white hover:opacity-90 transition-all shadow-md active:scale-[0.98] whitespace-nowrap cursor-pointer"
         >
           <Plus className="w-4 h-4" /> Add Ingredient
         </button>

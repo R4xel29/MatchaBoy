@@ -136,6 +136,21 @@ export function AdminAIAssistantWidget() {
     }
   }, [messages]);
 
+  // Global event listener to trigger AI assistant from anywhere in admin pages
+  useEffect(() => {
+    const handleOpenAi = (e: any) => {
+      setIsOpen(true);
+      if (e.detail?.prompt) {
+        setInput(e.detail.prompt);
+        if (e.detail?.autoSend) {
+          handleSendMessage(e.detail.prompt);
+        }
+      }
+    };
+    window.addEventListener("open-ai-assistant", handleOpenAi);
+    return () => window.removeEventListener("open-ai-assistant", handleOpenAi);
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };

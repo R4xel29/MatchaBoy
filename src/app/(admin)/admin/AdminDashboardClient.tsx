@@ -358,6 +358,128 @@ export default function AdminDashboardClient({ initialData }: Props) {
         </div>
       </div>
 
+      {/* AI Executive Command Center Hero Briefing Card */}
+      <div className="rounded-3xl p-5 sm:p-6 bg-gradient-to-br from-emerald-950 via-slate-900 to-teal-950 text-white border border-emerald-500/30 shadow-lg relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div className="space-y-2 max-w-2xl">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="px-3 py-1 rounded-full text-[10px] font-black tracking-widest uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5 shadow-xs">
+                <Sparkles className="w-3 h-3 text-amber-400 animate-spin" />
+                AI Autonomous Store Operator
+              </span>
+              <span className="text-xs text-emerald-400/60 font-medium">•</span>
+              <span className="text-xs font-bold text-emerald-300">
+                Sistem Analitik Prediktif & Eksekusi Otonom Aktif
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+              Pusat Kendali Eksekutif AI Matchaboy
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Perintahkan Asisten AI untuk merancang menu baru beserta foto AI studio 8K, memproses struk belanja supplier multi-entitas, memprediksi sisa hari bahan baku (burn-rate), atau memasang flash sale di jam sepi.
+            </p>
+          </div>
+
+          {/* Quick AI Action Triggers */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 gap-2 shrink-0 md:max-w-md w-full">
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-assistant', {
+                      detail: {
+                        prompt: "Bikinin menu baru 'Matcha Mango Cloud Float' harga 32rb lengkap dengan foto studio AI, takaran resep, dan kalkulasi HPP.",
+                      },
+                    })
+                  );
+                }
+              }}
+              className="p-3 rounded-2xl bg-white/10 hover:bg-emerald-500/20 border border-white/15 hover:border-emerald-400/40 text-left transition-all active:scale-95 group cursor-pointer"
+            >
+              <div className="flex items-center gap-2 text-emerald-300 font-bold text-xs mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Buat Menu Baru AI</span>
+              </div>
+              <p className="text-[10px] text-slate-300 group-hover:text-white transition-colors">
+                Auto-generate foto 8K & resep HPP
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-assistant', {
+                      detail: {
+                        prompt: "Bahan baku apa yang diprediksi habis dalam beberapa hari ke depan berdasarkan rata-rata penjualan 7 hari terakhir?",
+                      },
+                    })
+                  );
+                }
+              }}
+              className="p-3 rounded-2xl bg-white/10 hover:bg-amber-500/20 border border-white/15 hover:border-amber-400/40 text-left transition-all active:scale-95 group cursor-pointer"
+            >
+              <div className="flex items-center gap-2 text-amber-300 font-bold text-xs mb-1">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-400" />
+                <span>Analisa Burn-Rate</span>
+              </div>
+              <p className="text-[10px] text-slate-300 group-hover:text-white transition-colors">
+                Prediksi hari habis stok gudang
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-assistant', {
+                      detail: {
+                        prompt: "Tolong analisa jam sepi hari ini dan rekomendasikan promo Flash Sale menu apa yang cocok dipasang.",
+                      },
+                    })
+                  );
+                }
+              }}
+              className="p-3 rounded-2xl bg-white/10 hover:bg-teal-500/20 border border-white/15 hover:border-teal-400/40 text-left transition-all active:scale-95 group cursor-pointer"
+            >
+              <div className="flex items-center gap-2 text-teal-300 font-bold text-xs mb-1">
+                <Flame className="w-3.5 h-3.5 text-orange-400" />
+                <span>Flash Sale Jam Sepi</span>
+              </div>
+              <p className="text-[10px] text-slate-300 group-hover:text-white transition-colors">
+                Optimasi omset jam lengang
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(
+                    new CustomEvent('open-ai-assistant', {
+                      detail: { prompt: '' },
+                    })
+                  );
+                }
+              }}
+              className="p-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md active:scale-95 transition-all text-left group cursor-pointer flex flex-col justify-center"
+            >
+              <div className="flex items-center gap-2 font-black text-xs mb-0.5">
+                <Bot className="w-4 h-4" />
+                <span>Buka Asisten AI 🎙️</span>
+              </div>
+              <p className="text-[10px] text-emerald-100 font-medium">
+                Perintah suara & aksi toko
+              </p>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {reportSuccess && (
         <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
