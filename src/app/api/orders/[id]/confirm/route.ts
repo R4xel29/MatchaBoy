@@ -28,16 +28,14 @@ export async function PUT(
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
       }
 
-      if (order.userId !== session.user.id) {
+      const isStaff = ['ADMIN', 'CASHIER'].includes(session.user.role || '');
+      if (!isStaff && order.userId !== session.user.id) {
         return NextResponse.json({ error: 'Order not found or forbidden' }, { status: 403 })
       }
 
-      if (order.paymentMethod === 'COD') {
-        return NextResponse.json({ error: 'Pesanan COD hanya dapat diselesaikan oleh kurir demi keamanan transaksi.' }, { status: 400 })
-      }
-
-      if (order.status !== 'ON_DELIVERY' && order.status !== 'DELIVERED') {
-        return NextResponse.json({ error: 'Order cannot be confirmed at this status' }, { status: 400 })
+      const cancellableOrDone = ['CANCELLED'];
+      if (cancellableOrDone.includes(order.status)) {
+        return NextResponse.json({ error: 'Pesanan yang telah dibatalkan tidak dapat dikonfirmasi.' }, { status: 400 })
       }
     } else {
       // For SPMB: allow guests to confirm if status is any active stage
