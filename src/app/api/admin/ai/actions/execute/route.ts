@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -273,6 +273,161 @@ export async function POST(req: Request) {
         success: true,
         message: `Berhasil memproses struk belanja dari "${receiptStoreName}". Stok terupdate: ${results.join(", ")}. Total pengeluaran: Rp ${totalExpense.toLocaleString("id-ID")}.`,
         updatedItems: results,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 6. CREATE REAL ORDER (LANGSUNG MASUK PREPARING & POTONG STOK INVENTARIS)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "CREATE_ORDER") {
+      const {
+        customerName = "Pelanggan Bot AI",
+        customerPhone = "-",
+        orderType = "PICKUP",
+        tableNumber,
+        items = [],
+        notes = "Pesanan dibuat via Asisten Bot AI",
+      } = payload;
+
+      if (!Array.isArray(items) || items.length === 0) {
+        return NextResponse.json({ error: "Daftar menu pesanan kosong." }, { status: 400 });
+      }
+
+      // Fetch products with their recipe relations
+      const allProductNames = items.map((i: any) => i.productName?.toLowerCase()).filter(Boolean);
+      const allProductIds = items.map((i: any) => i.productId).filter(Boolean);
+
+      const dbProducts = await prisma.product.findMany({
+        where: {
+          OR: [
+            { id: { in: allProductIds } },
+            { name: { in: allProductNames, mode: "insensitive" } },
+          ],
+        },
+        include: {
+          productIngredients: {
+            include: { ingredient: true },
+          },
+        },
+      });
+
+      if (dbProducts.length === 0) {
+        return NextResponse.json({ error: "Menu yang dipesan tidak ditemukan di database toko." }, { status: 404 });
+      }
+
+      let calculatedSubtotal = 0;
+      const orderItemsToCreate: any[] = [];
+      const ingredientDeductionsSummary: string[] = [];
+
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const createdOrder = await prisma.$transaction(async (tx) => {
+        const todayCount = await tx.order.count({
+          where: { createdAt: { gte: todayStart } },
+        });
+        const queueNumber = todayCount + 1;
+
+        for (const reqItem of items) {
+          const matchedProd = dbProducts.find(
+            (p) =>
+              p.id === reqItem.productId ||
+              p.name.toLowerCase() === reqItem.productName?.toLowerCase() ||
+              p.name.toLowerCase().includes(reqItem.productName?.toLowerCase() || "")
+          );
+
+          if (!matchedProd) continue;
+
+          const itemQty = Number(reqItem.quantity) || 1;
+          const itemPrice = matchedProd.price;
+          calculatedSubtotal += itemPrice * itemQty;
+
+          const modsString = `${reqItem.matchaLevel !== undefined ? `Matcha Lvl: ${reqItem.matchaLevel}, ` : ""}${reqItem.iceLevel || "Normal Ice"}, ${reqItem.sugarLevel || "Biasa"}${reqItem.shotName && reqItem.shotName !== "Single Shot" ? `, +${reqItem.shotName}` : ""}`;
+
+          orderItemsToCreate.push({
+            productId: matchedProd.id,
+            qty: itemQty,
+            price: itemPrice,
+            modifiers: modsString,
+          });
+
+          // Deduct actual ingredient stocks based on recipe
+          if (matchedProd.productIngredients && matchedProd.productIngredients.length > 0) {
+            for (const pi of matchedProd.productIngredients) {
+              const deductAmount = pi.quantity * itemQty;
+              const newRemainingStock = Math.max(0, pi.ingredient.stock - deductAmount);
+
+              await tx.ingredient.update({
+                where: { id: pi.ingredientId },
+                data: { stock: newRemainingStock },
+              });
+
+              await tx.stockMovement.create({
+                data: {
+                  ingredientId: pi.ingredientId,
+                  quantity: -deductAmount,
+                  type: "OUT",
+                  reason: `Pesanan AI #${queueNumber} (${itemQty}x ${matchedProd.name})`,
+                },
+              });
+
+              ingredientDeductionsSummary.push(`${pi.ingredient.name} (-${deductAmount} ${pi.ingredient.unit})`);
+            }
+          }
+        }
+
+        if (orderItemsToCreate.length === 0) {
+          throw new Error("Tidak ada menu valid yang dapat diproses.");
+        }
+
+        // Set table status if dine in
+        if (orderType === "DINE_IN" && tableNumber) {
+          const tbl = await tx.diningTable.findUnique({
+            where: { number: String(tableNumber) },
+          });
+          if (tbl) {
+            await tx.diningTable.update({
+              where: { number: String(tableNumber) },
+              data: { status: "OCCUPIED" },
+            });
+          }
+        }
+
+        const newOrder = await tx.order.create({
+          data: {
+            customerName,
+            customerPhone: customerPhone || "-",
+            orderType: orderType === "DINE_IN" ? "DINE_IN" : "PICKUP",
+            source: "AI_BOT",
+            tableNumber: tableNumber ? String(tableNumber) : null,
+            status: "PREPARING",
+            paymentMethod: "CASH",
+            paymentProofUrl: "/verified-cashier.svg",
+            subtotal: calculatedSubtotal,
+            total: calculatedSubtotal,
+            notes,
+            queueNumber,
+            items: {
+              create: orderItemsToCreate,
+            },
+          },
+          include: {
+            items: {
+              include: { product: true },
+            },
+          },
+        });
+
+        return newOrder;
+      });
+
+      const itemsSummary = createdOrder.items.map((i) => `${i.qty}x ${i.product.name}`).join(", ");
+      const stockSummary = ingredientDeductionsSummary.length > 0 ? ` Pemotongan stok gudang: ${ingredientDeductionsSummary.join(", ")}.` : "";
+
+      return NextResponse.json({
+        success: true,
+        message: `Pesanan #${createdOrder.queueNumber} (${itemsSummary}) berhasil dibuat dengan status PREPARING! Total: Rp ${createdOrder.total.toLocaleString("id-ID")}.${stockSummary}`,
+        order: createdOrder,
       });
     }
 

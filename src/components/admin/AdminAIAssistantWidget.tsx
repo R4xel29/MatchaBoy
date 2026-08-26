@@ -28,7 +28,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 interface ActionProposal {
   id: string;
-  actionType: "CREATE_VOUCHER" | "UPDATE_PRODUCT" | "RESTOCK_INGREDIENT" | "RECORD_EXPENSE" | "BATCH_RECEIPT_RESTOCK";
+  actionType: "CREATE_ORDER" | "CREATE_VOUCHER" | "UPDATE_PRODUCT" | "RESTOCK_INGREDIENT" | "RECORD_EXPENSE" | "BATCH_RECEIPT_RESTOCK";
   title: string;
   summary: string;
   payload: any;
@@ -46,11 +46,11 @@ interface Message {
 }
 
 const QUICK_PROMPTS = [
+  { label: "🛍️ Tambah Pesanan", prompt: "Tolong pesankan 2 Matcha Latte meja 3 atas nama Budi." },
   { label: "🎟️ Buat Voucher Promo", prompt: "Bikinin voucher diskon 20% kode MATCHAWEEKEND minimal belanja 40rb kuota 30 orang buat weekend ini." },
   { label: "🏷️ Ubah Harga Menu", prompt: "Tolong ubah harga menu Matcha Latte jadi Rp 29.000." },
   { label: "💰 Analisa HPP & Resep", prompt: "Tolong tampilkan rincian HPP, modal bahan baku per cup, takaran resep, dan margin keuntungan dari menu-menu kita." },
   { label: "📦 Cek Bahan Baku", prompt: "Apakah ada bahan baku yang persediaannya menipis atau perlu restock segera?" },
-  { label: "📊 Performa 30 Hari", prompt: "Bagaimana ringkasan performa penjualan toko kita dalam 30 hari terakhir?" },
 ];
 
 function parseProposalFromText(text: string): { cleanText: string; proposal: ActionProposal | null } {
