@@ -289,8 +289,12 @@ export function AdminAIAssistantWidget() {
   };
 
   const handleSendMessage = async (textToSend?: string) => {
-    const text = (textToSend || input).trim();
+    const text = (textToSend !== undefined ? textToSend : input).trim();
     if ((!text && !selectedImage) || isLoading) return;
+
+    // Instantly stop voice recording and clear text input for fast next action
+    stopListening();
+    setInput("");
 
     const currentImage = selectedImage;
     const currentTimestamp = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
@@ -304,7 +308,6 @@ export function AdminAIAssistantWidget() {
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    if (!textToSend) setInput("");
     setSelectedImage(null);
     setIsLoading(true);
 

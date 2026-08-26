@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -136,6 +136,7 @@ export function VoiceOrderModal({ isOpen, onClose, onOrderParsed }: Props) {
 
       const json = await res.json();
       if (res.ok && json.success && json.data) {
+        setTranscript("");
         onOrderParsed(json.data);
         onClose();
       } else {
