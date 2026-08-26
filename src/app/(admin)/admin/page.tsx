@@ -25,6 +25,7 @@ export default async function AdminDashboardPage() {
     periodExpensesList,
     periodExpensesAggregate,
     allTimeExpensesList,
+    allCapitalInjections,
     allIngredients,
     totalCustomers,
     totalProducts,
@@ -75,6 +76,7 @@ export default async function AdminDashboardPage() {
     prisma.expense.findMany({
       select: { id: true, amount: true, notes: true },
     }),
+    prisma.capitalInjection.findMany(),
     prisma.ingredient.findMany({
       select: { id: true, name: true, stock: true, unit: true, costPerUnit: true },
     }),
@@ -222,9 +224,16 @@ export default async function AdminDashboardPage() {
     .sort((a, b) => b.qty - a.qty)
     .slice(0, 5);
 
-  // Balance calculations (Cash & QRIS Saat Ini)
-  const BASE_CASH_BALANCE = 252000;
-  const BASE_QRIS_BALANCE = 722000;
+  // Balance calculations (Dynamic Cash & QRIS from Database)
+  let totalCapitalCash = 0;
+  let totalCapitalQris = 0;
+  allCapitalInjections.forEach((c) => {
+    if (c.paymentMethod === 'CASH') {
+      totalCapitalCash += c.amount;
+    } else {
+      totalCapitalQris += c.amount;
+    }
+  });
 
   let allTimeCash = 0;
   let allTimeCashCount = 0;
@@ -254,16 +263,18 @@ export default async function AdminDashboardPage() {
 
   const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + s.openingCash, 0);
   const allTimeExpensesTotal = allTimeCashExpenses + allTimeTransferExpenses;
-  const cashInflowTotal = BASE_CASH_BALANCE + allTimeCash;
-  const qrisInflowTotal = BASE_QRIS_BALANCE + allTimeQris;
+  const cashInflowTotal = totalCapitalCash + allTimeCash;
+  const qrisInflowTotal = totalCapitalQris + allTimeQris;
   const currentCash = Math.max(0, cashInflowTotal - allTimeCashExpenses);
   const currentQris = Math.max(0, qrisInflowTotal - allTimeTransferExpenses);
   const grossTotalMoney = cashInflowTotal + qrisInflowTotal;
   const netTotalMoney = currentCash + currentQris;
 
   const balancePosition = {
-    baseCashBalance: BASE_CASH_BALANCE,
-    baseQrisBalance: BASE_QRIS_BALANCE,
+    baseCashBalance: totalCapitalCash,
+    baseQrisBalance: totalCapitalQris,
+    totalCapitalCash,
+    totalCapitalQris,
     activeShiftOpeningCash,
     allTimeExpensesTotal,
     allTimeCashExpenses,

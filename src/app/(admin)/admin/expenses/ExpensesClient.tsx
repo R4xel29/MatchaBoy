@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
@@ -10,6 +11,7 @@ import {
   Banknote, QrCode, Coins, TrendingUp
 } from 'lucide-react';
 import { UrlPagination } from '@/components/ui/UrlPagination';
+import { InjectCapitalModal } from '@/components/admin/finances/InjectCapitalModal';
 
 interface Expense {
   id: string;
@@ -70,6 +72,7 @@ export default function ExpensesClient({
   const [showModal, setShowModal] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+  const [showInjectModal, setShowInjectModal] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -189,12 +192,28 @@ export default function ExpensesClient({
           </p>
         </div>
 
-        <button 
-          onClick={() => openModal()}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:opacity-95 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap self-start sm:self-auto cursor-pointer"
-        >
-          <Plus className="w-4 h-4" /> Catat Pengeluaran
-        </button>
+        <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+          <button
+            onClick={() => setShowInjectModal(true)}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-md shadow-emerald-600/20 active:scale-95 whitespace-nowrap cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Suntik Modal
+          </button>
+
+          <Link
+            href="/admin/finances"
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-slate-100 hover:bg-orange-50 hover:text-orange-700 text-slate-700 border border-slate-200 transition-colors whitespace-nowrap"
+          >
+            <Coins className="w-4 h-4 text-orange-600" /> Buku Kas
+          </Link>
+
+          <button 
+            onClick={() => openModal()}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-extrabold rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:opacity-95 transition-all shadow-md shadow-orange-500/20 active:scale-95 whitespace-nowrap cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Catat Pengeluaran
+          </button>
+        </div>
       </div>
 
       {/* Saldo Kas & Rekening Real-Time */}
@@ -516,6 +535,13 @@ export default function ExpensesClient({
           </div>
         </div>
       )}
+
+      {/* Modal Suntik Modal Quick Action */}
+      <InjectCapitalModal
+        isOpen={showInjectModal}
+        onClose={() => setShowInjectModal(false)}
+        onSuccess={() => router.refresh()}
+      />
     </>
   );
 }

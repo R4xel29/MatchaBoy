@@ -49,13 +49,15 @@ import {
   UsersRound,
   Music,
   TrendingUp,
-  Layers
+  Layers,
+  Coins
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
 
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Buku Kas & Keuangan', href: '/admin/finances', icon: Coins },
   { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
   { label: 'Penjualan', href: '/admin/reports', icon: BarChart3 },

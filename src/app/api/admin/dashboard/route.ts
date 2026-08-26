@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
       periodExpensesList,
       periodExpensesAggregate,
       allTimeExpensesList,
+      allCapitalInjections,
       allIngredients,
       totalCustomers,
       totalProducts,
@@ -115,6 +116,9 @@ export async function GET(req: NextRequest) {
       prisma.expense.findMany({
         select: { id: true, amount: true, notes: true },
       }),
+
+      // Capital Injections (Modal & Suntikan Dana dari Database)
+      prisma.capitalInjection.findMany(),
 
       // All Ingredients for stock valuation
       prisma.ingredient.findMany({
@@ -306,9 +310,16 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 5);
 
-    // 1. DYNAMIC BALANCE POSITION CALCULATION (Cash & QRIS Saat Ini)
-    const BASE_CASH_BALANCE = 252000;
-    const BASE_QRIS_BALANCE = 722000;
+    // 1. DYNAMIC BALANCE POSITION CALCULATION (From Database Capital & Transactions)
+    let totalCapitalCash = 0;
+    let totalCapitalQris = 0;
+    allCapitalInjections.forEach((c) => {
+      if (c.paymentMethod === 'CASH') {
+        totalCapitalCash += c.amount;
+      } else {
+        totalCapitalQris += c.amount;
+      }
+    });
 
     let allTimeCash = 0;
     let allTimeCashCount = 0;
@@ -338,16 +349,18 @@ export async function GET(req: NextRequest) {
 
     const activeShiftOpeningCash = activeCashierShifts.reduce((sum, s) => sum + s.openingCash, 0);
     const allTimeExpensesTotal = allTimeCashExpenses + allTimeTransferExpenses;
-    const cashInflowTotal = BASE_CASH_BALANCE + allTimeCash;
-    const qrisInflowTotal = BASE_QRIS_BALANCE + allTimeQris;
+    const cashInflowTotal = totalCapitalCash + allTimeCash;
+    const qrisInflowTotal = totalCapitalQris + allTimeQris;
     const currentCash = Math.max(0, cashInflowTotal - allTimeCashExpenses);
     const currentQris = Math.max(0, qrisInflowTotal - allTimeTransferExpenses);
     const grossTotalMoney = cashInflowTotal + qrisInflowTotal;
     const netTotalMoney = currentCash + currentQris;
 
     const balancePosition = {
-      baseCashBalance: BASE_CASH_BALANCE,
-      baseQrisBalance: BASE_QRIS_BALANCE,
+      baseCashBalance: totalCapitalCash,
+      baseQrisBalance: totalCapitalQris,
+      totalCapitalCash,
+      totalCapitalQris,
       activeShiftOpeningCash,
       allTimeExpensesTotal,
       allTimeCashExpenses,

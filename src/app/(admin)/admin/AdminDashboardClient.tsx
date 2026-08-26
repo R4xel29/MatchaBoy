@@ -37,8 +37,10 @@ import {
   ExternalLink,
   QrCode,
   Banknote,
-  Coins
+  Coins,
+  Plus
 } from 'lucide-react';
+import { InjectCapitalModal } from '@/components/admin/finances/InjectCapitalModal';
 
 type Range = 'today' | 'week' | 'month' | 'all';
 
@@ -162,6 +164,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
   const [loading, setLoading] = useState(false);
   const [activeChartMetric, setActiveChartMetric] = useState<'revenue' | 'orders' | 'cashflow'>('revenue');
   const [lastRefreshed, setLastRefreshed] = useState<string>('');
+  const [showInjectModal, setShowInjectModal] = useState(false);
 
   const fetchData = useCallback(async (selectedRange: Range, isBackground = false) => {
     if (!isBackground) setLoading(true);
@@ -344,6 +347,24 @@ export default function AdminDashboardClient({ initialData }: Props) {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap self-start sm:self-auto">
+            <button
+              onClick={() => setShowInjectModal(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition-all shadow-sm shadow-emerald-600/20 active:scale-95 cursor-pointer"
+              title="Suntik dana / tambah modal ke kas atau rekening QRIS"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Suntik Modal</span>
+            </button>
+
+            <Link
+              href="/admin/finances"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-orange-50 hover:text-orange-700 text-xs font-bold text-slate-700 border border-slate-200 transition-colors shadow-sm"
+              title="Buka Buku Kas & Riwayat Mutasi Lengkap"
+            >
+              <Coins className="w-3.5 h-3.5 text-orange-600" />
+              <span>Buku Kas & Mutasi</span>
+            </Link>
+
             {data.stockAssetValuation && (
               <Link
                 href="/admin/inventory"
@@ -354,9 +375,6 @@ export default function AdminDashboardClient({ initialData }: Props) {
                 Valuasi Stok: <span className="font-extrabold text-amber-950">{formatRupiah(data.stockAssetValuation.totalValue)}</span>
               </Link>
             )}
-            <span className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-150">
-              Dana Tersedia Saat Ini
-            </span>
           </div>
         </div>
 
@@ -1417,6 +1435,13 @@ export default function AdminDashboardClient({ initialData }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Modal Suntik Modal Quick Action */}
+      <InjectCapitalModal
+        isOpen={showInjectModal}
+        onClose={() => setShowInjectModal(false)}
+        onSuccess={() => fetchData(range)}
+      />
     </div>
   );
 }

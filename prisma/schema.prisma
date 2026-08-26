@@ -35,6 +35,7 @@ model User {
   notifications Notification[]
   activityLogs  ActivityLog[]
   cashierShifts CashierShift[]
+  capitalInjections CapitalInjection[]
 
   // Loyalty & Points
   points          Int     @default(0)
@@ -764,6 +765,25 @@ model Expense {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model CapitalInjection {
+  id            String   @id @default(cuid())
+  amount        Int      // Nominal (positif = suntik modal, negatif = penarikan/prive)
+  paymentMethod String   @default("CASH") // "CASH" atau "QRIS"
+  category      String   @default("CAPITAL_INJECTION") // "INITIAL_BALANCE", "CAPITAL_INJECTION", "OWNER_LOAN", "ADJUSTMENT", "WITHDRAWAL"
+  name          String   // e.g. "Modal Awal Kas Laci", "Suntikan Kas Operasional"
+  notes         String?
+  date          DateTime @default(now())
+
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([paymentMethod])
+  @@index([date])
 }
 
 model WaBotSession {

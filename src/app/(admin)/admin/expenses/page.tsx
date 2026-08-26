@@ -18,6 +18,7 @@ export default async function AdminExpensesPage({ searchParams }: PageProps) {
     expenses,
     allCompletedOrders,
     allExpensesList,
+    allCapitalInjections,
     activeCashierShifts,
   ] = await Promise.all([
     prisma.expense.count(),
@@ -37,15 +38,23 @@ export default async function AdminExpensesPage({ searchParams }: PageProps) {
     prisma.expense.findMany({
       select: { amount: true, notes: true },
     }),
+    prisma.capitalInjection.findMany(),
     prisma.cashierShift.findMany({
       where: { closedAt: null },
       select: { openingCash: true },
     }),
   ]);
 
-  // Balance calculations (Cash & QRIS Saat Ini)
-  const BASE_CASH_BALANCE = 252000;
-  const BASE_QRIS_BALANCE = 722000;
+  // Balance calculations (Dynamic Cash & QRIS from Database)
+  let totalCapitalCash = 0;
+  let totalCapitalQris = 0;
+  allCapitalInjections.forEach((c) => {
+    if (c.paymentMethod === 'CASH') {
+      totalCapitalCash += c.amount;
+    } else {
+      totalCapitalQris += c.amount;
+    }
+  });
 
   let allTimeCash = 0;
   let allTimeQris = 0;
@@ -68,8 +77,8 @@ export default async function AdminExpensesPage({ searchParams }: PageProps) {
     }
   });
 
-  const cashInflowTotal = BASE_CASH_BALANCE + allTimeCash;
-  const qrisInflowTotal = BASE_QRIS_BALANCE + allTimeQris;
+  const cashInflowTotal = totalCapitalCash + allTimeCash;
+  const qrisInflowTotal = totalCapitalQris + allTimeQris;
   const currentCash = Math.max(0, cashInflowTotal - allTimeCashExpenses);
   const currentQris = Math.max(0, qrisInflowTotal - allTimeTransferExpenses);
   const grossTotalMoney = cashInflowTotal + qrisInflowTotal;
