@@ -33,10 +33,12 @@ import {
   Unlock,
   Clock,
   Save,
+  Mic,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
 import { PosTablePickerModal } from '@/components/cashier/PosTablePickerModal';
+import { VoiceOrderModal } from '@/components/cashier/VoiceOrderModal';
 import { useToast } from '@/components/ui/Toast';
 
 const DEFAULT_DRINK_SIZES = [
@@ -149,6 +151,7 @@ export default function CashierPOSClient({ products, categories, packagingStock 
   const [showTableManagerModal, setShowTableManagerModal] = useState(false);
   const [showPosTablePicker, setShowPosTablePicker] = useState(false);
   const [posPeopleCount, setPosPeopleCount] = useState(1);
+  const [showVoiceOrderModal, setShowVoiceOrderModal] = useState(false);
 
   // Cashier Shift & Petty Cash State
   const [shiftData, setShiftData] = useState<{ activeShift: any; reconciliation: any; history: any[] } | null>(null);
@@ -657,6 +660,60 @@ export default function CashierPOSClient({ products, categories, packagingStock 
     setModifierProduct(null);
   };
 
+  const handleVoiceOrderParsed = (parsedOrder: any) => {
+    if (parsedOrder.customerName && !customerName) {
+      setCustomerName(parsedOrder.customerName);
+    } else if (!customerName.trim()) {
+      setCustomerName('Pelanggan Suara AI');
+    }
+
+    if (parsedOrder.orderType) {
+      setOrderType(parsedOrder.orderType);
+    }
+    if (parsedOrder.tableNumber) {
+      setSelectedTable(parsedOrder.tableNumber);
+    }
+
+    let addedCount = 0;
+    parsedOrder.items?.forEach((item: any) => {
+      const matchedProduct = products.find(
+        (p) =>
+          p.id === item.productId ||
+          p.name.toLowerCase() === item.productName?.toLowerCase() ||
+          p.name.toLowerCase().includes(item.productName?.toLowerCase() || '') ||
+          (item.productName && item.productName.toLowerCase().includes(p.name.toLowerCase()))
+      );
+
+      if (matchedProduct) {
+        if (matchedProduct.isSoldOut) {
+          showToast(`Menu "${matchedProduct.name}" stok habis, dilewati.`, 'error');
+          return;
+        }
+
+        addToCart(
+          matchedProduct,
+          item.iceLevel || 'Normal Ice',
+          item.sugarLevel || 'Biasa',
+          item.matchaLevel ?? 5,
+          item.size || 'Regular',
+          item.sizePrice || 0,
+          item.shotName || 'Single Shot',
+          item.shotCount || 1,
+          item.shotPrice || 0,
+          [],
+          item.quantity || 1
+        );
+        addedCount += item.quantity || 1;
+      }
+    });
+
+    if (addedCount > 0) {
+      showToast(`🎙️ Berhasil menambahkan ${addedCount} item via Pesan Suara AI!`, 'success');
+    } else {
+      showToast('Tidak ada menu yang berhasil dicocokkan dari ucapan suara.', 'error');
+    }
+  };
+
   const updateCartQty = (id: string, newQty: number) => {
     if (newQty <= 0) {
       setCart((prev) => prev.filter((i) => i.id !== id));
@@ -979,7 +1036,7 @@ export default function CashierPOSClient({ products, categories, packagingStock 
             </div>
           )}
 
-          {/* Search + Category Filter */}
+          {/* Search + Voice AI + Category Filter */}
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
@@ -991,6 +1048,17 @@ export default function CashierPOSClient({ products, categories, packagingStock 
                 className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
               />
             </div>
+
+            {/* Voice Ordering AI Button */}
+            <button
+              type="button"
+              onClick={() => setShowVoiceOrderModal(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-amber-600 hover:from-emerald-700 hover:to-amber-700 text-white font-extrabold text-xs shadow-md shadow-emerald-600/20 transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+              title="Pesan lewat suara (Auto-Default)"
+            >
+              <Mic className="w-4 h-4 animate-pulse text-amber-300" />
+              <span>Pesan Suara AI</span>
+            </button>
           </div>
 
           {/* Category Tabs */}
@@ -2414,6 +2482,13 @@ export default function CashierPOSClient({ products, categories, packagingStock 
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* AI Voice-to-Order Modal */}
+      <VoiceOrderModal
+        isOpen={showVoiceOrderModal}
+        onClose={() => setShowVoiceOrderModal(false)}
+        onOrderParsed={handleVoiceOrderParsed}
+      />
     </div>
   );
 }
