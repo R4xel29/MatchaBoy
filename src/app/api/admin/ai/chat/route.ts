@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateStoreAIStream } from "@/lib/gemini";
@@ -122,7 +122,7 @@ export async function POST(req: Request) {
       }),
       // Store settings
       prisma.storeSettings.findFirst({
-        select: { storeStatus: true, openingHour: true, closingHour: true, isRamadanTheme: true },
+        select: { storeName: true, storeAddress: true, openTime: true, closeTime: true, pickupAlarmLeadTime: true, whatsappNumber: true },
       }),
       // Categories
       prisma.category.findMany({
