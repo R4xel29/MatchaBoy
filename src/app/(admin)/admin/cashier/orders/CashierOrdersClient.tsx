@@ -42,7 +42,6 @@ import {
   Send,
   Printer
 } from 'lucide-react';
-import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 import { LiveTableMinimap } from '@/components/admin/tables/LiveTableMinimap';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';

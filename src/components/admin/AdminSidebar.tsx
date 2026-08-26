@@ -95,9 +95,6 @@ const LOYALTY_ITEMS = [
   { label: 'Kelola Referral', href: '/admin/referrals', icon: Share2 },
 ];
 
-const DELIVERY_ITEMS = [
-  { label: 'Kelola Kurir', href: '/admin/drivers', icon: Truck },
-];
 
 const CUSTOMER_FEATURE_ITEMS = [
   { label: 'Wallet', href: '/admin/wallet', icon: Wallet },
@@ -450,16 +447,6 @@ function SidebarContent({
               isCollapsed={isCollapsed}
             />
 
-            {/* Delivery Section */}
-            <CollapsibleSection
-              title="Delivery"
-              icon={Truck}
-              items={DELIVERY_ITEMS}
-              pathname={pathname}
-              onNavigate={onNavigate}
-              pendingCount={pendingCount}
-              isCollapsed={isCollapsed}
-            />
 
             {/* Fitur Pelanggan Section */}
             <CollapsibleSection

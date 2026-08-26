@@ -6,7 +6,7 @@ import { authConfig } from '@/auth.config'
 // Initialize NextAuth with only the Edge-compatible configuration
 const { auth } = NextAuth(authConfig)
 
-const protectedRoutes = ['/admin', '/checkout', '/driver']
+const protectedRoutes = ['/admin', '/checkout']
 const authRoutes = ['/login', '/register']
 
 export default auth((req) => {
@@ -39,18 +39,6 @@ export default auth((req) => {
             }
         }
 
-        if (pathname.startsWith('/api/driver')) {
-            // Exclude register route from driver auth since anyone can register
-            if (!pathname.startsWith('/api/driver/register')) {
-                if (!isLoggedIn) {
-                    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-                }
-                if (role !== 'DRIVER' && role !== 'ADMIN') {
-                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-                }
-            }
-        }
-
         if (pathname.startsWith('/api/cashier')) {
             if (!isLoggedIn) {
                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -73,17 +61,9 @@ export default auth((req) => {
             if (role === 'CASHIER') {
                 return NextResponse.redirect(new URL('/admin/cashier', req.url))
             }
-            if (role === 'DRIVER') {
-                return NextResponse.redirect(new URL('/driver', req.url))
-            }
             return NextResponse.redirect(new URL('/profile', req.url))
         }
         return NextResponse.next()
-    }
-
-    // Separate driver account functions from regular user pages
-    if (isLoggedIn && role === 'DRIVER' && !pathname.startsWith('/driver')) {
-        return NextResponse.redirect(new URL('/driver', req.url))
     }
 
     // Protect sensitive routes
@@ -93,7 +73,7 @@ export default auth((req) => {
             if (pathname.startsWith('/admin')) {
                 return NextResponse.rewrite(new URL('/404', req.url))
             }
-            const loginUrl = new URL(pathname.startsWith('/driver') ? '/login/driver' : '/login', req.url)
+            const loginUrl = new URL('/login', req.url)
             loginUrl.searchParams.set('callbackUrl', pathname)
             return NextResponse.redirect(loginUrl)
         }
@@ -112,13 +92,6 @@ export default auth((req) => {
                 if (!isAllowed) {
                     return NextResponse.rewrite(new URL('/404', req.url))
                 }
-            }
-        }
-
-        // Driver routes: allow DRIVER role only
-        if (pathname.startsWith('/driver')) {
-            if (role !== 'DRIVER') {
-                return NextResponse.redirect(new URL('/profile', req.url))
             }
         }
     }

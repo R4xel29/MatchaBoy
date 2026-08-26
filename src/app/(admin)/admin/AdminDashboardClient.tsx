@@ -759,8 +759,8 @@ export default function AdminDashboardClient({ initialData }: Props) {
           </div>
         </div>
 
-        {/* Live Operational Status Mini Bar (Kasir, Kurir, Meja) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100">
+        {/* Live Operational Status Mini Bar (Kasir, Meja) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
           <div className="p-3 rounded-2xl bg-slate-50 border border-slate-150/70 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center">
@@ -782,28 +782,6 @@ export default function AdminDashboardClient({ initialData }: Props) {
               className="text-[11px] font-extrabold text-orange-600 hover:text-orange-700"
             >
               POS
-            </Link>
-          </div>
-
-          <div className="p-3 rounded-2xl bg-slate-50 border border-slate-150/70 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                <Truck className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-900">Kurir / Driver Delivery</p>
-                <p className="text-[11px] text-slate-500">
-                  {liveOps.onlineDrivers.length > 0
-                    ? `${liveOps.onlineDrivers.length} driver online siaga`
-                    : 'Belum ada kurir online'}
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/admin/drivers"
-              className="text-[11px] font-extrabold text-indigo-600 hover:text-indigo-700"
-            >
-              Kurir
             </Link>
           </div>
 

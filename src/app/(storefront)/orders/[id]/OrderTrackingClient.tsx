@@ -27,10 +27,7 @@ import {
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatRupiah } from '@/lib/utils';
 import dynamic from 'next/dynamic';
-import { QRCodeCanvas } from 'qrcode.react';
 
-const LeafletTracking = dynamic(() => import('@/components/storefront/MapboxTracking').then(m => m.LeafletTracking), { ssr: false });
-import { SocialShareCard } from '@/components/storefront/SocialShareCard';
 
 export type TrackingOrderShape = {
   id: string;
@@ -653,27 +650,6 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
   const OrderTypeIcon = getOrderTypeIcon(order.orderType, isSpmb);
   const steps = getOrderSteps(order.orderType, currentStatus, isSpmb);
 
-  const isOngoingDelivery = order.orderType === 'DELIVERY' && ['PICKED_UP', 'ON_DELIVERY'].includes(currentStatus);
-
-  if (isOngoingDelivery) {
-    return (
-      <LeafletTracking
-        orderId={orderId}
-        orderStatus={currentStatus}
-        paymentMethod={order.paymentMethod}
-        customerName={order.customerName}
-        customerPhone={order.customerPhone}
-        address={order.address}
-        subtotal={order.subtotal}
-        deliveryFee={order.deliveryFee}
-        total={order.total}
-        items={order.items}
-        onConfirmDelivery={handleConfirmDelivery}
-        isConfirming={isConfirming}
-        confirmError={confirmError}
-      />
-    );
-  }
 
   return (
     <div className="min-h-dvh bg-background pb-safe">

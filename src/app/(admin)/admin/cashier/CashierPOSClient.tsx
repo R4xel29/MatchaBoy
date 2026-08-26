@@ -116,7 +116,7 @@ type CartItemPOS = {
   image?: string | null;
 };
 
-type OrderType = 'DELIVERY' | 'PICKUP' | 'DINE_IN';
+type OrderType = 'PICKUP' | 'DINE_IN';
 
 interface Props {
   products: POSProduct[];
@@ -1206,15 +1206,6 @@ export default function CashierPOSClient({ products, categories, packagingStock 
               </div>
             )}
 
-            {orderType === 'DELIVERY' && (
-              <textarea
-                placeholder="Alamat pengiriman *"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                rows={2}
-                className="w-full px-3 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-400 transition-all resize-none"
-              />
-            )}
 
             {orderType === 'DINE_IN' && (
               <div className="grid grid-cols-2 gap-3">

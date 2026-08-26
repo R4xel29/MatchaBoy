@@ -32,8 +32,7 @@ const checkoutSchema = z.object({
   notes: z.string().optional(),
 });
 
-type CheckoutFormData = z.infer<typeof checkoutSchema>;
-type OrderType = 'PICKUP' | 'DELIVERY' | 'DINE_IN';
+type OrderType = 'PICKUP' | 'DINE_IN';
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -1475,7 +1474,7 @@ export default function CheckoutPage() {
             <h2 className="font-serif font-bold text-base text-gray-900 mb-4 flex items-center gap-2">
               <Store className="w-4.5 h-4.5 text-[#B48A5E]" /> Metode Pengambilan
             </h2>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setOrderType('PICKUP')}
@@ -1486,17 +1485,6 @@ export default function CheckoutPage() {
               >
                 <Store className={`w-5 h-5 shrink-0 ${orderType === 'PICKUP' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
                 <span className="text-xs font-bold text-gray-900">Pickup</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderType('DELIVERY')}
-                className={`flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-center
-                  ${orderType === 'DELIVERY'
-                    ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm shadow-[#B48A5E]/5'
-                    : 'border-gray-150 bg-white hover:border-gray-300'}`}
-              >
-                <Truck className={`w-5 h-5 shrink-0 ${orderType === 'DELIVERY' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
-                <span className="text-xs font-bold text-gray-900">Delivery</span>
               </button>
               <button
                 type="button"
@@ -1518,18 +1506,6 @@ export default function CheckoutPage() {
                   <p className="text-sm font-extrabold text-gray-900">Toko Tutup Hari Ini</p>
                   <p className="text-xs text-red-700 leading-relaxed font-semibold">
                     Maaf, toko kami tutup hari ini. Silakan jadwalkan waktu pengambilan Anda di tanggal buka lain yang tersedia di bawah.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {orderType === 'DELIVERY' && isStoreClosedToday && (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4 flex gap-3 text-red-800">
-                <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="text-sm font-extrabold text-gray-900">Pengiriman Tidak Tersedia</p>
-                  <p className="text-xs text-red-700 leading-relaxed font-semibold">
-                    Maaf, gerai kami hari ini sedang tutup / libur. Layanan pesan-antar (delivery) tidak tersedia saat ini.
                   </p>
                 </div>
               </div>
@@ -1631,110 +1607,6 @@ export default function CheckoutPage() {
             </motion.section>
           )}
 
-          {/* ── 2. Delivery Address (Leaflet Map) ────────────────────────────────── */}
-          {orderType === 'DELIVERY' && (
-            <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
-              <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
-                <MapPin className="w-4.5 h-4.5 text-[#B48A5E]" /> Alamat Pengiriman
-              </h2>
-
-              {loadingAddresses ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin text-[#B48A5E]" />
-                  <span className="text-xs font-semibold text-gray-400 ml-2">Memuat alamat tersimpan...</span>
-                </div>
-              ) : savedAddresses.length > 0 ? (
-                <div className="space-y-2 select-none">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 pl-1">Pilih Alamat Tersimpan</label>
-                  <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-hide">
-                    {savedAddresses.map((addr) => {
-                      const isSelected = selectedSavedAddressId === addr.id;
-                      return (
-                        <button
-                          key={addr.id}
-                          type="button"
-                          onClick={() => handleSelectSavedAddress(addr.id)}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-full border text-xs font-bold transition-all whitespace-nowrap shrink-0 cursor-pointer ${
-                            isSelected
-                              ? 'border-[#B48A5E] text-[#B48A5E] bg-[#FFF8F0] shadow-sm'
-                              : 'border-gray-200 text-gray-500 bg-white hover:bg-gray-50'
-                          }`}
-                        >
-                          <MapPin className={`w-3.5 h-3.5 ${isSelected ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
-                          <span>{addr.name || 'Alamat'}</span>
-                          {addr.isDefault && (
-                            <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-100 px-1.5 py-0.2 rounded-full ml-1">
-                              Utama
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-
-              {!deliveryAddress ? (
-                <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-[2rem] p-8 bg-gray-50 text-center gap-4">
-                  <div className="w-14 h-14 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E]">
-                    <MapPin className="w-7 h-7" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold text-gray-800">Belum Ada Lokasi Terpilih</p>
-                    <p className="text-[11px] text-gray-400 max-w-[260px]">Tentukan koordinat peta dan detail alamat pengantaran Anda</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsMapOpen(true)}
-                    className="px-6 py-3 rounded-full bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-xs shadow-md shadow-[#B48A5E]/10 hover:shadow-[#B48A5E]/20 active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    Pilih Alamat di Peta (Buka Map)
-                  </button>
-                </div>
-              ) : (
-                <div className="border border-[#B48A5E]/20 bg-[#FFFBF5] rounded-[2rem] p-5 shadow-sm space-y-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex gap-3 min-w-0">
-                      <div className="w-10 h-10 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E] shrink-0 mt-0.5">
-                        <MapPin className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-extrabold text-gray-900 truncate">{deliveryAddress.label}</p>
-                        <p className="text-[11px] text-gray-500 leading-relaxed mt-0.5 line-clamp-2">{deliveryAddress.detail}</p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsMapOpen(true)}
-                      className="text-xs font-bold text-[#B48A5E] hover:underline shrink-0 cursor-pointer"
-                    >
-                      Ubah Alamat / Lihat Peta
-                    </button>
-                  </div>
-
-                  {/* Detailed Info Badge Grid */}
-                  <div className="grid grid-cols-2 gap-3.5 border-y border-gray-100 py-3.5">
-                    <div>
-                      <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Jarak</span>
-                      <span className="text-xs font-extrabold text-gray-800">{deliveryAddress.distance.toFixed(1)} km</span>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ongkir</span>
-                      <span className="text-xs font-extrabold text-[#B48A5E]">{formatRupiah(deliveryAddress.deliveryFee)}</span>
-                    </div>
-                  </div>
-
-                  {/* Custom Street Details Card */}
-                  <div className="bg-white border border-gray-100 rounded-2xl p-3.5 space-y-1">
-                    <span className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider">Detail Alamat Pengiriman</span>
-                    <p className="text-xs font-semibold text-gray-700 leading-snug">
-                      {deliveryAddress.streetDetail}
-                    </p>
-                  </div>
-                </div>
-              )}
-            </motion.section>
-          )}
 
           {/* ── 3. Customer Details ───────────────────────────── */}
           <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">

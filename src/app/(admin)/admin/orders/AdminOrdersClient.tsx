@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
 import { Search, MapPin, Package, Clock, ArrowUpRight, ShoppingBag, Truck, UserPlus, Bell } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { CourierSelectModal } from '@/components/admin/CourierSelectModal';
 import { useToast } from '@/components/ui/Toast';
 
 interface OrderItem { id: string; qty: number; price: number; modifiers?: string | null; product: { name: string; image: string | null; }; }
@@ -77,9 +76,6 @@ export default function AdminOrdersClient({
     prevOrdersCount.current = orders.length;
   }, [orders.length]);
 
-  const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
-  const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
-
   const filteredOrders = orders.filter(o => {
     const matchesSearch = o.id.toLowerCase().includes(search.toLowerCase()) || o.customerName.toLowerCase().includes(search.toLowerCase()) || o.customerPhone.includes(search);
     const matchesStatus = statusFilter === 'ALL' || o.status === statusFilter;
@@ -87,26 +83,17 @@ export default function AdminOrdersClient({
     return matchesSearch && matchesStatus && matchesType;
   });
 
-  const getNextStatus = (status: string, orderType: string, paymentMethod?: string, paymentProofUrl?: string | null) => {
+  const getNextStatus = (status: string, paymentMethod?: string, paymentProofUrl?: string | null) => {
     if (status === 'PENDING_PAYMENT' && ['QRIS', 'TRANSFER'].includes(paymentMethod || '') && !paymentProofUrl) {
       return 'PENDING';
     }
-    if (orderType === 'DELIVERY') {
-      const map: Record<string, string> = {
-        'PENDING': 'PREPARING',
-        'PENDING_PAYMENT': 'PREPARING',
-        'PREPARING': 'READY',
-      };
-      return map[status];
-    } else {
-      const map: Record<string, string> = {
-        'PENDING': 'PREPARING',
-        'PENDING_PAYMENT': 'PREPARING',
-        'PREPARING': 'READY',
-        'READY': 'COMPLETED',
-      };
-      return map[status];
-    }
+    const map: Record<string, string> = {
+      'PENDING': 'PREPARING',
+      'PENDING_PAYMENT': 'PREPARING',
+      'PREPARING': 'READY',
+      'READY': 'COMPLETED',
+    };
+    return map[status];
   };
 
   const advanceOrderStatus = async (orderId: string, nextStatus: string) => {
@@ -119,17 +106,6 @@ export default function AdminOrdersClient({
       showToast('Status pesanan berhasil diperbarui', 'success');
     } catch { showToast('Gagal mengupdate pesanan', 'error'); }
     finally { setIsUpdating(null); }
-  };
-
-  const handleAssignDriver = async (driverId: string) => {
-    if (!selectedOrderIdForCourier) return;
-    const res = await fetch(`/api/admin/orders/${selectedOrderIdForCourier}/assign`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ driverId }),
-    });
-    if (!res.ok) throw new Error('Failed to assign driver');
-    router.refresh();
   };
 
   const getStatusStyle = (status: string) => {
@@ -303,19 +279,9 @@ export default function AdminOrdersClient({
 
               {/* Actions */}
               <div className="flex items-center gap-2 px-4 sm:px-5 py-3 bg-muted/20 border-t border-border/30">
-                {order.orderType === 'DELIVERY' && order.status === 'READY' ? (
-                  <button
-                    onClick={() => {
-                      setSelectedOrderIdForCourier(order.id);
-                      setIsCourierModalOpen(true);
-                    }}
-                    className="flex-1 py-2 px-4 rounded-xl bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition-all shadow-sm active:scale-[0.98] flex items-center justify-center gap-1.5"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" /> Tugaskan Kurir
-                  </button>
-                ) : getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl) && order.status !== 'DELIVERED' ? (
+                {getNextStatus(order.status, order.paymentMethod, order.paymentProofUrl) ? (
                   (() => {
-                    const nextStatus = getNextStatus(order.status, order.orderType, order.paymentMethod, order.paymentProofUrl)!;
+                    const nextStatus = getNextStatus(order.status, order.paymentMethod, order.paymentProofUrl)!;
                     const isAcceptPayment = nextStatus === 'PENDING';
                     return (
                       <button 
@@ -333,7 +299,7 @@ export default function AdminOrdersClient({
                   })()
                 ) : (
                   <div className="flex-1 text-center text-xs text-muted-foreground font-medium">
-                    {order.status === 'DELIVERED' ? 'Selesai' : 'Menunggu kurir'}
+                    Selesai
                   </div>
                 )}
                 <a href={`/admin/orders/${order.id}`} className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors">
@@ -354,16 +320,6 @@ export default function AdminOrdersClient({
           pageSize={pageSize}
         />
       </div>
-
-      <CourierSelectModal
-        isOpen={isCourierModalOpen}
-        onClose={() => {
-          setIsCourierModalOpen(false);
-          setSelectedOrderIdForCourier(null);
-        }}
-        onSelectDriver={handleAssignDriver}
-        orderId={selectedOrderIdForCourier || ''}
-      />
     </>
   );
 }
