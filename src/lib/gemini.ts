@@ -1,4 +1,4 @@
-﻿import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from '@google/genai';
 
 function getCleanApiKey(): string {
   const raw = process.env.GEMINI_API_KEY || '';
@@ -6,10 +6,10 @@ function getCleanApiKey(): string {
 }
 
 const ACTIVE_MODELS = [
-  'gemini-3.6-flash',
   'gemini-3.5-flash',
   'gemini-3.5-flash-lite',
   'gemini-3-flash-preview',
+  'gemini-3.6-flash',
 ];
 
 interface GenAIOptions {
