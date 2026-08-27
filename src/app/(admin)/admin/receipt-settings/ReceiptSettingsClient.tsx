@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { formatRupiah } from '@/lib/utils';
+import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
 
 interface ReceiptSettingsData {
   id: string;
@@ -54,7 +55,41 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
   const [form, setForm] = useState<ReceiptSettingsData>(initialSettings);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [showTestModal, setShowTestModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const sampleOrder: ReceiptData = {
+    id: 'AS-TEST-001',
+    customerName: 'Bella (Uji Coba)',
+    customerPhone: '081288990011',
+    orderType: 'DINE_IN',
+    tableNumber: '03',
+    paymentMethod: 'QRIS',
+    createdAt: new Date().toISOString(),
+    items: [
+      {
+        name: 'Kopi Susu Arum',
+        qty: 1,
+        price: 22000,
+        totalPrice: 27000,
+        sugarLevel: 'Less Sugar (50%)',
+        iceLevel: 'Normal Ice',
+        shotName: 'Double Shot (+5.000)',
+      },
+      {
+        name: 'Roti Bakar Butter',
+        qty: 1,
+        price: 18000,
+        totalPrice: 18000,
+      },
+    ],
+    subtotal: 45000,
+    tumblerDiscount: 4500,
+    total: 40500,
+    pointsEarned: 4,
+    totalPoints: 34,
+    notes: 'Kopi jangan terlalu manis, roti bakar garing.',
+  };
 
   const handleChange = (field: keyof ReceiptSettingsData, value: any) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -124,7 +159,7 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
   };
 
   const handleTestPrint = () => {
-    window.print();
+    setShowTestModal(true);
   };
 
   return (
@@ -601,6 +636,14 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
           </div>
         </div>
       </div>
+
+      {/* 58mm Thermal Receipt Test Modal (Algoo AT-5805) */}
+      <ThermalReceiptModal
+        isOpen={showTestModal}
+        onClose={() => setShowTestModal(false)}
+        order={sampleOrder}
+        customSettings={form}
+      />
     </div>
   );
 }

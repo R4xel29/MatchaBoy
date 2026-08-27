@@ -224,3 +224,46 @@
   border-top-color: transparent;
   border-bottom-color: transparent;
 }
+
+/* ── Thermal Receipt 58mm / 80mm Print Isolation ─────────── */
+@media print {
+  html, body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #printable-thermal-receipt,
+  #printable-thermal-receipt * {
+    visibility: visible !important;
+  }
+
+  #printable-thermal-receipt {
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 48mm !important;
+    max-width: 48mm !important;
+    margin: 0 !important;
+    padding: 0 2mm !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-family: 'Courier New', Courier, monospace !important;
+    font-size: 10px !important;
+    line-height: 1.25 !important;
+    color: #000000 !important;
+    background: #ffffff !important;
+    display: block !important;
+    z-index: 999999 !important;
+  }
+
+  @page {
+    size: 58mm auto;
+    margin: 0mm !important;
+  }
+}
