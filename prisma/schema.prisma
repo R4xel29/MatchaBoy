@@ -562,6 +562,31 @@ model StoreSettings {
   updatedAt           DateTime @updatedAt
 }
 
+// Pengaturan Struk Kasir Thermal (Algoo AT-5805, 58mm/80mm)
+model ReceiptSettings {
+  id                  String   @id @default(cuid())
+  storeName           String   @default("Arum Seduh")
+  tagline             String   @default("Kopi & Seduhan Istimewa")
+  address             String   @default("Jl. Sukajadi No. 88, Bandung")
+  phone               String   @default("0812-3456-7890")
+  headerNotes         String   @default("")
+  footerNotes         String   @default("Terima kasih atas kunjungan Anda!\nSelamat menikmati seduhan kami.")
+  showLogo            Boolean  @default(true)
+  logoUrl             String?
+  showWifi            Boolean  @default(true)
+  wifiSsid            String   @default("ArumSeduh_Free")
+  wifiPassword        String   @default("seduhkopi123")
+  showSocial          Boolean  @default(true)
+  instagram           String   @default("@arumseduh.id")
+  tiktok              String   @default("@arumseduh")
+  showOrderQr         Boolean  @default(false)
+  paperWidth          String   @default("58mm")
+  autoPrintOnCheckout Boolean  @default(false)
+  printKitchenTicket  Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
 // Pengaturan pembayaran (QRIS, Bank Transfer, COD)
 model PaymentSettings {
   id              String   @id @default(cuid())

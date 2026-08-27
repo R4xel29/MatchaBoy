@@ -43,6 +43,7 @@ import {
   Printer
 } from 'lucide-react';
 import { LiveTableMinimap } from '@/components/admin/tables/LiveTableMinimap';
+import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -182,6 +183,33 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   const [isCourierModalOpen, setIsCourierModalOpen] = useState(false);
   const [selectedOrderIdForCourier, setSelectedOrderIdForCourier] = useState<string | null>(null);
   const [showMinimap, setShowMinimap] = useState(false);
+  const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<ReceiptData | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  const handleOpenReceipt = (order: OrderData) => {
+    const receiptData: ReceiptData = {
+      id: order.id,
+      orderNumber: order.queueNumber ? `A-${order.queueNumber}` : undefined,
+      queueNumber: order.queueNumber,
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      orderType: order.orderType,
+      tableNumber: order.tableNumber,
+      paymentMethod: order.paymentMethod,
+      createdAt: order.createdAt,
+      items: order.items.map((item) => ({
+        name: item.product.name,
+        qty: item.qty,
+        price: item.price,
+        modifiersString: item.modifiers || undefined,
+      })),
+      subtotal: order.subtotal || order.total,
+      total: order.total,
+      notes: order.notes || undefined,
+    };
+    setSelectedReceiptOrder(receiptData);
+    setShowReceiptModal(true);
+  };
 
   // Load read order IDs on mount
   useEffect(() => {
@@ -827,13 +855,24 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                   </div>
                 )}
 
-                {/* Secondary Action Toolbar: Details, WhatsApp, Cancel */}
+                {/* Secondary Action Toolbar: Details, Print, WhatsApp, Cancel */}
                 <div className="flex items-center gap-1.5 pt-1">
                   <button
                     onClick={() => setSelectedOrder(order)}
                     className="flex-1 py-2 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-100 text-stone-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5" /> Rincian
+                  </button>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenReceipt(order);
+                    }}
+                    className="p-2 rounded-xl border border-stone-200 bg-white hover:bg-orange-50 hover:border-orange-300 text-orange-600 transition-all cursor-pointer"
+                    title="Cetak Struk Thermal (58mm)"
+                  >
+                    <Printer className="w-4 h-4" />
                   </button>
 
                   {order.customerPhone && order.customerPhone !== '-' && (
@@ -888,64 +927,52 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
             />
 
             <motion.div
-              initial={{ scale: 0.95, y: 15 }}
+              initial={{ scale: 0.95, y: 10 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative z-10 border border-stone-200 max-h-[90vh] flex flex-col text-left space-y-4"
+              exit={{ scale: 0.95, y: 10 }}
+              className="bg-white rounded-3xl w-full max-w-lg p-6 shadow-2xl relative z-10 text-left border border-stone-200 space-y-4 max-h-[90vh] overflow-y-auto"
             >
-              <div className="flex items-center justify-between pb-3 border-b border-stone-100">
+              <div className="flex items-center justify-between border-b border-stone-100 pb-3">
                 <div>
-                  <h3 className="font-serif font-bold text-lg text-stone-900">
-                    Rincian Pesanan #{selectedOrder.id.slice(0, 8).toUpperCase()}
-                  </h3>
-                  <p className="text-xs text-stone-500 font-medium">{ORDER_TYPE_LABELS[selectedOrder.orderType]} • {new Date(selectedOrder.createdAt).toLocaleString('id-ID')}</p>
+                  <h3 className="font-serif font-bold text-lg text-stone-900 leading-tight">Detail Pesanan</h3>
+                  <p className="text-xs text-stone-500 font-mono">#{selectedOrder.id.slice(0, 8).toUpperCase()}</p>
                 </div>
                 <button
                   onClick={() => setSelectedOrder(null)}
-                  className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50 cursor-pointer"
+                  className="p-2 rounded-xl hover:bg-stone-100 text-stone-400 hover:text-stone-600 transition-colors"
                 >
-                  <X className="w-4 h-4 text-stone-500" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                {/* Customer Info */}
-                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="text-stone-500">Nama Pemesan</span>
-                    <span className="text-stone-900">{selectedOrder.customerName}</span>
+              <div className="space-y-3">
+                {/* Meta details */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
+                    <span className="text-stone-400 block text-[10px] uppercase font-bold">Pelanggan</span>
+                    <span className="font-bold text-stone-800">{selectedOrder.customerName}</span>
+                    <span className="text-stone-500 block text-[11px]">{selectedOrder.customerPhone}</span>
                   </div>
-                  {selectedOrder.tableNumber && (
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-stone-500">Lokasi Duduk</span>
-                      <span className="text-orange-700">{selectedOrder.tableNumber}</span>
-                    </div>
-                  )}
-                  {selectedOrder.customerPhone && selectedOrder.customerPhone !== '-' && (
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className="text-stone-500">Nomor Telepon</span>
-                      <span className="text-stone-900">{selectedOrder.customerPhone}</span>
-                    </div>
-                  )}
-                  {selectedOrder.address && (
-                    <div className="flex items-start justify-between text-xs font-bold gap-3 pt-1 border-t border-stone-200">
-                      <span className="text-stone-500">Alamat / Meja</span>
-                      <span className="text-stone-900 text-right">{selectedOrder.address}</span>
-                    </div>
-                  )}
+                  <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-100">
+                    <span className="text-stone-400 block text-[10px] uppercase font-bold">Tipe & Meja</span>
+                    <span className="font-bold text-stone-800">{ORDER_TYPE_LABELS[selectedOrder.orderType] || selectedOrder.orderType}</span>
+                    {selectedOrder.tableNumber && (
+                      <span className="text-orange-700 block text-[11px] font-bold">Meja {selectedOrder.tableNumber}</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Items */}
-                <div className="space-y-2">
-                  <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Item Dipesan</p>
-                  <div className="space-y-1.5">
+                <div className="space-y-1.5">
+                  <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Item Pesanan</p>
+                  <div className="space-y-1">
                     {selectedOrder.items.map((item) => (
-                      <div key={item.id} className="p-3 rounded-2xl border border-stone-100 bg-stone-50 flex items-start justify-between gap-3 text-xs">
+                      <div key={item.id} className="p-2.5 rounded-xl border border-stone-100 bg-stone-50/50 flex justify-between items-center text-xs">
                         <div>
-                          <p className="font-bold text-stone-900">{item.qty}x {item.product.name}</p>
-                          {item.modifiers && <p className="text-[11px] text-stone-500 mt-0.5">{item.modifiers}</p>}
+                          <span className="font-bold text-stone-900">{item.qty}x {item.product.name}</span>
+                          {item.modifiers && <p className="text-[10px] text-stone-500">{item.modifiers}</p>}
                         </div>
-                        <span className="font-bold text-stone-800">{formatRupiah(item.price * item.qty)}</span>
+                        <span className="font-bold text-stone-700">{formatRupiah(item.price * item.qty)}</span>
                       </div>
                     ))}
                   </div>
@@ -987,6 +1014,15 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                   className="flex-1 py-3 rounded-xl border border-stone-200 font-bold text-xs text-stone-700 hover:bg-stone-50 cursor-pointer"
                 >
                   Tutup
+                </button>
+                <button
+                  onClick={() => {
+                    handleOpenReceipt(selectedOrder);
+                  }}
+                  className="py-3 px-4 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  title="Cetak Struk (58mm)"
+                >
+                  <Printer className="w-4 h-4" /> Cetak Struk
                 </button>
                 {selectedOrder.customerPhone && selectedOrder.customerPhone !== '-' && (
                   <a
@@ -1092,6 +1128,13 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
           onRefreshOrders={fetchOrders}
         />
       )}
+
+      {/* 58mm Thermal Receipt Modal (Algoo AT-5805) */}
+      <ThermalReceiptModal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        order={selectedReceiptOrder}
+      />
     </div>
   );
 }

@@ -50,7 +50,8 @@ import {
   Music,
   TrendingUp,
   Layers,
-  Coins
+  Coins,
+  Printer
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
@@ -82,6 +83,7 @@ const USER_ITEMS = [
 
 const SETTING_ITEMS = [
   { label: 'Pengaturan Toko', href: '/admin/store-settings', icon: Store },
+  { label: 'Pengaturan Struk', href: '/admin/receipt-settings', icon: Printer },
   { label: 'Layout Meja (Dine-in)', href: '/admin/tables', icon: Layers },
   { label: 'Metode Pembayaran', href: '/admin/payment-settings', icon: CreditCard },
   { label: 'Notifikasi', href: '/admin/notifications', icon: Bell },
@@ -121,6 +123,7 @@ const COLLABORATION_ITEMS = [
 const CASHIER_ITEMS = [
   { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
+  { label: 'Pengaturan Struk', href: '/admin/receipt-settings', icon: Printer },
   { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
 ];
 

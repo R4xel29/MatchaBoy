@@ -34,11 +34,13 @@ import {
   Clock,
   Save,
   Mic,
+  Printer,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
 import { PosTablePickerModal } from '@/components/cashier/PosTablePickerModal';
 import { VoiceOrderModal } from '@/components/cashier/VoiceOrderModal';
+import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
 import { useToast } from '@/components/ui/Toast';
 
 const DEFAULT_DRINK_SIZES = [
@@ -118,7 +120,7 @@ type CartItemPOS = {
   image?: string | null;
 };
 
-type OrderType = 'PICKUP' | 'DINE_IN';
+type OrderType = 'PICKUP' | 'DINE_IN' | 'DELIVERY';
 
 interface Props {
   products: POSProduct[];
@@ -152,6 +154,8 @@ export default function CashierPOSClient({ products, categories, packagingStock 
   const [showPosTablePicker, setShowPosTablePicker] = useState(false);
   const [posPeopleCount, setPosPeopleCount] = useState(1);
   const [showVoiceOrderModal, setShowVoiceOrderModal] = useState(false);
+  const [completedReceiptData, setCompletedReceiptData] = useState<ReceiptData | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
 
   // Cashier Shift & Petty Cash State
   const [shiftData, setShiftData] = useState<{ activeShift: any; reconciliation: any; history: any[] } | null>(null);
@@ -803,6 +807,36 @@ export default function CashierPOSClient({ products, categories, packagingStock 
       const wasPointsAwarded = data.pointsAwarded;
       const earnedPoints = data.pointsEarned || 0;
       const memberName = phoneLookupResult?.name || customerName;
+
+      // Prepare Receipt Data for 58mm Thermal Print (Algoo AT-5805)
+      const receiptData: ReceiptData = {
+        id: data.orderId,
+        customerName: memberName || customerName || 'Pelanggan',
+        customerPhone: customerPhone || undefined,
+        orderType,
+        tableNumber: selectedTable || null,
+        paymentMethod,
+        createdAt: new Date().toISOString(),
+        items: cart.map((item) => ({
+          name: item.name,
+          qty: item.quantity,
+          price: item.basePrice,
+          totalPrice: item.totalPrice,
+          iceLevel: item.iceLevel,
+          sugarLevel: item.sugarLevel,
+          matchaLevel: item.matchaLevel,
+          size: item.size,
+          shotName: item.shotName,
+          addOns: item.addOns,
+        })),
+        subtotal,
+        tumblerDiscount,
+        total: totalPayable,
+        pointsEarned: earnedPoints,
+        notes,
+      };
+      setCompletedReceiptData(receiptData);
+      setShowReceiptModal(true);
 
       // Broadcast completed state payload to second monitor display FIRST before clearing cart
       const completedPayload = {
@@ -2488,6 +2522,13 @@ export default function CashierPOSClient({ products, categories, packagingStock 
         isOpen={showVoiceOrderModal}
         onClose={() => setShowVoiceOrderModal(false)}
         onOrderParsed={handleVoiceOrderParsed}
+      />
+
+      {/* 58mm Thermal Receipt Modal (Algoo AT-5805) */}
+      <ThermalReceiptModal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        order={completedReceiptData}
       />
     </div>
   );
