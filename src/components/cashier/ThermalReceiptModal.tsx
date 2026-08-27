@@ -155,7 +155,138 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
   const orderIdShort = order.id.slice(0, 8).toUpperCase();
 
   const handlePrint = () => {
-    window.print();
+    const printableElement = document.getElementById('printable-thermal-receipt');
+    if (!printableElement) {
+      window.print();
+      return;
+    }
+
+    // Use hidden iframe to isolate the exact receipt and prevent viewport clipping
+    let iframe = document.getElementById('thermal-print-iframe') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'thermal-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    const printableHtml = printableElement.innerHTML;
+    const is80mm = settings.paperWidth === '80mm';
+    const widthMm = is80mm ? '72mm' : '48mm';
+    const pageMm = is80mm ? '80mm' : '58mm';
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Struk ${settings.storeName}</title>
+          <style>
+            @page {
+              size: ${pageMm} auto;
+              margin: 0mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+            }
+            html, body {
+              width: ${pageMm};
+              margin: 0;
+              padding: 0;
+              background: #ffffff;
+              color: #000000;
+              font-family: 'Courier New', Courier, monospace;
+              font-size: 11px;
+              line-height: 1.35;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            .receipt-wrapper {
+              width: ${widthMm};
+              margin: 0 auto;
+              padding: 2mm 0 10mm 0;
+            }
+            img {
+              max-width: 100%;
+              height: auto;
+              filter: grayscale(100%) contrast(200%);
+              display: block;
+              margin: 0 auto;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: bold; }
+            .font-semibold { font-weight: 600; }
+            .font-extrabold { font-weight: 800; }
+            .uppercase { text-transform: uppercase; }
+            .border-b { border-bottom: 1px dashed #000; }
+            .border-b-2 { border-bottom: 2px solid #000; }
+            .border-t { border-top: 1px dashed #000; }
+            .border-dashed { border-style: dashed; }
+            .py-2 { padding-top: 6px; padding-bottom: 6px; }
+            .py-1 { padding-top: 3px; padding-bottom: 3px; }
+            .py-1\\.5 { padding-top: 4px; padding-bottom: 4px; }
+            .py-3 { padding-top: 8px; padding-bottom: 8px; }
+            .pt-0\\.5 { padding-top: 2px; }
+            .pt-1 { padding-top: 3px; }
+            .pt-2 { padding-top: 6px; }
+            .pb-2 { padding-bottom: 6px; }
+            .pl-3 { padding-left: 10px; }
+            .pl-4 { padding-left: 12px; }
+            .pl-6 { padding-left: 16px; }
+            .space-y-0\\.5 > * + * { margin-top: 2px; }
+            .space-y-1 > * + * { margin-top: 4px; }
+            .space-y-2 > * + * { margin-top: 7px; }
+            .space-y-3 > * + * { margin-top: 10px; }
+            .flex { display: flex; }
+            .justify-between { justify-content: space-between; }
+            .items-start { align-items: flex-start; }
+            .items-center { align-items: center; }
+            .flex-1 { flex: 1 1 0%; }
+            .shrink-0 { flex-shrink: 0; }
+            .text-\\[9px\\] { font-size: 9px; }
+            .text-\\[9\\.5px\\] { font-size: 9.5px; }
+            .text-\\[10px\\] { font-size: 10px; }
+            .text-\\[11px\\] { font-size: 11px; }
+            .text-\\[12px\\] { font-size: 12px; }
+            .text-xs { font-size: 10.5px; }
+            .text-sm { font-size: 12px; }
+            .text-base { font-size: 14px; }
+            .whitespace-pre-line { white-space: pre-line; }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-wrapper">
+            ${printableHtml}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        window.print();
+      }
+    }, 300);
   };
 
   const handleCopyText = () => {
