@@ -13,9 +13,9 @@ import {
   Wifi,
   Sparkles,
   ChevronRight,
-  Info,
-} from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import { BluetoothPrinterPill } from './BluetoothPrinterPill';
+import { isBluetoothPrinterConnected, printDirectBluetooth } from '@/lib/bluetooth-printer';
 
 export interface ReceiptData {
   id: string;
@@ -526,7 +526,20 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     `;
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    // 1. Direct Web Bluetooth Print (Zero Dialogs, Instant Hardware Print)
+    if (isBluetoothPrinterConnected()) {
+      try {
+        const success = await printDirectBluetooth(order, settings, activeTab === 'kitchen');
+        if (success) {
+          return;
+        }
+      } catch (err) {
+        console.warn('Bluetooth direct print failed, falling back to browser print:', err);
+      }
+    }
+
+    // 2. Hidden Iframe Print Dialog Fallback
     let iframe = document.getElementById('thermal-print-iframe') as HTMLIFrameElement;
     if (!iframe) {
       iframe = document.createElement('iframe');
@@ -639,12 +652,15 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
               </div>
             </div>
 
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full hover:bg-slate-200/70 text-slate-500 flex items-center justify-center transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-2">
+              <BluetoothPrinterPill />
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full hover:bg-slate-200/70 text-slate-500 flex items-center justify-center transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Tab Selector */}

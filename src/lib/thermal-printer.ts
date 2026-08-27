@@ -1,4 +1,5 @@
 import { formatRupiah } from './utils';
+import { isBluetoothPrinterConnected, printDirectBluetooth } from './bluetooth-printer';
 
 export interface ThermalPrintOrder {
   id: string;
@@ -56,12 +57,22 @@ export interface ThermalPrintSettings {
   printKitchenTicket?: boolean;
 }
 
-export function printThermalReceipt(
+export async function printThermalReceipt(
   order: ThermalPrintOrder,
   settings: ThermalPrintSettings = {},
   isKitchenTicket = false
 ) {
   if (typeof window === 'undefined') return;
+
+  // 1. Direct Web Bluetooth Print (Zero Dialogs, Instant Hardware Print)
+  if (isBluetoothPrinterConnected()) {
+    try {
+      const printed = await printDirectBluetooth(order, settings, isKitchenTicket);
+      if (printed) return;
+    } catch (err) {
+      console.warn('Bluetooth direct print failed, falling back to browser print:', err);
+    }
+  }
 
   const storeName = settings.storeName || 'Arum Seduh';
   const is80mm = settings.paperWidth === '80mm';

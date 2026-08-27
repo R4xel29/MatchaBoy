@@ -45,6 +45,7 @@ import {
 } from 'lucide-react';
 import { LiveTableMinimap } from '@/components/admin/tables/LiveTableMinimap';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
+import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 import { printThermalReceipt, ThermalPrintOrder } from '@/lib/thermal-printer';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -541,6 +542,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Bluetooth Thermal Printer Pill */}
+            <BluetoothPrinterPill />
+
             {/* Audio Alarm Toggle */}
             <button
               type="button"

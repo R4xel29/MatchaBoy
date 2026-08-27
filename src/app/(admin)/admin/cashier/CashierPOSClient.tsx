@@ -41,6 +41,7 @@ import QRCameraScanner from '@/components/cashier/QRCameraScanner';
 import { PosTablePickerModal } from '@/components/cashier/PosTablePickerModal';
 import { VoiceOrderModal } from '@/components/cashier/VoiceOrderModal';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
+import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 import { printThermalReceipt } from '@/lib/thermal-printer';
 import { useToast } from '@/components/ui/Toast';
 
@@ -1062,6 +1063,9 @@ export default function CashierPOSClient({ products, categories, packagingStock 
               Buka Shift Kasir
             </button>
           )}
+
+          {/* Bluetooth Thermal Printer Pill */}
+          <BluetoothPrinterPill />
 
           {/* Customer Display Button */}
           <button

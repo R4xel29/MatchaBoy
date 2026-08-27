@@ -19,10 +19,10 @@ import {
   Receipt,
   Coffee,
   Check,
-} from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { formatRupiah } from '@/lib/utils';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
+import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 
 interface ReceiptSettingsData {
   id: string;
@@ -445,9 +445,12 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
 
           {/* Card 5: Pengaturan Printer Algoo AT-5805 */}
           <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
-              <Sliders className="w-4 h-4 text-orange-600" />
-              <h2 className="font-bold text-sm text-slate-800">Spesifikasi Printer Thermal</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-orange-600" />
+                <h2 className="font-bold text-sm text-slate-800">Koneksi & Spesifikasi Printer</h2>
+              </div>
+              <BluetoothPrinterPill />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
