@@ -43,6 +43,7 @@ interface ReceiptSettingsData {
   showOrderQr: boolean;
   paperWidth: string;
   autoPrintOnCheckout: boolean;
+  autoPrintIncomingOrders: boolean;
   printKitchenTicket: boolean;
 }
 
@@ -470,7 +471,19 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
                     onChange={(e) => handleChange('autoPrintOnCheckout', e.target.checked)}
                     className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
                   />
-                  <span className="text-xs font-medium text-slate-700">Auto-Print setelah Checkout</span>
+                  <span className="text-xs font-medium text-slate-700">Auto-Print Transaksi Kasir POS</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.autoPrintIncomingOrders}
+                    onChange={(e) => handleChange('autoPrintIncomingOrders', e.target.checked)}
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
+                  />
+                  <span className="text-xs font-medium text-slate-700 font-semibold text-orange-700">
+                    ⚡ Auto-Print Pesanan Masuk (Online / Meja)
+                  </span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">

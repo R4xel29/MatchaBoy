@@ -41,6 +41,7 @@ import QRCameraScanner from '@/components/cashier/QRCameraScanner';
 import { PosTablePickerModal } from '@/components/cashier/PosTablePickerModal';
 import { VoiceOrderModal } from '@/components/cashier/VoiceOrderModal';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
+import { printThermalReceipt } from '@/lib/thermal-printer';
 import { useToast } from '@/components/ui/Toast';
 
 const DEFAULT_DRINK_SIZES = [
@@ -215,7 +216,16 @@ export default function CashierPOSClient({ products, categories, packagingStock 
         }
       })
       .catch(() => {});
+
+    fetch('/api/admin/receipt-settings')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && !d.error) setReceiptSettings(d);
+      })
+      .catch(() => {});
   }, []);
+
+  const [receiptSettings, setReceiptSettings] = useState<any>(null);
 
   // Member lookup state (via QR scan, unique ID, or phone)
   const [phoneLookupResult, setPhoneLookupResult] = useState<{ id: string; name: string; phone?: string; points: number; referralCode?: string; arusLevel?: string } | null>(null);
@@ -837,6 +847,17 @@ export default function CashierPOSClient({ products, categories, packagingStock 
       };
       setCompletedReceiptData(receiptData);
       setShowReceiptModal(true);
+
+      // Auto-print receipt if enabled in store settings
+      if (receiptSettings?.autoPrintOnCheckout) {
+        setTimeout(() => {
+          printThermalReceipt(
+            receiptData,
+            receiptSettings,
+            receiptSettings.printKitchenTicket
+          );
+        }, 150);
+      }
 
       // Broadcast completed state payload to second monitor display FIRST before clearing cart
       const completedPayload = {

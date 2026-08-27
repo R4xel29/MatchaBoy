@@ -582,6 +582,7 @@ model ReceiptSettings {
   showOrderQr         Boolean  @default(false)
   paperWidth          String   @default("58mm")
   autoPrintOnCheckout Boolean  @default(false)
+  autoPrintIncomingOrders Boolean @default(true)
   printKitchenTicket  Boolean  @default(false)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

@@ -40,10 +40,12 @@ import {
   CreditCard,
   Banknote,
   Send,
-  Printer
+  Printer,
+  Zap
 } from 'lucide-react';
 import { LiveTableMinimap } from '@/components/admin/tables/LiveTableMinimap';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
+import { printThermalReceipt, ThermalPrintOrder } from '@/lib/thermal-printer';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -186,6 +188,27 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<ReceiptData | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
+  // Auto-Print Receipt Settings & Ref
+  const [receiptSettings, setReceiptSettings] = useState<any>(null);
+  const autoPrintedOrderIdsRef = useRef<Set<string>>(new Set());
+
+  // Load receipt settings on mount
+  useEffect(() => {
+    fetch('/api/admin/receipt-settings')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && !data.error) setReceiptSettings(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Initialize auto-printed orders with initialOrders on mount so historical orders don't re-print
+  useEffect(() => {
+    if (initialOrders && initialOrders.length > 0) {
+      initialOrders.forEach((o) => autoPrintedOrderIdsRef.current.add(o.id));
+    }
+  }, [initialOrders]);
+
   const handleOpenReceipt = (order: OrderData) => {
     const receiptData: ReceiptData = {
       id: order.id,
@@ -319,7 +342,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
     showToast('Alarm pesanan telah dimatikan', 'info');
   };
 
-  // Realtime Polling (Every 4 seconds)
+  // Realtime Polling (Every 4 seconds) with Auto-Print Trigger
   const fetchOrders = useCallback(async () => {
     try {
       const res = await fetch(`/api/cashier/orders?format=json&t=${Date.now()}`, {
@@ -328,13 +351,56 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.orders) setOrders(data.orders);
+        if (data.orders) {
+          const incomingOrders: OrderData[] = data.orders;
+          setOrders(incomingOrders);
+
+          // Check for newly arrived orders to auto-print
+          if (receiptSettings?.autoPrintIncomingOrders) {
+            incomingOrders.forEach((ord) => {
+              const isEligible = ['PENDING', 'PENDING_PAYMENT', 'PREPARING'].includes(ord.status);
+              if (isEligible && !autoPrintedOrderIdsRef.current.has(ord.id)) {
+                autoPrintedOrderIdsRef.current.add(ord.id);
+
+                const thermalOrder: ThermalPrintOrder = {
+                  id: ord.id,
+                  orderNumber: ord.queueNumber ? `A-${ord.queueNumber}` : undefined,
+                  queueNumber: ord.queueNumber,
+                  customerName: ord.customerName,
+                  customerPhone: ord.customerPhone,
+                  orderType: ord.orderType,
+                  tableNumber: ord.tableNumber,
+                  paymentMethod: ord.paymentMethod,
+                  createdAt: ord.createdAt,
+                  items: ord.items.map((item) => ({
+                    name: item.product.name,
+                    qty: item.qty,
+                    price: item.price,
+                    modifiersString: item.modifiers || undefined,
+                  })),
+                  subtotal: ord.subtotal || ord.total,
+                  total: ord.total,
+                  notes: ord.notes || undefined,
+                };
+
+                // Trigger auto-print to thermal printer
+                printThermalReceipt(
+                  thermalOrder,
+                  receiptSettings,
+                  receiptSettings.printKitchenTicket
+                );
+
+                showToast(`⚡ Pesanan baru #${ord.id.slice(0, 8).toUpperCase()} otomatis dicetak ke Algoo!`, 'success');
+              }
+            });
+          }
+        }
         if (data.pickupAlarmLeadTime !== undefined) setPickupAlarmLeadTime(data.pickupAlarmLeadTime);
       }
     } catch (err) {
       console.error('Error fetching cashier orders:', err);
     }
-  }, []);
+  }, [receiptSettings, showToast]);
 
   useEffect(() => {
     const interval = setInterval(fetchOrders, 4000);

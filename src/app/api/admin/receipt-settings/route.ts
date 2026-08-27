@@ -28,6 +28,7 @@ export async function GET() {
           showOrderQr: false,
           paperWidth: '58mm',
           autoPrintOnCheckout: false,
+          autoPrintIncomingOrders: true,
           printKitchenTicket: false,
         },
       });
@@ -71,6 +72,7 @@ export async function POST(req: Request) {
       showOrderQr: Boolean(body.showOrderQr),
       paperWidth: body.paperWidth === '80mm' ? '80mm' : '58mm',
       autoPrintOnCheckout: Boolean(body.autoPrintOnCheckout),
+      autoPrintIncomingOrders: Boolean(body.autoPrintIncomingOrders),
       printKitchenTicket: Boolean(body.printKitchenTicket),
     };
 
