@@ -30,18 +30,24 @@ import { normalizeVoiceTranscript } from "@/lib/voice-dictionary";
 interface ActionProposal {
   id: string;
   actionType:
-    | "CREATE_PRODUCT"
-    | "FULL_RECEIPT_PIPELINE"
-    | "CHAINED_BATCH_ACTION"
-    | "SET_FLASH_SALE"
-    | "SET_PRODUCT_RECIPE"
-    | "CREATE_ORDER"
-    | "CREATE_VOUCHER"
+    | "UPDATE_STORE_SETTINGS"
+    | "UPDATE_SETTINGS"
     | "UPDATE_PRODUCT"
+    | "BULK_UPDATE_PRODUCTS"
+    | "CREATE_PRODUCT"
     | "DELETE_PRODUCT"
+    | "SET_PRODUCT_RECIPE"
+    | "FULL_RECEIPT_PIPELINE"
+    | "BATCH_RECEIPT_RESTOCK"
     | "RESTOCK_INGREDIENT"
     | "RECORD_EXPENSE"
-    | "BATCH_RECEIPT_RESTOCK";
+    | "MANAGE_CATEGORY"
+    | "MANAGE_DINING_TABLE"
+    | "MANAGE_TOPPING"
+    | "SET_FLASH_SALE"
+    | "CREATE_VOUCHER"
+    | "CREATE_ORDER"
+    | "CHAINED_BATCH_ACTION";
   title: string;
   summary: string;
   payload: any;
@@ -745,20 +751,21 @@ export function AdminAIAssistantWidget() {
 
                         {/* Payload summary badge grid */}
                         <div className="p-2.5 rounded-xl bg-white/80 border border-slate-200/80 text-[11px] space-y-1 font-mono text-slate-700">
-                          {Object.entries(msg.proposal.payload).map(([k, v]) => {
+                          {Object.entries(msg.proposal.payload || {}).map(([k, v]) => {
                             if (k === "imageUrl" || k === "aiImagePrompt") return null;
                             if (typeof v === "object" && v !== null) {
                               return (
                                 <div key={k} className="flex justify-between gap-2 border-b border-slate-100 pb-0.5">
-                                  <span className="font-semibold text-slate-500">{k}:</span>
-                                  <span className="font-bold text-slate-900 text-right truncate max-w-[180px]">{JSON.stringify(v)}</span>
+                                  <span className="font-semibold text-slate-500 capitalize">{k.replace(/([A-Z])/g, " $1").toLowerCase()}:</span>
+                                  <span className="font-bold text-slate-900 text-right truncate max-w-[200px]">{JSON.stringify(v)}</span>
                                 </div>
                               );
                             }
+                            const displayVal = v !== undefined && v !== null && v !== "" ? String(v) : "-";
                             return (
                               <div key={k} className="flex justify-between gap-2 border-b border-slate-100 pb-0.5 last:border-0 last:pb-0">
-                                <span className="font-semibold text-slate-500">{k}:</span>
-                                <span className="font-bold text-slate-900 text-right">{String(v)}</span>
+                                <span className="font-semibold text-slate-500 capitalize">{k.replace(/([A-Z])/g, " $1").toLowerCase()}:</span>
+                                <span className="font-bold text-slate-900 text-right max-w-[200px] truncate">{displayVal}</span>
                               </div>
                             );
                           })}
@@ -790,7 +797,7 @@ export function AdminAIAssistantWidget() {
                         {msg.proposal.status === "EXECUTED" && (
                           <div className="p-2.5 rounded-xl bg-emerald-100/90 border border-emerald-300 text-emerald-900 text-[11px] font-bold flex items-center gap-2">
                             <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-                            <span>{msg.proposal.executionResult}</span>
+                            <span>{msg.proposal.executionResult || "Aksi berhasil dieksekusi ke database toko!"}</span>
                           </div>
                         )}
 

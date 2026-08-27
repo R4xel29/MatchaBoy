@@ -20,7 +20,74 @@ export async function POST(req: Request) {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 1. CREATE VOUCHER TEMPLATE
+    // 1. UPDATE STORE SETTINGS (JAM OPERASIONAL, NAMA TOKO, ALAMAT, WA, ONGKIR)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "UPDATE_STORE_SETTINGS" || actionType === "UPDATE_SETTINGS") {
+      const {
+        openTime,
+        closeTime,
+        storeName,
+        storeAddress,
+        whatsappNumber,
+        whatsappMessage,
+        deliveryFeePerKm,
+        maxDeliveryDistance,
+        pickupAlarmLeadTime,
+        cancellationTimeLimit,
+        operationalDays,
+      } = payload;
+
+      const existingSettings = await prisma.storeSettings.findFirst();
+      const updateData: Record<string, any> = {};
+
+      if (openTime !== undefined) updateData.openTime = String(openTime).trim();
+      if (closeTime !== undefined) updateData.closeTime = String(closeTime).trim();
+      if (storeName !== undefined) updateData.storeName = String(storeName).trim();
+      if (storeAddress !== undefined) updateData.storeAddress = String(storeAddress).trim();
+      if (whatsappNumber !== undefined) updateData.whatsappNumber = String(whatsappNumber).trim();
+      if (whatsappMessage !== undefined) updateData.whatsappMessage = String(whatsappMessage).trim();
+      if (deliveryFeePerKm !== undefined) updateData.deliveryFeePerKm = Number(deliveryFeePerKm);
+      if (maxDeliveryDistance !== undefined) updateData.maxDeliveryDistance = Number(maxDeliveryDistance);
+      if (pickupAlarmLeadTime !== undefined) updateData.pickupAlarmLeadTime = Number(pickupAlarmLeadTime);
+      if (cancellationTimeLimit !== undefined) updateData.cancellationTimeLimit = Number(cancellationTimeLimit);
+      if (operationalDays !== undefined) updateData.operationalDays = typeof operationalDays === "string" ? operationalDays : JSON.stringify(operationalDays);
+
+      let savedSettings;
+      if (existingSettings) {
+        savedSettings = await prisma.storeSettings.update({
+          where: { id: existingSettings.id },
+          data: updateData,
+        });
+      } else {
+        savedSettings = await prisma.storeSettings.create({
+          data: {
+            openTime: updateData.openTime || "08:00",
+            closeTime: updateData.closeTime || "21:00",
+            storeName: updateData.storeName || "Matchaboy HQ",
+            storeAddress: updateData.storeAddress || "Jl. Matcha No. 1",
+            whatsappNumber: updateData.whatsappNumber || "",
+            whatsappMessage: updateData.whatsappMessage || "Halo Matchaboy...",
+            ...updateData,
+          },
+        });
+      }
+
+      const summaryList: string[] = [];
+      if (openTime || closeTime) summaryList.push(`Jam Buka/Tutup: ${savedSettings.openTime} - ${savedSettings.closeTime}`);
+      if (storeName) summaryList.push(`Nama: "${savedSettings.storeName}"`);
+      if (storeAddress) summaryList.push(`Alamat: "${savedSettings.storeAddress}"`);
+      if (whatsappNumber) summaryList.push(`WA: ${savedSettings.whatsappNumber}`);
+      if (deliveryFeePerKm) summaryList.push(`Ongkir/km: Rp ${savedSettings.deliveryFeePerKm.toLocaleString("id-ID")}`);
+
+      return NextResponse.json({
+        success: true,
+        message: `Pengaturan toko berhasil diperbarui! (${summaryList.join(", ") || "Perubahan tersimpan"}).`,
+        settings: savedSettings,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 2. CREATE VOUCHER TEMPLATE
     // ──────────────────────────────────────────────────────────────────────────
     if (actionType === "CREATE_VOUCHER") {
       const {
@@ -194,32 +261,65 @@ export async function POST(req: Request) {
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // 3. UPDATE PRODUCT (PRICE / BADGE / IMAGE / STATUS)
+    // 3. UPDATE PRODUCT (CAPTION, HARGA, FOTO, BADGE, NAMA, MODIFIER, KATEGORI)
     // ──────────────────────────────────────────────────────────────────────────
     if (actionType === "UPDATE_PRODUCT") {
-      const { productId, productName, price, badge, description, name, imageUrl, aiImagePrompt } = payload;
+      const {
+        productId,
+        productName,
+        name,
+        price,
+        badge,
+        description,
+        caption,
+        tagline,
+        imageUrl,
+        aiImagePrompt,
+        modifiers,
+        categoryName,
+      } = payload;
 
       let targetProduct = null;
       if (productId) {
         targetProduct = await prisma.product.findUnique({ where: { id: productId } });
-      } else if (productName) {
+      } else if (productName || name) {
+        const queryName = productName || name;
         targetProduct = await prisma.product.findFirst({
-          where: { name: { contains: productName, mode: "insensitive" } },
+          where: { name: { contains: queryName, mode: "insensitive" } },
         });
       }
 
       if (!targetProduct) {
-        return NextResponse.json({ error: `Produk "${productName || productId}" tidak ditemukan di database.` }, { status: 404 });
+        return NextResponse.json({ error: `Produk "${productName || name || productId}" tidak ditemukan di database.` }, { status: 404 });
       }
 
       const updateData: Record<string, any> = {};
+      if (name !== undefined) updateData.name = String(name).trim();
       if (price !== undefined) updateData.price = Number(price);
       if (badge !== undefined) updateData.badge = badge === "none" ? null : badge;
-      if (description !== undefined) updateData.description = description;
-      if (name !== undefined) updateData.name = name;
+      
+      const finalDesc = description || caption || tagline;
+      if (finalDesc !== undefined) updateData.description = String(finalDesc).trim();
+
+      if (modifiers !== undefined) {
+        updateData.modifiers = typeof modifiers === "string" ? modifiers : JSON.stringify(modifiers);
+      }
+
+      if (categoryName) {
+        let cat = await prisma.category.findFirst({
+          where: { name: { contains: categoryName, mode: "insensitive" } },
+        });
+        if (!cat) {
+          const slug = categoryName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+          cat = await prisma.category.create({
+            data: { name: categoryName, slug: slug || `cat-${Date.now()}` },
+          });
+        }
+        updateData.categoryId = cat.id;
+      }
 
       if (imageUrl || aiImagePrompt) {
-        updateData.image = await persistAiProductImage(imageUrl || aiImagePrompt, name || targetProduct.name);
+        updateData.image = await persistAiProductImage(imageUrl || aiImagePrompt, updateData.name || targetProduct.name);
       }
 
       const updated = await prisma.product.update({
@@ -227,10 +327,71 @@ export async function POST(req: Request) {
         data: updateData,
       });
 
+      const changeSummary: string[] = [];
+      if (finalDesc) changeSummary.push(`Deskripsi/Caption: "${updated.description.slice(0, 40)}..."`);
+      if (price !== undefined) changeSummary.push(`Harga: Rp ${updated.price.toLocaleString("id-ID")}`);
+      if (badge !== undefined) changeSummary.push(`Badge: ${updated.badge || "Normal"}`);
+      if (name !== undefined) changeSummary.push(`Nama: "${updated.name}"`);
+
       return NextResponse.json({
         success: true,
-        message: `Menu "${updated.name}" berhasil diperbarui (Harga: Rp ${updated.price.toLocaleString("id-ID")}${updated.badge ? `, Status: ${updated.badge}` : ""}).`,
-        data: updated,
+        message: `Menu "${updated.name}" berhasil diperbarui! (${changeSummary.join(", ") || "Data tersimpan"}).`,
+        product: updated,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 3.5. BULK UPDATE PRODUCTS (LENGKAPI CAPTION/HARGA UNTUK BANYAK MENU SEKALIGUS)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "BULK_UPDATE_PRODUCTS") {
+      const { updates = [], badge } = payload;
+
+      if (!Array.isArray(updates) || updates.length === 0) {
+        if (badge !== undefined) {
+          await prisma.product.updateMany({
+            data: { badge: badge === "none" ? null : badge },
+          });
+          return NextResponse.json({
+            success: true,
+            message: `Status badge seluruh menu berhasil diubah menjadi "${badge}".`,
+          });
+        }
+        return NextResponse.json({ error: "Daftar pembaruan menu (updates) kosong." }, { status: 400 });
+      }
+
+      const results: string[] = [];
+      await prisma.$transaction(async (tx) => {
+        for (const item of updates) {
+          const itemDesc = item.description || item.caption || item.tagline;
+          const updateData: Record<string, any> = {};
+          if (itemDesc) updateData.description = String(itemDesc).trim();
+          if (item.price !== undefined) updateData.price = Number(item.price);
+          if (item.badge !== undefined) updateData.badge = item.badge === "none" ? null : item.badge;
+          if (item.name) updateData.name = String(item.name).trim();
+
+          let target = null;
+          if (item.productId || item.id) {
+            target = await tx.product.findUnique({ where: { id: item.productId || item.id } });
+          } else if (item.productName || item.name) {
+            target = await tx.product.findFirst({
+              where: { name: { contains: item.productName || item.name, mode: "insensitive" } },
+            });
+          }
+
+          if (target && Object.keys(updateData).length > 0) {
+            await tx.product.update({
+              where: { id: target.id },
+              data: updateData,
+            });
+            results.push(target.name);
+          }
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Berhasil memperbarui ${results.length} menu: ${results.join(", ")}.`,
+        updatedCount: results.length,
       });
     }
 
@@ -547,6 +708,150 @@ export async function POST(req: Request) {
         success: true,
         message: `Berhasil memproses struk belanja dari "${receiptStoreName}". Bahan terupdate: ${results.join(", ")}. Total pengeluaran: Rp ${totalExpense.toLocaleString("id-ID")}.`,
         updatedItems: results,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 8.5. MANAGE CATEGORY (BUAT / UBAH KATEGORI MENU)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "MANAGE_CATEGORY") {
+      const { categoryId, name, newName, action = "CREATE" } = payload;
+      const targetName = newName || name;
+
+      if (!targetName) {
+        return NextResponse.json({ error: "Nama kategori harus diisi." }, { status: 400 });
+      }
+
+      const slug = targetName.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+
+      if (action === "UPDATE" && (categoryId || name)) {
+        const cat = await prisma.category.findFirst({
+          where: { OR: [{ id: categoryId }, { name: { contains: name, mode: "insensitive" } }] },
+        });
+        if (!cat) return NextResponse.json({ error: "Kategori tidak ditemukan." }, { status: 404 });
+
+        const updated = await prisma.category.update({
+          where: { id: cat.id },
+          data: { name: targetName, slug },
+        });
+        return NextResponse.json({
+          success: true,
+          message: `Kategori "${cat.name}" berhasil diubah namanya menjadi "${updated.name}".`,
+          category: updated,
+        });
+      }
+
+      const created = await prisma.category.create({
+        data: { name: targetName, slug: slug || `cat-${Date.now()}` },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Kategori baru "${created.name}" berhasil dibuat!`,
+        category: created,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 8.6. MANAGE DINING TABLE (TAMBAH / UBAH MEJA DINE-IN)
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "MANAGE_DINING_TABLE") {
+      const { number, capacity = 2, status = "AVAILABLE", action = "CREATE" } = payload;
+
+      if (!number) {
+        return NextResponse.json({ error: "Nomor meja harus diisi." }, { status: 400 });
+      }
+
+      const tableNum = String(number).trim();
+      const existing = await prisma.diningTable.findUnique({
+        where: { number: tableNum },
+      });
+
+      if (action === "DELETE" && existing) {
+        await prisma.diningTable.delete({ where: { id: existing.id } });
+        return NextResponse.json({
+          success: true,
+          message: `Meja ${tableNum} berhasil dihapus dari sistem.`,
+        });
+      }
+
+      if (existing) {
+        const updated = await prisma.diningTable.update({
+          where: { id: existing.id },
+          data: {
+            capacity: Number(capacity) || existing.capacity,
+            status: status || existing.status,
+          },
+        });
+        return NextResponse.json({
+          success: true,
+          message: `Meja ${tableNum} berhasil diperbarui (Kapasitas: ${updated.capacity} kursi, Status: ${updated.status}).`,
+          table: updated,
+        });
+      }
+
+      const created = await prisma.diningTable.create({
+        data: {
+          number: tableNum,
+          capacity: Number(capacity) || 2,
+          status: status || "AVAILABLE",
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Meja ${created.number} (Kapasitas: ${created.capacity} kursi) berhasil ditambahkan!`,
+        table: created,
+      });
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // 8.7. MANAGE TOPPING
+    // ──────────────────────────────────────────────────────────────────────────
+    if (actionType === "MANAGE_TOPPING") {
+      const { toppingId, name, price, isAvailable, action = "CREATE" } = payload;
+
+      if (!name && !toppingId) {
+        return NextResponse.json({ error: "Nama atau ID topping harus diisi." }, { status: 400 });
+      }
+
+      let topping = null;
+      if (toppingId) {
+        topping = await prisma.topping.findUnique({ where: { id: toppingId } });
+      } else if (name) {
+        topping = await prisma.topping.findFirst({
+          where: { name: { contains: name, mode: "insensitive" } },
+        });
+      }
+
+      if (topping && (action === "UPDATE" || price !== undefined || isAvailable !== undefined)) {
+        const updated = await prisma.topping.update({
+          where: { id: topping.id },
+          data: {
+            name: name || topping.name,
+            price: price !== undefined ? Number(price) : topping.price,
+            isAvailable: isAvailable !== undefined ? Boolean(isAvailable) : topping.isAvailable,
+          },
+        });
+        return NextResponse.json({
+          success: true,
+          message: `Topping "${updated.name}" berhasil diperbarui (Harga: Rp ${updated.price.toLocaleString("id-ID")}, Status: ${updated.isAvailable ? "Tersedia" : "Habis"}).`,
+          topping: updated,
+        });
+      }
+
+      const created = await prisma.topping.create({
+        data: {
+          name,
+          price: Number(price) || 0,
+          isAvailable: isAvailable !== undefined ? Boolean(isAvailable) : true,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: `Topping baru "${created.name}" (Rp ${created.price.toLocaleString("id-ID")}) berhasil ditambahkan!`,
+        topping: created,
       });
     }
 
