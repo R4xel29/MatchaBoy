@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
     ],
     formats: ['image/avif', 'image/webp'],
   },
+  serverExternalPackages: ['sharp'],
   experimental: {
     optimizePackageImports: [
       'lucide-react',
@@ -24,7 +25,6 @@ const nextConfig: NextConfig = {
       '@simplewebauthn/server',
       'class-variance-authority',
     ],
-    serverComponentsExternalPackages: ['sharp'],
   },
 };
 

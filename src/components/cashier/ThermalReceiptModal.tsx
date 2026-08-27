@@ -13,6 +13,7 @@ import {
   Wifi,
   Sparkles,
   ChevronRight,
+} from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import { BluetoothPrinterPill } from './BluetoothPrinterPill';
 import { isBluetoothPrinterConnected, printDirectBluetooth } from '@/lib/bluetooth-printer';

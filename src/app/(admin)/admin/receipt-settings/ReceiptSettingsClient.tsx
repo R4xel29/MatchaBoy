@@ -19,6 +19,7 @@ import {
   Receipt,
   Coffee,
   Check,
+} from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { formatRupiah } from '@/lib/utils';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
