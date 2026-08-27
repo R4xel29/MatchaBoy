@@ -20,38 +20,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: 'Order not found' }, { status: 404 })
     }
 
-    // Only the user who placed the order can cancel it (or an admin, but let's restrict to user for now)
-    if (order.userId !== session.user.id && session.user.role === 'CUSTOMER') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    const isStaff = session.user.role === 'ADMIN' || session.user.role === 'CASHIER';
 
-    // Check payment method
-    if (order.paymentMethod !== 'COD') {
-      return NextResponse.json({ error: 'Only COD orders can be cancelled' }, { status: 400 })
+    // Only the user who placed the order can cancel it (unless admin or cashier)
+    if (order.userId !== session.user.id && !isStaff) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Check order status
     if (order.status !== 'PENDING' && order.status !== 'PENDING_PAYMENT') {
-      return NextResponse.json({ error: 'Order is no longer pending and cannot be cancelled' }, { status: 400 })
+      return NextResponse.json({ error: 'Pesanan sudah diproses dan tidak dapat dibatalkan' }, { status: 400 })
     }
 
-    // Check time limit
-    const settings = await prisma.storeSettings.findFirst()
-    const timeLimitMinutes = settings?.cancellationTimeLimit ?? 15
+    // Time limit check for customers (staff can cancel anytime while pending)
+    if (!isStaff) {
+      const settings = await prisma.storeSettings.findFirst()
+      const timeLimitMinutes = settings?.cancellationTimeLimit ?? 15
 
-    if (timeLimitMinutes <= 0) {
-      return NextResponse.json({ error: 'Cancellation is disabled' }, { status: 400 })
+      if (timeLimitMinutes > 0) {
+        const orderTime = new Date(order.createdAt).getTime()
+        const now = new Date().getTime()
+        const diffMinutes = (now - orderTime) / (1000 * 60)
+
+        // For unpaid QRIS, always allow cancel within expiry; for other orders check time limit
+        const isQris = order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN';
+        if (!isQris && diffMinutes > timeLimitMinutes) {
+          return NextResponse.json({ error: `Batas waktu pembatalan (${timeLimitMinutes} menit) telah terlewat` }, { status: 400 })
+        }
+      }
     }
 
-    const orderTime = new Date(order.createdAt).getTime()
-    const now = new Date().getTime()
-    const diffMinutes = (now - orderTime) / (1000 * 60)
-
-    if (diffMinutes > timeLimitMinutes) {
-      return NextResponse.json({ error: `Cancellation time limit of ${timeLimitMinutes} minutes has passed` }, { status: 400 })
-    }
-
-    let reason = 'Dibatalkan oleh Pelanggan';
+    let reason = isStaff ? 'Dibatalkan oleh Kasir / Admin' : 'Dibatalkan oleh Pelanggan';
     try {
       const body = await req.json();
       if (body.reason) {
@@ -75,6 +74,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       })
 
+      // 1.1 Release dining table if Dine-In
+      if (order.tableNumber) {
+        await tx.diningTable.updateMany({
+          where: { number: order.tableNumber },
+          data: { status: 'AVAILABLE', occupiedSeats: 0 }
+        })
+      }
+
       // 2. Restore points if any
       const pointHistories = await tx.pointHistory.findMany({
         where: {
@@ -95,7 +102,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
               userId: order.userId,
               amount: refundAmount,
               type: 'ADMIN_ADJUST',
-              description: `Pengembalian ${refundAmount} poin karena pesanan #${id.slice(0, 8).toUpperCase()} dibatalkan oleh Pelanggan`,
+              description: `Pengembalian ${refundAmount} poin karena pesanan #${id.slice(0, 8).toUpperCase()} dibatalkan: ${reason}`,
               orderId: id
             }
           })
@@ -133,7 +140,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         action: 'CANCEL',
         entity: 'ORDER',
         entityId: id,
-        details: `User cancelled COD order: ${reason}`
+        details: `${isStaff ? 'Staff' : 'User'} cancelled order: ${reason}`
       }
     })
 

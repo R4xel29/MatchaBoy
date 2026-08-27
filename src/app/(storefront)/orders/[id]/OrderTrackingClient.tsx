@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatRupiah } from '@/lib/utils';
+import { QRCodeCanvas } from 'qrcode.react';
 import dynamic from 'next/dynamic';
 
 
@@ -1140,14 +1141,14 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
         </button>
 
         {/* Cancel Button */}
-        {order.paymentMethod === 'COD' && (currentStatus === 'PENDING' || currentStatus === 'PENDING_PAYMENT') && timeLeftSeconds > 0 && (
+        {(currentStatus === 'PENDING' || currentStatus === 'PENDING_PAYMENT') && (
           <button
             onClick={() => setShowCancelConfirm(true)}
             className="w-full py-3.5 rounded-xl border border-red-200 bg-red-50 text-red-600
               font-semibold text-sm flex items-center justify-center gap-2
               hover:bg-red-100 transition-colors touch-target animate-in fade-in zoom-in duration-250"
           >
-            Batalkan Pesanan ({formatTimeLeft(timeLeftSeconds)})
+            Batalkan Pesanan {timeLeftSeconds > 0 ? `(${formatTimeLeft(timeLeftSeconds)})` : ''}
           </button>
         )}
         </div> {/* END RIGHT COLUMN */}
@@ -1182,6 +1183,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Pilih Alasan</label>
                   <div className="grid grid-cols-1 gap-1.5">
                     {[
+                      'QRIS kedaluwarsa / berubah pikiran',
                       'Ingin mengubah pesanan (item/alamat)',
                       'Salah pilih metode pembayaran',
                       'Pengiriman terlalu lama / berubah pikiran',
@@ -1226,7 +1228,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                   </button>
                   <button
                     onClick={handleCancelOrder}
-                    disabled={isCancelling || timeLeftSeconds <= 0 || (selectedCancelReason === 'Lainnya' && !customCancelReason.trim())}
+                    disabled={isCancelling || (selectedCancelReason === 'Lainnya' && !customCancelReason.trim())}
                     className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 text-white font-semibold text-xs hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center"
                   >
                     {isCancelling ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : 'Ya, Batalkan'}

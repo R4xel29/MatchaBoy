@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
+import { autoCancelExpiredQrisOrders } from '@/lib/order-utils';
 
 // GET /api/admin/tables/live — Fetch all tables with real-time active order details
 export async function GET() {
@@ -10,6 +11,9 @@ export async function GET() {
     if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'CASHIER')) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
+
+    // Auto-cancel expired QRIS orders before mapping live tables
+    await autoCancelExpiredQrisOrders().catch(err => console.error('[Live Tables Auto-Cancel QRIS Error]', err));
 
     // 1. Fetch all dining tables
     const tables = await prisma.diningTable.findMany({

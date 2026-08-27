@@ -50,7 +50,9 @@ export default async function OrderPaymentPage({ params }: { params: Promise<{ i
     subtotal: order.subtotal,
     deliveryFee: order.deliveryFee,
     createdAt: order.createdAt.toISOString(),
-    paymentExpiredAt: order.paymentExpiredAt ? order.paymentExpiredAt.toISOString() : new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    paymentExpiredAt: order.paymentExpiredAt 
+      ? order.paymentExpiredAt.toISOString() 
+      : new Date(Date.now() + (order.paymentMethod === 'QRIS' ? 5 : 15) * 60 * 1000).toISOString(),
     paymentQrContent: order.paymentQrContent || '',
     paymentUrl: order.paymentUrl || '',
     paymentMethod: order.paymentMethod,

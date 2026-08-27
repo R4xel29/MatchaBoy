@@ -31,7 +31,7 @@ function getWhatsAppTemplate(order: any) {
     
   return `Halo ${order.customerName},
 
-Kami dari *Matchaboy* ingin mengonfirmasi pesanan Anda dengan detail sebagai berikut:
+Kami dari *Arum Seduh* ingin mengonfirmasi pesanan Anda dengan detail sebagai berikut:
 
 *ID Pesanan:* #${orderIdShort}
 *Status:* ${order.status}

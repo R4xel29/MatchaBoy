@@ -25,15 +25,17 @@ export async function POST(req: Request) {
     for (const order of orders) {
       const diffMs = now.getTime() - order.createdAt.getTime();
       const diffMins = diffMs / (1000 * 60);
+      const isQris = order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN';
+      const timeoutLimit = isQris ? 5 : 30;
 
-      if (diffMins >= 30) {
+      if (diffMins >= timeoutLimit) {
         console.log(`[CHECK-UNPAID] Expiring order ${order.id} (unpaid for ${Math.round(diffMins)} minutes)`);
-        await expireOrder(order.id, true);
+        await expireOrder(order.id, true, `Dibatalkan otomatis oleh sistem (QRIS belum terbayar > ${timeoutLimit} menit)`);
 
         // Notify user
         if (order.customerPhone && !order.customerPhone.startsWith('SPMB-PENDING')) {
           try {
-            const userMsg = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah dibatalkan secara otomatis karena belum ada pembayaran yang diterima setelah 30 menit. ❌`;
+            const userMsg = `Halo *${order.customerName}*!\n\nPesanan Anda *#${order.id.slice(-6).toUpperCase()}* telah dibatalkan secara otomatis karena belum ada pembayaran yang diterima setelah ${timeoutLimit} menit. ❌`;
             await sendWhatsAppMessage(standardizeJid(order.customerPhone), userMsg);
           } catch (err) {
             console.error(`[CHECK-UNPAID] Failed to notify user for expired order ${order.id}:`, err);
@@ -50,7 +52,7 @@ export async function POST(req: Request) {
               .filter(n => n.length > 0)
               .map(n => standardizeJid(n));
 
-            const adminMsg = `❌ *PESANAN DIBATALKAN (BELUM DIBAYAR >= 30 MENIT)*\n\n` +
+            const adminMsg = `❌ *PESANAN DIBATALKAN (BELUM DIBAYAR >= ${timeoutLimit} MENIT)*\n\n` +
                              `*ID Pesanan:* ${order.id}\n` +
                              `*Pelanggan:* ${order.customerName} (${order.customerPhone})\n` +
                              `*Total:* Rp ${order.total.toLocaleString('id-ID')}\n` +

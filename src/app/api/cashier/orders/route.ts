@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
-import { cleanupUnconfirmedSpmbOrders } from '@/lib/order-utils'
+import { cleanupUnconfirmedSpmbOrders, autoCancelExpiredQrisOrders } from '@/lib/order-utils'
 import { getNextQueueSequence } from '@/lib/rate-limit-redis'
 
 // Lightweight JSON endpoint for client-side polling (replaces router.refresh)
@@ -12,8 +12,11 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Clean up old unconfirmed SPMB orders
-    await cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err));
+    // Clean up old unconfirmed SPMB orders and auto-cancel QRIS orders > 5 mins
+    await Promise.allSettled([
+      cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err)),
+      autoCancelExpiredQrisOrders().catch(err => console.error('[Auto Cancel QRIS Error]', err))
+    ]);
 
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);

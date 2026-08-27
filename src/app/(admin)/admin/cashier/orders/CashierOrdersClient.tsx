@@ -1139,6 +1139,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                 onChange={(e) => setCancelReason(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 text-xs font-bold text-stone-800"
               >
+                <option value="QRIS Kedaluwarsa / Tidak Dibayar">QRIS Kedaluwarsa / Tidak Dibayar</option>
                 <option value="Bukti Pembayaran Palsu / Dibatalkan Pelanggan">Bukti Pembayaran Palsu / Dibatalkan Pelanggan</option>
                 <option value="Stok Habis">Stok Bahan Habis</option>
                 <option value="Pelanggan Tidak Merespons">Pelanggan Tidak Merespons</option>

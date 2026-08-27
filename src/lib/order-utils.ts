@@ -14,7 +14,7 @@ import { supabaseAdmin } from './supabase';
  * - All checks now happen inside transaction with atomic updates
  * - Uses updateMany with WHERE condition for atomic status check
  */
-export async function expireOrder(orderId: string, force: boolean = false) {
+export async function expireOrder(orderId: string, force: boolean = false, cancelReasonText?: string) {
   try {
     console.log(`[Order Expiry] Processing order ${orderId}. Force: ${force}`);
     
@@ -31,44 +31,58 @@ export async function expireOrder(orderId: string, force: boolean = false) {
         return null;
       }
 
-      // Check if order is still in PENDING_PAYMENT status
-      if (order.status !== 'PENDING_PAYMENT') {
+      // Check if order is in a cancellable pending status
+      if (order.status !== 'PENDING_PAYMENT' && order.status !== 'PENDING') {
         console.log(`[Order Expiry] Order ${orderId} status is ${order.status}, skipping cancellation`);
         return order;
       }
 
-      // Check if expired (only if not forced)
-      const isExpired = order.paymentExpiredAt && new Date() > order.paymentExpiredAt;
+      // Check if expired: either paymentExpiredAt is passed, or QRIS order is >= 5 minutes old
+      const isQris = order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN';
+      const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60);
+      const isExpired = (order.paymentExpiredAt && new Date() > order.paymentExpiredAt) || (isQris && orderAgeMinutes >= 5);
       
       if (!isExpired && !force) {
         console.log(`[Order Expiry] Order ${orderId} not expired yet and not forced`);
         return order;
       }
 
+      const defaultReason = isQris 
+        ? 'Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran QRIS (5 menit).'
+        : 'Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran.';
+      const finalCancelReason = cancelReasonText || defaultReason;
+
       // ✅ FIX: Use updateMany with atomic WHERE condition
-      // This ensures status is still PENDING_PAYMENT at the moment of update
       const updateResult = await tx.order.updateMany({
         where: { 
           id: orderId,
-          status: 'PENDING_PAYMENT' // Atomic check: only update if still PENDING_PAYMENT
+          status: { in: ['PENDING_PAYMENT', 'PENDING'] }
         },
         data: {
           status: 'CANCELLED',
+          cancelReason: finalCancelReason,
           notes: order.notes 
-            ? `${order.notes}\n[Sistem] Sesi pembayaran berakhir atau dibatalkan.`
-            : '[Sistem] Sesi pembayaran berakhir atau dibatalkan.'
+            ? `${order.notes}\n[Batal] ${finalCancelReason}`
+            : `[Batal] ${finalCancelReason}`
         }
       });
 
       // If updateMany affected 0 rows, status changed between our check and update
       if (updateResult.count === 0) {
         console.log(`[Order Expiry] Order ${orderId} status changed during transaction, skipping refund`);
-        // Re-fetch to return current state
         return await tx.order.findUnique({ where: { id: orderId } });
       }
 
       shouldRestoreStock = true;
-      console.log(`[Order Expiry] Order ${orderId} cancelled successfully, processing refunds`);
+      console.log(`[Order Expiry] Order ${orderId} cancelled successfully, processing refunds & table releases`);
+
+      // 1. Release dining table if occupied
+      if (order.tableNumber) {
+        await tx.diningTable.updateMany({
+          where: { number: order.tableNumber },
+          data: { status: 'AVAILABLE', occupiedSeats: 0 }
+        });
+      }
 
       // 2. Restore points if any
       const pointHistories = await tx.pointHistory.findMany({
@@ -142,6 +156,60 @@ export async function expireOrder(orderId: string, force: boolean = false) {
 }
 
 /**
+ * Automatically checks and cancels all expired QRIS orders that are pending
+ * for >= 5 minutes (or where paymentExpiredAt <= now).
+ */
+export async function autoCancelExpiredQrisOrders(): Promise<number> {
+  try {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    const expiredPendingOrders = await prisma.order.findMany({
+      where: {
+        status: { in: ['PENDING_PAYMENT', 'PENDING'] },
+        OR: [
+          {
+            paymentMethod: { in: ['QRIS', 'QRIS_INSTAN'] },
+            createdAt: { lt: fiveMinutesAgo }
+          },
+          {
+            paymentExpiredAt: { lt: new Date() }
+          }
+        ]
+      },
+      select: {
+        id: true,
+        paymentMethod: true,
+        createdAt: true,
+        paymentExpiredAt: true
+      }
+    });
+
+    if (expiredPendingOrders.length === 0) return 0;
+
+    console.log(`[Auto-Cancel QRIS] Found ${expiredPendingOrders.length} expired QRIS/pending orders to cancel.`);
+    let cancelledCount = 0;
+
+    for (const ord of expiredPendingOrders) {
+      try {
+        await expireOrder(
+          ord.id, 
+          true, 
+          'Dibatalkan otomatis oleh sistem (QRIS kedaluwarsa > 5 menit).'
+        );
+        cancelledCount++;
+      } catch (err) {
+        console.error(`[Auto-Cancel QRIS Error] Failed to cancel order ${ord.id}:`, err);
+      }
+    }
+
+    return cancelledCount;
+  } catch (err) {
+    console.error('[Auto-Cancel QRIS Error] Failed to execute scan:', err);
+    return 0;
+  }
+}
+
+/**
  * Automatically cleans up old user-uploaded payment proof files.
  * Finds orders older than 30 days that have a payment proof URL.
  * Deletes the files from Supabase Storage and clears the DB fields.
@@ -203,18 +271,18 @@ export async function cleanupOldPaymentProofs() {
 
 /**
  * Automatically deletes guest SPMB orders where customerPhone is 'SPMB-PENDING'
- * and they are older than 5 minutes.
+ * and they are older than 5 minutes for QRIS, or 30 minutes for COD.
  */
 export async function cleanupUnconfirmedSpmbOrders() {
   try {
-    const sixtyMinutesAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
     const deleteResult = await prisma.order.deleteMany({
       where: {
         source: 'SPMB',
         customerPhone: { startsWith: 'SPMB-PENDING' },
         OR: [
-          { paymentMethod: 'QRIS', createdAt: { lt: sixtyMinutesAgo } },
+          { paymentMethod: { in: ['QRIS', 'QRIS_INSTAN'] }, createdAt: { lt: fiveMinutesAgo } },
           { paymentMethod: 'COD', createdAt: { lt: thirtyMinutesAgo } }
         ]
       }
@@ -226,4 +294,5 @@ export async function cleanupUnconfirmedSpmbOrders() {
     console.error('[SPMB Cleanup Error] Failed to delete unconfirmed SPMB orders:', err);
   }
 }
+
 

@@ -42,7 +42,7 @@ export default async function OrderQrisPage({ params }: { params: Promise<{ id: 
   const mappedOrder = {
     id: order.id,
     total: order.total,
-    paymentExpiredAt: order.paymentExpiredAt ? order.paymentExpiredAt.toISOString() : new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+    paymentExpiredAt: order.paymentExpiredAt ? order.paymentExpiredAt.toISOString() : new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     createdAt: order.createdAt.toISOString(),
     paymentQrContent: order.paymentQrContent,
   }

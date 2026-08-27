@@ -32,7 +32,8 @@ const checkoutSchema = z.object({
   notes: z.string().optional(),
 });
 
-type OrderType = 'PICKUP' | 'DINE_IN';
+type CheckoutFormData = z.infer<typeof checkoutSchema>;
+type OrderType = 'PICKUP' | 'DELIVERY' | 'DINE_IN';
 
 export default function CheckoutPage() {
   const router = useRouter();

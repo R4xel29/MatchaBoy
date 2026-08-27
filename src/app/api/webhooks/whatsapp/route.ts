@@ -1168,7 +1168,7 @@ export async function POST(req: Request) {
                   data: {
                     paymentQrContent: mcpResult.qrContent,
                     paymentUrl: mcpResult.qrImageUrl || null,
-                    paymentExpiredAt: new Date(Date.now() + 60 * 60 * 1000)
+                    paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000)
                   }
                 });
 

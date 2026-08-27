@@ -45,10 +45,12 @@ export async function GET(req: Request) {
     for (const order of pendingOrders) {
       const createdAt = new Date(order.createdAt);
       const minutesSinceCreated = (now.getTime() - createdAt.getTime()) / (1000 * 60);
+      const isQris = order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN';
+      const timeoutLimit = isQris ? 5 : 30;
 
-      if (minutesSinceCreated >= 30) {
+      if (minutesSinceCreated >= timeoutLimit) {
         // Cancel the order
-        console.log(`[CHECK_UNPAID_CRON] Order ${order.id} is unpaid for >= 30 mins. Cancelling...`);
+        console.log(`[CHECK_UNPAID_CRON] Order ${order.id} is unpaid for >= ${timeoutLimit} mins. Cancelling...`);
 
         await prisma.$transaction(async (tx) => {
           // 1. Update order status
@@ -56,10 +58,10 @@ export async function GET(req: Request) {
             where: { id: order.id },
             data: {
               status: "CANCELLED",
-              cancelReason: "Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran (30 menit).",
+              cancelReason: `Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran (${timeoutLimit} menit).`,
               notes: order.notes
-                ? `${order.notes}\n[Batal] Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran (30 menit).`
-                : `[Batal] Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran (30 menit).`
+                ? `${order.notes}\n[Batal] Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran (${timeoutLimit} menit).`
+                : `[Batal] Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran (${timeoutLimit} menit).`
             }
           });
 
@@ -115,7 +117,7 @@ export async function GET(req: Request) {
         }
 
         // Send WhatsApp cancellation notice
-        const cancelMsg = `⚠️ *PESANAN DIBATALKAN OTOMATIS* ⚠️\n\nHalo *${order.customerName}*,\n\nPesanan Anda *${order.id}* dengan total *Rp${order.total.toLocaleString("id-ID")}* telah dibatalkan secara otomatis oleh sistem karena melewati batas waktu pembayaran 30 menit.\n\nSilakan lakukan pemesanan kembali jika Anda masih ingin memesan. Terima kasih! 🍵`;
+        const cancelMsg = `⚠️ *PESANAN DIBATALKAN OTOMATIS* ⚠️\n\nHalo *${order.customerName}*,\n\nPesanan Anda *${order.id}* dengan total *Rp${order.total.toLocaleString("id-ID")}* telah dibatalkan secara otomatis oleh sistem karena melewati batas waktu pembayaran ${timeoutLimit} menit.\n\nSilakan lakukan pemesanan kembali jika Anda masih ingin memesan. Terima kasih! 🍵`;
         try {
           await sendWhatsAppMessage(standardizeJid(order.customerPhone), cancelMsg);
         } catch (waErr) {
@@ -155,7 +157,7 @@ export async function GET(req: Request) {
           }
 
           // Send WhatsApp reminder
-          const reminderMsg = `⚠️ *PENGINGAT PEMBAYARAN* ⚠️\n\nHalo *${order.customerName}*,\n\nPesanan Anda *${order.id}* dengan total *Rp ${order.total.toLocaleString("id-ID")}* belum terbayar.\n\n*Cara Pembayaran QRIS:*\n1. Simpan/Screenshot gambar QRIS di atas.\n2. Buka aplikasi e-wallet Anda (GoPay, OVO, DANA, ShopeePay, dll.) atau M-Banking.\n3. Pilih menu *Scan / Bayar* lalu unggah gambar QRIS tadi dari galeri.\n4. Konfirmasi pembayaran dan masukkan PIN Anda.\n\n_Pesanan akan dibatalkan otomatis oleh sistem jika belum terbayar dalam waktu 30 menit sejak pemesanan._\n\nTerima kasih! 🍵`;
+          const reminderMsg = `⚠️ *PENGINGAT PEMBAYARAN* ⚠️\n\nHalo *${order.customerName}*,\n\nPesanan Anda *${order.id}* dengan total *Rp ${order.total.toLocaleString("id-ID")}* belum terbayar.\n\n*Cara Pembayaran QRIS:*\n1. Simpan/Screenshot gambar QRIS di atas.\n2. Buka aplikasi e-wallet Anda (GoPay, OVO, DANA, ShopeePay, dll.) atau M-Banking.\n3. Pilih menu *Scan / Bayar* lalu unggah gambar QRIS tadi dari galeri.\n4. Konfirmasi pembayaran dan masukkan PIN Anda.\n\n_Pesanan akan dibatalkan otomatis oleh sistem jika belum terbayar dalam waktu ${timeoutLimit} menit sejak pemesanan._\n\nTerima kasih! 🍵`;
 
           try {
             await sendWhatsAppMessage(standardizeJid(order.customerPhone), reminderMsg, imageUrl || undefined);

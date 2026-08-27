@@ -24,15 +24,13 @@ export async function POST(req: Request) {
 
     // Fetch all active products and categories
     const products = await prisma.product.findMany({
-      where: { isSoldOut: false },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        modifiers: true,
-        category: {
-          select: { name: true },
-        },
+      where: {
+        NOT: {
+          badge: 'sold-out'
+        }
+      },
+      include: {
+        category: true,
       },
     });
 

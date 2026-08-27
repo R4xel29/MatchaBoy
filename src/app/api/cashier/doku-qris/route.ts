@@ -35,6 +35,7 @@ export async function POST(req: Request) {
           total: Math.round(amount),
           status: 'PENDING_PAYMENT',
           paymentProofUrl: invoiceNumber,
+          paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),
           notes: '[POS QRIS Order]',
           items: items.length > 0 ? {
             create: items.map((i: any) => ({
@@ -49,6 +50,7 @@ export async function POST(req: Request) {
           total: Math.round(amount),
           customerName: customerName,
           status: 'PENDING_PAYMENT',
+          paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),
         },
       });
     } catch (dbErr) {

@@ -753,7 +753,13 @@ export async function POST(req: Request) {
                         ? `${body.notes || ''}\n[CHANNEL: ${body.paymentChannel}]`.trim() 
                         : (body.notes || null),
                     voucherCode: voucherCode || null,
-                    paymentExpiredAt: isWallet ? null : ((isDoku || body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'TRANSFER') ? new Date(Date.now() + 15 * 60 * 1000) : null),
+                    paymentExpiredAt: isWallet ? null : (
+                        (body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'QRIS_INSTAN')
+                            ? new Date(Date.now() + 5 * 60 * 1000)
+                            : ((isDoku || body.paymentMethod?.toUpperCase() === 'TRANSFER')
+                                ? new Date(Date.now() + 15 * 60 * 1000)
+                                : null)
+                    ),
                     queueNumber,
                     items: {
                         create: orderItemsToCreate
