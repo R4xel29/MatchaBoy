@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import { BluetoothPrinterPill } from './BluetoothPrinterPill';
-import { isBluetoothPrinterConnected, printDirectBluetooth } from '@/lib/bluetooth-printer';
+import { isBluetoothPrinterConnected, printDirectBluetooth, printElementAsRasterBluetooth } from '@/lib/bluetooth-printer';
 
 export interface ReceiptData {
   id: string;
@@ -685,15 +685,22 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
   };
 
   const handlePrint = async () => {
-    // 1. Direct Web Bluetooth Print (Zero Dialogs, Instant Hardware Print)
+    // 1. Direct Web Bluetooth Print (High-Fidelity CGV Raster Bitmap Graphic)
     if (isBluetoothPrinterConnected()) {
       try {
-        const success = await printDirectBluetooth(order, settings, activeTab === 'kitchen');
-        if (success) {
+        const previewEl = document.getElementById('printable-thermal-receipt-preview');
+        if (previewEl) {
+          const rasterSuccess = await printElementAsRasterBluetooth(previewEl, settings.paperWidth);
+          if (rasterSuccess) {
+            return;
+          }
+        }
+        const textSuccess = await printDirectBluetooth(order, settings, activeTab === 'kitchen');
+        if (textSuccess) {
           return;
         }
       } catch (err) {
-        console.warn('Bluetooth direct print failed, falling back to browser print:', err);
+        console.warn('Bluetooth raster direct print failed, falling back to browser print:', err);
       }
     }
 
@@ -862,6 +869,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
           {/* Scrollable Receipt Body (On-Screen Interactive CGV Preview) */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100/80 flex justify-center">
             <div
+              id="printable-thermal-receipt-preview"
               className="w-full max-w-[310px] bg-white p-4 sm:p-5 rounded-lg shadow-md border-2 border-black text-black font-mono text-[11px] leading-tight transition-all select-none"
             >
               {activeTab === 'customer' ? (

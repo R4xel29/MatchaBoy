@@ -4,6 +4,7 @@
  */
 
 import { formatRupiah } from './utils';
+import html2canvas from 'html2canvas';
 
 export interface BluetoothPrinterDevice {
   id: string;
@@ -225,34 +226,42 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   writeText(`${(order.customerName || 'PELANGGAN').toUpperCase()}\n`);
   write([0x1b, 0x21, 0x00]); // Normal text
   write([0x1b, 0x45, 0x00]); // Bold off
-  writeText(padLine('No. Order:', `#${orderIdShort}`, maxCols));
+  writeText(`No. Order : #${orderIdShort}\n`);
 
   writeText(dividerSingle);
 
-  // 4. Section 2: Waktu & Meja (CGV 2-Column Split Box)
+  // 4. Section 2: Waktu & Meja
   const tableDisplay = order.tableNumber 
     ? `MEJA ${order.tableNumber}` 
     : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : (order.orderType || 'PICKUP'));
   
-  writeText(padLine('[ WAKTU & TGL ]', '[ LOKASI / MEJA ]', maxCols));
-  write([0x1b, 0x45, 0x01]); // Bold on
-  writeText(padLine(`${formattedDate} ${formattedTime}`, tableDisplay, maxCols));
-  write([0x1b, 0x45, 0x00]); // Bold off
+  write([0x1b, 0x45, 0x01]);
+  writeText(`WAKTU  : ${formattedDate} ${formattedTime}\n`);
+  writeText(`LOKASI : ${tableDisplay}\n`);
+  write([0x1b, 0x45, 0x00]);
 
   writeText(dividerDouble);
 
-  // 5. Section 3: Detail Pesanan & Modifiers (Tebal & Jelas Sesuai Request)
+  // 5. Section 3: Detail Pesanan & Modifiers
   write([0x1b, 0x45, 0x01]);
   writeText('[ DETAIL PESANAN ]\n');
   write([0x1b, 0x45, 0x00]);
 
   (order.items || []).forEach((item: any) => {
     const itemPrice = (item.totalPrice || item.price) * item.qty;
+    const itemTitle = `[ ${item.qty}x ] ${item.name.toUpperCase()}`;
+    const priceStr = formatRupiah(itemPrice);
+
     write([0x1b, 0x45, 0x01]); // Bold on
-    writeText(padLine(`[ ${item.qty}x ] ${item.name.toUpperCase()}`, formatRupiah(itemPrice), maxCols));
+    if (itemTitle.length + priceStr.length + 1 <= maxCols) {
+      writeText(padLine(itemTitle, priceStr, maxCols));
+    } else {
+      writeText(`${itemTitle}\n`);
+      writeText(padLine('', priceStr, maxCols));
+    }
     write([0x1b, 0x45, 0x00]); // Bold off
 
-    // Prominent & Bold Modifiers for Barista & Customer
+    // Modifiers for Barista & Customer
     write([0x1b, 0x45, 0x01]); // Bold on modifiers
     if (item.sugarLevel) {
       writeText(`   >> GULA: ${item.sugarLevel.toUpperCase()}\n`);
@@ -295,7 +304,7 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
 
   writeText(padLine('Subtotal:', formatRupiah(order.subtotal || order.total), maxCols));
   if (totalDiscount > 0) {
-    writeText(padLine('Diskon / Promo:', `-${formatRupiah(totalDiscount)}`, maxCols));
+    writeText(padLine('Diskon/Promo:', `-${formatRupiah(totalDiscount)}`, maxCols));
   }
 
   writeText(dividerSingle);
@@ -305,7 +314,7 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   write([0x1b, 0x21, 0x00]); // Normal
   write([0x1b, 0x45, 0x00]); // Bold off
 
-  writeText(padLine('Metode Pembayaran:', `${order.paymentMethod || 'TUNAI'} (LUNAS)`, maxCols));
+  writeText(padLine('Metode:', `${order.paymentMethod || 'TUNAI'} (LUNAS)`, maxCols));
   if (order.cashPaid) {
     writeText(padLine('Tunai Diterima:', formatRupiah(order.cashPaid), maxCols));
     write([0x1b, 0x45, 0x01]);
@@ -432,7 +441,7 @@ export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array
 }
 
 /**
- * Print directly to connected Bluetooth Printer without browser dialog
+ * Print directly to connected Bluetooth Printer without browser dialog (Text Mode)
  */
 export async function printDirectBluetooth(order: any, settings: any, isKitchen = false): Promise<boolean> {
   if (!isBluetoothPrinterConnected()) {
@@ -444,4 +453,103 @@ export async function printDirectBluetooth(order: any, settings: any, isKitchen 
     : buildCustomerReceiptEscPos(order, settings);
 
   return await sendRawBytes(bytes);
+}
+
+/**
+ * Print exact HTML DOM element as Monochrome ESC/POS Raster Bitmap (GS v 0)
+ * This guarantees 100% visual fidelity matching the on-screen CGV Cinema Ticket
+ * with crisp black inverted ribbons, big bold numbers, and zero line-wrapping glitches!
+ */
+export async function printElementAsRasterBluetooth(
+  element: HTMLElement,
+  paperWidth: string = '58mm'
+): Promise<boolean> {
+  if (!isBluetoothPrinterConnected()) {
+    return false;
+  }
+
+  // 58mm = 384 dots (48 bytes per row), 80mm = 576 dots (72 bytes per row)
+  const targetWidth = paperWidth === '80mm' ? 576 : 384;
+  const widthBytes = targetWidth / 8;
+
+  try {
+    // 1. Capture the DOM element to high-res canvas
+    const canvas = await html2canvas(element, {
+      scale: 2, // 2x crisp rendering for sharp text edges
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    });
+
+    const targetHeight = Math.round((canvas.height / canvas.width) * targetWidth);
+    const scaledCanvas = document.createElement('canvas');
+    scaledCanvas.width = targetWidth;
+    scaledCanvas.height = targetHeight;
+
+    const ctx = scaledCanvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return false;
+
+    // Fill white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, targetWidth, targetHeight);
+    ctx.drawImage(canvas, 0, 0, targetWidth, targetHeight);
+
+    const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+    const pixels = imgData.data;
+
+    const buffer: number[] = [];
+    const write = (arr: number[]) => buffer.push(...arr);
+
+    // Initialize printer (ESC @)
+    write([0x1b, 0x40]);
+    // Set line spacing to 0 for seamless vertical slice joining
+    write([0x1b, 0x33, 0x00]);
+
+    // Slice image into vertical chunks (128 dots height) to protect printer RAM buffer
+    const SLICE_HEIGHT = 128;
+    for (let yOffset = 0; yOffset < targetHeight; yOffset += SLICE_HEIGHT) {
+      const currentSliceHeight = Math.min(SLICE_HEIGHT, targetHeight - yOffset);
+
+      // GS v 0 0 xL xH yL yH
+      write([
+        0x1d, 0x76, 0x30, 0x00,
+        widthBytes % 256,
+        Math.floor(widthBytes / 256),
+        currentSliceHeight % 256,
+        Math.floor(currentSliceHeight / 256),
+      ]);
+
+      for (let y = 0; y < currentSliceHeight; y++) {
+        const row = yOffset + y;
+        for (let xByte = 0; xByte < widthBytes; xByte++) {
+          let byteVal = 0;
+          for (let b = 0; b < 8; b++) {
+            const x = xByte * 8 + b;
+            const pixelIndex = (row * targetWidth + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const bVal = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+
+            // Luminance formula
+            const gray = a === 0 ? 255 : 0.299 * r + 0.587 * g + 0.114 * bVal;
+            // Contrast threshold: anything darker than 175 is thermal black dot (1)
+            if (gray < 175) {
+              byteVal |= (1 << (7 - b));
+            }
+          }
+          buffer.push(byteVal);
+        }
+      }
+    }
+
+    // Restore normal line spacing (ESC 2) and feed 4 lines for tear-off
+    write([0x1b, 0x32]);
+    write([0x1b, 0x64, 0x04]);
+
+    return await sendRawBytes(new Uint8Array(buffer));
+  } catch (err) {
+    console.error('Raster direct print error:', err);
+    return false;
+  }
 }
