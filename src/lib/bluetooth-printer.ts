@@ -191,6 +191,30 @@ function cleanAscii(str: string): string {
     .replace(/[‘’]/g, "'");
 }
 
+function wrapText(text: string, maxLen = 32): string[] {
+  const lines: string[] = [];
+  const paragraphs = text.split('\n');
+  for (const para of paragraphs) {
+    const words = para.trim().split(/\s+/);
+    let currentLine = '';
+    for (const word of words) {
+      if (!word) continue;
+      if (!currentLine) {
+        currentLine = word;
+      } else if (currentLine.length + 1 + word.length <= maxLen) {
+        currentLine += ' ' + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+  return lines;
+}
+
 /**
  * Build ESC/POS Byte Stream for Customer Receipt
  */
@@ -222,10 +246,16 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   writeText(`${storeName.toUpperCase()}\n`);
   write([0x1b, 0x21, 0x00]); // Normal text
 
-  if (settings.tagline) writeText(`${settings.tagline}\n`);
-  if (settings.address) writeText(`${settings.address}\n`);
+  if (settings.tagline) {
+    wrapText(settings.tagline, maxCols).forEach((l) => writeText(`${l}\n`));
+  }
+  if (settings.address) {
+    wrapText(settings.address, maxCols).forEach((l) => writeText(`${l}\n`));
+  }
   if (settings.phone) writeText(`WA: ${settings.phone}\n`);
-  if (settings.headerNotes) writeText(`${settings.headerNotes}\n`);
+  if (settings.headerNotes) {
+    wrapText(settings.headerNotes, maxCols).forEach((l) => writeText(`${l}\n`));
+  }
 
   writeText(dividerDouble);
 
@@ -241,19 +271,21 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
 
   writeText(dividerSingle);
 
-  // 4. Section 2: Waktu & Meja
+  // 4. Section 2: Waktu & Meja (Jelas & Tebal)
   const tableDisplay = order.tableNumber 
     ? `MEJA ${order.tableNumber}` 
     : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : (order.orderType || 'PICKUP'));
   
-  write([0x1b, 0x45, 0x01]);
   writeText(`WAKTU  : ${formattedDate} ${formattedTime}\n`);
+  write([0x1b, 0x45, 0x01]); // Bold on
+  write([0x1b, 0x21, 0x10]); // Double height for Table
   writeText(`LOKASI : ${tableDisplay}\n`);
-  write([0x1b, 0x45, 0x00]);
+  write([0x1b, 0x21, 0x00]); // Normal text
+  write([0x1b, 0x45, 0x00]); // Bold off
 
   writeText(dividerDouble);
 
-  // 5. Section 3: Detail Pesanan & Modifiers
+  // 5. Section 3: Detail Pesanan & Modifiers (Tebal & Rapi)
   write([0x1b, 0x45, 0x01]);
   writeText('[ DETAIL PESANAN ]\n');
   write([0x1b, 0x45, 0x00]);
@@ -263,7 +295,7 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
     const itemTitle = `[ ${item.qty}x ] ${item.name.toUpperCase()}`;
     const priceStr = formatRupiah(itemPrice);
 
-    write([0x1b, 0x45, 0x01]); // Bold on
+    write([0x1b, 0x45, 0x01]); // Bold on item title & price
     if (itemTitle.length + priceStr.length + 1 <= maxCols) {
       writeText(padLine(itemTitle, priceStr, maxCols));
     } else {
@@ -272,37 +304,51 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
     }
     write([0x1b, 0x45, 0x00]); // Bold off
 
-    // Modifiers for Barista & Customer
-    write([0x1b, 0x45, 0x01]); // Bold on modifiers
+    // Prominent Bold Modifiers
     if (item.sugarLevel) {
-      writeText(`   >> GULA: ${item.sugarLevel.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x01]);
+      writeText(`  >> GULA  : ${item.sugarLevel.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x00]);
     }
     if (item.iceLevel) {
-      writeText(`   >> ES: ${item.iceLevel.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x01]);
+      writeText(`  >> ES    : ${item.iceLevel.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x00]);
     }
     if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
-      writeText(`   >> MATCHA: LEVEL ${item.matchaLevel}\n`);
+      write([0x1b, 0x45, 0x01]);
+      writeText(`  >> MATCHA: LEVEL ${item.matchaLevel}\n`);
+      write([0x1b, 0x45, 0x00]);
     }
     if (item.size) {
-      writeText(`   >> UKURAN: ${item.size.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x01]);
+      writeText(`  >> UKURAN: ${item.size.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x00]);
     }
     if (item.shotName) {
-      writeText(`   >> SHOT: ${item.shotName.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x01]);
+      writeText(`  >> SHOT  : ${item.shotName.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x00]);
     }
     if (item.addOns && item.addOns.length > 0) {
       item.addOns.forEach((a: any) => {
-        writeText(`   >> TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`);
+        write([0x1b, 0x45, 0x01]);
+        writeText(`  >> TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`);
+        write([0x1b, 0x45, 0x00]);
       });
     }
     if (item.bundleSelections && item.bundleSelections.length > 0) {
       item.bundleSelections.forEach((b: any) => {
-        writeText(`   >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`);
+        write([0x1b, 0x45, 0x01]);
+        writeText(`  >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`);
+        write([0x1b, 0x45, 0x00]);
       });
     }
     if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-      writeText(`   >> VARIAN: ${item.modifiersString.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x01]);
+      writeText(`  >> VARIAN: ${item.modifiersString.toUpperCase()}\n`);
+      write([0x1b, 0x45, 0x00]);
     }
-    write([0x1b, 0x45, 0x00]); // Bold off
   });
 
   writeText(dividerDouble);
@@ -342,23 +388,28 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
     write([0x1b, 0x61, 0x00]);
   }
 
-  // 8. Member Promo Banner (CGV Style)
+  // 8. Member Promo Banner (CGV Style Framed Box)
   writeText(dividerDouble);
   write([0x1b, 0x61, 0x01]); // Center
   write([0x1b, 0x45, 0x01]);
   writeText('GRATIS VOUCHER & CASHBACK\n');
   writeText('DENGAN JOIN MEMBER ARUM SEDUH\n');
   write([0x1b, 0x45, 0x00]);
-  writeText('Kumpulkan Poin di Setiap Kunjungan\n');
+  writeText('Kumpulkan Poin di Setiap Belanja\n');
   writeText(dividerDouble);
 
   if (settings.showWifi && settings.wifiSsid) {
-    writeText(`Wi-Fi: ${settings.wifiSsid} | Pass: ${settings.wifiPassword || '-'}\n`);
+    write([0x1b, 0x61, 0x00]);
+    writeText(`Wi-Fi: ${settings.wifiSsid}\n`);
+    writeText(`Pass : ${settings.wifiPassword || '-'}\n`);
     writeText(dividerSingle);
   }
 
   // 9. Footer Greetings
-  if (settings.footerNotes) writeText(`${settings.footerNotes}\n`);
+  write([0x1b, 0x61, 0x01]); // Center
+  if (settings.footerNotes) {
+    wrapText(settings.footerNotes, maxCols).forEach((l) => writeText(`${l}\n`));
+  }
   if (settings.showSocial && settings.instagram) writeText(`IG: ${settings.instagram}\n`);
   if (settings.showSocial && settings.tiktok) writeText(`TikTok: ${settings.tiktok}\n`);
   writeText(`*** TERIMA KASIH • ARUM SEDUH ***\n`);
