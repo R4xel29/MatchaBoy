@@ -685,19 +685,15 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
   };
 
   const handlePrint = async () => {
-    // 1. Direct Web Bluetooth Print (High-Fidelity CGV Raster Bitmap Graphic)
+    // 1. Direct Web Bluetooth Print (Super-Sharp, Large & Bold CGV ESC/POS Ticket)
     if (isBluetoothPrinterConnected()) {
       try {
-        const rasterSuccess = await printCgvTicketRasterBluetooth(order, settings, activeTab === 'kitchen');
-        if (rasterSuccess) {
-          return;
-        }
-        const textSuccess = await printDirectBluetooth(order, settings, activeTab === 'kitchen');
-        if (textSuccess) {
+        const success = await printDirectBluetooth(order, settings, activeTab === 'kitchen');
+        if (success) {
           return;
         }
       } catch (err) {
-        console.warn('Bluetooth raster direct print failed, falling back to browser print:', err);
+        console.warn('Bluetooth direct print failed, falling back to browser print:', err);
       }
     }
 

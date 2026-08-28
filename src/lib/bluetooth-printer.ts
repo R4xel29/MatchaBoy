@@ -318,38 +318,38 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
     }
     boldOff();
 
-    // Modifiers in Bold with clear indentation
+    // Modifiers in Bold with clear vertical line indicator
     boldOn();
     if (item.sugarLevel) {
-      writeText(`  >> GULA  : ${item.sugarLevel.toUpperCase()}\n`);
+      writeText(`  | >> GULA  : ${item.sugarLevel.toUpperCase()}\n`);
     }
     if (item.iceLevel) {
-      writeText(`  >> ES    : ${item.iceLevel.toUpperCase()}\n`);
+      writeText(`  | >> ES    : ${item.iceLevel.toUpperCase()}\n`);
     }
     if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
-      writeText(`  >> MATCHA: LEVEL ${item.matchaLevel}\n`);
+      writeText(`  | >> MATCHA: LEVEL ${item.matchaLevel}\n`);
     }
     if (item.size) {
-      writeText(`  >> UKURAN: ${item.size.toUpperCase()}\n`);
+      writeText(`  | >> UKURAN: ${item.size.toUpperCase()}\n`);
     }
     if (item.shotName) {
-      writeText(`  >> SHOT  : ${item.shotName.toUpperCase()}\n`);
+      writeText(`  | >> SHOT  : ${item.shotName.toUpperCase()}\n`);
     }
     if (item.addOns && item.addOns.length > 0) {
       item.addOns.forEach((a: any) => {
-        writeText(`  >> TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`);
+        writeText(`  | >> TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`);
       });
     }
     if (item.bundleSelections && item.bundleSelections.length > 0) {
       item.bundleSelections.forEach((b: any) => {
-        writeText(`  >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`);
+        writeText(`  | >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`);
       });
     }
     if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-      writeText(`  >> VARIAN: ${item.modifiersString.toUpperCase()}\n`);
+      writeText(`  | >> VARIAN: ${item.modifiersString.toUpperCase()}\n`);
     }
     boldOff();
-    writeText('................................\n');
+    writeText('--------------------------------\n');
   });
 
   // 6. Barcode Graphic
