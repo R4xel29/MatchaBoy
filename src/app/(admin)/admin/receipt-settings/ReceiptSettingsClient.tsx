@@ -517,129 +517,179 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
               </span>
             </div>
 
-            {/* Simulated Thermal Paper */}
+            {/* Simulated Thermal Paper (CGV Cinema Ticket Style) */}
             <div className="bg-slate-200/80 p-4 sm:p-5 rounded-2xl flex justify-center border border-slate-300 shadow-inner">
               <div
                 id="printable-thermal-receipt"
-                className="w-full max-w-[300px] bg-white p-4 rounded-lg shadow-lg border border-slate-200 text-slate-900 font-mono text-[10.5px] leading-relaxed transition-all"
+                className="w-full max-w-[310px] bg-white p-4 rounded-lg shadow-lg border-2 border-black text-black font-mono text-[10.5px] leading-tight transition-all select-none space-y-2"
               >
                 {/* Logo Preview */}
                 {form.showLogo && form.logoUrl && (
-                  <div className="flex justify-center mb-2">
+                  <div className="flex justify-center mb-1">
                     <img
                       src={form.logoUrl}
                       alt="Preview Logo"
-                      className="max-h-11 max-w-[130px] object-contain grayscale contrast-200"
+                      className="max-h-9 max-w-[85px] object-contain grayscale contrast-200"
                     />
                   </div>
                 )}
 
                 {/* Header */}
-                <div className="text-center pb-2 border-b border-dashed border-slate-400">
-                  <h2 className="font-bold text-[13px] tracking-wider uppercase">
+                <div className="text-center pb-2 border-b-2 border-black">
+                  <h2 className="font-black text-[13px] tracking-wider uppercase">
                     {form.storeName || 'ARUM SEDUH'}
                   </h2>
-                  {form.tagline && <p className="text-[9.5px] text-slate-600">{form.tagline}</p>}
-                  {form.address && <p className="text-[9.5px] text-slate-600 mt-0.5">{form.address}</p>}
-                  {form.phone && <p className="text-[9.5px] text-slate-600">WA: {form.phone}</p>}
+                  {form.tagline && <p className="text-[9.5px] font-bold text-slate-700">{form.tagline}</p>}
+                  {form.address && <p className="text-[8.5px] text-slate-600 mt-0.5">{form.address}</p>}
+                  {form.phone && <p className="text-[8.5px] text-slate-600">WA: {form.phone}</p>}
                   {form.headerNotes && (
-                    <p className="text-[9px] italic text-slate-500 mt-1 whitespace-pre-line">{form.headerNotes}</p>
+                    <p className="text-[8px] italic text-slate-500 mt-1 whitespace-pre-line">{form.headerNotes}</p>
                   )}
                 </div>
 
-                {/* Sample Metadata */}
-                <div className="py-2 border-b border-dashed border-slate-400 space-y-0.5 text-[9.5px]">
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">No. Order:</span>
-                    <span className="font-bold">#AS-260827-001</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">No. Antrian:</span>
-                    <span className="font-bold bg-slate-100 px-1 rounded">A-12</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Waktu:</span>
-                    <span>27/08/2026 21:35</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Tipe:</span>
-                    <span className="font-semibold">DINE IN (Meja 03)</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-600">Pelanggan:</span>
-                    <span className="font-semibold truncate max-w-[130px]">Bella</span>
-                  </div>
+                {/* Section 1: Customer & Order (CGV Header Style) */}
+                <div>
+                  <span className="bg-black text-white text-[8px] font-black uppercase px-1.5 py-0.5 tracking-wider inline-block">
+                    PESANAN
+                  </span>
+                  <h3 className="font-black text-sm uppercase tracking-wide mt-1 text-black">
+                    BELLA
+                  </h3>
+                  <p className="text-[9px] font-bold text-slate-600">
+                    ORDER: #AS-0828
+                  </p>
                 </div>
 
-                {/* Sample Items */}
-                <div className="py-2 border-b border-dashed border-slate-400 space-y-2">
-                  <div className="space-y-0.5">
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold">1x Kopi Susu Arum</span>
-                      <span className="font-semibold">22.000</span>
-                    </div>
-                    <div className="pl-3 text-[9px] text-slate-600 space-y-0.5">
-                      <div>- Gula: Less Sugar (50%)</div>
-                      <div>- Es: Normal Ice</div>
-                      <div>- Espresso: Double Shot (+5.000)</div>
-                    </div>
+                {/* Section 2: Split Box Time/Date & Table/Auditorium (CGV 2-Col Style) */}
+                <div className="border-2 border-black flex my-1">
+                  <div className="flex-1 p-2 border-r-2 border-black bg-white">
+                    <span className="bg-black text-white text-[7px] font-black uppercase px-1 py-0.5 tracking-wider inline-block">
+                      WAKTU & TANGGAL
+                    </span>
+                    <div className="font-black text-[9.5px] mt-1">28/08/2026</div>
+                    <div className="font-black text-[11px]">21:45 WIB</div>
                   </div>
-
-                  <div className="space-y-0.5">
-                    <div className="flex justify-between items-start">
-                      <span className="font-bold">1x Roti Bakar Butter</span>
-                      <span className="font-semibold">18.000</span>
+                  <div className="w-2/5 p-2 bg-slate-50 flex flex-col items-center justify-center text-center">
+                    <span className="bg-black text-white text-[7px] font-black uppercase px-1 py-0.5 tracking-wider inline-block">
+                      NOMOR MEJA
+                    </span>
+                    <div className="font-black text-sm uppercase tracking-tight mt-1 text-black">
+                      MEJA 03
                     </div>
                   </div>
                 </div>
 
-                {/* Sample Pricing */}
-                <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-[9.5px]">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>45.000</span>
-                  </div>
-                  <div className="flex justify-between text-slate-700">
-                    <span>Diskon Tumbler (10%)</span>
-                    <span>-4.500</span>
-                  </div>
-                  <div className="flex justify-between font-bold text-[11.5px] pt-1 border-t border-slate-300">
-                    <span>TOTAL</span>
-                    <span>Rp 40.500</span>
-                  </div>
-                  <div className="flex justify-between pt-0.5">
-                    <span>Metode (QRIS)</span>
-                    <span>Rp 40.500</span>
+                {/* Section 3: Order Items (CGV Seat Breakdown Style) */}
+                <div className="pt-1">
+                  <span className="bg-black text-white text-[8px] font-black uppercase px-1.5 py-0.5 tracking-wider inline-block">
+                    DETAIL PESANAN
+                  </span>
+
+                  <div className="divide-y divide-dashed divide-slate-400 mt-1">
+                    <div className="py-2 space-y-1">
+                      <div className="flex justify-between items-start">
+                        <span className="font-black text-xs uppercase flex-1 pr-2">
+                          [ 1x ] KOPI SUSU ARUM
+                        </span>
+                        <span className="font-black text-xs shrink-0">
+                          27.000
+                        </span>
+                      </div>
+                      {/* Clear & Bold Modifiers */}
+                      <div className="border-l-2 border-black pl-2 space-y-0.5 text-[9.5px] font-bold text-black mt-1">
+                        <div>» <span className="font-black">GULA:</span> <span className="underline font-black">LESS SUGAR (50%)</span></div>
+                        <div>» <span className="font-black">ES:</span> <span className="underline font-black">NORMAL ICE</span></div>
+                        <div>» <span className="font-black">SHOT:</span> <span className="underline font-black">DOUBLE SHOT (+5.000)</span></div>
+                      </div>
+                    </div>
+
+                    <div className="py-2 space-y-1">
+                      <div className="flex justify-between items-start">
+                        <span className="font-black text-xs uppercase flex-1 pr-2">
+                          [ 1x ] ROTI BAKAR BUTTER
+                        </span>
+                        <span className="font-black text-xs shrink-0">
+                          18.000
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Sample Poin */}
-                <div className="py-1.5 border-b border-dashed border-slate-400 text-center text-[9.5px]">
-                  <span className="font-semibold text-slate-800">Poin Didapat: +4 Poin</span>
-                  <div className="text-[8.5px] text-slate-500">Total Poin: 34 Poin</div>
+                {/* Section 4: Barcode & Payment Breakdown */}
+                <div className="border-t-2 border-black pt-2">
+                  <div className="text-center font-mono font-black text-xs tracking-widest">
+                    |||| | ||||| || ||||||||| | |||
+                  </div>
+                  <div className="text-center text-[8px] font-mono text-slate-600 mb-2">
+                    AS-260828-042
+                  </div>
+
+                  <div className="space-y-1 text-[9.5px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-700">Subtotal:</span>
+                      <span className="font-bold">45.000</span>
+                    </div>
+                    <div className="flex justify-between text-slate-800">
+                      <span>Diskon / Promo:</span>
+                      <span className="font-bold">-4.500</span>
+                    </div>
+
+                    {/* Total Inverted Banner */}
+                    <div className="bg-black text-white px-2 py-1 flex justify-between font-black text-xs tracking-wide my-1">
+                      <span>TOTAL</span>
+                      <span>Rp 40.500</span>
+                    </div>
+
+                    <div className="flex justify-between text-[9.5px]">
+                      <span>Metode Pembayaran:</span>
+                      <span className="font-bold">QRIS (LUNAS)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section 5: Loyalty Points */}
+                <div className="border-t border-dashed border-slate-400 py-1 text-center text-[9px]">
+                  <span className="font-black text-black">POIN DIPEROLEH: +4 POIN</span>
+                  <div className="text-[8px] text-slate-600">TOTAL POIN MEMBER: 34 POIN</div>
+                </div>
+
+                {/* Section 6: Promo Loyalty Card (CGV Style) */}
+                <div className="border-2 border-black p-1.5 text-center bg-slate-50 my-1">
+                  <div className="font-black text-[9.5px] tracking-wide uppercase">
+                    GRATIS VOUCHER & CASHBACK
+                  </div>
+                  <div className="text-[8px] font-bold text-slate-700 mt-0.5">
+                    DENGAN JOIN MEMBER ARUM SEDUH
+                  </div>
+                  <div className="text-[7px] font-bold text-slate-500 mt-0.5 uppercase">
+                    KUMPULKAN POIN DI SETIAP KUNJUNGAN
+                  </div>
                 </div>
 
                 {/* Wi-Fi Info */}
                 {form.showWifi && form.wifiSsid && (
-                  <div className="py-1.5 border-b border-dashed border-slate-400 text-center text-[9px] text-slate-600">
-                    <div>Wi-Fi: <span className="font-bold">{form.wifiSsid}</span></div>
-                    {form.wifiPassword && (
-                      <div>Password: <span className="font-mono font-bold">{form.wifiPassword}</span></div>
-                    )}
+                  <div className="text-center text-[8.5px] text-slate-700 py-1 border-t border-dashed border-slate-400">
+                    Wi-Fi: <span className="font-black">{form.wifiSsid}</span> | Pass: <span className="font-bold">{form.wifiPassword || '-'}</span>
                   </div>
                 )}
 
                 {/* Footer Notes & Sosmed */}
-                <div className="pt-2 text-center text-[9px] text-slate-600 space-y-1">
+                <div className="text-center text-[8.5px] text-slate-600 space-y-0.5 pt-1">
                   {form.footerNotes && (
                     <p className="whitespace-pre-line font-medium leading-tight">{form.footerNotes}</p>
                   )}
                   {form.showSocial && form.instagram && (
-                    <p className="text-[8.5px] font-semibold text-slate-800 mt-1">
+                    <p className="font-black text-black mt-0.5">
                       IG: {form.instagram}
                     </p>
                   )}
-                  <p className="text-[7.5px] text-slate-400 pt-1">*** {form.storeName || 'ARUM SEDUH'} ***</p>
+                  {form.showSocial && form.tiktok && (
+                    <p className="font-black text-black text-[8px]">
+                      TikTok: {form.tiktok}
+                    </p>
+                  )}
+                  <p className="text-[7.5px] text-slate-400 pt-1">*** TERIMA KASIH • SELAMAT MENIKMATI ***</p>
                 </div>
               </div>
             </div>

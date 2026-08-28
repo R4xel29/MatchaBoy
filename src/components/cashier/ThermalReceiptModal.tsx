@@ -152,39 +152,52 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
 
   const totalDiscount = (order.discount || 0) + (order.tumblerDiscount || 0) + (order.voucherDiscount || 0);
   const orderIdShort = order.id.slice(0, 8).toUpperCase();
+  const tableDisplay = order.tableNumber ? `MEJA ${order.tableNumber}` : (order.queueNumber ? `A-${order.queueNumber}` : (order.orderType === 'DINE_IN' ? 'DINE IN' : 'PICKUP'));
 
-  // Clean HTML generator specifically designed for 58mm / 80mm ESC/POS Thermal Printers
+  // Clean HTML generator specifically designed for 58mm / 80mm ESC/POS Thermal Printers in CGV Cinema Ticket Style
   const generateCustomerReceiptHtml = () => {
     let itemsHtml = '';
     order.items.forEach((item) => {
-      const priceFormatted = formatRupiah((item.totalPrice || item.price) * item.qty);
-      let mods = '';
-      if (item.sugarLevel) mods += `<div class="mod-line">• Gula: ${item.sugarLevel}</div>`;
-      if (item.iceLevel) mods += `<div class="mod-line">• Es: ${item.iceLevel}</div>`;
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) mods += `<div class="mod-line">• Matcha: Level ${item.matchaLevel}</div>`;
-      if (item.size) mods += `<div class="mod-line">• Ukuran: ${item.size}</div>`;
-      if (item.shotName) mods += `<div class="mod-line">• Shot: ${item.shotName}</div>`;
+      const itemTotalPrice = (item.totalPrice || item.price) * item.qty;
+      const priceFormatted = formatRupiah(itemTotalPrice);
+      
+      let modsHtml = '';
+      if (item.sugarLevel) {
+        modsHtml += `<div class="cgv-mod-line">» <b>GULA:</b> <span class="cgv-mod-val">${item.sugarLevel.toUpperCase()}</span></div>`;
+      }
+      if (item.iceLevel) {
+        modsHtml += `<div class="cgv-mod-line">» <b>ES:</b> <span class="cgv-mod-val">${item.iceLevel.toUpperCase()}</span></div>`;
+      }
+      if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
+        modsHtml += `<div class="cgv-mod-line">» <b>MATCHA:</b> <span class="cgv-mod-val">LEVEL ${item.matchaLevel}</span></div>`;
+      }
+      if (item.size) {
+        modsHtml += `<div class="cgv-mod-line">» <b>UKURAN:</b> <span class="cgv-mod-val">${item.size.toUpperCase()}</span></div>`;
+      }
+      if (item.shotName) {
+        modsHtml += `<div class="cgv-mod-line">» <b>SHOT:</b> <span class="cgv-mod-val">${item.shotName.toUpperCase()}</span></div>`;
+      }
       if (item.addOns && item.addOns.length > 0) {
         item.addOns.forEach((a) => {
-          mods += `<div class="mod-line">• +${a.name} (${formatRupiah(a.price)})</div>`;
+          modsHtml += `<div class="cgv-mod-line">» <b>TOPPING:</b> <span class="cgv-mod-val">+${a.name.toUpperCase()} (${formatRupiah(a.price)})</span></div>`;
         });
       }
       if (item.bundleSelections && item.bundleSelections.length > 0) {
         item.bundleSelections.forEach((b) => {
-          mods += `<div class="mod-line">• ${b.productName || b.groupName}</div>`;
+          modsHtml += `<div class="cgv-mod-line">» <b>PILIHAN:</b> <span class="cgv-mod-val">${(b.productName || b.groupName || '').toUpperCase()}</span></div>`;
         });
       }
       if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-        mods += `<div class="mod-line">• ${item.modifiersString}</div>`;
+        modsHtml += `<div class="cgv-mod-line">» <b>VARIAN:</b> <span class="cgv-mod-val">${item.modifiersString.toUpperCase()}</span></div>`;
       }
 
       itemsHtml += `
-        <div class="item-block">
-          <div class="row">
-            <span class="item-name">${item.qty}x ${item.name}</span>
-            <span class="item-price">${priceFormatted}</span>
+        <div class="cgv-item-card">
+          <div class="cgv-item-header">
+            <span class="cgv-item-name">[ ${item.qty}x ] ${item.name.toUpperCase()}</span>
+            <span class="cgv-item-price">${priceFormatted}</span>
           </div>
-          ${mods ? `<div class="mod-container">${mods}</div>` : ''}
+          ${modsHtml ? `<div class="cgv-mod-box">${modsHtml}</div>` : ''}
         </div>
       `;
     });
@@ -192,6 +205,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     const is80mm = settings.paperWidth === '80mm';
     const paperWidthStyle = is80mm ? '72mm' : '48mm';
     const pageSizeStyle = is80mm ? '80mm auto' : '58mm auto';
+    const tableDisplay = order.tableNumber ? `MEJA ${order.tableNumber}` : (order.queueNumber ? `A-${order.queueNumber}` : 'PICKUP');
 
     return `
       <!DOCTYPE html>
@@ -212,10 +226,10 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
             html, body {
               width: ${paperWidthStyle};
               margin: 0 auto;
-              padding: 2mm 0 10mm 0;
+              padding: 2mm 0 8mm 0;
               font-family: 'Courier New', Courier, monospace;
               font-size: 11px;
-              line-height: 1.35;
+              line-height: 1.3;
               color: #000000;
               background: #ffffff;
               -webkit-print-color-adjust: exact;
@@ -223,90 +237,185 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
             }
             .center { text-align: center; }
             .right { text-align: right; }
-            .bold { font-weight: bold; }
+            .bold { font-weight: 900; }
+            
+            /* CGV Solid Inverted Badge Header */
+            .cgv-tag {
+              background: #000000;
+              color: #ffffff;
+              font-size: 9px;
+              font-weight: 900;
+              letter-spacing: 0.8px;
+              text-transform: uppercase;
+              padding: 2px 6px;
+              display: inline-block;
+              margin-bottom: 2px;
+            }
+            
+            .cgv-title {
+              font-size: 13px;
+              font-weight: 900;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+              line-height: 1.2;
+              margin: 2px 0;
+            }
+
             .logo-wrap {
               text-align: center;
-              margin-bottom: 4px;
+              margin-bottom: 3px;
             }
             .logo-img {
               max-width: 85px;
-              max-height: 38px;
+              max-height: 36px;
               object-fit: contain;
               filter: grayscale(100%) contrast(200%);
               display: inline-block;
             }
-            .store-name {
-              font-size: 13px;
-              font-weight: bold;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              margin-bottom: 1px;
-            }
-            .store-sub {
-              font-size: 9.5px;
-              color: #111;
-              margin-bottom: 1px;
-            }
+
             .divider {
               border-top: 1px dashed #000;
               margin: 4px 0;
               width: 100%;
             }
             .divider-solid {
-              border-top: 1px solid #000;
-              margin: 4px 0;
+              border-top: 2px solid #000;
+              margin: 5px 0;
               width: 100%;
             }
-            .row {
+
+            /* 2-Column Split Box (Identik Time/Date & Auditorium CGV) */
+            .cgv-split-box {
+              display: flex;
+              border: 1.5px solid #000;
+              margin: 4px 0;
+            }
+            .cgv-split-left {
+              flex: 1.1;
+              padding: 4px;
+              border-right: 1.5px solid #000;
+            }
+            .cgv-split-right {
+              flex: 0.9;
+              padding: 4px;
+              text-align: center;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              background: #f9f9f9;
+            }
+            .cgv-huge-number {
+              font-size: 15px;
+              font-weight: 900;
+              letter-spacing: 0.5px;
+              margin-top: 2px;
+              text-transform: uppercase;
+            }
+
+            /* Items & Modifiers */
+            .cgv-item-card {
+              padding: 3.5px 0;
+              border-bottom: 1px dashed #666;
+            }
+            .cgv-item-card:last-child {
+              border-bottom: none;
+            }
+            .cgv-item-header {
               display: flex;
               justify-content: space-between;
               align-items: flex-start;
-              width: 100%;
-              margin-bottom: 1.5px;
-              font-size: 10.5px;
             }
-            .item-block {
-              margin-bottom: 4px;
-            }
-            .item-name {
-              font-weight: bold;
+            .cgv-item-name {
               font-size: 11px;
+              font-weight: 900;
               flex: 1;
               padding-right: 4px;
+              text-transform: uppercase;
             }
-            .item-price {
-              font-weight: bold;
+            .cgv-item-price {
               font-size: 11px;
+              font-weight: 900;
               white-space: nowrap;
             }
-            .mod-container {
-              padding-left: 8px;
+            .cgv-mod-box {
+              margin-top: 2px;
+              padding: 2px 0 2px 4px;
+              border-left: 2px solid #000;
+            }
+            .cgv-mod-line {
               font-size: 9.5px;
-              color: #222;
+              font-weight: 900;
               margin-top: 1px;
+              line-height: 1.3;
             }
-            .mod-line {
-              margin-top: 1px;
+            .cgv-mod-val {
+              font-weight: 900;
+              text-decoration: underline;
             }
-            .row-total {
+
+            /* Barcode Area */
+            .cgv-barcode {
+              text-align: center;
+              font-family: monospace;
+              letter-spacing: 2px;
+              font-size: 12px;
+              font-weight: 900;
+              margin: 4px 0 1px 0;
+            }
+
+            /* Total Payment Banner */
+            .cgv-total-banner {
+              background: #000000;
+              color: #ffffff;
               display: flex;
               justify-content: space-between;
               align-items: center;
+              padding: 4px 6px;
               font-size: 12px;
-              font-weight: bold;
-              padding: 2px 0;
+              font-weight: 900;
+              margin: 4px 0;
             }
+
+            .row {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              font-size: 10px;
+              margin-bottom: 1.5px;
+            }
+
+            /* Member Promo Banner (CGV Style) */
+            .cgv-promo-card {
+              border: 1.5px solid #000;
+              padding: 5px;
+              text-align: center;
+              margin: 6px 0;
+              background: #fafafa;
+            }
+            .cgv-promo-title {
+              font-size: 10.5px;
+              font-weight: 900;
+              letter-spacing: 0.5px;
+            }
+            .cgv-promo-sub {
+              font-size: 8.5px;
+              font-weight: bold;
+              margin-top: 1px;
+            }
+            .cgv-promo-scan {
+              font-size: 8px;
+              font-weight: bold;
+              margin-top: 2px;
+              letter-spacing: 0.5px;
+            }
+
             .footer-text {
-              font-size: 9.5px;
+              font-size: 9px;
               text-align: center;
               line-height: 1.3;
               margin-top: 4px;
               white-space: pre-line;
-            }
-            .wifi-text {
-              font-size: 9.5px;
-              text-align: center;
-              padding: 2px 0;
             }
           </style>
         </head>
@@ -317,101 +426,111 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
             </div>
           ` : ''}
 
-          <div class="center">
-            <div class="store-name">${settings.storeName}</div>
-            ${settings.tagline ? `<div class="store-sub">${settings.tagline}</div>` : ''}
-            ${settings.address ? `<div class="store-sub">${settings.address}</div>` : ''}
-            ${settings.phone ? `<div class="store-sub">WA: ${settings.phone}</div>` : ''}
-            ${settings.headerNotes ? `<div class="store-sub" style="font-style:italic;">${settings.headerNotes}</div>` : ''}
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="row">
-            <span>No. Order:</span>
-            <span class="bold">#${orderIdShort}</span>
-          </div>
-          ${order.queueNumber ? `
-            <div class="row">
-              <span>No. Antrian:</span>
-              <span class="bold">A-${order.queueNumber}</span>
+          <div class="center" style="margin-bottom: 4px;">
+            <div class="bold" style="font-size: 13px; letter-spacing: 1px; text-transform: uppercase;">
+              ${settings.storeName}
             </div>
-          ` : ''}
-          <div class="row">
-            <span>Waktu:</span>
-            <span>${formattedDate} ${formattedTime}</span>
+            ${settings.tagline ? `<div style="font-size: 9px; font-weight: bold;">${settings.tagline}</div>` : ''}
+            ${settings.address ? `<div style="font-size: 8.5px;">${settings.address}</div>` : ''}
+            ${settings.phone ? `<div style="font-size: 8.5px;">WA: ${settings.phone}</div>` : ''}
+            ${settings.headerNotes ? `<div style="font-size: 8px; font-style: italic; color: #444; margin-top: 1px; white-space: pre-line;">${settings.headerNotes}</div>` : ''}
           </div>
-          <div class="row">
-            <span>Tipe:</span>
-            <span class="bold">${order.orderType === 'DINE_IN' ? `DINE IN ${order.tableNumber ? `(Meja ${order.tableNumber})` : ''}` : order.orderType}</span>
-          </div>
-          <div class="row">
-            <span>Pelanggan:</span>
-            <span class="bold">${order.customerName}</span>
-          </div>
-
-          <div class="divider"></div>
-
-          <div style="margin: 4px 0;">
-            ${itemsHtml}
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="row">
-            <span>Subtotal</span>
-            <span>${formatRupiah(order.subtotal)}</span>
-          </div>
-          ${totalDiscount > 0 ? `
-            <div class="row">
-              <span>Diskon / Promo</span>
-              <span>-${formatRupiah(totalDiscount)}</span>
-            </div>
-          ` : ''}
 
           <div class="divider-solid"></div>
 
-          <div class="row-total">
+          <!-- Section 1: Movie / Customer Header (CGV Style) -->
+          <div style="margin-bottom: 3px;">
+            <div class="cgv-tag">PESANAN</div>
+            <div class="cgv-title">${order.customerName.toUpperCase()}</div>
+            <div style="font-size: 9px; font-weight: bold;">ORDER: #${orderIdShort}</div>
+          </div>
+
+          <!-- Section 2: Split Time & Table/Auditorium (CGV Style) -->
+          <div class="cgv-split-box">
+            <div class="cgv-split-left">
+              <div class="cgv-tag">WAKTU & TANGGAL</div>
+              <div style="font-size: 9.5px; font-weight: 900; margin-top: 2px;">${formattedDate}</div>
+              <div style="font-size: 11px; font-weight: 900;">${formattedTime} WIB</div>
+            </div>
+            <div class="cgv-split-right">
+              <div class="cgv-tag">${order.orderType === 'DINE_IN' ? 'NOMOR MEJA' : 'ANTRIAN'}</div>
+              <div class="cgv-huge-number">${tableDisplay}</div>
+            </div>
+          </div>
+
+          <!-- Section 3: Seats / Order Items (CGV Style) -->
+          <div style="margin-top: 5px;">
+            <div class="cgv-tag">DETAIL PESANAN</div>
+            <div style="margin-top: 3px;">
+              ${itemsHtml}
+            </div>
+          </div>
+
+          <div class="divider-solid"></div>
+
+          <!-- Section 4: Barcode & Payment -->
+          <div class="cgv-barcode">|||| | ||||| || ||||||||| | |||</div>
+          <div class="center" style="font-size: 8.5px; letter-spacing: 1px; margin-bottom: 4px;">
+            ${order.id}
+          </div>
+
+          <div class="row">
+            <span>Subtotal:</span>
+            <span class="bold">${formatRupiah(order.subtotal)}</span>
+          </div>
+          ${totalDiscount > 0 ? `
+            <div class="row">
+              <span>Diskon / Promo:</span>
+              <span class="bold">-${formatRupiah(totalDiscount)}</span>
+            </div>
+          ` : ''}
+
+          <div class="cgv-total-banner">
             <span>TOTAL</span>
             <span>${formatRupiah(order.total)}</span>
           </div>
-          <div class="row">
-            <span>Metode (${order.paymentMethod})</span>
-            <span>${formatRupiah(order.total)}</span>
+
+          <div class="row" style="font-size: 9.5px;">
+            <span>Metode Pembayaran:</span>
+            <span class="bold">${order.paymentMethod} (LUNAS)</span>
           </div>
           ${order.cashPaid ? `
             <div class="row">
-              <span>Tunai Diterima</span>
+              <span>Tunai Diterima:</span>
               <span>${formatRupiah(order.cashPaid)}</span>
             </div>
             <div class="row">
-              <span class="bold">Kembalian</span>
+              <span class="bold">Kembalian:</span>
               <span class="bold">${formatRupiah(order.change || 0)}</span>
             </div>
           ` : ''}
 
           ${order.pointsEarned && order.pointsEarned > 0 ? `
             <div class="divider"></div>
-            <div class="center" style="font-size: 9.5px; font-weight: bold;">
-              Poin Didapat: +${order.pointsEarned} Poin
-              ${order.totalPoints ? `<div style="font-size: 8.5px; font-weight: normal;">Total Poin: ${order.totalPoints} Poin</div>` : ''}
+            <div class="center" style="font-size: 9px; font-weight: 900;">
+              POIN DIPEROLEH: +${order.pointsEarned} POIN
+              ${order.totalPoints ? `<div style="font-size: 8.5px; font-weight: normal;">TOTAL POIN MEMBER: ${order.totalPoints} POIN</div>` : ''}
             </div>
           ` : ''}
+
+          <!-- Section 5: Member Reward Promo Banner (CGV Style) -->
+          <div class="cgv-promo-card">
+            <div class="cgv-promo-title">GRATIS VOUCHER & CASHBACK</div>
+            <div class="cgv-promo-sub">DENGAN JOIN MEMBER ARUM SEDUH</div>
+            <div class="cgv-promo-scan">KUMPULKAN POIN DI SETIAP KUNJUNGAN</div>
+          </div>
 
           ${settings.showWifi && settings.wifiSsid ? `
-            <div class="divider"></div>
-            <div class="wifi-text">
-              Wi-Fi: <b>${settings.wifiSsid}</b><br/>
-              ${settings.wifiPassword ? `Pass: <b>${settings.wifiPassword}</b>` : ''}
+            <div class="center" style="font-size: 9px; padding: 2px 0;">
+              Wi-Fi: <b>${settings.wifiSsid}</b> | Pass: <b>${settings.wifiPassword || '-'}</b>
             </div>
           ` : ''}
-
-          <div class="divider"></div>
 
           <div class="footer-text">
             ${settings.footerNotes ? `${settings.footerNotes}` : ''}
-            ${settings.showSocial && settings.instagram ? `<div style="font-weight: bold; margin-top: 3px;">IG: ${settings.instagram}</div>` : ''}
-            <div style="font-size: 8px; color: #666; margin-top: 4px;">*** ${settings.storeName} ***</div>
+            ${settings.showSocial && settings.instagram ? `<div style="font-weight: 900; margin-top: 2px;">IG: ${settings.instagram}</div>` : ''}
+            ${settings.showSocial && settings.tiktok ? `<div style="font-weight: 900; margin-top: 1px;">TikTok: ${settings.tiktok}</div>` : ''}
+            <div style="font-size: 8px; color: #444; margin-top: 3px;">*** TERIMA KASIH • SELAMAT MENIKMATI ***</div>
           </div>
         </body>
       </html>
@@ -421,29 +540,39 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
   const generateKitchenTicketHtml = () => {
     let itemsHtml = '';
     order.items.forEach((item) => {
-      let mods = '';
-      if (item.sugarLevel) mods += `<div>• Gula: ${item.sugarLevel}</div>`;
-      if (item.iceLevel) mods += `<div>• Es: ${item.iceLevel}</div>`;
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) mods += `<div>• Matcha: Level ${item.matchaLevel}</div>`;
-      if (item.size) mods += `<div>• Size: ${item.size}</div>`;
-      if (item.shotName) mods += `<div>• Shot: ${item.shotName}</div>`;
+      let modsHtml = '';
+      if (item.sugarLevel) {
+        modsHtml += `<div style="font-size: 12px; font-weight: 900; color: #000;">» GULA: ${item.sugarLevel.toUpperCase()}</div>`;
+      }
+      if (item.iceLevel) {
+        modsHtml += `<div style="font-size: 12px; font-weight: 900; color: #000;">» ES: ${item.iceLevel.toUpperCase()}</div>`;
+      }
+      if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
+        modsHtml += `<div style="font-size: 12px; font-weight: 900; color: #000;">» MATCHA: LEVEL ${item.matchaLevel}</div>`;
+      }
+      if (item.size) {
+        modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» SIZE: ${item.size.toUpperCase()}</div>`;
+      }
+      if (item.shotName) {
+        modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» SHOT: ${item.shotName.toUpperCase()}</div>`;
+      }
       if (item.addOns && item.addOns.length > 0) {
         item.addOns.forEach((a) => {
-          mods += `<div>• +${a.name}</div>`;
+          modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» +TOPPING: ${a.name.toUpperCase()}</div>`;
         });
       }
       if (item.bundleSelections && item.bundleSelections.length > 0) {
         item.bundleSelections.forEach((b) => {
-          mods += `<div>• ${b.productName || b.groupName}</div>`;
+          modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}</div>`;
         });
       }
 
       itemsHtml += `
-        <div style="border-bottom: 1px dashed #000; padding: 4px 0;">
-          <div style="font-size: 12px; font-weight: bold;">
-            [ ${item.qty}x ] ${item.name.toUpperCase()}
+        <div style="border-bottom: 1.5px dashed #000; padding: 5px 0;">
+          <div style="font-size: 13px; font-weight: 900; text-transform: uppercase;">
+            [ ${item.qty}x ] ${item.name}
           </div>
-          ${mods ? `<div style="padding-left: 8px; font-size: 11px; font-weight: bold; margin-top: 2px;">${mods}</div>` : ''}
+          ${modsHtml ? `<div style="padding-left: 6px; margin-top: 3px; border-left: 2.5px solid #000;">${modsHtml}</div>` : ''}
         </div>
       `;
     });
@@ -451,6 +580,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     const is80mm = settings.paperWidth === '80mm';
     const paperWidthStyle = is80mm ? '72mm' : '48mm';
     const pageSizeStyle = is80mm ? '80mm auto' : '58mm auto';
+    const tableDisplay = order.tableNumber ? `MEJA ${order.tableNumber}` : (order.queueNumber ? `A-${order.queueNumber}` : 'PICKUP');
 
     return `
       <!DOCTYPE html>
@@ -471,7 +601,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
             html, body {
               width: ${paperWidthStyle};
               margin: 0 auto;
-              padding: 2mm 0 10mm 0;
+              padding: 2mm 0 8mm 0;
               font-family: 'Courier New', Courier, monospace;
               font-size: 11px;
               line-height: 1.35;
@@ -481,47 +611,74 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
               print-color-adjust: exact;
             }
             .center { text-align: center; }
-            .bold { font-weight: bold; }
-            .divider-solid { border-top: 2px solid #000; margin: 4px 0; }
-            .divider-dash { border-top: 1px dashed #000; margin: 4px 0; }
-            .row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2px; font-size: 11px; }
+            .bold { font-weight: 900; }
+            .cgv-tag {
+              background: #000000;
+              color: #ffffff;
+              font-size: 10px;
+              font-weight: 900;
+              letter-spacing: 1px;
+              text-transform: uppercase;
+              padding: 3px 6px;
+              display: inline-block;
+            }
+            .cgv-split-box {
+              display: flex;
+              border: 2px solid #000;
+              margin: 5px 0;
+            }
+            .cgv-split-left {
+              flex: 1.1;
+              padding: 4px;
+              border-right: 2px solid #000;
+            }
+            .cgv-split-right {
+              flex: 0.9;
+              padding: 4px;
+              text-align: center;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              background: #000;
+              color: #fff;
+            }
           </style>
         </head>
         <body>
           <div class="center">
-            <div style="font-size: 14px; font-weight: 900; letter-spacing: 1px;">KITCHEN / BAR TICKET</div>
-            <div style="font-size: 12px; font-weight: bold; margin-top: 2px;">
-              ${order.orderType === 'DINE_IN' ? `DINE IN - MEJA ${order.tableNumber || '?'}` : order.orderType}
+            <div class="cgv-tag">KITCHEN / BARISTA TICKET</div>
+          </div>
+
+          <div class="cgv-split-box">
+            <div class="cgv-split-left">
+              <div style="font-size: 9px; font-weight: 900; color: #555;">PELANGGAN & ORDER</div>
+              <div style="font-size: 13px; font-weight: 900; text-transform: uppercase;">${order.customerName}</div>
+              <div style="font-size: 10px; font-weight: 900;">#${orderIdShort} • ${formattedTime} WIB</div>
+            </div>
+            <div class="cgv-split-right">
+              <div style="font-size: 8.5px; font-weight: 900; letter-spacing: 0.5px;">LOKASI</div>
+              <div style="font-size: 15px; font-weight: 900; text-transform: uppercase;">${tableDisplay}</div>
             </div>
           </div>
 
-          <div class="divider-solid"></div>
-
-          <div class="row">
-            <div>
-              <div>Order: <b>#${orderIdShort}</b></div>
-              <div>Cust: <b>${order.customerName}</b></div>
-            </div>
-            <div style="text-align: right;">
-              ${order.queueNumber ? `<div style="font-size: 14px; font-weight: 900;">A-${order.queueNumber}</div>` : ''}
-              <div style="font-size: 10px;">${formattedTime}</div>
-            </div>
+          <div style="border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 2px 0; margin: 4px 0; font-size: 10px; font-weight: 900; text-align: center; letter-spacing: 0.5px;">
+            DAFTAR PESANAN MINUMAN & MAKANAN
           </div>
-
-          <div class="divider-solid"></div>
 
           <div style="margin: 4px 0;">
             ${itemsHtml}
           </div>
 
           ${order.notes ? `
-            <div style="border: 1px solid #000; padding: 4px; margin-top: 4px; font-size: 10.5px;">
-              <b>Catatan:</b><br/>${order.notes}
+            <div style="border: 1.5px solid #000; padding: 4px; margin-top: 4px; font-size: 11px; font-weight: 900; background: #f5f5f5;">
+              <b>CATATAN KHUSUS:</b><br/>${order.notes}
             </div>
           ` : ''}
 
-          <div class="divider-dash"></div>
-          <div class="center" style="font-size: 9px; margin-top: 4px;">--- SELESAIKAN & SAJIKAN ---</div>
+          <div class="center" style="font-size: 9px; font-weight: 900; margin-top: 6px; letter-spacing: 0.5px;">
+            --- SELESAIKAN & SAJIKAN ---
+          </div>
         </body>
       </html>
     `;
@@ -586,30 +743,42 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     if (settings.address) receiptText += `  ${settings.address}\n`;
     if (settings.phone) receiptText += `      WA: ${settings.phone}\n`;
     receiptText += `================================\n`;
-    receiptText += `Order ID  : #${orderIdShort}\n`;
-    receiptText += `Waktu     : ${formattedDate} ${formattedTime}\n`;
-    receiptText += `Tipe      : ${order.orderType} ${order.tableNumber ? `(Meja ${order.tableNumber})` : ''}\n`;
-    receiptText += `Pelanggan : ${order.customerName}\n`;
+    receiptText += `[ PESANAN ]\n`;
+    receiptText += `Pelanggan : ${order.customerName.toUpperCase()}\n`;
+    receiptText += `No. Order : #${orderIdShort}\n`;
     receiptText += `--------------------------------\n`;
+    receiptText += `[ WAKTU ]   : ${formattedDate} ${formattedTime}\n`;
+    receiptText += `[ LOKASI ]  : ${order.orderType === 'DINE_IN' ? `MEJA ${order.tableNumber || '?'}` : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : order.orderType)}\n`;
+    receiptText += `--------------------------------\n`;
+    receiptText += `[ DETAIL PESANAN ]\n`;
     order.items.forEach((item) => {
-      receiptText += `${item.qty}x ${item.name.padEnd(18)} ${formatRupiah(item.price * item.qty).padStart(10)}\n`;
-      if (item.iceLevel) receiptText += `   * Es: ${item.iceLevel}\n`;
-      if (item.sugarLevel) receiptText += `   * Gula: ${item.sugarLevel}\n`;
-      if (item.size) receiptText += `   * Ukuran: ${item.size}\n`;
-      if (item.shotName) receiptText += `   * Espresso: ${item.shotName}\n`;
+      receiptText += `* ${item.qty}x ${item.name.toUpperCase().padEnd(18)} ${formatRupiah((item.totalPrice || item.price) * item.qty).padStart(10)}\n`;
+      if (item.sugarLevel) receiptText += `  » GULA: ${item.sugarLevel.toUpperCase()}\n`;
+      if (item.iceLevel) receiptText += `  » ES: ${item.iceLevel.toUpperCase()}\n`;
+      if (item.matchaLevel !== undefined && item.matchaLevel > 0) receiptText += `  » MATCHA: LEVEL ${item.matchaLevel}\n`;
+      if (item.size) receiptText += `  » UKURAN: ${item.size.toUpperCase()}\n`;
+      if (item.shotName) receiptText += `  » SHOT: ${item.shotName.toUpperCase()}\n`;
       if (item.addOns && item.addOns.length > 0) {
         item.addOns.forEach((a) => {
-          receiptText += `   * ${a.name} (+${formatRupiah(a.price)})\n`;
+          receiptText += `  » TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`;
         });
+      }
+      if (item.bundleSelections && item.bundleSelections.length > 0) {
+        item.bundleSelections.forEach((b) => {
+          receiptText += `  » PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`;
+        });
+      }
+      if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
+        receiptText += `  » VARIAN: ${item.modifiersString.toUpperCase()}\n`;
       }
     });
     receiptText += `--------------------------------\n`;
     receiptText += `Subtotal                ${formatRupiah(order.subtotal).padStart(10)}\n`;
     if (totalDiscount > 0) {
-      receiptText += `Diskon                 -${formatRupiah(totalDiscount).padStart(10)}\n`;
+      receiptText += `Diskon / Promo         -${formatRupiah(totalDiscount).padStart(10)}\n`;
     }
     receiptText += `TOTAL AKHIR             ${formatRupiah(order.total).padStart(10)}\n`;
-    receiptText += `METODE: ${order.paymentMethod.padEnd(12)} ${formatRupiah(order.total).padStart(10)}\n`;
+    receiptText += `METODE: ${order.paymentMethod.padEnd(12)} (LUNAS)\n`;
     if (order.cashPaid) {
       receiptText += `DITERIMA                ${formatRupiah(order.cashPaid).padStart(10)}\n`;
       receiptText += `KEMBALIAN               ${formatRupiah(order.change || 0).padStart(10)}\n`;
@@ -649,7 +818,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
               </div>
               <div>
                 <h3 className="font-semibold text-slate-800 text-sm">Cetak Struk Transaksi</h3>
-                <p className="text-[11px] text-slate-500 font-mono">Format Thermal {settings.paperWidth} (Algoo AT-5805)</p>
+                <p className="text-[11px] text-slate-500 font-mono">Format Tiket CGV Style • {settings.paperWidth}</p>
               </div>
             </div>
 
@@ -690,225 +859,267 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
             </button>
           </div>
 
-          {/* Scrollable Receipt Body (On-Screen Interactive Preview) */}
+          {/* Scrollable Receipt Body (On-Screen Interactive CGV Preview) */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100/80 flex justify-center">
             <div
-              className="w-full max-w-[300px] bg-white p-4 sm:p-5 rounded-lg shadow-md border border-slate-200 text-slate-900 font-mono text-[11px] leading-relaxed transition-all"
+              className="w-full max-w-[310px] bg-white p-4 sm:p-5 rounded-lg shadow-md border-2 border-black text-black font-mono text-[11px] leading-tight transition-all select-none"
             >
               {activeTab === 'customer' ? (
-                /* ================= CUSTOMER RECEIPT PREVIEW ================= */
-                <div>
+                /* ================= CUSTOMER CGV CINEMA TICKET PREVIEW ================= */
+                <div className="space-y-2">
                   {/* Store Logo */}
                   {settings.showLogo && settings.logoUrl && (
-                    <div className="flex justify-center mb-2">
+                    <div className="flex justify-center mb-1">
                       <img
                         src={settings.logoUrl}
                         alt="Logo Struk"
-                        className="max-h-10 max-w-[85px] object-contain grayscale contrast-200"
+                        className="max-h-9 max-w-[85px] object-contain grayscale contrast-200"
                       />
                     </div>
                   )}
 
-                  {/* Header */}
-                  <div className="text-center pb-2 border-b border-dashed border-slate-400">
-                    <h2 className="font-bold text-sm tracking-wider uppercase">{settings.storeName}</h2>
-                    {settings.tagline && <p className="text-[10px] text-slate-600">{settings.tagline}</p>}
-                    {settings.address && <p className="text-[10px] text-slate-600 mt-0.5">{settings.address}</p>}
-                    {settings.phone && <p className="text-[10px] text-slate-600">WA: {settings.phone}</p>}
+                  {/* Store Header */}
+                  <div className="text-center pb-2 border-b-2 border-black">
+                    <h2 className="font-black text-sm tracking-wider uppercase">{settings.storeName}</h2>
+                    {settings.tagline && <p className="text-[9.5px] font-bold text-slate-700">{settings.tagline}</p>}
+                    {settings.address && <p className="text-[8.5px] text-slate-600 mt-0.5">{settings.address}</p>}
+                    {settings.phone && <p className="text-[8.5px] text-slate-600">WA: {settings.phone}</p>}
                     {settings.headerNotes && (
-                      <p className="text-[10px] italic text-slate-500 mt-1 whitespace-pre-line">{settings.headerNotes}</p>
+                      <p className="text-[8px] italic text-slate-500 mt-1 whitespace-pre-line">{settings.headerNotes}</p>
                     )}
                   </div>
 
-                  {/* Order Metadata */}
-                  <div className="py-2 border-b border-dashed border-slate-400 space-y-0.5 text-[10.5px]">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">No. Order:</span>
-                      <span className="font-bold">#{orderIdShort}</span>
-                    </div>
-                    {order.queueNumber && (
-                      <div className="flex justify-between">
-                        <span className="text-slate-600">No. Antrian:</span>
-                        <span className="font-bold text-xs bg-slate-100 px-1 rounded">A-{order.queueNumber}</span>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Waktu:</span>
-                      <span>{formattedDate} {formattedTime}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Tipe:</span>
-                      <span className="font-semibold">
-                        {order.orderType === 'DINE_IN' ? `DINE IN ${order.tableNumber ? `(Meja ${order.tableNumber})` : ''}` : order.orderType}
+                  {/* Section 1: Customer & Order (CGV Header Style) */}
+                  <div>
+                    <span className="bg-black text-white text-[8.5px] font-black uppercase px-1.5 py-0.5 tracking-wider inline-block">
+                      PESANAN
+                    </span>
+                    <h3 className="font-black text-sm uppercase tracking-wide mt-1 text-black">
+                      {order.customerName}
+                    </h3>
+                    <p className="text-[9.5px] font-bold text-slate-600">
+                      ORDER: #{orderIdShort}
+                    </p>
+                  </div>
+
+                  {/* Section 2: Split Box Time/Date & Table/Auditorium (CGV 2-Col Style) */}
+                  <div className="border-2 border-black flex my-1">
+                    <div className="flex-1 p-2 border-r-2 border-black bg-white">
+                      <span className="bg-black text-white text-[7.5px] font-black uppercase px-1 py-0.5 tracking-wider inline-block">
+                        WAKTU & TANGGAL
                       </span>
+                      <div className="font-black text-[10px] mt-1">{formattedDate}</div>
+                      <div className="font-black text-xs">{formattedTime} WIB</div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600">Pelanggan:</span>
-                      <span className="font-semibold truncate max-w-[140px]">{order.customerName}</span>
-                    </div>
-                  </div>
-
-                  {/* Order Items */}
-                  <div className="py-2 border-b border-dashed border-slate-400 space-y-2">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="space-y-0.5">
-                        <div className="flex justify-between items-start">
-                          <span className="font-bold flex-1 pr-2">
-                            {item.qty}x {item.name}
-                          </span>
-                          <span className="font-semibold shrink-0">
-                            {formatRupiah((item.totalPrice || item.price) * item.qty)}
-                          </span>
-                        </div>
-                        {/* Modifiers breakdown */}
-                        <div className="pl-3 text-[9.5px] text-slate-600 space-y-0.5">
-                          {item.sugarLevel && <div>• Gula: {item.sugarLevel}</div>}
-                          {item.iceLevel && <div>• Es: {item.iceLevel}</div>}
-                          {item.matchaLevel !== undefined && item.matchaLevel > 0 && (
-                            <div>• Matcha: Level {item.matchaLevel}</div>
-                          )}
-                          {item.size && <div>• Ukuran: {item.size}</div>}
-                          {item.shotName && <div>• Shot: {item.shotName}</div>}
-                          {item.addOns && item.addOns.length > 0 && (
-                            item.addOns.map((addon, aIdx) => (
-                              <div key={aIdx}>• +{addon.name} ({formatRupiah(addon.price)})</div>
-                            ))
-                          )}
-                          {item.bundleSelections && item.bundleSelections.length > 0 && (
-                            item.bundleSelections.map((bundle, bIdx) => (
-                              <div key={bIdx}>• {bundle.productName || bundle.groupName}</div>
-                            ))
-                          )}
-                          {item.modifiersString && !item.sugarLevel && !item.iceLevel && (
-                            <div>• {item.modifiersString}</div>
-                          )}
-                        </div>
+                    <div className="w-2/5 p-2 bg-slate-50 flex flex-col items-center justify-center text-center">
+                      <span className="bg-black text-white text-[7.5px] font-black uppercase px-1 py-0.5 tracking-wider inline-block">
+                        {order.orderType === 'DINE_IN' ? 'NOMOR MEJA' : 'ANTRIAN'}
+                      </span>
+                      <div className="font-black text-sm sm:text-base uppercase tracking-tight mt-1 text-black">
+                        {order.tableNumber ? `MEJA ${order.tableNumber}` : (order.queueNumber ? `A-${order.queueNumber}` : 'PICKUP')}
                       </div>
-                    ))}
+                    </div>
                   </div>
 
-                  {/* Pricing Breakdown */}
-                  <div className="py-2 border-b border-dashed border-slate-400 space-y-1 text-[10.5px]">
-                    <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>{formatRupiah(order.subtotal)}</span>
+                  {/* Section 3: Order Items (CGV Seat Breakdown Style) */}
+                  <div className="pt-1">
+                    <span className="bg-black text-white text-[8.5px] font-black uppercase px-1.5 py-0.5 tracking-wider inline-block">
+                      DETAIL PESANAN
+                    </span>
+
+                    <div className="divide-y divide-dashed divide-slate-400 mt-1">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="py-2 space-y-1">
+                          <div className="flex justify-between items-start">
+                            <span className="font-black text-xs uppercase flex-1 pr-2">
+                              [ {item.qty}x ] {item.name}
+                            </span>
+                            <span className="font-black text-xs shrink-0">
+                              {formatRupiah((item.totalPrice || item.price) * item.qty)}
+                            </span>
+                          </div>
+
+                          {/* Super Clear & Bold Modifiers */}
+                          <div className="border-l-2 border-black pl-2 space-y-0.5 text-[10px] font-bold text-black mt-1">
+                            {item.sugarLevel && (
+                              <div>» <span className="font-black">GULA:</span> <span className="underline font-black">{item.sugarLevel.toUpperCase()}</span></div>
+                            )}
+                            {item.iceLevel && (
+                              <div>» <span className="font-black">ES:</span> <span className="underline font-black">{item.iceLevel.toUpperCase()}</span></div>
+                            )}
+                            {item.matchaLevel !== undefined && item.matchaLevel > 0 && (
+                              <div>» <span className="font-black">MATCHA:</span> <span className="underline font-black">LEVEL {item.matchaLevel}</span></div>
+                            )}
+                            {item.size && (
+                              <div>» <span className="font-black">UKURAN:</span> <span className="underline font-black">{item.size.toUpperCase()}</span></div>
+                            )}
+                            {item.shotName && (
+                              <div>» <span className="font-black">SHOT:</span> <span className="underline font-black">{item.shotName.toUpperCase()}</span></div>
+                            )}
+                            {item.addOns && item.addOns.length > 0 && (
+                              item.addOns.map((addon, aIdx) => (
+                                <div key={aIdx}>» <span className="font-black">TOPPING:</span> <span className="underline font-black">+{addon.name.toUpperCase()} ({formatRupiah(addon.price)})</span></div>
+                              ))
+                            )}
+                            {item.bundleSelections && item.bundleSelections.length > 0 && (
+                              item.bundleSelections.map((bundle, bIdx) => (
+                                <div key={bIdx}>» <span className="font-black">PILIHAN:</span> <span className="underline font-black">{(bundle.productName || bundle.groupName || '').toUpperCase()}</span></div>
+                              ))
+                            )}
+                            {item.modifiersString && !item.sugarLevel && !item.iceLevel && (
+                              <div>» <span className="font-black">VARIAN:</span> <span className="underline font-black">{item.modifiersString.toUpperCase()}</span></div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {totalDiscount > 0 && (
-                      <div className="flex justify-between text-slate-700">
-                        <span>Diskon / Promo</span>
-                        <span>-{formatRupiah(totalDiscount)}</span>
+                  </div>
+
+                  {/* Section 4: Barcode & Payment Breakdown */}
+                  <div className="border-t-2 border-black pt-2">
+                    <div className="text-center font-mono font-black text-xs tracking-widest">
+                      |||| | ||||| || ||||||||| | |||
+                    </div>
+                    <div className="text-center text-[8.5px] font-mono text-slate-600 mb-2">
+                      {order.id}
+                    </div>
+
+                    <div className="space-y-1 text-[10px]">
+                      <div className="flex justify-between">
+                        <span className="text-slate-700">Subtotal:</span>
+                        <span className="font-bold">{formatRupiah(order.subtotal)}</span>
                       </div>
-                    )}
-                    <div className="flex justify-between font-bold text-[12px] pt-1 border-t border-slate-800">
-                      <span>TOTAL</span>
-                      <span>{formatRupiah(order.total)}</span>
-                    </div>
-                    <div className="flex justify-between pt-0.5">
-                      <span>Metode ({order.paymentMethod})</span>
-                      <span>{formatRupiah(order.total)}</span>
-                    </div>
-                    {order.cashPaid !== undefined && order.cashPaid > 0 && (
-                      <>
-                        <div className="flex justify-between text-slate-600">
-                          <span>Tunai Diterima</span>
-                          <span>{formatRupiah(order.cashPaid)}</span>
+                      {totalDiscount > 0 && (
+                        <div className="flex justify-between text-slate-800">
+                          <span>Diskon / Promo:</span>
+                          <span className="font-bold">-{formatRupiah(totalDiscount)}</span>
                         </div>
-                        <div className="flex justify-between font-semibold text-slate-800">
-                          <span>Kembalian</span>
-                          <span>{formatRupiah(order.change || 0)}</span>
-                        </div>
-                      </>
-                    )}
+                      )}
+
+                      {/* Total Inverted Banner */}
+                      <div className="bg-black text-white px-2 py-1.5 flex justify-between font-black text-xs tracking-wide my-1.5">
+                        <span>TOTAL</span>
+                        <span>{formatRupiah(order.total)}</span>
+                      </div>
+
+                      <div className="flex justify-between text-[10px]">
+                        <span>Metode Pembayaran:</span>
+                        <span className="font-bold">{order.paymentMethod} (LUNAS)</span>
+                      </div>
+
+                      {order.cashPaid !== undefined && order.cashPaid > 0 && (
+                        <>
+                          <div className="flex justify-between text-slate-600">
+                            <span>Tunai Diterima:</span>
+                            <span>{formatRupiah(order.cashPaid)}</span>
+                          </div>
+                          <div className="flex justify-between font-black text-black">
+                            <span>Kembalian:</span>
+                            <span>{formatRupiah(order.change || 0)}</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  {/* Loyalty Points Info */}
+                  {/* Section 5: Loyalty Points Info */}
                   {order.pointsEarned && order.pointsEarned > 0 ? (
-                    <div className="py-1.5 border-b border-dashed border-slate-400 text-center text-[10px]">
-                      <span className="font-semibold text-slate-800">
-                        Poin Didapat: +{order.pointsEarned} Poin
+                    <div className="border-t border-dashed border-slate-400 py-1.5 text-center text-[9.5px]">
+                      <span className="font-black text-black">
+                        POIN DIPEROLEH: +{order.pointsEarned} POIN
                       </span>
                       {order.totalPoints ? (
-                        <div className="text-[9px] text-slate-500">Total Poin Akun: {order.totalPoints} Poin</div>
+                        <div className="text-[8.5px] text-slate-600">TOTAL POIN MEMBER: {order.totalPoints} POIN</div>
                       ) : null}
                     </div>
                   ) : null}
 
-                  {/* Extra Store Info (Wi-Fi) */}
+                  {/* Section 6: Promo Loyalty Card (CGV Style) */}
+                  <div className="border-2 border-black p-2 text-center bg-slate-50 my-2">
+                    <div className="font-black text-[10px] tracking-wide uppercase">
+                      GRATIS VOUCHER & CASHBACK
+                    </div>
+                    <div className="text-[8.5px] font-bold text-slate-700 mt-0.5">
+                      DENGAN JOIN MEMBER ARUM SEDUH
+                    </div>
+                    <div className="text-[7.5px] font-bold text-slate-500 mt-1 uppercase">
+                      KUMPULKAN POIN DI SETIAP KUNJUNGAN
+                    </div>
+                  </div>
+
+                  {/* Wi-Fi & Footer */}
                   {settings.showWifi && settings.wifiSsid && (
-                    <div className="py-1.5 border-b border-dashed border-slate-400 text-center text-[9.5px] text-slate-600">
-                      <div>Wi-Fi: <span className="font-bold">{settings.wifiSsid}</span></div>
-                      {settings.wifiPassword && (
-                        <div>Password: <span className="font-mono font-bold">{settings.wifiPassword}</span></div>
-                      )}
+                    <div className="text-center text-[9px] text-slate-700 py-1 border-t border-dashed border-slate-400">
+                      Wi-Fi: <span className="font-black">{settings.wifiSsid}</span> | Pass: <span className="font-bold">{settings.wifiPassword || '-'}</span>
                     </div>
                   )}
 
-                  {/* Footer Greetings & Social Media */}
-                  <div className="pt-2 text-center text-[9.5px] text-slate-600 space-y-1">
+                  <div className="text-center text-[9px] text-slate-600 space-y-0.5 pt-1">
                     {settings.footerNotes && (
                       <p className="whitespace-pre-line font-medium leading-tight">{settings.footerNotes}</p>
                     )}
                     {settings.showSocial && settings.instagram && (
-                      <p className="text-[9px] font-semibold text-slate-800 mt-1">
-                        IG: {settings.instagram}
-                      </p>
+                      <p className="font-black text-black mt-0.5">IG: {settings.instagram}</p>
                     )}
-                    <p className="text-[8px] text-slate-400 pt-1">*** {settings.storeName} ***</p>
+                    {settings.showSocial && settings.tiktok && (
+                      <p className="font-black text-black text-[8.5px]">TikTok: {settings.tiktok}</p>
+                    )}
+                    <p className="text-[8px] text-slate-400 pt-1">*** TERIMA KASIH • SELAMAT MENIKMATI ***</p>
                   </div>
                 </div>
               ) : (
-                /* ================= KITCHEN TICKET PREVIEW ================= */
-                <div>
-                  <div className="text-center pb-2 border-b-2 border-slate-800">
-                    <h2 className="font-extrabold text-base tracking-widest uppercase">KITCHEN / BAR TICKET</h2>
-                    <p className="text-xs font-bold mt-1 text-slate-800">
-                      {order.orderType === 'DINE_IN' ? `DINE IN - MEJA ${order.tableNumber || '?'}` : order.orderType}
-                    </p>
+                /* ================= KITCHEN / BARISTA TICKET PREVIEW ================= */
+                <div className="space-y-2">
+                  <div className="text-center pb-1">
+                    <span className="bg-black text-white text-[9px] font-black uppercase px-2 py-0.5 tracking-wider inline-block">
+                      KITCHEN / BARISTA TICKET
+                    </span>
                   </div>
 
-                  <div className="py-2 border-b border-dashed border-slate-500 flex justify-between text-[11px]">
-                    <div>
-                      <div><span className="text-slate-500">Order:</span> <b className="text-xs">#{orderIdShort}</b></div>
-                      <div><span className="text-slate-500">Cust:</span> <b>{order.customerName}</b></div>
+                  {/* Split Box */}
+                  <div className="border-2 border-black flex my-1">
+                    <div className="flex-1 p-2 border-r-2 border-black bg-white">
+                      <div className="text-[8px] font-bold text-slate-500 uppercase">PELANGGAN & ORDER</div>
+                      <div className="font-black text-sm uppercase truncate">{order.customerName}</div>
+                      <div className="font-bold text-[10px] text-slate-700">#{orderIdShort} • {formattedTime} WIB</div>
                     </div>
-                    <div className="text-right">
-                      {order.queueNumber && (
-                        <div className="text-sm font-extrabold bg-slate-900 text-white px-2 py-0.5 rounded">
-                          A-{order.queueNumber}
-                        </div>
-                      )}
-                      <div className="text-[10px] text-slate-500 mt-0.5">{formattedTime}</div>
+                    <div className="w-2/5 p-2 bg-black text-white flex flex-col items-center justify-center text-center">
+                      <div className="text-[7.5px] font-bold tracking-wider text-slate-300">LOKASI</div>
+                      <div className="font-black text-sm uppercase tracking-tight mt-0.5">
+                        {tableDisplay}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Kitchen Items with Large Clear Modifiers */}
-                  <div className="py-3 border-b-2 border-slate-800 space-y-3">
+                  <div className="border-y-2 border-black py-1 text-center font-black text-[9.5px] tracking-wider uppercase">
+                    DAFTAR PESANAN MINUMAN & MAKANAN
+                  </div>
+
+                  {/* Kitchen Items with Large Bold Modifiers */}
+                  <div className="divide-y-2 divide-dashed divide-black py-1 space-y-2">
                     {order.items.map((item, idx) => (
-                      <div key={idx} className="border-b border-slate-200 pb-2 last:border-none last:pb-0">
-                        <div className="text-xs font-extrabold flex items-center gap-1.5 text-slate-900">
-                          <span className="inline-block bg-slate-900 text-white px-1.5 py-0.2 rounded text-[11px]">
-                            {item.qty}x
-                          </span>
-                          <span className="text-sm uppercase tracking-tight">{item.name}</span>
+                      <div key={idx} className="pt-2 first:pt-0 space-y-1">
+                        <div className="font-black text-sm uppercase text-black">
+                          [ {item.qty}x ] {item.name}
                         </div>
 
-                        {/* Modifiers for Barista / Chef */}
-                        <div className="pl-5 pt-1 text-[11px] font-bold text-slate-800 space-y-0.5">
-                          {item.sugarLevel && <div className="text-orange-600">• Gula: {item.sugarLevel}</div>}
-                          {item.iceLevel && <div className="text-blue-600">• Es: {item.iceLevel}</div>}
+                        {/* Modifiers for Barista */}
+                        <div className="border-l-2 border-black pl-2 space-y-0.5 text-[11px] font-black text-black">
+                          {item.sugarLevel && <div>» GULA: {item.sugarLevel.toUpperCase()}</div>}
+                          {item.iceLevel && <div>» ES: {item.iceLevel.toUpperCase()}</div>}
                           {item.matchaLevel !== undefined && item.matchaLevel > 0 && (
-                            <div className="text-emerald-700">• Level Matcha: Level {item.matchaLevel}</div>
+                            <div>» MATCHA: LEVEL {item.matchaLevel}</div>
                           )}
-                          {item.size && <div>• Size: {item.size}</div>}
-                          {item.shotName && <div className="text-amber-700">• Shot: {item.shotName}</div>}
+                          {item.size && <div>» UKURAN: {item.size.toUpperCase()}</div>}
+                          {item.shotName && <div>» SHOT: {item.shotName.toUpperCase()}</div>}
                           {item.addOns && item.addOns.length > 0 && (
                             item.addOns.map((addon, aIdx) => (
-                              <div key={aIdx} className="text-purple-700">• +Topping: {addon.name}</div>
+                              <div key={aIdx}>» +TOPPING: {addon.name.toUpperCase()}</div>
                             ))
                           )}
                           {item.bundleSelections && item.bundleSelections.length > 0 && (
                             item.bundleSelections.map((bundle, bIdx) => (
-                              <div key={bIdx} className="text-indigo-700">• {bundle.productName || bundle.groupName}</div>
+                              <div key={bIdx}>» PILIHAN: {(bundle.productName || bundle.groupName || '').toUpperCase()}</div>
                             ))
                           )}
                         </div>
@@ -917,13 +1128,13 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
                   </div>
 
                   {order.notes && (
-                    <div className="pt-2 text-[10px] bg-amber-50 p-2 rounded border border-amber-200 text-amber-900">
-                      <b>Catatan Pesanan:</b>
-                      <p className="mt-0.5">{order.notes}</p>
+                    <div className="border-2 border-black p-2 bg-slate-50 text-black text-[10px] font-black mt-2">
+                      <div className="underline">CATATAN KHUSUS:</div>
+                      <p className="mt-0.5 text-[11px]">{order.notes}</p>
                     </div>
                   )}
 
-                  <div className="pt-2 text-center text-[9px] text-slate-400 font-mono">
+                  <div className="pt-2 text-center text-[8.5px] font-black text-slate-500 uppercase tracking-wider">
                     --- SELESAIKAN & SAJIKAN ---
                   </div>
                 </div>
@@ -938,7 +1149,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
               className="px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 transition-colors"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-              {copied ? 'Tersalin' : 'Salin Teks'}
+              {copied ? 'Tersalin' : 'Salin Teks (WA)'}
             </button>
 
             <div className="flex items-center gap-2">

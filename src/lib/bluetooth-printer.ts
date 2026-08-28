@@ -197,6 +197,10 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   const formattedDate = orderDate.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const formattedTime = orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
+  const maxCols = settings.paperWidth === '80mm' ? 48 : 32;
+  const dividerDouble = '='.repeat(maxCols) + '\n';
+  const dividerSingle = '-'.repeat(maxCols) + '\n';
+
   // 1. Initialize Printer (ESC @)
   write([0x1b, 0x40]);
 
@@ -211,85 +215,133 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   if (settings.phone) writeText(`WA: ${settings.phone}\n`);
   if (settings.headerNotes) writeText(`${settings.headerNotes}\n`);
 
-  writeText('--------------------------------\n');
+  writeText(dividerDouble);
 
-  // 3. Metadata
+  // 3. Section 1: Pesanan & Pelanggan (CGV Header)
   write([0x1b, 0x61, 0x00]); // Align Left
-  writeText(padLine('No. Order:', `#${orderIdShort}`));
-  if (order.queueNumber) {
-    writeText(padLine('No. Antrian:', `A-${order.queueNumber}`));
-  }
-  writeText(padLine('Waktu:', `${formattedDate} ${formattedTime}`));
-  writeText(padLine('Tipe:', order.orderType === 'DINE_IN' ? `DINE IN (Meja ${order.tableNumber || '?'})` : order.orderType));
-  writeText(padLine('Pelanggan:', order.customerName || 'Pelanggan'));
+  write([0x1b, 0x45, 0x01]); // Bold on
+  writeText('[ PESANAN ]\n');
+  write([0x1b, 0x21, 0x10]); // Double height for customer name
+  writeText(`${(order.customerName || 'PELANGGAN').toUpperCase()}\n`);
+  write([0x1b, 0x21, 0x00]); // Normal text
+  write([0x1b, 0x45, 0x00]); // Bold off
+  writeText(padLine('No. Order:', `#${orderIdShort}`, maxCols));
 
-  writeText('--------------------------------\n');
+  writeText(dividerSingle);
 
-  // 4. Items
+  // 4. Section 2: Waktu & Meja (CGV 2-Column Split Box)
+  const tableDisplay = order.tableNumber 
+    ? `MEJA ${order.tableNumber}` 
+    : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : (order.orderType || 'PICKUP'));
+  
+  writeText(padLine('[ WAKTU & TGL ]', '[ LOKASI / MEJA ]', maxCols));
+  write([0x1b, 0x45, 0x01]); // Bold on
+  writeText(padLine(`${formattedDate} ${formattedTime}`, tableDisplay, maxCols));
+  write([0x1b, 0x45, 0x00]); // Bold off
+
+  writeText(dividerDouble);
+
+  // 5. Section 3: Detail Pesanan & Modifiers (Tebal & Jelas Sesuai Request)
+  write([0x1b, 0x45, 0x01]);
+  writeText('[ DETAIL PESANAN ]\n');
+  write([0x1b, 0x45, 0x00]);
+
   (order.items || []).forEach((item: any) => {
     const itemPrice = (item.totalPrice || item.price) * item.qty;
     write([0x1b, 0x45, 0x01]); // Bold on
-    writeText(padLine(`${item.qty}x ${item.name}`, formatRupiah(itemPrice)));
+    writeText(padLine(`[ ${item.qty}x ] ${item.name.toUpperCase()}`, formatRupiah(itemPrice), maxCols));
     write([0x1b, 0x45, 0x00]); // Bold off
 
-    // Modifiers
-    if (item.sugarLevel) writeText(`   - Gula: ${item.sugarLevel}\n`);
-    if (item.iceLevel) writeText(`   - Es: ${item.iceLevel}\n`);
-    if (item.matchaLevel !== undefined && item.matchaLevel > 0) writeText(`   - Matcha: Level ${item.matchaLevel}\n`);
-    if (item.size) writeText(`   - Ukuran: ${item.size}\n`);
-    if (item.shotName) writeText(`   - Shot: ${item.shotName}\n`);
+    // Prominent & Bold Modifiers for Barista & Customer
+    write([0x1b, 0x45, 0x01]); // Bold on modifiers
+    if (item.sugarLevel) {
+      writeText(`   >> GULA: ${item.sugarLevel.toUpperCase()}\n`);
+    }
+    if (item.iceLevel) {
+      writeText(`   >> ES: ${item.iceLevel.toUpperCase()}\n`);
+    }
+    if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
+      writeText(`   >> MATCHA: LEVEL ${item.matchaLevel}\n`);
+    }
+    if (item.size) {
+      writeText(`   >> UKURAN: ${item.size.toUpperCase()}\n`);
+    }
+    if (item.shotName) {
+      writeText(`   >> SHOT: ${item.shotName.toUpperCase()}\n`);
+    }
     if (item.addOns && item.addOns.length > 0) {
-      item.addOns.forEach((a: any) => writeText(`   - +${a.name} (${formatRupiah(a.price)})\n`));
+      item.addOns.forEach((a: any) => {
+        writeText(`   >> TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`);
+      });
     }
     if (item.bundleSelections && item.bundleSelections.length > 0) {
-      item.bundleSelections.forEach((b: any) => writeText(`   - ${b.productName || b.groupName}\n`));
+      item.bundleSelections.forEach((b: any) => {
+        writeText(`   >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`);
+      });
     }
     if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-      writeText(`   - ${item.modifiersString}\n`);
+      writeText(`   >> VARIAN: ${item.modifiersString.toUpperCase()}\n`);
     }
+    write([0x1b, 0x45, 0x00]); // Bold off
   });
 
-  writeText('--------------------------------\n');
+  writeText(dividerDouble);
 
-  // 5. Pricing Summary
-  writeText(padLine('Subtotal', formatRupiah(order.subtotal || order.total)));
+  // 6. Pricing & Barcode Summary
+  write([0x1b, 0x61, 0x01]); // Center
+  writeText('|||| | ||||| || ||||||||| | |||\n');
+  writeText(`${order.id || orderIdShort}\n`);
+  write([0x1b, 0x61, 0x00]); // Left
+
+  writeText(padLine('Subtotal:', formatRupiah(order.subtotal || order.total), maxCols));
   if (totalDiscount > 0) {
-    writeText(padLine('Diskon / Promo', `-${formatRupiah(totalDiscount)}`));
+    writeText(padLine('Diskon / Promo:', `-${formatRupiah(totalDiscount)}`, maxCols));
   }
 
+  writeText(dividerSingle);
   write([0x1b, 0x45, 0x01]); // Bold on
-  writeText(padLine('TOTAL', formatRupiah(order.total)));
+  write([0x1b, 0x21, 0x10]); // Double height
+  writeText(padLine('TOTAL AKHIR:', formatRupiah(order.total), maxCols));
+  write([0x1b, 0x21, 0x00]); // Normal
   write([0x1b, 0x45, 0x00]); // Bold off
 
-  writeText(padLine(`Metode (${order.paymentMethod || 'TUNAI'})`, formatRupiah(order.total)));
+  writeText(padLine('Metode Pembayaran:', `${order.paymentMethod || 'TUNAI'} (LUNAS)`, maxCols));
   if (order.cashPaid) {
-    writeText(padLine('Tunai Diterima', formatRupiah(order.cashPaid)));
+    writeText(padLine('Tunai Diterima:', formatRupiah(order.cashPaid), maxCols));
     write([0x1b, 0x45, 0x01]);
-    writeText(padLine('Kembalian', formatRupiah(order.change || 0)));
+    writeText(padLine('Kembalian:', formatRupiah(order.change || 0), maxCols));
     write([0x1b, 0x45, 0x00]);
   }
 
-  // 6. Loyalty Points & Wi-Fi
+  // 7. Loyalty Points Info
   if (order.pointsEarned && order.pointsEarned > 0) {
-    writeText('--------------------------------\n');
+    writeText(dividerSingle);
     write([0x1b, 0x61, 0x01]);
-    writeText(`Poin Didapat: +${order.pointsEarned} Poin\n`);
-    if (order.totalPoints) writeText(`Total Poin Akun: ${order.totalPoints} Poin\n`);
+    writeText(`POIN DIPEROLEH: +${order.pointsEarned} POIN\n`);
+    if (order.totalPoints) writeText(`TOTAL POIN MEMBER: ${order.totalPoints} POIN\n`);
+    write([0x1b, 0x61, 0x00]);
   }
+
+  // 8. Member Promo Banner (CGV Style)
+  writeText(dividerDouble);
+  write([0x1b, 0x61, 0x01]); // Center
+  write([0x1b, 0x45, 0x01]);
+  writeText('GRATIS VOUCHER & CASHBACK\n');
+  writeText('DENGAN JOIN MEMBER ARUM SEDUH\n');
+  write([0x1b, 0x45, 0x00]);
+  writeText('Kumpulkan Poin di Setiap Kunjungan\n');
+  writeText(dividerDouble);
 
   if (settings.showWifi && settings.wifiSsid) {
-    writeText('--------------------------------\n');
-    write([0x1b, 0x61, 0x01]);
-    writeText(`Wi-Fi: ${settings.wifiSsid}\n`);
-    if (settings.wifiPassword) writeText(`Pass: ${settings.wifiPassword}\n`);
+    writeText(`Wi-Fi: ${settings.wifiSsid} | Pass: ${settings.wifiPassword || '-'}\n`);
+    writeText(dividerSingle);
   }
 
-  // 7. Footer Greetings
-  writeText('--------------------------------\n');
-  write([0x1b, 0x61, 0x01]);
+  // 9. Footer Greetings
   if (settings.footerNotes) writeText(`${settings.footerNotes}\n`);
   if (settings.showSocial && settings.instagram) writeText(`IG: ${settings.instagram}\n`);
-  writeText(`*** ${storeName} ***\n`);
+  if (settings.showSocial && settings.tiktok) writeText(`TikTok: ${settings.tiktok}\n`);
+  writeText(`*** TERIMA KASIH • ARUM SEDUH ***\n`);
 
   // Feed 4 lines for paper tearing
   write([0x1b, 0x64, 0x04]);
@@ -298,9 +350,9 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
 }
 
 /**
- * Build ESC/POS Byte Stream for Kitchen / Bar Ticket
+ * Build ESC/POS Byte Stream for Kitchen / Bar Ticket in CGV Style
  */
-export function buildKitchenTicketEscPos(order: any): Uint8Array {
+export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array {
   const encoder = new TextEncoder();
   const buffer: number[] = [];
 
@@ -311,25 +363,32 @@ export function buildKitchenTicketEscPos(order: any): Uint8Array {
   const orderDate = new Date(order.createdAt || Date.now());
   const formattedTime = orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
+  const maxCols = settings?.paperWidth === '80mm' ? 48 : 32;
+  const dividerDouble = '='.repeat(maxCols) + '\n';
+  const dividerSingle = '-'.repeat(maxCols) + '\n';
+
   // Initialize
   write([0x1b, 0x40]);
 
   // Title
   write([0x1b, 0x61, 0x01]); // Center
-  write([0x1b, 0x21, 0x30]); // Double size
-  writeText('KITCHEN TICKET\n');
+  write([0x1b, 0x45, 0x01]); // Bold
+  write([0x1b, 0x21, 0x20]); // Double width
+  writeText('KITCHEN / BAR TICKET\n');
   write([0x1b, 0x21, 0x00]); // Normal size
-
-  const typeStr = order.orderType === 'DINE_IN' ? `DINE IN (Meja ${order.tableNumber || '?'})` : order.orderType;
-  write([0x1b, 0x45, 0x01]);
-  writeText(`${typeStr}\n`);
   write([0x1b, 0x45, 0x00]);
 
-  writeText('================================\n');
+  const tableDisplay = order.tableNumber 
+    ? `MEJA ${order.tableNumber}` 
+    : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : (order.orderType || 'PICKUP'));
+
+  writeText(dividerDouble);
   write([0x1b, 0x61, 0x00]); // Left
-  writeText(padLine(`Order: #${orderIdShort}`, order.queueNumber ? `Antrian: A-${order.queueNumber}` : formattedTime));
-  writeText(padLine(`Cust: ${order.customerName}`, formattedTime));
-  writeText('================================\n');
+  write([0x1b, 0x45, 0x01]);
+  writeText(padLine(`CUST: ${(order.customerName || 'PELANGGAN').toUpperCase()}`, tableDisplay, maxCols));
+  writeText(padLine(`ORDER: #${orderIdShort}`, `${formattedTime} WIB`, maxCols));
+  write([0x1b, 0x45, 0x00]);
+  writeText(dividerDouble);
 
   // Items for Barista
   (order.items || []).forEach((item: any) => {
@@ -339,25 +398,28 @@ export function buildKitchenTicketEscPos(order: any): Uint8Array {
     write([0x1b, 0x21, 0x00]); // Normal
     write([0x1b, 0x45, 0x00]); // Bold off
 
-    if (item.sugarLevel) writeText(`  * Gula: ${item.sugarLevel}\n`);
-    if (item.iceLevel) writeText(`  * Es: ${item.iceLevel}\n`);
-    if (item.matchaLevel !== undefined && item.matchaLevel > 0) writeText(`  * Matcha: Level ${item.matchaLevel}\n`);
-    if (item.size) writeText(`  * Size: ${item.size}\n`);
-    if (item.shotName) writeText(`  * Shot: ${item.shotName}\n`);
+    // Bold Modifiers
+    write([0x1b, 0x45, 0x01]);
+    if (item.sugarLevel) writeText(`  >> GULA: ${item.sugarLevel.toUpperCase()}\n`);
+    if (item.iceLevel) writeText(`  >> ES: ${item.iceLevel.toUpperCase()}\n`);
+    if (item.matchaLevel !== undefined && item.matchaLevel > 0) writeText(`  >> MATCHA: LEVEL ${item.matchaLevel}\n`);
+    if (item.size) writeText(`  >> SIZE: ${item.size.toUpperCase()}\n`);
+    if (item.shotName) writeText(`  >> SHOT: ${item.shotName.toUpperCase()}\n`);
     if (item.addOns && item.addOns.length > 0) {
-      item.addOns.forEach((a: any) => writeText(`  * +${a.name}\n`));
+      item.addOns.forEach((a: any) => writeText(`  >> +TOPPING: ${a.name.toUpperCase()}\n`));
     }
     if (item.bundleSelections && item.bundleSelections.length > 0) {
-      item.bundleSelections.forEach((b: any) => writeText(`  * ${b.productName || b.groupName}\n`));
+      item.bundleSelections.forEach((b: any) => writeText(`  >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`));
     }
-    writeText('--------------------------------\n');
+    write([0x1b, 0x45, 0x00]);
+    writeText(dividerSingle);
   });
 
   if (order.notes) {
     write([0x1b, 0x45, 0x01]);
-    writeText(`CATATAN:\n${order.notes}\n`);
+    writeText(`CATATAN KHUSUS:\n${order.notes}\n`);
     write([0x1b, 0x45, 0x00]);
-    writeText('--------------------------------\n');
+    writeText(dividerSingle);
   }
 
   write([0x1b, 0x61, 0x01]);
@@ -378,7 +440,7 @@ export async function printDirectBluetooth(order: any, settings: any, isKitchen 
   }
 
   const bytes = isKitchen
-    ? buildKitchenTicketEscPos(order)
+    ? buildKitchenTicketEscPos(order, settings)
     : buildCustomerReceiptEscPos(order, settings);
 
   return await sendRawBytes(bytes);
