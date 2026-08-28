@@ -216,7 +216,7 @@ function wrapText(text: string, maxLen = 32): string[] {
 }
 
 /**
- * Build ESC/POS Byte Stream for Customer Receipt
+ * Build ESC/POS Byte Stream for Customer Receipt in True CGV Cinema Ticket Style
  */
 export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Array {
   const encoder = new TextEncoder();
@@ -234,14 +234,20 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   const formattedTime = orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
   const maxCols = settings.paperWidth === '80mm' ? 48 : 32;
-  const dividerDouble = '='.repeat(maxCols) + '\n';
-  const dividerSingle = '-'.repeat(maxCols) + '\n';
+
+  // ESC/POS Formatting Helpers
+  const reverseOn = () => write([0x1d, 0x42, 0x01]);  // GS B 1 (White text on black background)
+  const reverseOff = () => write([0x1d, 0x42, 0x00]); // GS B 0 (Normal)
+  const boldOn = () => write([0x1b, 0x45, 0x01]);     // ESC E 1
+  const boldOff = () => write([0x1b, 0x45, 0x00]);    // ESC E 0
+  const alignCenter = () => write([0x1b, 0x61, 0x01]);
+  const alignLeft = () => write([0x1b, 0x61, 0x00]);
 
   // 1. Initialize Printer (ESC @)
   write([0x1b, 0x40]);
 
-  // 2. Header (Center, Bold, Double Size Store Name)
-  write([0x1b, 0x61, 0x01]); // Align Center
+  // 2. Header
+  alignCenter();
   write([0x1b, 0x21, 0x30]); // Double width & height
   writeText(`${storeName.toUpperCase()}\n`);
   write([0x1b, 0x21, 0x00]); // Normal text
@@ -257,162 +263,171 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
     wrapText(settings.headerNotes, maxCols).forEach((l) => writeText(`${l}\n`));
   }
 
-  writeText(dividerDouble);
+  writeText('================================\n');
 
-  // 3. Section 1: Pesanan & Pelanggan (CGV Header)
-  write([0x1b, 0x61, 0x00]); // Align Left
-  write([0x1b, 0x45, 0x01]); // Bold on
-  writeText('[ PESANAN ]\n');
-  write([0x1b, 0x21, 0x10]); // Double height for customer name
+  // 3. Section 1: Inverted Black Ribbon [ PESANAN ] + Customer Name
+  alignLeft();
+  reverseOn();
+  boldOn();
+  writeText(' PESANAN ');
+  reverseOff();
+  boldOff();
+  writeText('\n');
+
+  boldOn();
+  write([0x1b, 0x21, 0x20]); // Double width
   writeText(`${(order.customerName || 'PELANGGAN').toUpperCase()}\n`);
-  write([0x1b, 0x21, 0x00]); // Normal text
-  write([0x1b, 0x45, 0x00]); // Bold off
+  write([0x1b, 0x21, 0x00]); // Normal size
+  boldOff();
   writeText(`No. Order : #${orderIdShort}\n`);
 
-  writeText(dividerSingle);
+  writeText('--------------------------------\n');
 
-  // 4. Section 2: Waktu & Meja (Jelas & Tebal)
+  // 4. Section 2: CGV 2-Column Split Box (WAKTU & NOMOR MEJA)
   const tableDisplay = order.tableNumber 
     ? `MEJA ${order.tableNumber}` 
     : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : (order.orderType || 'PICKUP'));
-  
-  writeText(`WAKTU  : ${formattedDate} ${formattedTime}\n`);
-  write([0x1b, 0x45, 0x01]); // Bold on
-  write([0x1b, 0x21, 0x10]); // Double height for Table
-  writeText(`LOKASI : ${tableDisplay}\n`);
-  write([0x1b, 0x21, 0x00]); // Normal text
-  write([0x1b, 0x45, 0x00]); // Bold off
 
-  writeText(dividerDouble);
+  writeText('+--------------------+---------+\n');
+  writeText('| WAKTU & TANGGAL    | LOKASI  |\n');
+  writeText(`| ${formattedDate} ${formattedTime} | `);
+  boldOn();
+  writeText(`${tableDisplay.slice(0, 7).padEnd(7)} |\n`);
+  boldOff();
+  writeText('+--------------------+---------+\n');
 
-  // 5. Section 3: Detail Pesanan & Modifiers (Tebal & Rapi)
-  write([0x1b, 0x45, 0x01]);
-  writeText('[ DETAIL PESANAN ]\n');
-  write([0x1b, 0x45, 0x00]);
+  // 5. Section 3: Inverted Black Ribbon [ DETAIL PESANAN ]
+  reverseOn();
+  boldOn();
+  writeText(' DETAIL PESANAN ');
+  reverseOff();
+  boldOff();
+  writeText('\n');
 
   (order.items || []).forEach((item: any) => {
     const itemPrice = (item.totalPrice || item.price) * item.qty;
     const itemTitle = `[ ${item.qty}x ] ${item.name.toUpperCase()}`;
     const priceStr = formatRupiah(itemPrice);
 
-    write([0x1b, 0x45, 0x01]); // Bold on item title & price
+    boldOn();
     if (itemTitle.length + priceStr.length + 1 <= maxCols) {
       writeText(padLine(itemTitle, priceStr, maxCols));
     } else {
       writeText(`${itemTitle}\n`);
       writeText(padLine('', priceStr, maxCols));
     }
-    write([0x1b, 0x45, 0x00]); // Bold off
+    boldOff();
 
-    // Prominent Bold Modifiers
+    // Modifiers in Bold with clear indentation
+    boldOn();
     if (item.sugarLevel) {
-      write([0x1b, 0x45, 0x01]);
       writeText(`  >> GULA  : ${item.sugarLevel.toUpperCase()}\n`);
-      write([0x1b, 0x45, 0x00]);
     }
     if (item.iceLevel) {
-      write([0x1b, 0x45, 0x01]);
       writeText(`  >> ES    : ${item.iceLevel.toUpperCase()}\n`);
-      write([0x1b, 0x45, 0x00]);
     }
     if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
-      write([0x1b, 0x45, 0x01]);
       writeText(`  >> MATCHA: LEVEL ${item.matchaLevel}\n`);
-      write([0x1b, 0x45, 0x00]);
     }
     if (item.size) {
-      write([0x1b, 0x45, 0x01]);
       writeText(`  >> UKURAN: ${item.size.toUpperCase()}\n`);
-      write([0x1b, 0x45, 0x00]);
     }
     if (item.shotName) {
-      write([0x1b, 0x45, 0x01]);
       writeText(`  >> SHOT  : ${item.shotName.toUpperCase()}\n`);
-      write([0x1b, 0x45, 0x00]);
     }
     if (item.addOns && item.addOns.length > 0) {
       item.addOns.forEach((a: any) => {
-        write([0x1b, 0x45, 0x01]);
         writeText(`  >> TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`);
-        write([0x1b, 0x45, 0x00]);
       });
     }
     if (item.bundleSelections && item.bundleSelections.length > 0) {
       item.bundleSelections.forEach((b: any) => {
-        write([0x1b, 0x45, 0x01]);
         writeText(`  >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`);
-        write([0x1b, 0x45, 0x00]);
       });
     }
     if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-      write([0x1b, 0x45, 0x01]);
       writeText(`  >> VARIAN: ${item.modifiersString.toUpperCase()}\n`);
-      write([0x1b, 0x45, 0x00]);
     }
+    boldOff();
+    writeText('................................\n');
   });
 
-  writeText(dividerDouble);
-
-  // 6. Pricing & Barcode Summary
-  write([0x1b, 0x61, 0x01]); // Center
+  // 6. Barcode Graphic
+  alignCenter();
   writeText('|||| | ||||| || ||||||||| | |||\n');
   writeText(`${order.id || orderIdShort}\n`);
-  write([0x1b, 0x61, 0x00]); // Left
+  alignLeft();
 
+  // 7. Payment Summary
   writeText(padLine('Subtotal:', formatRupiah(order.subtotal || order.total), maxCols));
   if (totalDiscount > 0) {
-    writeText(padLine('Diskon/Promo:', `-${formatRupiah(totalDiscount)}`, maxCols));
+    writeText(padLine('Diskon / Promo:', `-${formatRupiah(totalDiscount)}`, maxCols));
   }
 
-  writeText(dividerSingle);
-  write([0x1b, 0x45, 0x01]); // Bold on
+  // 8. Solid Black TOTAL Banner (Inverted Ribbon)
+  alignCenter();
+  reverseOn();
+  boldOn();
   write([0x1b, 0x21, 0x10]); // Double height
-  writeText(padLine('TOTAL AKHIR:', formatRupiah(order.total), maxCols));
-  write([0x1b, 0x21, 0x00]); // Normal
-  write([0x1b, 0x45, 0x00]); // Bold off
+  writeText(padLine(' TOTAL', `${formatRupiah(order.total)} `, maxCols));
+  write([0x1b, 0x21, 0x00]); // Normal text
+  boldOff();
+  reverseOff();
+  alignLeft();
 
-  writeText(padLine('Metode:', `${order.paymentMethod || 'TUNAI'} (LUNAS)`, maxCols));
+  writeText(`Metode Pembayaran: ${order.paymentMethod || 'TUNAI'} (LUNAS)\n`);
   if (order.cashPaid) {
     writeText(padLine('Tunai Diterima:', formatRupiah(order.cashPaid), maxCols));
-    write([0x1b, 0x45, 0x01]);
+    boldOn();
     writeText(padLine('Kembalian:', formatRupiah(order.change || 0), maxCols));
-    write([0x1b, 0x45, 0x00]);
+    boldOff();
   }
 
-  // 7. Loyalty Points Info
+  // 9. Loyalty Points Info
   if (order.pointsEarned && order.pointsEarned > 0) {
-    writeText(dividerSingle);
-    write([0x1b, 0x61, 0x01]);
+    writeText('--------------------------------\n');
+    alignCenter();
+    boldOn();
     writeText(`POIN DIPEROLEH: +${order.pointsEarned} POIN\n`);
+    boldOff();
     if (order.totalPoints) writeText(`TOTAL POIN MEMBER: ${order.totalPoints} POIN\n`);
-    write([0x1b, 0x61, 0x00]);
+    alignLeft();
   }
 
-  // 8. Member Promo Banner (CGV Style Framed Box)
-  writeText(dividerDouble);
-  write([0x1b, 0x61, 0x01]); // Center
-  write([0x1b, 0x45, 0x01]);
-  writeText('GRATIS VOUCHER & CASHBACK\n');
-  writeText('DENGAN JOIN MEMBER ARUM SEDUH\n');
-  write([0x1b, 0x45, 0x00]);
-  writeText('Kumpulkan Poin di Setiap Belanja\n');
-  writeText(dividerDouble);
+  // 10. CGV Style Member Voucher Box
+  writeText('+==============================+\n');
+  alignCenter();
+  reverseOn();
+  boldOn();
+  writeText('  GRATIS VOUCHER & CASHBACK   \n');
+  reverseOff();
+  writeText(' DENGAN JOIN MEMBER ARUM SEDUH \n');
+  writeText(' Kumpulkan Poin Tiap Belanja  \n');
+  boldOff();
+  alignLeft();
+  writeText('+==============================+\n');
 
   if (settings.showWifi && settings.wifiSsid) {
-    write([0x1b, 0x61, 0x00]);
-    writeText(`Wi-Fi: ${settings.wifiSsid}\n`);
-    writeText(`Pass : ${settings.wifiPassword || '-'}\n`);
-    writeText(dividerSingle);
+    writeText(`Wi-Fi: ${settings.wifiSsid} | Pass: ${settings.wifiPassword || '-'}\n`);
+    writeText('--------------------------------\n');
   }
 
-  // 9. Footer Greetings
-  write([0x1b, 0x61, 0x01]); // Center
+  // 11. Footer Greetings
+  alignCenter();
   if (settings.footerNotes) {
     wrapText(settings.footerNotes, maxCols).forEach((l) => writeText(`${l}\n`));
   }
-  if (settings.showSocial && settings.instagram) writeText(`IG: ${settings.instagram}\n`);
-  if (settings.showSocial && settings.tiktok) writeText(`TikTok: ${settings.tiktok}\n`);
-  writeText(`*** TERIMA KASIH • ARUM SEDUH ***\n`);
+  if (settings.showSocial && settings.instagram) {
+    boldOn();
+    writeText(`IG: ${settings.instagram}\n`);
+    boldOff();
+  }
+  if (settings.showSocial && settings.tiktok) {
+    boldOn();
+    writeText(`TikTok: ${settings.tiktok}\n`);
+    boldOff();
+  }
+  writeText('*** TERIMA KASIH • SELAMAT MENIKMATI ***\n');
 
   // Feed 4 lines for paper tearing
   write([0x1b, 0x64, 0x04]);
@@ -435,65 +450,76 @@ export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array
   const formattedTime = orderDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
   const maxCols = settings?.paperWidth === '80mm' ? 48 : 32;
-  const dividerDouble = '='.repeat(maxCols) + '\n';
-  const dividerSingle = '-'.repeat(maxCols) + '\n';
 
-  // Initialize
+  const reverseOn = () => write([0x1d, 0x42, 0x01]);
+  const reverseOff = () => write([0x1d, 0x42, 0x00]);
+  const boldOn = () => write([0x1b, 0x45, 0x01]);
+  const boldOff = () => write([0x1b, 0x45, 0x00]);
+  const alignCenter = () => write([0x1b, 0x61, 0x01]);
+  const alignLeft = () => write([0x1b, 0x61, 0x00]);
+
+  // 1. Initialize
   write([0x1b, 0x40]);
 
-  // Title
-  write([0x1b, 0x61, 0x01]); // Center
-  write([0x1b, 0x45, 0x01]); // Bold
-  write([0x1b, 0x21, 0x20]); // Double width
-  writeText('KITCHEN / BAR TICKET\n');
-  write([0x1b, 0x21, 0x00]); // Normal size
-  write([0x1b, 0x45, 0x00]);
+  // 2. Title Inverted Ribbon
+  alignCenter();
+  reverseOn();
+  boldOn();
+  writeText(' KITCHEN / BARISTA TICKET \n');
+  reverseOff();
+  boldOff();
+  writeText('\n');
 
   const tableDisplay = order.tableNumber 
     ? `MEJA ${order.tableNumber}` 
     : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : (order.orderType || 'PICKUP'));
 
-  writeText(dividerDouble);
-  write([0x1b, 0x61, 0x00]); // Left
-  write([0x1b, 0x45, 0x01]);
-  writeText(padLine(`CUST: ${(order.customerName || 'PELANGGAN').toUpperCase()}`, tableDisplay, maxCols));
-  writeText(padLine(`ORDER: #${orderIdShort}`, `${formattedTime} WIB`, maxCols));
-  write([0x1b, 0x45, 0x00]);
-  writeText(dividerDouble);
+  alignLeft();
+  writeText('+--------------------+---------+\n');
+  writeText('| PELANGGAN / ORDER  | LOKASI  |\n');
+  writeText(`| ${(order.customerName || 'PELANGGAN').slice(0, 18).padEnd(18)} | `);
+  boldOn();
+  writeText(`${tableDisplay.slice(0, 7).padEnd(7)} |\n`);
+  boldOff();
+  writeText(`| #${orderIdShort.padEnd(17)} | ${formattedTime} |\n`);
+  writeText('+--------------------+---------+\n');
 
   // Items for Barista
   (order.items || []).forEach((item: any) => {
-    write([0x1b, 0x45, 0x01]); // Bold
+    boldOn();
     write([0x1b, 0x21, 0x10]); // Double height
     writeText(`[ ${item.qty}x ] ${item.name.toUpperCase()}\n`);
-    write([0x1b, 0x21, 0x00]); // Normal
-    write([0x1b, 0x45, 0x00]); // Bold off
+    write([0x1b, 0x21, 0x00]); // Normal size
+    boldOff();
 
-    // Bold Modifiers
-    write([0x1b, 0x45, 0x01]);
-    if (item.sugarLevel) writeText(`  >> GULA: ${item.sugarLevel.toUpperCase()}\n`);
-    if (item.iceLevel) writeText(`  >> ES: ${item.iceLevel.toUpperCase()}\n`);
+    // Modifiers
+    boldOn();
+    if (item.sugarLevel) writeText(`  >> GULA  : ${item.sugarLevel.toUpperCase()}\n`);
+    if (item.iceLevel) writeText(`  >> ES    : ${item.iceLevel.toUpperCase()}\n`);
     if (item.matchaLevel !== undefined && item.matchaLevel > 0) writeText(`  >> MATCHA: LEVEL ${item.matchaLevel}\n`);
-    if (item.size) writeText(`  >> SIZE: ${item.size.toUpperCase()}\n`);
-    if (item.shotName) writeText(`  >> SHOT: ${item.shotName.toUpperCase()}\n`);
+    if (item.size) writeText(`  >> UKURAN: ${item.size.toUpperCase()}\n`);
+    if (item.shotName) writeText(`  >> SHOT  : ${item.shotName.toUpperCase()}\n`);
     if (item.addOns && item.addOns.length > 0) {
       item.addOns.forEach((a: any) => writeText(`  >> +TOPPING: ${a.name.toUpperCase()}\n`));
     }
     if (item.bundleSelections && item.bundleSelections.length > 0) {
       item.bundleSelections.forEach((b: any) => writeText(`  >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`));
     }
-    write([0x1b, 0x45, 0x00]);
-    writeText(dividerSingle);
+    boldOff();
+    writeText('--------------------------------\n');
   });
 
   if (order.notes) {
-    write([0x1b, 0x45, 0x01]);
-    writeText(`CATATAN KHUSUS:\n${order.notes}\n`);
-    write([0x1b, 0x45, 0x00]);
-    writeText(dividerSingle);
+    reverseOn();
+    boldOn();
+    writeText(' CATATAN KHUSUS: \n');
+    reverseOff();
+    boldOff();
+    writeText(`${order.notes}\n`);
+    writeText('--------------------------------\n');
   }
 
-  write([0x1b, 0x61, 0x01]);
+  alignCenter();
   writeText('--- SELESAIKAN & SAJIKAN ---\n');
 
   // Feed 4 lines
