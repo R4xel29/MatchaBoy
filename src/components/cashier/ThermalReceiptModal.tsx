@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import { BluetoothPrinterPill } from './BluetoothPrinterPill';
-import { isBluetoothPrinterConnected, printDirectBluetooth, printElementAsRasterBluetooth } from '@/lib/bluetooth-printer';
+import { isBluetoothPrinterConnected, printDirectBluetooth, printCgvTicketRasterBluetooth } from '@/lib/bluetooth-printer';
 
 export interface ReceiptData {
   id: string;
@@ -688,12 +688,9 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     // 1. Direct Web Bluetooth Print (High-Fidelity CGV Raster Bitmap Graphic)
     if (isBluetoothPrinterConnected()) {
       try {
-        const previewEl = document.getElementById('printable-thermal-receipt-preview');
-        if (previewEl) {
-          const rasterSuccess = await printElementAsRasterBluetooth(previewEl, settings.paperWidth);
-          if (rasterSuccess) {
-            return;
-          }
+        const rasterSuccess = await printCgvTicketRasterBluetooth(order, settings, activeTab === 'kitchen');
+        if (rasterSuccess) {
+          return;
         }
         const textSuccess = await printDirectBluetooth(order, settings, activeTab === 'kitchen');
         if (textSuccess) {
