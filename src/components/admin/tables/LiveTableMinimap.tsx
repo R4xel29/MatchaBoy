@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-  Armchair,
   UtensilsCrossed,
   Clock,
   CheckCircle2,
@@ -23,11 +22,7 @@ import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  getDefaultChairs, 
-  getChairVisualClass, 
-  getChairIconClass, 
   FloorElementVisual,
-  type CustomChair, 
   type FloorElementData 
 } from '@/app/(admin)/admin/tables/AdminTablesClient';
 
@@ -158,18 +153,6 @@ export function LiveTableMinimap({
     } finally {
       setClearingTableId(null);
     }
-  };
-
-  const getTableChairs = (table: LiveDiningTable): CustomChair[] => {
-    if (table.chairsJson) {
-      try {
-        const parsed = JSON.parse(table.chairsJson);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {}
-    }
-    return getDefaultChairs(table.capacity || 4, table.shape || 'RECTANGLE');
   };
 
   const getTableStatusConfig = (table: LiveDiningTable) => {
@@ -323,13 +306,12 @@ export function LiveTableMinimap({
                 </div>
               ))}
 
-              {/* Tables with exact positions and surrounding physical chairs */}
+              {/* Tables with exact positions and status */}
               {tables.map((table) => {
                 const config = getTableStatusConfig(table);
                 const isSelected = selectedTableNumber === table.number;
                 const hasOrder = table.primaryOrder !== null;
                 const isRound = table.shape === 'ROUND';
-                const chairs = getTableChairs(table);
 
                 return (
                   <div
@@ -370,35 +352,14 @@ export function LiveTableMinimap({
                         Meja {table.number}
                       </span>
 
-                      <span className="text-[10px] font-semibold opacity-90 mt-0.5 flex items-center gap-1">
-                        <Armchair className="w-3 h-3" /> {table.capacity} Kursi
+                      <span className="text-[9px] font-bold uppercase tracking-wider opacity-90 mt-0.5">
+                        {config.badge}
                       </span>
 
                       {hasOrder && (
                         <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-rose-500 border-2 border-white animate-bounce z-30 shadow" />
                       )}
                     </div>
-
-                    {/* Surrounding Physical Chairs with exact offsets and custom colors */}
-                    {chairs.map((chair) => {
-                      const visualClass = getChairVisualClass(chair.color, false);
-                      const iconClass = getChairIconClass(chair.color, false);
-                      return (
-                        <div
-                          key={chair.id}
-                          style={{
-                            transform: `translate(${chair.x}px, ${chair.y}px)`,
-                          }}
-                          title={`Meja ${table.number} - Kursi ${chair.label} (${chair.color || 'Putih'})`}
-                          className={`absolute w-8 h-8 rounded-full border-2 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10 transition-all ${visualClass}`}
-                        >
-                          <Armchair className={`w-3.5 h-3.5 ${iconClass}`} />
-                          <span className="font-serif font-black text-[8px] leading-none mt-0.5">
-                            {chair.label}
-                          </span>
-                        </div>
-                      );
-                    })}
                   </div>
                 );
               })}

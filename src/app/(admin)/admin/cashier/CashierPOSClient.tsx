@@ -747,19 +747,19 @@ export default function CashierPOSClient({ products, categories, packagingStock 
     }
   };
 
-  const handleUpdateTableSeats = async (id: string, newOccupied: number) => {
+  const handleUpdateTableStatus = async (id: string, newStatus: string) => {
     try {
       const res = await fetch(`/api/admin/tables/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ occupiedSeats: newOccupied })
+        body: JSON.stringify({ status: newStatus, occupiedSeats: newStatus === 'AVAILABLE' ? 0 : 1 })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui kursi');
+      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui status meja');
       
       // Update local activeTables state
       setActiveTables(prev => prev.map(t => t.id === id ? data : t));
-      showToast(`Meja ${data.number} diperbarui menjadi ${newOccupied} kursi terisi`, 'success');
+      showToast(`Status Meja ${data.number} diubah menjadi ${newStatus}`, 'success');
     } catch (err: any) {
       showToast(err.message, 'error');
     }
@@ -1354,8 +1354,8 @@ export default function CashierPOSClient({ products, categories, packagingStock 
                   >
                     <option value="">Pilih Nomor Meja</option>
                     {activeTables.map((t) => (
-                      <option key={t.id} value={t.number} disabled={(t.occupiedSeats || 0) >= t.capacity}>
-                        Meja {t.number} ({t.occupiedSeats || 0}/{t.capacity} terisi)
+                      <option key={t.id} value={t.number} disabled={t.status === 'OCCUPIED'}>
+                        Meja {t.number} ({t.status === 'AVAILABLE' ? 'Tersedia' : 'Terisi'})
                       </option>
                     ))}
                     {activeTables.length === 0 && (
@@ -2134,7 +2134,7 @@ export default function CashierPOSClient({ products, categories, packagingStock 
               <div className="p-4 border-b border-border/30 flex items-center justify-between bg-gradient-to-r from-amber-50 to-amber-100/30">
                 <div className="flex items-center gap-2">
                   <Coffee className="w-5 h-5 text-amber-600" />
-                  <h3 className="font-heading font-bold text-base text-foreground">Kelola Status Meja & Kursi (Manual)</h3>
+                  <h3 className="font-heading font-bold text-base text-foreground">Kelola Status Meja (Manual)</h3>
                 </div>
                 <button onClick={() => setShowTableManagerModal(false)} className="p-1.5 hover:bg-muted rounded-lg">
                   <X className="w-4 h-4" />
@@ -2142,18 +2142,17 @@ export default function CashierPOSClient({ products, categories, packagingStock 
               </div>
               <div className="p-5 max-h-[70vh] overflow-y-auto space-y-4">
                 <p className="text-xs text-muted-foreground">
-                  Kasir/Admin dapat mengisi atau mengosongkan kapasitas kursi pada masing-masing meja secara manual. Perubahan akan langsung disinkronkan ke database.
+                  Kasir/Admin dapat mengubah status meja (Tersedia / Terisi / Dibersihkan) secara manual. Perubahan akan langsung disinkronkan ke database.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {activeTables.map((t) => {
-                    const remaining = t.capacity - (t.occupiedSeats || 0);
                     return (
                       <div key={t.id} className="p-4 rounded-xl border border-border bg-card shadow-sm space-y-3">
                         <div className="flex justify-between items-center">
                           <div>
                             <h4 className="font-bold text-sm text-foreground">Meja {t.number}</h4>
                             <span className="text-[10px] text-muted-foreground">
-                              Kapasitas: {t.capacity} Kursi ({remaining} Tersisa)
+                              Bentuk: {t.shape === 'ROUND' ? 'Bulat' : 'Kotak'}
                             </span>
                           </div>
                           <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold ${
@@ -2164,38 +2163,40 @@ export default function CashierPOSClient({ products, categories, packagingStock 
                           </span>
                         </div>
 
-                        {/* Chairs dot indicator */}
-                        <div className="flex gap-1.5 flex-wrap py-1">
-                          {Array.from({ length: t.capacity }).map((_, idx) => (
-                            <span
-                              key={idx}
-                              className={`w-3.5 h-3.5 rounded-full border border-slate-200 ${
-                                idx < (t.occupiedSeats || 0) ? 'bg-rose-500' : 'bg-emerald-400'
-                              }`}
-                            />
-                          ))}
-                        </div>
-
-                        <div className="flex justify-between items-center gap-2 pt-2 border-t border-border/30">
-                          <span className="text-xs font-bold text-foreground">Kursi Terisi: {t.occupiedSeats || 0}</span>
-                          <div className="flex gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateTableSeats(t.id, (t.occupiedSeats || 0) - 1)}
-                              disabled={(t.occupiedSeats || 0) <= 0}
-                              className="w-8 h-8 rounded-lg bg-muted hover:bg-muted/80 text-foreground flex items-center justify-center font-black disabled:opacity-40"
-                            >
-                              -
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleUpdateTableSeats(t.id, (t.occupiedSeats || 0) + 1)}
-                              disabled={(t.occupiedSeats || 0) >= t.capacity}
-                              className="w-8 h-8 rounded-lg bg-muted hover:bg-muted/80 text-foreground flex items-center justify-center font-black disabled:opacity-40"
-                            >
-                              +
-                            </button>
-                          </div>
+                        <div className="flex items-center gap-1.5 pt-2 border-t border-border/30">
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateTableStatus(t.id, 'AVAILABLE')}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              t.status === 'AVAILABLE'
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-muted hover:bg-muted/80 text-foreground'
+                            }`}
+                          >
+                            Tersedia
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateTableStatus(t.id, 'OCCUPIED')}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              t.status === 'OCCUPIED'
+                                ? 'bg-rose-600 text-white shadow-xs'
+                                : 'bg-muted hover:bg-muted/80 text-foreground'
+                            }`}
+                          >
+                            Terisi
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleUpdateTableStatus(t.id, 'CLEANING')}
+                            className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                              t.status === 'CLEANING'
+                                ? 'bg-amber-600 text-white shadow-xs'
+                                : 'bg-muted hover:bg-muted/80 text-foreground'
+                            }`}
+                          >
+                            Bersihkan
+                          </button>
                         </div>
                       </div>
                     );

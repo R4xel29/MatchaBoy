@@ -113,19 +113,12 @@ export async function POST(req: Request) {
         }
       });
       
-      // Update table seats if DINE_IN
+      // Update table status if DINE_IN
       if (existingOrder.orderType === 'DINE_IN' && existingOrder.tableNumber) {
-        const tbl = await prisma.diningTable.findUnique({
-          where: { number: existingOrder.tableNumber }
+        await prisma.diningTable.updateMany({
+          where: { number: existingOrder.tableNumber },
+          data: { status: 'OCCUPIED', occupiedSeats: 1 }
         });
-        if (tbl) {
-          const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1;
-          const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats);
-          await prisma.diningTable.update({
-            where: { number: existingOrder.tableNumber },
-            data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
-          });
-        }
       }
       
       // Update shift stats
@@ -327,17 +320,10 @@ export async function POST(req: Request) {
         });
 
         if (orderType === 'DINE_IN' && body.tableNumber) {
-          const tbl = await tx.diningTable.findUnique({
-            where: { number: body.tableNumber }
+          await tx.diningTable.updateMany({
+            where: { number: body.tableNumber },
+            data: { status: 'OCCUPIED', occupiedSeats: 1 }
           });
-          if (tbl) {
-            const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1;
-            const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats);
-            await tx.diningTable.update({
-              where: { number: body.tableNumber },
-              data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
-            });
-          }
         }
 
         return updatedOrder;
@@ -370,17 +356,10 @@ export async function POST(req: Request) {
         });
 
         if (orderType === 'DINE_IN' && body.tableNumber) {
-          const tbl = await tx.diningTable.findUnique({
-            where: { number: body.tableNumber }
+          await tx.diningTable.updateMany({
+            where: { number: body.tableNumber },
+            data: { status: 'OCCUPIED', occupiedSeats: 1 }
           });
-          if (tbl) {
-            const addedSeats = body.peopleCount ? parseInt(body.peopleCount) : 1;
-            const newOccupied = Math.min(tbl.capacity, tbl.occupiedSeats + addedSeats);
-            await tx.diningTable.update({
-              where: { number: body.tableNumber },
-              data: { status: 'OCCUPIED', occupiedSeats: newOccupied }
-            });
-          }
         }
 
         return newOrder;

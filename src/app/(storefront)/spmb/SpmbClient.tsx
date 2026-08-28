@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ShoppingBag, Trash2, Plus, Minus, User, MapPin, 
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
-  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Armchair, Sparkles,
+  ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Sparkles,
   Flame, Clock, AlertTriangle, DoorOpen, Tv, Archive, Coffee, Flower2, Columns, Accessibility, Compass, Map
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -17,13 +17,7 @@ import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import { formatRupiah, getActivePromo, getEffectiveProductDisplay } from '@/lib/utils';
 import type { Product, Category } from '@/types';
 import { 
-  getDefaultChairs, 
-  getChairVisualClass, 
-  getChairIconClass, 
   FloorElementVisual,
-  CHAIR_COLOR_OPTIONS,
-  type CustomChair, 
-  type ChairColor, 
   type FloorElementData 
 } from '@/app/(admin)/admin/tables/AdminTablesClient';
 
@@ -62,9 +56,8 @@ export default function SpmbClient({
   const [pickupTimeOption, setPickupTimeOption] = useState<string>('ASAP'); // 'ASAP', '30_MIN', '45_MIN', 'CUSTOM'
   const [customPickupTime, setCustomPickupTime] = useState<string>('15:00');
 
-  // Table & Seat State
+  // Table State
   const [tableNumber, setTableNumber] = useState<string>('');
-  const [seatNumber, setSeatNumber] = useState<string>('1');
   const [isTableLocked, setIsTableLocked] = useState<boolean>(false);
   const [activeTables, setActiveTables] = useState<Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; rotation?: number; status?: string; chairsJson?: string | null }>>(initialTables || []);
   const [floorElements, setFloorElements] = useState<FloorElementData[]>(initialFloorElements || []);
@@ -72,8 +65,6 @@ export default function SpmbClient({
 
   // Modals
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
-  const [showSeatModal, setShowSeatModal] = useState<boolean>(false);
-  const [seatModalView, setSeatModalView] = useState<'SEAT_PICKER' | 'ROOM_MAP'>('SEAT_PICKER');
 
   // Cart State
   const cartItems = useCartStore((s) => s.items);
@@ -110,14 +101,12 @@ export default function SpmbClient({
   const [qrisPaymentPaid, setQrisPaymentPaid] = useState(false);
 
   // 1. Initialize table parameter or fetch active tables
-  // 1. Immediately trigger seat modal and set table when tableParam exists from QR scan
   useEffect(() => {
     if (tableParam) {
       const clean = tableParam.trim();
       setTableNumber(clean);
       setIsTableLocked(true);
       setServiceMode('DINE_IN');
-      setShowSeatModal(true);
     }
   }, [tableParam]);
 
@@ -132,7 +121,6 @@ export default function SpmbClient({
             const clean = tableParam.trim();
             setTableNumber(clean);
             setIsTableLocked(true);
-            setShowSeatModal(true);
           } else if (data.length > 0 && !tableNumber) {
             setTableNumber(data[0].number.toString());
           }
@@ -305,12 +293,12 @@ export default function SpmbClient({
       const isPickUp = serviceMode === 'PICKUP';
       const fullTableLabel = isPickUp 
         ? 'Pick Up di Bar / Kasir Arum Seduh'
-        : `Meja ${tableNumber.trim()} (Kursi ${seatNumber})`;
+        : `Meja ${tableNumber.trim()}`;
 
       const payload = {
         name,
         phone: '-',
-        tableNumber: isPickUp ? null : `${tableNumber.trim()} (Kursi ${seatNumber})`,
+        tableNumber: isPickUp ? null : tableNumber.trim(),
         orderType: serviceMode,
         address: fullTableLabel,
         pickupTime: isPickUp ? pickupTimeStr : undefined,
@@ -318,7 +306,7 @@ export default function SpmbClient({
         items: itemsPayload,
         notes: isPickUp 
           ? (notes ? `[Pick Up: ${pickupTimeStr}] ${notes}` : `[Pick Up: ${pickupTimeStr}]`)
-          : (notes ? `[Kursi: ${seatNumber}] ${notes}` : `[Kursi: ${seatNumber}]`)
+          : (notes || undefined)
       };
 
       const res = await fetch('/api/orders', {
@@ -422,11 +410,9 @@ export default function SpmbClient({
                   onClick={() => {
                     if (!isTableLocked) {
                       setShowTableModal(true);
-                    } else {
-                      setShowSeatModal(true);
                     }
                   }}
-                  className="p-3 sm:p-3.5 rounded-2xl bg-stone-50/90 border border-stone-200 flex items-center gap-3 cursor-pointer hover:border-orange-300 hover:bg-orange-50/30 transition-all group shadow-sm text-left"
+                  className={`p-3 sm:p-3.5 rounded-2xl bg-stone-50/90 border border-stone-200 flex items-center gap-3 ${!isTableLocked ? 'cursor-pointer hover:border-orange-300 hover:bg-orange-50/30' : ''} transition-all group shadow-sm text-left`}
                 >
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-serif text-lg font-bold shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
                     {tableNumber || '—'}
@@ -438,7 +424,7 @@ export default function SpmbClient({
                     </p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="font-serif font-bold text-stone-900 text-xs sm:text-sm">
-                        Meja {tableNumber || '—'} <span className="text-[11px] text-stone-500 font-sans font-normal">• Kursi {seatNumber}</span>
+                        Meja {tableNumber || '—'}
                       </span>
                     </div>
                   </div>
@@ -783,7 +769,7 @@ export default function SpmbClient({
                     {serviceMode === 'DINE_IN' ? (
                       <>
                         <UtensilsCrossed className="w-3 h-3 text-[#D4A574] shrink-0" />
-                        <span className="truncate">Meja {tableNumber || '—'} • Kursi {seatNumber}</span>
+                        <span className="truncate">Meja {tableNumber || '—'}</span>
                       </>
                     ) : (
                       <>
@@ -840,7 +826,7 @@ export default function SpmbClient({
                   </div>
                   <div>
                     <h2 className="font-serif font-bold text-base text-stone-900">Pesanan Meja</h2>
-                    <p className="text-[11px] text-stone-500 font-medium">Meja {tableNumber || '—'} • Kursi {seatNumber}</p>
+                    <p className="text-[11px] text-stone-500 font-medium">Meja {tableNumber || '—'}</p>
                   </div>
                 </div>
                 <button
@@ -966,13 +952,13 @@ export default function SpmbClient({
                     </div>
                   </div>
 
-                  {/* Lokasi Meja & Kursi (Hanya jika Dine In) */}
+                  {/* Lokasi Meja (Hanya jika Dine In) */}
                   {serviceMode === 'DINE_IN' ? (
                     <div className="space-y-1.5 text-left">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
                           <UtensilsCrossed className="w-3.5 h-3.5 text-orange-500" />
-                          <span>Meja & Kursi</span>
+                          <span>Nomor Meja</span>
                         </label>
                         {!isTableLocked && (
                           <button
@@ -985,41 +971,29 @@ export default function SpmbClient({
                         )}
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!isTableLocked) setShowTableModal(true);
-                          }}
-                          className={`px-3.5 py-3 rounded-2xl border text-xs font-bold text-left flex items-center justify-between transition-all ${
-                            isTableLocked 
-                              ? 'bg-orange-50/50 border-orange-200 text-orange-950'
-                              : 'bg-stone-50/70 border-stone-200 text-stone-800 hover:border-orange-400'
-                          }`}
-                        >
-                          <div>
-                            <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Nomor Meja</p>
-                            <p className="text-xs font-bold mt-0.5">Meja {tableNumber || '—'}</p>
-                          </div>
-                          {isTableLocked && (
-                            <span className="text-[9px] text-orange-700 bg-orange-100 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                              <Lock className="w-2.5 h-2.5" /> QR
-                            </span>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setShowSeatModal(true)}
-                          className="px-3.5 py-3 rounded-2xl border border-stone-200 bg-stone-50/70 text-stone-800 text-left flex items-center justify-between hover:border-orange-400 transition-all cursor-pointer"
-                        >
-                          <div>
-                            <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Posisi Kursi</p>
-                            <p className="text-xs font-bold text-stone-900 mt-0.5">Kursi {seatNumber}</p>
-                          </div>
-                          <span className="text-[10px] text-orange-600 font-bold">Pilih</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isTableLocked) setShowTableModal(true);
+                        }}
+                        className={`w-full px-4 py-3 rounded-2xl border text-xs font-bold text-left flex items-center justify-between transition-all ${
+                          isTableLocked 
+                            ? 'bg-orange-50/50 border-orange-200 text-orange-950'
+                            : 'bg-stone-50/70 border-stone-200 text-stone-800 hover:border-orange-400 cursor-pointer'
+                        }`}
+                      >
+                        <div>
+                          <p className="text-[9px] uppercase tracking-wider text-stone-400 font-medium">Tempat Duduk</p>
+                          <p className="text-sm font-bold mt-0.5">Meja {tableNumber || '—'}</p>
+                        </div>
+                        {isTableLocked ? (
+                          <span className="text-[10px] text-orange-700 bg-orange-100 px-2 py-1 rounded-xl flex items-center gap-1 font-bold">
+                            <Lock className="w-3 h-3" /> Terkunci QR
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-orange-600 font-bold">Ganti Meja &rarr;</span>
+                        )}
+                      </button>
                     </div>
                   ) : (
                     /* Pick Up Estimated Time Options */
@@ -1247,8 +1221,6 @@ export default function SpmbClient({
                     const xPos = t.x !== undefined ? t.x : 50;
                     const yPos = t.y !== undefined ? t.y : 50;
                     const isRound = t.shape === 'ROUND';
-                    const cap = t.capacity || 2;
-
                     return (
                       <div
                         key={t.id}
@@ -1265,7 +1237,6 @@ export default function SpmbClient({
                           onClick={() => {
                             setTableNumber(t.number.toString());
                             setShowTableModal(false);
-                            setShowSeatModal(true);
                           }}
                           style={{
                             transform: `rotate(${t.rotation || 0}deg)`,
@@ -1286,45 +1257,12 @@ export default function SpmbClient({
                           <span className="font-serif font-bold text-xs sm:text-sm leading-tight">
                             Meja {t.number}
                           </span>
-                          <span className={`text-[8px] font-semibold mt-0.5 ${isCurrent ? 'text-white/90' : 'text-stone-400'}`}>
-                            {cap} Kursi
-                          </span>
                           {isCurrent && (
                             <span className="text-[7px] bg-white/20 px-1.5 py-0.2 rounded mt-0.5 font-bold">
                               Meja Anda
                             </span>
                           )}
                         </button>
-
-                        {/* Surrounding Visible Mini Chairs (Unclipped, Synchronized & Colored) */}
-                        {(() => {
-                          let tChairs: CustomChair[] = [];
-                          if (t.chairsJson) {
-                            try {
-                              const parsed = JSON.parse(t.chairsJson);
-                              if (Array.isArray(parsed) && parsed.length > 0) {
-                                tChairs = parsed;
-                              }
-                            } catch {}
-                          }
-                          if (tChairs.length === 0) {
-                            tChairs = getDefaultChairs(cap, t.shape || 'RECTANGLE');
-                          }
-
-                          return tChairs.map((c, cIdx) => {
-                            const visualClass = getChairVisualClass(c.color, false);
-                            const iconClass = getChairIconClass(c.color, false);
-                            return (
-                              <div
-                                key={c.id || cIdx}
-                                style={{ transform: `translate(${c.x * 0.75}px, ${c.y * 0.75}px)` }}
-                                className={`absolute w-4 h-4 rounded-full border shadow-xs flex items-center justify-center pointer-events-none z-10 ${visualClass}`}
-                              >
-                                <Armchair className={`w-2.5 h-2.5 ${iconClass}`} />
-                              </div>
-                            );
-                          });
-                        })()}
                       </div>
                     );
                   })}
@@ -1346,7 +1284,6 @@ export default function SpmbClient({
                         onClick={() => {
                           setTableNumber(t.number.toString());
                           setShowTableModal(false);
-                          setShowSeatModal(true);
                         }}
                         className={`px-3 py-2 rounded-xl border text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
                           isCur
@@ -1379,456 +1316,6 @@ export default function SpmbClient({
         )}
       </AnimatePresence>
 
-      {/* Pop-up Pemilihan Nomor Kursi (Contextual Landmark Orientation + Dual View Denah) */}
-      <AnimatePresence>
-        {showSeatModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 backdrop-blur-sm cursor-pointer"
-              onClick={() => setShowSeatModal(false)}
-            />
-
-            <motion.div
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl w-full max-w-lg p-5 sm:p-6 shadow-2xl relative z-10 border border-stone-200 text-center flex flex-col items-center max-h-[90vh] overflow-y-auto"
-            >
-              {(() => {
-                const currentTableObj = activeTables.find(t => t.number.toString().trim() === tableNumber.toString().trim()) || null;
-                const isRoundTable = currentTableObj?.shape === 'ROUND';
-                const currentTableCapacity = currentTableObj?.capacity || 4;
-
-                // 1. Calculate nearby room landmarks around the current table
-                const tx = currentTableObj?.x !== undefined ? currentTableObj.x : 50;
-                const ty = currentTableObj?.y !== undefined ? currentTableObj.y : 50;
-
-                let topEl: { el: FloorElementData; dist: number } | null = null;
-                let bottomEl: { el: FloorElementData; dist: number } | null = null;
-                let leftEl: { el: FloorElementData; dist: number } | null = null;
-                let rightEl: { el: FloorElementData; dist: number } | null = null;
-
-                for (const el of floorElements) {
-                  const dx = el.x - tx;
-                  const dy = el.y - ty;
-                  const dist = Math.hypot(dx, dy);
-
-                  if (dy < -2 && Math.abs(dy) >= Math.abs(dx) * 0.4) {
-                    if (!topEl || dist < topEl.dist) topEl = { el, dist };
-                  }
-                  if (dy > 2 && dy >= Math.abs(dx) * 0.4) {
-                    if (!bottomEl || dist < bottomEl.dist) bottomEl = { el, dist };
-                  }
-                  if (dx < -2 && Math.abs(dx) >= Math.abs(dy) * 0.4) {
-                    if (!leftEl || dist < leftEl.dist) leftEl = { el, dist };
-                  }
-                  if (dx > 2 && dx >= Math.abs(dy) * 0.4) {
-                    if (!rightEl || dist < rightEl.dist) rightEl = { el, dist };
-                  }
-                }
-
-                const landmarks: {
-                  top: FloorElementData | null;
-                  bottom: FloorElementData | null;
-                  left: FloorElementData | null;
-                  right: FloorElementData | null;
-                } = {
-                  top: topEl ? topEl.el : null,
-                  bottom: bottomEl ? bottomEl.el : null,
-                  left: leftEl ? leftEl.el : null,
-                  right: rightEl ? rightEl.el : null,
-                };
-
-                let savedChairs: CustomChair[] | null = null;
-                // Try from database chairsJson (Synced from Admin Studio)
-                if (currentTableObj?.chairsJson) {
-                  try {
-                    const parsed = JSON.parse(currentTableObj.chairsJson);
-                    if (Array.isArray(parsed) && parsed.length > 0) {
-                      savedChairs = parsed;
-                    }
-                  } catch {}
-                }
-                // Fallback to localStorage if any
-                if (!savedChairs && typeof window !== 'undefined' && currentTableObj?.id) {
-                  const saved = localStorage.getItem(`arum_chairs_table_${currentTableObj.id}`);
-                  if (saved) {
-                    try {
-                      const parsed = JSON.parse(saved);
-                      if (Array.isArray(parsed) && parsed.length > 0) {
-                        savedChairs = parsed;
-                      }
-                    } catch {}
-                  }
-                }
-                // Fallback to default placement
-                if (!savedChairs || savedChairs.length === 0) {
-                  savedChairs = getDefaultChairs(currentTableCapacity, currentTableObj?.shape || 'RECTANGLE');
-                }
-
-                // Helper to get facing direction text for a chair
-                const getChairFacingText = (c: CustomChair) => {
-                  if (c.y < -20 && Math.abs(c.y) >= Math.abs(c.x)) {
-                    return landmarks.top ? `Menghadap ${landmarks.top.name}` : 'Sisi Atas (Depan)';
-                  }
-                  if (c.y > 20 && c.y >= Math.abs(c.x)) {
-                    return landmarks.bottom ? `Menghadap ${landmarks.bottom.name}` : 'Sisi Bawah (Belakang)';
-                  }
-                  if (c.x < -20) {
-                    return landmarks.left ? `Menghadap ${landmarks.left.name}` : 'Sisi Kiri';
-                  }
-                  if (c.x > 20) {
-                    return landmarks.right ? `Menghadap ${landmarks.right.name}` : 'Sisi Kanan';
-                  }
-                  return 'Sisi Meja';
-                };
-
-                const selectedChairObj = savedChairs.find(c => (c.label || '').toString() === seatNumber.toString()) || savedChairs[0];
-                const selectedChairColorOption = CHAIR_COLOR_OPTIONS.find(opt => opt.id === selectedChairObj?.color) || CHAIR_COLOR_OPTIONS[0];
-                const selectedChairFacing = selectedChairObj ? getChairFacingText(selectedChairObj) : 'Sisi Meja';
-
-                const renderLandmarkBadge = (el: FloorElementData | null, directionLabel: string) => {
-                  if (!el) return null;
-                  const isDoor = el.type === 'DOOR';
-                  const isTv = el.type === 'TV';
-                  const isShelf = el.type === 'SHELF';
-                  const isBar = el.type === 'BAR';
-                  const isPlant = el.type === 'PLANT';
-                  const isWindow = el.type === 'WINDOW';
-                  const isRestroom = el.type === 'RESTROOM';
-
-                  return (
-                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/95 border border-stone-300 text-stone-800 shadow-xs text-[10px] font-bold tracking-wide backdrop-blur-xs whitespace-nowrap">
-                      {isDoor && <DoorOpen className="w-3 h-3 text-amber-700 shrink-0" />}
-                      {isTv && <Tv className="w-3 h-3 text-sky-500 shrink-0 animate-pulse" />}
-                      {isShelf && <Archive className="w-3 h-3 text-[#8C5E35] shrink-0" />}
-                      {isBar && <Coffee className="w-3 h-3 text-amber-600 shrink-0" />}
-                      {isPlant && <Flower2 className="w-3 h-3 text-emerald-600 shrink-0" />}
-                      {isWindow && <Columns className="w-3 h-3 text-cyan-600 shrink-0" />}
-                      {isRestroom && <Accessibility className="w-3 h-3 text-purple-600 shrink-0" />}
-                      <span>{directionLabel}: {el.name}</span>
-                    </div>
-                  );
-                };
-
-                return (
-                  <>
-                    {/* Header */}
-                    <div className="flex items-center justify-between w-full pb-3 border-b border-stone-100 mb-2">
-                      <div className="text-left">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-serif font-bold text-base text-stone-900 flex items-center gap-1.5">
-                            <UtensilsCrossed className="w-4 h-4 text-orange-600" />
-                            <span>Pilih Tempat Duduk Anda</span>
-                          </h3>
-                          <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[10px] font-bold">
-                            Meja {tableNumber} ({isRoundTable ? 'Bulat' : 'Kotak'})
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-stone-500">
-                          Gunakan patokan ruangan & warna kursi fisik untuk memilih posisi duduk Anda
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => setShowSeatModal(false)}
-                        className="w-8 h-8 rounded-full border border-stone-200 flex items-center justify-center hover:bg-stone-50 cursor-pointer"
-                      >
-                        <X className="w-4 h-4 text-stone-500" />
-                      </button>
-                    </div>
-
-                    {/* Dual View Toggle (Pilih Kursi vs Denah Ruangan Lengkap) */}
-                    <div className="flex p-1 bg-stone-100 rounded-2xl border border-stone-200 w-full my-2">
-                      <button
-                        type="button"
-                        onClick={() => setSeatModalView('SEAT_PICKER')}
-                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          seatModalView === 'SEAT_PICKER'
-                            ? 'bg-white text-orange-600 shadow-sm'
-                            : 'text-stone-500 hover:text-stone-800'
-                        }`}
-                      >
-                        <Armchair className="w-3.5 h-3.5" />
-                        <span>Kursi & Arah Hadap</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSeatModalView('ROOM_MAP')}
-                        className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                          seatModalView === 'ROOM_MAP'
-                            ? 'bg-orange-500 text-white shadow-sm'
-                            : 'text-stone-500 hover:text-stone-800'
-                        }`}
-                      >
-                        <Compass className="w-3.5 h-3.5" />
-                        <span>Denah Ruangan Kafe</span>
-                      </button>
-                    </div>
-
-                    {isTableLocked && (
-                      <div className="w-full mb-2 px-3 py-1.5 rounded-2xl bg-orange-50/80 border border-orange-200 text-orange-950 text-[11px] font-semibold flex items-center gap-2 text-left">
-                        <span className="w-5 h-5 rounded-full bg-orange-500 text-white flex items-center justify-center shrink-0 text-[10px] font-black shadow-xs">
-                          {tableNumber}
-                        </span>
-                        <span>Tersambung di Meja {tableNumber}. Pilih kursi yang Anda duduki:</span>
-                      </div>
-                    )}
-
-                    {/* VIEW 1: SEAT PICKER WITH LANDMARK ORIENTATION GUIDES */}
-                    {seatModalView === 'SEAT_PICKER' && (
-                      <div className="w-full space-y-3">
-                        {/* Interactive Table Canvas with Directional Landmark Badges */}
-                        <div className="relative w-full max-w-[340px] sm:max-w-[380px] aspect-square mx-auto bg-[#FAF9F6] rounded-3xl border-2 border-stone-300 p-4 flex items-center justify-center shadow-inner select-none overflow-hidden touch-manipulation">
-                          
-                          {/* Compass Crosshair Accent */}
-                          <div 
-                            className="absolute inset-0 opacity-15 pointer-events-none rounded-3xl"
-                            style={{
-                              backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
-                              backgroundSize: '16px 16px'
-                            }}
-                          />
-
-                          {/* Landmark Badges on 4 Sides */}
-                          {landmarks.top && (
-                            <div className="absolute top-2 inset-x-0 flex justify-center pointer-events-none z-20">
-                              {renderLandmarkBadge(landmarks.top, '▲ Depan')}
-                            </div>
-                          )}
-                          {landmarks.bottom && (
-                            <div className="absolute bottom-2 inset-x-0 flex justify-center pointer-events-none z-20">
-                              {renderLandmarkBadge(landmarks.bottom, '▼ Belakang')}
-                            </div>
-                          )}
-                          {landmarks.left && (
-                            <div className="absolute left-2 top-1/2 -translate-y-1/2 flex flex-col items-start pointer-events-none z-20">
-                              {renderLandmarkBadge(landmarks.left, '◄ Kiri')}
-                            </div>
-                          )}
-                          {landmarks.right && (
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex flex-col items-end pointer-events-none z-20">
-                              {renderLandmarkBadge(landmarks.right, '► Kanan')}
-                            </div>
-                          )}
-
-                          {/* Central Dining Table Graphic */}
-                          {isRoundTable ? (
-                            <div className="w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
-                              <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
-                              <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
-                                {currentTableCapacity} Kursi
-                              </span>
-                              <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Bundar</span>
-                            </div>
-                          ) : (
-                            <div 
-                              style={{ transform: `rotate(${currentTableObj?.rotation || 0}deg)` }}
-                              className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none transition-transform duration-300"
-                            >
-                              <span className="font-serif font-black text-xs text-stone-900">MEJA {tableNumber}</span>
-                              <span className="text-[9px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-1">
-                                {currentTableCapacity} Kursi
-                              </span>
-                              <span className="text-[8px] text-stone-400 mt-0.5 font-medium">Kotak</span>
-                            </div>
-                          )}
-
-                          {/* Physical Chairs with Exact Colors & Placement */}
-                          {savedChairs.map((chair, idx) => {
-                            const sLabel = chair.label || (idx + 1).toString();
-                            const isSelected = seatNumber.toString() === sLabel;
-                            const visualClass = getChairVisualClass(chair.color, isSelected);
-                            const iconClass = getChairIconClass(chair.color, isSelected);
-                            const facing = getChairFacingText(chair);
-                            const cColor = CHAIR_COLOR_OPTIONS.find(opt => opt.id === chair.color)?.label || 'Putih';
-
-                            return (
-                              <button
-                                key={chair.id || idx}
-                                type="button"
-                                onClick={() => setSeatNumber(sLabel)}
-                                style={{
-                                  transform: `translate(${chair.x}px, ${chair.y}px)`
-                                }}
-                                title={`Pilih Kursi Nomor ${sLabel} (${cColor} • ${facing})`}
-                                className={`absolute w-10 h-10 rounded-full border-2 transition-all cursor-pointer flex flex-col items-center justify-center z-25 shadow-md group ${visualClass}`}
-                              >
-                                <Armchair className={`w-4 h-4 ${iconClass}`} />
-                                <span className={`font-serif font-black text-[9px] mt-0.5 leading-none ${isSelected ? 'text-white' : ''}`}>
-                                  {sLabel}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        {/* Quick Chair Selection Chips (With Color & Facing Description) */}
-                        <div className="space-y-1.5 text-left">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                            Pilih Kursi Berdasarkan Warna / Arah Hadap:
-                          </p>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {savedChairs.map((chair, idx) => {
-                              const sLabel = chair.label || (idx + 1).toString();
-                              const isSelected = seatNumber.toString() === sLabel;
-                              const cColorOpt = CHAIR_COLOR_OPTIONS.find(opt => opt.id === chair.color) || CHAIR_COLOR_OPTIONS[0];
-                              const facing = getChairFacingText(chair);
-
-                              return (
-                                <button
-                                  key={chair.id || idx}
-                                  type="button"
-                                  onClick={() => setSeatNumber(sLabel)}
-                                  className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
-                                    isSelected
-                                      ? 'bg-orange-50 border-orange-500 text-orange-950 ring-2 ring-orange-500/20 shadow-xs'
-                                      : 'bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100'
-                                  }`}
-                                >
-                                  <span className={`w-5 h-5 rounded-full ${cColorOpt.previewBg} ${cColorOpt.previewBorder} border shadow-xs flex items-center justify-center text-[8px] font-black ${chair.color === 'BLACK' ? 'text-white' : 'text-stone-900'}`}>
-                                    {sLabel}
-                                  </span>
-                                  <div className="overflow-hidden">
-                                    <p className="text-[11px] font-bold leading-tight truncate">
-                                      Kursi #{sLabel} ({cColorOpt.label})
-                                    </p>
-                                    <p className="text-[9px] text-stone-500 leading-tight truncate">
-                                      {facing}
-                                    </p>
-                                  </div>
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* VIEW 2: FULL CAFE ROOM FLOOR PLAN MAP */}
-                    {seatModalView === 'ROOM_MAP' && (
-                      <div className="w-full space-y-2 text-left">
-                        <p className="text-[10px] text-stone-500">
-                          Lihat posisi Meja {tableNumber} terhadap seluruh ruangan kafe (Pintu, Bar Kasir, TV, Rak, Jendela).
-                        </p>
-                        
-                        <div
-                          className="relative w-full aspect-[16/9] min-h-[220px] rounded-2xl bg-[#FAF7F2] border-2 border-stone-300 shadow-inner overflow-hidden select-none"
-                          style={{
-                            backgroundImage: 'radial-gradient(#F97316 1px, transparent 1px)',
-                            backgroundSize: '16px 16px'
-                          }}
-                        >
-                          {/* Floor Landmarks */}
-                          {floorElements.map((el) => (
-                            <div
-                              key={el.id}
-                              style={{
-                                position: 'absolute',
-                                left: `${Math.max(5, Math.min(95, el.x))}%`,
-                                top: `${Math.max(5, Math.min(95, el.y))}%`,
-                                transform: 'translate(-50%, -50%)',
-                              }}
-                              className="absolute flex items-center justify-center pointer-events-none z-10"
-                            >
-                              <FloorElementVisual element={el} />
-                            </div>
-                          ))}
-
-                          {/* Tables */}
-                          {activeTables.map((t) => {
-                            const isCurrent = tableNumber === t.number.toString();
-                            const isRound = t.shape === 'ROUND';
-                            const xPos = t.x !== undefined ? t.x : 50;
-                            const yPos = t.y !== undefined ? t.y : 50;
-
-                            return (
-                              <div
-                                key={t.id}
-                                onClick={() => {
-                                  setTableNumber(t.number.toString());
-                                  setSeatModalView('SEAT_PICKER');
-                                }}
-                                style={{
-                                  position: 'absolute',
-                                  left: `${Math.max(10, Math.min(90, xPos))}%`,
-                                  top: `${Math.max(10, Math.min(90, yPos))}%`,
-                                  transform: 'translate(-50%, -50%)',
-                                }}
-                                className="absolute flex items-center justify-center cursor-pointer z-20 group"
-                              >
-                                <div
-                                  style={{ transform: `rotate(${t.rotation || 0}deg)` }}
-                                  className={`relative flex flex-col items-center justify-center border-2 transition-all p-1.5 ${
-                                    isRound ? 'w-16 h-16 rounded-full' : 'w-20 h-14 rounded-xl'
-                                  } ${
-                                    isCurrent
-                                      ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/40 shadow-xl scale-110 z-30'
-                                      : 'bg-white text-stone-800 border-stone-300 hover:border-orange-400 hover:scale-105'
-                                  }`}
-                                >
-                                  <span className="font-serif font-black text-[10px] leading-tight">
-                                    Meja {t.number}
-                                  </span>
-                                  {isCurrent && (
-                                    <span className="text-[7px] bg-white/20 px-1 rounded font-bold uppercase mt-0.5">
-                                      Posisi Anda
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        <div className="flex items-center justify-between text-[11px] text-stone-500 pt-1">
-                          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Meja {tableNumber} (Posisi Anda)</span>
-                          <button
-                            type="button"
-                            onClick={() => setSeatModalView('SEAT_PICKER')}
-                            className="text-orange-600 font-bold hover:underline cursor-pointer"
-                          >
-                            Kembali ke Pilih Kursi &rarr;
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Selection Summary Confirmation Card */}
-                    <div className="w-full p-3 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-200 my-3 flex items-center justify-between text-xs text-left">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-orange-800">
-                          Tempat Duduk Terpilih
-                        </p>
-                        <p className="font-serif font-bold text-stone-900 mt-0.5 text-sm">
-                          Meja {tableNumber} • Kursi #{seatNumber} ({selectedChairColorOption.label})
-                        </p>
-                        <p className="text-[11px] text-orange-700 font-medium mt-0.5">
-                          📍 {selectedChairFacing}
-                        </p>
-                      </div>
-                      <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-sm shrink-0">
-                        <Check className="w-4 h-4" />
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowSeatModal(false)}
-                      className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer"
-                    >
-                      Konfirmasi Kursi #{seatNumber} ({selectedChairColorOption.label})
-                    </button>
-                  </>
-                );
-              })()}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
       {/* Confirmation Modal */}
       <AnimatePresence>
         {showConfirmModal && (
@@ -1852,7 +1339,7 @@ export default function SpmbClient({
               </div>
               <h3 className="font-serif font-bold text-lg text-stone-900 mb-1">Konfirmasi Pesanan Meja</h3>
               <p className="text-xs text-stone-600 leading-relaxed mb-5">
-                Pesanan akan dibuat untuk <span className="font-bold text-stone-900">Meja ${tableNumber} (Kursi ${seatNumber})</span> atas nama <span className="font-bold text-stone-900">${name}</span>.
+                Pesanan akan dibuat untuk <span className="font-bold text-stone-900">Meja {tableNumber}</span> atas nama <span className="font-bold text-stone-900">{name}</span>.
               </p>
 
               <div className="flex gap-2.5">

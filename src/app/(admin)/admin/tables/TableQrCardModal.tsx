@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/Toast';
 export interface DiningTableData {
   id: string;
   number: string;
-  capacity: number;
+  capacity?: number;
   status: string;
   shape: string;
 }
@@ -521,7 +521,7 @@ export default function TableQrCardModal({
                   >
                     {tables.map((t, idx) => (
                       <option key={t.id} value={idx}>
-                        Meja {t.number} ({t.capacity} Kursi)
+                        Meja {t.number}
                       </option>
                     ))}
                   </select>

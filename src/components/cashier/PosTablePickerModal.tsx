@@ -2,14 +2,10 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, UtensilsCrossed, Check, Armchair, Loader2 } from 'lucide-react';
+import { X, UtensilsCrossed, Check, Loader2 } from 'lucide-react';
 import type { LiveDiningTable } from '@/components/admin/tables/LiveTableMinimap';
 import { 
-  getDefaultChairs, 
-  getChairVisualClass, 
-  getChairIconClass, 
   FloorElementVisual,
-  type CustomChair, 
   type FloorElementData 
 } from '@/app/(admin)/admin/tables/AdminTablesClient';
 
@@ -74,18 +70,6 @@ export function PosTablePickerModal({
       fetchTables();
     }
   }, [isOpen, fetchTables]);
-
-  const getTableChairs = (table: LiveDiningTable): CustomChair[] => {
-    if (table.chairsJson) {
-      try {
-        const parsed = JSON.parse(table.chairsJson);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {}
-    }
-    return getDefaultChairs(table.capacity || 4, table.shape || 'RECTANGLE');
-  };
 
   if (!isOpen) return null;
 
@@ -191,7 +175,6 @@ export function PosTablePickerModal({
                   const isAvailable =
                     table.liveStatus === 'AVAILABLE' || table.status === 'AVAILABLE';
                   const isRound = table.shape === 'ROUND';
-                  const chairs = getTableChairs(table);
 
                   return (
                     <div
@@ -231,8 +214,8 @@ export function PosTablePickerModal({
                         <span className="font-serif font-black text-sm leading-tight mt-0.5">
                           Meja {table.number}
                         </span>
-                        <span className="text-[10px] font-semibold opacity-90 mt-0.5 flex items-center gap-1">
-                          <Armchair className="w-3 h-3" /> {table.capacity} Kursi
+                        <span className="text-[9px] font-bold uppercase tracking-wider opacity-90 mt-0.5">
+                          {isAvailable ? 'Tersedia' : 'Terisi'}
                         </span>
 
                         {isSelected && (
@@ -241,27 +224,6 @@ export function PosTablePickerModal({
                           </span>
                         )}
                       </div>
-
-                      {/* Physical Chairs with exact spacing and custom colors */}
-                      {chairs.map((chair) => {
-                        const visualClass = getChairVisualClass(chair.color, false);
-                        const iconClass = getChairIconClass(chair.color, false);
-                        return (
-                          <div
-                            key={chair.id}
-                            style={{
-                              transform: `translate(${chair.x}px, ${chair.y}px)`,
-                            }}
-                            title={`Meja ${table.number} - Kursi ${chair.label} (${chair.color || 'Putih'})`}
-                            className={`absolute w-8 h-8 rounded-full border-2 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10 transition-all ${visualClass}`}
-                          >
-                            <Armchair className={`w-3.5 h-3.5 ${iconClass}`} />
-                            <span className="font-serif font-black text-[8px] leading-none mt-0.5">
-                              {chair.label}
-                            </span>
-                          </div>
-                        );
-                      })}
                     </div>
                   );
                 })}

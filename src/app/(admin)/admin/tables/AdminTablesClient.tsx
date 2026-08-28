@@ -5,7 +5,7 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { useToast } from '@/components/ui/Toast';
 import { 
   Plus, Trash2, Move, Eye, Download, Check, RefreshCw, Layers, Edit2, Maximize2, 
-  Users, Armchair, Sparkles, X, Circle, Square, RotateCw, Settings, UtensilsCrossed,
+  Sparkles, X, Circle, Square, RotateCw, Settings, UtensilsCrossed,
   ArrowRight, ShieldCheck, CheckCircle2, ChevronRight, Sliders, Compass, LayoutGrid,
   Printer, Palette, DoorOpen, Tv, Archive, Coffee, Flower2, Columns, Accessibility,
   Scaling, GripHorizontal, Box
@@ -13,8 +13,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import TableQrCardModal from './TableQrCardModal';
 
+// Compatibility types for external references
 export type ChairColor = 'WHITE' | 'BLACK' | 'YELLOW' | 'GRAY' | 'WOOD';
-
 export interface ChairColorOption {
   id: ChairColor;
   label: string;
@@ -22,7 +22,6 @@ export interface ChairColorOption {
   previewBg: string;
   previewBorder: string;
 }
-
 export const CHAIR_COLOR_OPTIONS: ChairColorOption[] = [
   { id: 'WHITE', label: 'Putih', name: 'Putih (Clean)', previewBg: 'bg-white', previewBorder: 'border-stone-300' },
   { id: 'BLACK', label: 'Hitam', name: 'Hitam (Charcoal)', previewBg: 'bg-stone-900', previewBorder: 'border-black' },
@@ -30,42 +29,20 @@ export const CHAIR_COLOR_OPTIONS: ChairColorOption[] = [
   { id: 'GRAY', label: 'Abu-Abu', name: 'Abu-Abu (Slate)', previewBg: 'bg-stone-400', previewBorder: 'border-stone-500' },
   { id: 'WOOD', label: 'Kayu', name: 'Kayu (Oak Wood)', previewBg: 'bg-[#8B5A2B]', previewBorder: 'border-[#6F3E1B]' },
 ];
-
 export function getChairVisualClass(color?: ChairColor, isSelected?: boolean) {
-  if (isSelected) {
-    return 'bg-gradient-to-br from-orange-500 to-amber-500 text-white border-white ring-4 ring-orange-500/50 shadow-lg scale-110';
-  }
-  switch (color) {
-    case 'BLACK':
-      return 'bg-stone-900 text-white border-stone-800 shadow-md';
-    case 'YELLOW':
-      return 'bg-amber-400 text-amber-950 border-amber-500 shadow-md';
-    case 'GRAY':
-      return 'bg-stone-300 text-stone-900 border-stone-400 shadow-md';
-    case 'WOOD':
-      return 'bg-[#935A2B] text-amber-100 border-[#6F3E1B] shadow-md';
-    case 'WHITE':
-    default:
-      return 'bg-white text-stone-900 border-orange-400 shadow-sm';
-  }
+  return '';
 }
-
 export function getChairIconClass(color?: ChairColor, isSelected?: boolean) {
-  if (isSelected) return 'text-white';
-  switch (color) {
-    case 'BLACK':
-      return 'text-stone-200';
-    case 'YELLOW':
-      return 'text-amber-950';
-    case 'GRAY':
-      return 'text-stone-700';
-    case 'WOOD':
-      return 'text-amber-200';
-    case 'WHITE':
-    default:
-      return 'text-orange-600';
-  }
+  return '';
 }
+export interface CustomChair {
+  id: string;
+  label: string;
+  x: number;
+  y: number;
+  color?: ChairColor;
+}
+export const getDefaultChairs = (capacity: number = 4, shape: string = 'RECTANGLE', defaultColor: ChairColor = 'WHITE'): CustomChair[] => [];
 
 // Floor Elements (Doors, TV, Shelves, Bar, Plant, Window, Restroom, etc.)
 export type FloorElementType = 'DOOR' | 'TV' | 'SHELF' | 'BAR' | 'PLANT' | 'WINDOW' | 'RESTROOM' | 'CUSTOM';
@@ -104,122 +81,18 @@ export const FLOOR_ELEMENT_PRESETS: FloorElementTypePreset[] = [
 export interface DiningTable {
   id: string;
   number: string;
-  capacity: number;
-  occupiedSeats: number;
+  capacity?: number;
+  occupiedSeats?: number;
   status: string; // AVAILABLE, OCCUPIED, BILLING, CLEANING
   shape: string;  // RECTANGLE, ROUND
   x: number;
   y: number;
   rotation?: number; // 0, 90, 180, 270 (degrees)
-  qrUrl: string | null;
+  qrUrl?: string | null;
   chairsJson?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
-
-export interface CustomChair {
-  id: string;
-  label: string;
-  x: number; // relative pixel offset from table center
-  y: number; // relative pixel offset from table center
-  color?: ChairColor; // 'WHITE' | 'BLACK' | 'YELLOW' | 'GRAY' | 'WOOD'
-}
-
-// Compute default chair coordinates without clipping the table
-export const getDefaultChairs = (capacity: number, shape: string, defaultColor: ChairColor = 'WHITE'): CustomChair[] => {
-  const cap = Math.max(1, capacity);
-  if (shape === 'ROUND') {
-    const radius = 66; // outside 88px circle
-    return Array.from({ length: cap }).map((_, idx) => {
-      const angle = (idx / cap) * 2 * Math.PI - Math.PI / 2;
-      return {
-        id: `chair-${idx + 1}`,
-        label: (idx + 1).toString(),
-        x: Math.round(Math.cos(angle) * radius),
-        y: Math.round(Math.sin(angle) * radius),
-        color: defaultColor
-      };
-    });
-  } else {
-    // RECTANGLE TABLE (table is ~120px wide, ~80px tall)
-    // Chairs placed cleanly outside: Top (y=-56), Bottom (y=56), Left (x=-78), Right (x=78)
-    if (cap === 2) {
-      return [
-        { id: 'chair-1', label: '1', x: 0, y: -56, color: defaultColor },
-        { id: 'chair-2', label: '2', x: 0, y: 56, color: defaultColor }
-      ];
-    } else if (cap === 4) {
-      return [
-        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
-        { id: 'chair-2', label: '2', x: 0, y: -56, color: defaultColor },
-        { id: 'chair-3', label: '3', x: 78, y: 0, color: defaultColor },
-        { id: 'chair-4', label: '4', x: 0, y: 56, color: defaultColor }
-      ];
-    } else if (cap === 6) {
-      return [
-        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
-        { id: 'chair-2', label: '2', x: -32, y: -56, color: defaultColor },
-        { id: 'chair-3', label: '3', x: 32, y: -56, color: defaultColor },
-        { id: 'chair-4', label: '4', x: 78, y: 0, color: defaultColor },
-        { id: 'chair-5', label: '5', x: 32, y: 56, color: defaultColor },
-        { id: 'chair-6', label: '6', x: -32, y: 56, color: defaultColor }
-      ];
-    } else if (cap === 8) {
-      return [
-        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
-        { id: 'chair-2', label: '2', x: -40, y: -56, color: defaultColor },
-        { id: 'chair-3', label: '3', x: 0, y: -56, color: defaultColor },
-        { id: 'chair-4', label: '4', x: 40, y: -56, color: defaultColor },
-        { id: 'chair-5', label: '5', x: 78, y: 0, color: defaultColor },
-        { id: 'chair-6', label: '6', x: 40, y: 56, color: defaultColor },
-        { id: 'chair-7', label: '7', x: 0, y: 56, color: defaultColor },
-        { id: 'chair-8', label: '8', x: -40, y: 56, color: defaultColor }
-      ];
-    } else if (cap === 9) {
-      return [
-        { id: 'chair-1', label: '1', x: -78, y: 0, color: defaultColor },
-        { id: 'chair-2', label: '2', x: -45, y: -56, color: defaultColor },
-        { id: 'chair-3', label: '3', x: 0, y: -56, color: defaultColor },
-        { id: 'chair-4', label: '4', x: 45, y: -56, color: defaultColor },
-        { id: 'chair-5', label: '5', x: 78, y: 0, color: defaultColor },
-        { id: 'chair-6', label: '6', x: 45, y: 56, color: defaultColor },
-        { id: 'chair-7', label: '7', x: 15, y: 56, color: defaultColor },
-        { id: 'chair-8', label: '8', x: -15, y: 56, color: defaultColor },
-        { id: 'chair-9', label: '9', x: -45, y: 56, color: defaultColor }
-      ];
-    } else {
-      // General layout
-      const topCount = Math.max(1, Math.ceil(cap * 0.35));
-      const sideCount = Math.max(1, Math.floor((cap - topCount * 2) / 2));
-      const list: CustomChair[] = [];
-      let cIdx = 1;
-
-      // Left col
-      list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: -78, y: 0, color: defaultColor });
-      cIdx++;
-
-      // Top row
-      for (let i = 0; i < topCount && cIdx <= cap; i++) {
-        const xOffset = topCount === 1 ? 0 : -45 + (90 / (topCount - 1)) * i;
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: -56, color: defaultColor });
-        cIdx++;
-      }
-      // Right col
-      if (cIdx <= cap) {
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: 78, y: 0, color: defaultColor });
-        cIdx++;
-      }
-      // Bottom row
-      const remaining = cap - cIdx + 1;
-      for (let i = 0; i < remaining && cIdx <= cap; i++) {
-        const xOffset = remaining === 1 ? 0 : 45 - (90 / Math.max(1, remaining - 1)) * i;
-        list.push({ id: `chair-${cIdx}`, label: cIdx.toString(), x: Math.round(xOffset), y: 56, color: defaultColor });
-        cIdx++;
-      }
-      return list.slice(0, cap);
-    }
-  }
-};
 
 export function FloorElementVisual({ element, isSelected = false }: { element: FloorElementData; isSelected?: boolean }) {
   const isDoor = element.type === 'DOOR';
@@ -291,7 +164,6 @@ export default function AdminTablesClient({
   const { showToast } = useToast();
   const [tables, setTables] = useState<DiningTable[]>(initialTables);
   const [floorElements, setFloorElements] = useState<FloorElementData[]>(initialElements || []);
-  const [tableChairsMap, setTableChairsMap] = useState<Record<string, CustomChair[]>>({});
   
   // Studio & Selection States
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
@@ -301,7 +173,6 @@ export default function AdminTablesClient({
   const [cardModalTableId, setCardModalTableId] = useState<string | null>(null);
   const [activeCanvasMode, setActiveCanvasMode] = useState<'VIEW' | 'MOVE_TABLE' | 'MOVE_ELEMENT'>('VIEW');
   const [snapToGrid, setSnapToGrid] = useState(true);
-  const [showGridLines, setShowGridLines] = useState(true);
   const [liveOrdersMap, setLiveOrdersMap] = useState<Record<string, any>>({});
 
   // Floor Element Modal State
@@ -318,113 +189,33 @@ export default function AdminTablesClient({
 
   // Form / Studio editing values
   const [editNumber, setEditNumber] = useState('');
-  const [editCapacity, setEditCapacity] = useState(4);
   const [editShape, setEditShape] = useState<'RECTANGLE' | 'ROUND'>('RECTANGLE');
   const [editStatus, setEditStatus] = useState('AVAILABLE');
   const [editRotation, setEditRotation] = useState<number>(0);
-  const [customChairs, setCustomChairs] = useState<CustomChair[]>([]);
-  const [selectedChairIdx, setSelectedChairIdx] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Load custom chair configurations into state
-  useEffect(() => {
-    const map: Record<string, CustomChair[]> = {};
-    tables.forEach(t => {
-      // 1. Prioritize database chairsJson
-      if (t.chairsJson) {
-        try {
-          const parsed = JSON.parse(t.chairsJson);
-          if (Array.isArray(parsed) && parsed.length === t.capacity) {
-            map[t.id] = parsed;
-          }
-        } catch {}
-      }
-      // 2. Fallback to localStorage if not yet in DB
-      if (!map[t.id] && typeof window !== 'undefined') {
-        const saved = localStorage.getItem(`arum_chairs_table_${t.id}`);
-        if (saved) {
-          try {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length === t.capacity) {
-              map[t.id] = parsed;
-            }
-          } catch {}
-        }
-      }
-      // 3. Fallback to default placement
-      if (!map[t.id]) {
-        map[t.id] = getDefaultChairs(t.capacity || 4, t.shape || 'RECTANGLE');
-      }
-    });
-    setTableChairsMap(map);
-  }, [tables]);
 
   // Floor Plan Canvas Dragging Ref
   const canvasRef = useRef<HTMLDivElement>(null);
   const dragInfo = useRef<{ tableId: string; startX: number; startY: number } | null>(null);
 
-  // Chair 2D Dragging in Studio
-  const studioCanvasRef = useRef<HTMLDivElement>(null);
-  const chairDragInfo = useRef<{ chairIdx: number; startMouseX: number; startMouseY: number; startChairX: number; startChairY: number } | null>(null);
-
   const selectedTable = useMemo(() => {
     return tables.find(t => t.id === selectedTableId) || null;
   }, [tables, selectedTableId]);
-
-  // Helper to get chairs for a table
-  const getTableChairs = useCallback((table: DiningTable): CustomChair[] => {
-    if (tableChairsMap[table.id] && tableChairsMap[table.id].length > 0) {
-      return tableChairsMap[table.id];
-    }
-    if (table.chairsJson) {
-      try {
-        const parsed = JSON.parse(table.chairsJson);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch {}
-    }
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(`arum_chairs_table_${table.id}`);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed;
-          }
-        } catch {}
-      }
-    }
-    return getDefaultChairs(table.capacity || 4, table.shape || 'RECTANGLE');
-  }, [tableChairsMap]);
 
   // Open Studio for selected table
   const openStudio = (table: DiningTable) => {
     setSelectedTableId(table.id);
     setEditNumber(table.number);
-    setEditCapacity(table.capacity || 4);
     setEditShape((table.shape as 'RECTANGLE' | 'ROUND') || 'RECTANGLE');
     setEditStatus(table.status || 'AVAILABLE');
     setEditRotation(table.rotation || 0);
-    setCustomChairs(getTableChairs(table));
-    setSelectedChairIdx(null);
     setIsStudioOpen(true);
   };
 
-  // Rotate Table & Chairs
+  // Rotate Table
   const handleRotateTable = (degreesDelta: number = 90) => {
     const nextRotation = (editRotation + degreesDelta + 360) % 360;
     setEditRotation(nextRotation);
-
-    const rad = (degreesDelta * Math.PI) / 180;
-    const cos = Math.cos(rad);
-    const sin = Math.sin(rad);
-
-    setCustomChairs(prev => prev.map(c => ({
-      ...c,
-      x: Math.round(c.x * cos - c.y * sin),
-      y: Math.round(c.x * sin + c.y * cos)
-    })));
     showToast(`Rotasi meja diubah ke ${nextRotation}°`, 'info');
   };
 
@@ -598,141 +389,6 @@ export default function AdminTablesClient({
     }
   };
 
-  // Sync chairs when capacity or shape changes in Studio
-  const handleCapacityChange = (newCap: number) => {
-    const clamped = Math.max(1, Math.min(16, newCap));
-    setEditCapacity(clamped);
-    const defaultColor = customChairs[0]?.color || 'WHITE';
-    const newChairs = getDefaultChairs(clamped, editShape, defaultColor).map((c, idx) => ({
-      ...c,
-      color: customChairs[idx]?.color || defaultColor
-    }));
-    setCustomChairs(newChairs);
-  };
-
-  const handleShapeChange = (newShape: 'RECTANGLE' | 'ROUND') => {
-    setEditShape(newShape);
-    const defaultColor = customChairs[0]?.color || 'WHITE';
-    const newChairs = getDefaultChairs(editCapacity, newShape, defaultColor).map((c, idx) => ({
-      ...c,
-      color: customChairs[idx]?.color || defaultColor
-    }));
-    setCustomChairs(newChairs);
-  };
-
-  // Change chair color (individual selected chair or all chairs)
-  const handleChairColorChange = (newColor: ChairColor) => {
-    setCustomChairs(prev => {
-      if (selectedChairIdx !== null && prev[selectedChairIdx]) {
-        return prev.map((c, idx) => idx === selectedChairIdx ? { ...c, color: newColor } : c);
-      } else {
-        return prev.map(c => ({ ...c, color: newColor }));
-      }
-    });
-    const label = selectedChairIdx !== null && customChairs[selectedChairIdx]
-      ? `Warna Kursi #${customChairs[selectedChairIdx].label} diubah`
-      : 'Warna semua kursi diubah';
-    showToast(label, 'info');
-  };
-
-  // Preset placements: Kotak 4 Sisi, Atas-Bawah, Kiri-Kanan, Melingkar Orbital
-  const applyPresetPlacement = (presetType: 'FOUR_SIDES' | 'OPPOSITE' | 'LEFT_RIGHT' | 'ORBITAL') => {
-    const defaultColor = customChairs[0]?.color || 'WHITE';
-    let list: CustomChair[] = [];
-
-    if (presetType === 'FOUR_SIDES') {
-      list = getDefaultChairs(editCapacity, 'RECTANGLE', defaultColor);
-    } else if (presetType === 'OPPOSITE') {
-      const half = Math.ceil(editCapacity / 2);
-      for (let i = 0; i < editCapacity; i++) {
-        const isTop = i < half;
-        const colIdx = isTop ? i : i - half;
-        const totalInRow = isTop ? half : (editCapacity - half);
-        const xOffset = totalInRow === 1 ? 0 : -45 + (90 / Math.max(1, totalInRow - 1)) * colIdx;
-        list.push({
-          id: `chair-${i + 1}`,
-          label: (i + 1).toString(),
-          x: Math.round(xOffset),
-          y: isTop ? -56 : 56,
-          color: customChairs[i]?.color || defaultColor
-        });
-      }
-    } else if (presetType === 'LEFT_RIGHT') {
-      const half = Math.ceil(editCapacity / 2);
-      for (let i = 0; i < editCapacity; i++) {
-        const isLeft = i < half;
-        const rowIdx = isLeft ? i : i - half;
-        const totalInCol = isLeft ? half : (editCapacity - half);
-        const yOffset = totalInCol === 1 ? 0 : -25 + (50 / Math.max(1, totalInCol - 1)) * rowIdx;
-        list.push({
-          id: `chair-${i + 1}`,
-          label: (i + 1).toString(),
-          x: isLeft ? -78 : 78,
-          y: Math.round(yOffset),
-          color: customChairs[i]?.color || defaultColor
-        });
-      }
-    } else {
-      // Orbital 360°
-      list = getDefaultChairs(editCapacity, 'ROUND', defaultColor);
-    }
-
-    setCustomChairs(list.map((c, idx) => ({
-      ...c,
-      color: customChairs[idx]?.color || defaultColor
-    })));
-    showToast('Tata letak kursi diterapkan', 'info');
-  };
-
-  // Free 2D Chair drag in Studio Canvas
-  const handleStartChairDrag = (e: React.MouseEvent | React.TouchEvent, idx: number) => {
-    e.stopPropagation();
-    setSelectedChairIdx(idx);
-
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-    chairDragInfo.current = {
-      chairIdx: idx,
-      startMouseX: clientX,
-      startMouseY: clientY,
-      startChairX: customChairs[idx].x,
-      startChairY: customChairs[idx].y
-    };
-
-    window.addEventListener('mousemove', handleChairDragging);
-    window.addEventListener('mouseup', handleEndChairDrag);
-    window.addEventListener('touchmove', handleChairDragging);
-    window.addEventListener('touchend', handleEndChairDrag);
-  };
-
-  const handleChairDragging = (e: MouseEvent | TouchEvent) => {
-    if (!chairDragInfo.current) return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-    const deltaX = clientX - chairDragInfo.current.startMouseX;
-    const deltaY = clientY - chairDragInfo.current.startMouseY;
-
-    const newX = Math.round(chairDragInfo.current.startChairX + deltaX);
-    const newY = Math.round(chairDragInfo.current.startChairY + deltaY);
-
-    // Clamp within canvas boundary
-    const clampedX = Math.max(-125, Math.min(125, newX));
-    const clampedY = Math.max(-125, Math.min(125, newY));
-
-    const idx = chairDragInfo.current.chairIdx;
-    setCustomChairs(prev => prev.map((c, i) => i === idx ? { ...c, x: clampedX, y: clampedY } : c));
-  };
-
-  const handleEndChairDrag = () => {
-    chairDragInfo.current = null;
-    window.removeEventListener('mousemove', handleChairDragging);
-    window.removeEventListener('mouseup', handleEndChairDrag);
-    window.removeEventListener('touchmove', handleChairDragging);
-    window.removeEventListener('touchend', handleEndChairDrag);
-  };
-
   const fetchLiveTables = useCallback(async () => {
     try {
       const res = await fetch('/api/admin/tables/live');
@@ -785,12 +441,10 @@ export default function AdminTablesClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           number: editNumber.trim(),
-          capacity: editCapacity,
           shape: editShape,
           x: 50,
           y: 50,
           rotation: editRotation || 0,
-          chairsJson: JSON.stringify(customChairs)
         })
       });
 
@@ -799,7 +453,6 @@ export default function AdminTablesClient({
 
       showToast(`Meja ${editNumber} berhasil ditambahkan!`, 'success');
       setTables(prev => [...prev, data]);
-      setTableChairsMap(prev => ({ ...prev, [data.id]: customChairs }));
       setIsAddModalOpen(false);
       openStudio(data);
     } catch (err: any) {
@@ -820,24 +473,16 @@ export default function AdminTablesClient({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           number: editNumber.trim(),
-          capacity: editCapacity,
           shape: editShape,
           status: editStatus,
           rotation: editRotation,
-          chairsJson: JSON.stringify(customChairs)
         })
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal memperbarui meja');
 
-      // Save custom chair positions to localStorage and state
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`arum_chairs_table_${selectedTableId}`, JSON.stringify(customChairs));
-      }
-      setTableChairsMap(prev => ({ ...prev, [selectedTableId]: customChairs }));
-
-      showToast(`Pengaturan Meja ${editNumber} dan posisi kursi tersimpan!`, 'success');
+      showToast(`Pengaturan Meja ${editNumber} tersimpan!`, 'success');
       setTables(prev => prev.map(t => t.id === selectedTableId ? data : t));
       setIsStudioOpen(false);
     } catch (err: any) {
@@ -917,7 +562,6 @@ export default function AdminTablesClient({
     let yPercent = Math.max(10, Math.min(90, ((clientY - rect.top) / rect.height) * 100));
 
     if (snapToGrid) {
-      // Snap to 2.5% step (corresponds to clean ~20px increments on 16:9 canvas)
       xPercent = Math.round(xPercent / 2.5) * 2.5;
       yPercent = Math.round(yPercent / 2.5) * 2.5;
     }
@@ -993,7 +637,7 @@ export default function AdminTablesClient({
   // Metrics
   const totalTables = tables.length;
   const occupiedCount = tables.filter(t => t.status === 'OCCUPIED').length;
-  const totalCapacity = tables.reduce((acc, t) => acc + (t.capacity || 0), 0);
+  const availableCount = totalTables - occupiedCount;
   const occupancyPercent = totalTables > 0 ? Math.round((occupiedCount / totalTables) * 100) : 0;
 
   return (
@@ -1005,13 +649,13 @@ export default function AdminTablesClient({
           <div className="space-y-1">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-[11px] font-bold tracking-wide">
               <UtensilsCrossed className="w-3.5 h-3.5 text-orange-600" />
-              <span>Manajemen Meja & Tata Letak Kursi Arum Seduh</span>
+              <span>Manajemen Denah Meja Kafe Arum Seduh</span>
             </div>
             <h1 className="font-serif text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
-              Denah Ruangan & Studio Kursi
+              Denah Ruangan & Studio Meja
             </h1>
             <p className="text-xs text-stone-500">
-              Kursi fisik terletak rapi di sekeliling meja tanpa tertutup. Klik meja mana pun untuk menggeser posisi kursi secara bebas!
+              Atur posisi denah meja, bentuk meja (kotak/bulat), rotasi orientasi, dan elemen ruangan (pintu, bar kasir, TV, rak) secara visual.
             </p>
           </div>
 
@@ -1028,7 +672,7 @@ export default function AdminTablesClient({
                 }`}
               >
                 <Eye className="w-3.5 h-3.5 text-orange-600" />
-                <span>Klik Edit Meja & Kursi</span>
+                <span>Klik Edit Meja</span>
               </button>
 
               <button
@@ -1085,10 +729,8 @@ export default function AdminTablesClient({
               type="button"
               onClick={() => {
                 setEditNumber((tables.length + 1).toString());
-                setEditCapacity(4);
                 setEditShape('RECTANGLE');
                 setEditRotation(0);
-                setCustomChairs(getDefaultChairs(4, 'RECTANGLE'));
                 setIsAddModalOpen(true);
               }}
               className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-orange-500/20"
@@ -1109,24 +751,24 @@ export default function AdminTablesClient({
             <p className="text-[10px] font-bold uppercase tracking-wider text-blue-700">Meja Terisi</p>
             <p className="font-serif text-2xl font-bold text-blue-900 mt-1">{occupiedCount} Meja</p>
           </div>
-          <div className="bg-orange-50/60 p-4 rounded-2xl border border-orange-200">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">Total Kursi</p>
-            <p className="font-serif text-2xl font-bold text-orange-900 mt-1">{totalCapacity} Kursi</p>
-          </div>
           <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-200">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Okupansi Ruangan</p>
-            <p className="font-serif text-2xl font-bold text-emerald-900 mt-1">{occupancyPercent}%</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Meja Tersedia</p>
+            <p className="font-serif text-2xl font-bold text-emerald-900 mt-1">{availableCount} Meja</p>
+          </div>
+          <div className="bg-orange-50/60 p-4 rounded-2xl border border-orange-200">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-orange-700">Okupansi Ruangan</p>
+            <p className="font-serif text-2xl font-bold text-orange-900 mt-1">{occupancyPercent}%</p>
           </div>
         </div>
       </div>
 
-      {/* Blueprint Floor Plan Canvas with Visible Surrounding Chairs (Unclipped & Beautifully Placed) */}
+      {/* Blueprint Floor Plan Canvas */}
       <div className="bg-white rounded-3xl border border-stone-200 p-6 shadow-sm space-y-4 text-left">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-100">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
             <span className="text-xs font-bold uppercase tracking-wider text-orange-700">
-              Denah Ruangan Kafe (Live Occupancy & Snap-to-Grid)
+              Denah Ruangan Kafe (Live Occupancy & Magnet Grid)
             </span>
           </div>
 
@@ -1197,7 +839,7 @@ export default function AdminTablesClient({
           }}
         >
           <div className="absolute top-4 left-6 text-stone-400 text-[10px] font-mono tracking-widest uppercase pointer-events-none z-0">
-            [Denah Skala 1:25 • Meja, Kursi & Elemen Ruangan (Pintu, TV, Rak, Kasir)]
+            [Denah Skala 1:25 • Meja & Elemen Ruangan Kafe Arum Seduh]
           </div>
 
           {/* FLOOR ELEMENTS (Doors, TV, Shelves, Bar, Plant, Window, Restroom) */}
@@ -1235,7 +877,6 @@ export default function AdminTablesClient({
             const isSelected = selectedTableId === table.id;
             const statusStyle = getStatusColor(table.status);
             const isRound = table.shape === 'ROUND';
-            const tableChairs = getTableChairs(table);
 
             return (
               <div
@@ -1252,7 +893,7 @@ export default function AdminTablesClient({
                   activeCanvasMode === 'MOVE_TABLE' ? 'cursor-grab active:cursor-grabbing' : ''
                 }`}
               >
-                {/* Table Core Element (Rotated according to table.rotation) */}
+                {/* Table Core Element */}
                 <div
                   style={{
                     transform: `rotate(${table.rotation || 0}deg)`
@@ -1277,10 +918,10 @@ export default function AdminTablesClient({
                     Meja {table.number}
                   </span>
 
-                  <span className={`text-[10px] font-semibold mt-0.5 flex items-center gap-1 ${
-                    isSelected ? 'text-white/90' : 'text-stone-500'
+                  <span className={`text-[9px] font-bold uppercase tracking-wider mt-0.5 ${
+                    isSelected ? 'text-white/90' : statusStyle.text
                   }`}>
-                    <Armchair className="w-3 h-3" /> {table.capacity} Kursi
+                    {statusStyle.label}
                   </span>
 
                   {/* Move Handle when in move mode */}
@@ -1290,27 +931,6 @@ export default function AdminTablesClient({
                     </div>
                   )}
                 </div>
-
-                {/* PHYSICAL CHAIRS POSITIONED CLEANLY AROUND THE PERIMETER WITH CUSTOM COLORS */}
-                {tableChairs.map((chair) => {
-                  const visualClass = getChairVisualClass(chair.color, false);
-                  const iconClass = getChairIconClass(chair.color, false);
-                  return (
-                    <div
-                      key={chair.id}
-                      style={{
-                        transform: `translate(${chair.x}px, ${chair.y}px)`,
-                      }}
-                      title={`Meja ${table.number} - Kursi ${chair.label} (${chair.color || 'Putih'})`}
-                      className={`absolute w-8 h-8 rounded-full border-2 shadow-sm flex flex-col items-center justify-center pointer-events-none z-10 transition-all ${visualClass}`}
-                    >
-                      <Armchair className={`w-3.5 h-3.5 ${iconClass}`} />
-                      <span className="font-serif font-black text-[8px] leading-none mt-0.5">
-                        {chair.label}
-                      </span>
-                    </div>
-                  );
-                })}
               </div>
             );
           })}
@@ -1323,7 +943,7 @@ export default function AdminTablesClient({
         </div>
       </div>
 
-      {/* DEDICATED TABLE & CHAIR STUDIO MODAL (FREE 2D DRAG & RECTANGULAR/ORBITAL MODES) */}
+      {/* DEDICATED TABLE STUDIO MODAL */}
       <AnimatePresence>
         {isStudioOpen && selectedTable && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1339,7 +959,7 @@ export default function AdminTablesClient({
               initial={{ scale: 0.95, y: 15 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.95, y: 15 }}
-              className="bg-white rounded-3xl w-full max-w-4xl p-6 sm:p-8 shadow-2xl relative z-10 border border-stone-200 max-h-[92vh] flex flex-col text-left space-y-5"
+              className="bg-white rounded-3xl w-full max-w-3xl p-6 sm:p-8 shadow-2xl relative z-10 border border-stone-200 max-h-[92vh] flex flex-col text-left space-y-5"
             >
               {/* Header */}
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
@@ -1349,11 +969,11 @@ export default function AdminTablesClient({
                       Studio Meja {selectedTable.number}
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 text-xs font-bold">
-                      {editShape === 'ROUND' ? 'Meja Bulat (Orbital)' : 'Meja Kotak (Persegi)'}
+                      {editShape === 'ROUND' ? 'Meja Bulat' : 'Meja Kotak'}
                     </span>
                   </div>
                   <p className="text-xs text-stone-500">
-                    Tarik dan tempatkan kursi secara bebas 2D di sekeliling meja, atau gunakan preset tata letak kotak & orbital
+                    Atur bentuk meja, nomor meja, rotasi orientasi, status ketersediaan, dan kode QR meja.
                   </p>
                 </div>
 
@@ -1365,11 +985,11 @@ export default function AdminTablesClient({
                 </button>
               </div>
 
-              {/* Studio Body: Left Settings & Right Interactive 2D Visual Drag Canvas */}
+              {/* Studio Body */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start overflow-y-auto pr-1">
                 
-                {/* Left Column: Shape, Capacity, Presets */}
-                <div className="md:col-span-5 space-y-4">
+                {/* Left Column: Shape, Number, Status, Rotation */}
+                <div className="md:col-span-6 space-y-4">
                   {/* Shape Switcher */}
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
@@ -1378,7 +998,7 @@ export default function AdminTablesClient({
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => handleShapeChange('RECTANGLE')}
+                        onClick={() => setEditShape('RECTANGLE')}
                         className={`p-2.5 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                           editShape === 'RECTANGLE'
                             ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
@@ -1391,7 +1011,7 @@ export default function AdminTablesClient({
 
                       <button
                         type="button"
-                        onClick={() => handleShapeChange('ROUND')}
+                        onClick={() => setEditShape('ROUND')}
                         className={`p-2.5 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                           editShape === 'ROUND'
                             ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
@@ -1404,145 +1024,25 @@ export default function AdminTablesClient({
                     </div>
                   </div>
 
-                  {/* Table Number & Capacity */}
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                        Nomor Meja
-                      </label>
-                      <input
-                        type="text"
-                        value={editNumber}
-                        onChange={(e) => setEditNumber(e.target.value)}
-                        className="w-full px-3.5 py-2 text-xs font-bold rounded-xl border border-stone-200 bg-stone-50 focus:outline-none focus:border-orange-500"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                        Kapasitas Kursi
-                      </label>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleCapacityChange(editCapacity - 1)}
-                          className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 font-bold text-sm flex items-center justify-center hover:bg-stone-200 cursor-pointer"
-                        >
-                          -
-                        </button>
-                        <span className="flex-1 text-center font-serif font-bold text-sm text-stone-900">
-                          {editCapacity}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleCapacityChange(editCapacity + 1)}
-                          className="w-8 h-8 rounded-lg bg-stone-100 border border-stone-200 font-bold text-sm flex items-center justify-center hover:bg-stone-200 cursor-pointer"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Preset Penataan Kursi Otomatis (Kotak vs Orbital) */}
-                  <div className="space-y-1.5 p-3.5 rounded-2xl bg-orange-50/70 border border-orange-200">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-orange-950 flex items-center gap-1">
-                      <LayoutGrid className="w-3.5 h-3.5 text-orange-600" />
-                      <span>Preset Penataan Kursi (1-Klik)</span>
+                  {/* Table Number */}
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
+                      Nomor / Label Meja
                     </label>
-                    <div className="grid grid-cols-2 gap-1.5 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => applyPresetPlacement('FOUR_SIDES')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
-                      >
-                        4 Sisi Kotak
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => applyPresetPlacement('OPPOSITE')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
-                      >
-                        Atas & Bawah
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => applyPresetPlacement('LEFT_RIGHT')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
-                      >
-                        Kiri & Kanan
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => applyPresetPlacement('ORBITAL')}
-                        className="p-2 rounded-xl bg-white border border-orange-200 text-stone-700 text-[11px] font-bold hover:bg-orange-100/60 cursor-pointer text-center shadow-2xs"
-                      >
-                        Orbital (Melingkar)
-                      </button>
-                    </div>
+                    <input
+                      type="text"
+                      value={editNumber}
+                      onChange={(e) => setEditNumber(e.target.value)}
+                      className="w-full px-3.5 py-2 text-xs font-bold rounded-xl border border-stone-200 bg-stone-50 focus:outline-none focus:border-orange-500"
+                    />
                   </div>
 
-                  {/* Chair Color Picker (Hitam, Kuning, Abu-Abu, Putih, Kayu) */}
-                  <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
-                        <Palette className="w-3.5 h-3.5 text-orange-600" />
-                        <span>
-                          {selectedChairIdx !== null && customChairs[selectedChairIdx]
-                            ? `Warna Kursi #${customChairs[selectedChairIdx].label}`
-                            : 'Warna Kursi Meja'}
-                        </span>
-                      </label>
-                      {selectedChairIdx !== null && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedChairIdx(null)}
-                          className="text-[10px] text-orange-600 font-bold hover:underline cursor-pointer"
-                        >
-                          Pilih Semua
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {CHAIR_COLOR_OPTIONS.map((opt) => {
-                        const activeColor = selectedChairIdx !== null && customChairs[selectedChairIdx]
-                          ? (customChairs[selectedChairIdx].color || 'WHITE')
-                          : (customChairs[0]?.color || 'WHITE');
-                        const isColorActive = activeColor === opt.id;
-
-                        return (
-                          <button
-                            key={opt.id}
-                            type="button"
-                            onClick={() => handleChairColorChange(opt.id)}
-                            title={`Pilih Warna ${opt.name}`}
-                            className={`p-1.5 rounded-xl border flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                              isColorActive
-                                ? 'ring-2 ring-orange-500 border-orange-500 bg-white shadow-sm scale-105'
-                                : 'border-stone-200 bg-white hover:border-stone-400 hover:scale-102'
-                            }`}
-                          >
-                            <span className={`w-5 h-5 rounded-full ${opt.previewBg} ${opt.previewBorder} border shadow-xs`} />
-                            <span className="text-[9px] font-bold text-stone-800 leading-tight">{opt.label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <p className="text-[9px] text-stone-500 leading-snug">
-                      {selectedChairIdx !== null
-                        ? `💡 Klik warna untuk mengubah Kursi #${customChairs[selectedChairIdx]?.label}.`
-                        : '💡 Klik warna untuk mengubah semua kursi, atau klik kursi tertentu di kanvas.'}
-                    </p>
-                  </div>
-
-                  {/* Table Rotation Controls (Putar Meja & Kursi 90°) */}
+                  {/* Table Rotation Controls */}
                   <div className="space-y-2 p-3.5 rounded-2xl bg-stone-50 border border-stone-200">
                     <div className="flex items-center justify-between">
                       <label className="text-[10px] font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
                         <RotateCw className="w-3.5 h-3.5 text-orange-600" />
-                        <span>Rotasi Arah Meja & Kursi</span>
+                        <span>Rotasi Orientasi Meja</span>
                       </label>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
                         {editRotation}°
@@ -1573,10 +1073,7 @@ export default function AdminTablesClient({
                         <button
                           key={deg}
                           type="button"
-                          onClick={() => {
-                            const delta = deg - editRotation;
-                            if (delta !== 0) handleRotateTable(delta);
-                          }}
+                          onClick={() => setEditRotation(deg)}
                           className={`py-1 rounded-lg border text-[10px] font-bold transition-all cursor-pointer ${
                             editRotation === deg
                               ? 'bg-stone-900 text-white border-stone-900 shadow-xs'
@@ -1616,9 +1113,45 @@ export default function AdminTablesClient({
                       })}
                     </div>
                   </div>
+                </div>
+
+                {/* Right Column: Visual Preview & QR Actions */}
+                <div className="md:col-span-6 bg-[#FAF7F2] rounded-3xl border-2 border-stone-200 p-6 flex flex-col items-center justify-center space-y-4">
+                  <div className="text-center">
+                    <p className="text-[11px] font-bold text-orange-800 uppercase tracking-wider">
+                      Pratinjau Orientasi Meja
+                    </p>
+                    <p className="text-[10px] text-stone-500">
+                      Tampilan visual meja di denah kafe Arum Seduh
+                    </p>
+                  </div>
+
+                  {/* Visual Preview Box */}
+                  <div className="relative w-64 h-52 bg-white rounded-3xl border-2 border-stone-300 shadow-inner flex items-center justify-center select-none">
+                    {editShape === 'ROUND' ? (
+                      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-400 shadow-md flex flex-col items-center justify-center p-2">
+                        <span className="text-[8px] font-bold text-orange-800 uppercase tracking-wider">Bulat</span>
+                        <span className="font-serif font-black text-sm text-stone-900 mt-0.5">MEJA {editNumber}</span>
+                        <span className="text-[8px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full mt-1">
+                          {getStatusColor(editStatus).label}
+                        </span>
+                      </div>
+                    ) : (
+                      <div 
+                        style={{ transform: `rotate(${editRotation}deg)` }}
+                        className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-400 shadow-md flex flex-col items-center justify-center p-2 transition-transform duration-300"
+                      >
+                        <span className="text-[8px] font-bold text-orange-800 uppercase tracking-wider">Kotak</span>
+                        <span className="font-serif font-black text-sm text-stone-900 mt-0.5">MEJA {editNumber}</span>
+                        <span className="text-[8px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full mt-1">
+                          {getStatusColor(editStatus).label}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
                   {/* QR Code Action */}
-                  <div className="p-3.5 rounded-2xl bg-[#FAF7F2] border border-stone-200 text-center space-y-2">
+                  <div className="w-full p-3.5 rounded-2xl bg-white border border-stone-200 text-center space-y-2">
                     <div className="hidden">
                       <QRCodeCanvas
                         id={`qr-canvas-${selectedTable.id}`}
@@ -1635,7 +1168,7 @@ export default function AdminTablesClient({
                       }}
                       className="w-full py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-orange-500/20"
                     >
-                      <Sparkles className="w-3.5 h-3.5" /> Cetak Kartu Meja {selectedTable.number} (Template)
+                      <Sparkles className="w-3.5 h-3.5" /> Cetak Stiker Meja {selectedTable.number} (Template Resmi)
                     </button>
                     <button
                       type="button"
@@ -1645,87 +1178,6 @@ export default function AdminTablesClient({
                       <Download className="w-3 h-3" /> Unduh Gambar QR Polos
                     </button>
                   </div>
-                </div>
-
-                {/* Right Column: High-Res Interactive 2D Free-Form Chair Studio */}
-                <div className="md:col-span-7 bg-[#FAF7F2] rounded-3xl border-2 border-stone-200 p-6 flex flex-col items-center justify-center space-y-4">
-                  <div className="text-center">
-                    <p className="text-[11px] font-bold text-orange-800 uppercase tracking-wider">
-                      Kanvas Interaktif Studio Kursi Bebas (2D Free-Form)
-                    </p>
-                    <p className="text-[10px] text-stone-500">
-                      Tarik kursi ke posisi mana pun di kanvas. Klik kursi untuk mengubah warnanya secara spesifik.
-                    </p>
-                  </div>
-
-                  {/* Interactive Drag Canvas */}
-                  <div
-                    ref={studioCanvasRef}
-                    onClick={() => setSelectedChairIdx(null)}
-                    className="relative w-80 h-80 bg-white rounded-3xl border-2 border-stone-300 shadow-inner flex items-center justify-center select-none"
-                  >
-                    {/* Visual Placement Guide: Box Guide if Rectangle, Circle Guide if Round */}
-                    {editShape === 'ROUND' ? (
-                      <div className="absolute w-56 h-56 rounded-full border-2 border-dashed border-orange-300 pointer-events-none" />
-                    ) : (
-                      <div 
-                        style={{ transform: `rotate(${editRotation}deg)` }}
-                        className="absolute w-60 h-48 rounded-2xl border-2 border-dashed border-orange-300 pointer-events-none transition-transform duration-300" 
-                      />
-                    )}
-
-                    {/* Central Table Graphic */}
-                    {editShape === 'ROUND' ? (
-                      <div className="w-28 h-28 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none">
-                        <span className="font-serif font-black text-xs text-stone-900">MEJA {editNumber}</span>
-                        <span className="text-[8px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-0.5">
-                          {editCapacity} Kursi
-                        </span>
-                      </div>
-                    ) : (
-                      <div 
-                        style={{ transform: `rotate(${editRotation}deg)` }}
-                        className="w-36 h-24 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 border-2 border-amber-300 shadow-md flex flex-col items-center justify-center p-2 z-10 pointer-events-none transition-transform duration-300"
-                      >
-                        <span className="font-serif font-black text-xs text-stone-900">MEJA {editNumber}</span>
-                        <span className="text-[8px] font-bold text-orange-700 bg-white/80 px-2 py-0.5 rounded-full border border-orange-200 mt-0.5">
-                          {editCapacity} Kursi
-                        </span>
-                      </div>
-                    )}
-
-                    {/* INTERACTIVE 2D DRAGGABLE CHAIRS WITH CUSTOM COLORS */}
-                    {customChairs.map((chair, idx) => {
-                      const isSelected = selectedChairIdx === idx;
-                      const visualClass = getChairVisualClass(chair.color, isSelected);
-                      const iconClass = getChairIconClass(chair.color, isSelected);
-
-                      return (
-                        <div
-                          key={chair.id}
-                          onMouseDown={(e) => handleStartChairDrag(e, idx)}
-                          onTouchStart={(e) => handleStartChairDrag(e, idx)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedChairIdx(idx);
-                          }}
-                          style={{
-                            transform: `translate(${chair.x}px, ${chair.y}px)`,
-                            touchAction: 'none'
-                          }}
-                          title={`Kursi ${chair.label} (${chair.color || 'Putih'}) - Klik untuk pilih & ubah warna/geser`}
-                          className={`absolute w-10 h-10 rounded-full border-2 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center transition-transform z-30 shadow-md ${visualClass}`}
-                        >
-                          <Armchair className={`w-4 h-4 ${iconClass}`} />
-                          <span className="font-serif font-black text-[9px] leading-none mt-0.5">{chair.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  <p className="text-[11px] font-medium text-stone-600 text-center bg-stone-100 px-3.5 py-1.5 rounded-xl border border-stone-200">
-                    Posisi kursi yang Anda geser akan langsung tampil persis sama di denah kasir & SPMB pelanggan.
-                  </p>
                 </div>
               </div>
 
@@ -1753,7 +1205,7 @@ export default function AdminTablesClient({
                     disabled={isSaving}
                     className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-orange-500/20 transition-all cursor-pointer disabled:opacity-50"
                   >
-                    {isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Meja & Kursi'}
+                    {isSaving ? 'Menyimpan...' : 'Simpan Pengaturan Meja'}
                   </button>
                 </div>
               </div>
@@ -1813,7 +1265,7 @@ export default function AdminTablesClient({
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => handleShapeChange('RECTANGLE')}
+                      onClick={() => setEditShape('RECTANGLE')}
                       className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                         editShape === 'RECTANGLE'
                           ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
@@ -1826,7 +1278,7 @@ export default function AdminTablesClient({
 
                     <button
                       type="button"
-                      onClick={() => handleShapeChange('ROUND')}
+                      onClick={() => setEditShape('ROUND')}
                       className={`p-3 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
                         editShape === 'ROUND'
                           ? 'bg-orange-50 border-orange-500 text-orange-700 shadow-sm ring-2 ring-orange-500/20'
@@ -1837,20 +1289,6 @@ export default function AdminTablesClient({
                       <span>Meja Bulat</span>
                     </button>
                   </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1">
-                    Kapasitas Kursi
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={editCapacity}
-                    onChange={(e) => handleCapacityChange(parseInt(e.target.value) || 2)}
-                    className="w-full px-3.5 py-2.5 text-xs font-bold rounded-xl border border-stone-200 bg-stone-50 focus:outline-none focus:border-orange-500"
-                  />
                 </div>
 
                 <div className="flex gap-2 pt-3 border-t border-stone-100">
@@ -1875,7 +1313,7 @@ export default function AdminTablesClient({
         )}
       </AnimatePresence>
 
-      {/* FLOOR ELEMENT (DOORS, TV, SHELVES, BAR, ETC.) MODAL */}
+      {/* FLOOR ELEMENT MODAL */}
       <AnimatePresence>
         {isElementModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
@@ -1962,7 +1400,7 @@ export default function AdminTablesClient({
                 />
               </div>
 
-              {/* Slider Ukuran (Lebar & Tinggi dalam Piksel) */}
+              {/* Slider Ukuran */}
               <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-[#FAF7F2] border border-stone-200">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between text-[11px] font-bold text-stone-700">
