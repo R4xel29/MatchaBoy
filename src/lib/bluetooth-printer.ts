@@ -180,6 +180,17 @@ function centerText(text: string, maxLen = 32): string {
   return ' '.repeat(pad) + t + '\n';
 }
 
+function cleanAscii(str: string): string {
+  return str
+    .replace(/[\u00A0\u202F\u2007\u200B]/g, ' ')
+    .replace(/[»›]/g, '>>')
+    .replace(/[«‹]/g, '<<')
+    .replace(/[•●·]/g, '*')
+    .replace(/[–—]/g, '-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'");
+}
+
 /**
  * Build ESC/POS Byte Stream for Customer Receipt
  */
@@ -188,7 +199,7 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   const buffer: number[] = [];
 
   const write = (arr: number[]) => buffer.push(...arr);
-  const writeText = (str: string) => buffer.push(...Array.from(encoder.encode(str)));
+  const writeText = (str: string) => buffer.push(...Array.from(encoder.encode(cleanAscii(str))));
 
   const storeName = settings.storeName || 'ARUM SEDUH';
   const orderIdShort = (order.id || '').slice(0, 8).toUpperCase();
@@ -366,7 +377,7 @@ export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array
   const buffer: number[] = [];
 
   const write = (arr: number[]) => buffer.push(...arr);
-  const writeText = (str: string) => buffer.push(...Array.from(encoder.encode(str)));
+  const writeText = (str: string) => buffer.push(...Array.from(encoder.encode(cleanAscii(str))));
 
   const orderIdShort = (order.id || '').slice(0, 8).toUpperCase();
   const orderDate = new Date(order.createdAt || Date.now());

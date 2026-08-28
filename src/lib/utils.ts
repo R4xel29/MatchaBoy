@@ -6,12 +6,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount)
+  const num = Math.round(Number(amount) || 0);
+  return 'Rp ' + num.toLocaleString('id-ID');
 }
 
 export function getActivePromo(product: any): { promoPrice: number; startDate: string; endDate: string; isActive: boolean } | null {
