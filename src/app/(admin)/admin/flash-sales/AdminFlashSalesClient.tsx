@@ -293,7 +293,7 @@ export default function AdminFlashSalesClient({ initialProducts, categories }: A
               <div className="flex gap-3">
                 {p.image ? (
                   <div className="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-border bg-brand-50">
-                    <Image src={p.image} alt={p.name} fill className="object-cover" />
+                    <Image src={p.image} alt={p.name} fill sizes="64px" className="object-cover" />
                   </div>
                 ) : (
                   <div className="w-16 h-16 rounded-xl shrink-0 border border-border bg-brand-50/50 flex items-center justify-center text-xl">

@@ -323,6 +323,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                    src={banner.image} 
                    alt={banner.alt} 
                    fill 
+                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                    className={`${banner.isCover === false ? 'object-contain' : 'object-cover'} transition-transform group-hover:scale-105`} 
                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x400/18442D/FFF?text=Error'; }} 
                 />
@@ -405,6 +406,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                             src={formData.image} 
                             alt="Miniatur Pratinjau" 
                             fill 
+                            sizes="(max-width: 768px) 100vw, 450px"
                             className={formData.isCover ? "object-cover" : "object-contain"}
                             unoptimized
                             onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/600x200/18442D/FFF?text=Gambar+tidak+dapat+dimuat'; }}
@@ -559,6 +561,7 @@ export default function HeroBannersClient({ initialBanners }: { initialBanners: 
                       src={previewBanner.image}
                       alt={previewBanner.alt || 'Promo Image'}
                       fill
+                      sizes="(max-width: 768px) 100vw, 800px"
                       className={`${previewBanner.isCover === false ? 'object-contain' : 'object-cover'} transition-all`}
                       unoptimized
                       onError={(e) => {

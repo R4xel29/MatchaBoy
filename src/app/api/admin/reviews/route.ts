@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { invalidateReviewsCache } from '@/lib/redis-cache'
 
 async function verifyAdmin() {
   const session = await auth()
@@ -183,6 +184,8 @@ export async function PATCH(req: Request) {
       },
     })
 
+    await invalidateReviewsCache()
+
     return NextResponse.json({ success: true, review })
   } catch (error) {
     console.error('Update review error:', error)
@@ -204,6 +207,7 @@ export async function DELETE(req: Request) {
 
     if (replyId) {
       await prisma.reviewReply.delete({ where: { id: replyId } })
+      await invalidateReviewsCache()
       return NextResponse.json({ success: true, message: 'Reply deleted successfully' })
     }
 
@@ -212,6 +216,7 @@ export async function DELETE(req: Request) {
     }
 
     await prisma.review.delete({ where: { id } })
+    await invalidateReviewsCache()
 
     return NextResponse.json({ success: true, message: 'Review deleted successfully' })
   } catch (error) {

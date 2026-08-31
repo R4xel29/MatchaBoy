@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateProductCache } from '@/lib/redis-cache';
 
 // POST /api/admin/products/[id]/duplicate — Duplicate an existing product
 export async function POST(
@@ -71,6 +72,8 @@ export async function POST(
       entityId: duplicatedProduct.id,
       details: `Menduplikasi produk "${originalProduct.name}" menjadi "${duplicatedProduct.name}"`,
     });
+
+    await invalidateProductCache();
 
     return NextResponse.json(duplicatedProduct, { status: 201 });
   } catch (error) {

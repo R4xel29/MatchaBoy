@@ -26,7 +26,7 @@ export default function StoreSettingsPage() {
     dates?: { [key: string]: { openTime: string; closeTime: string } };
   }>({});
   const [whatsappNumber, setWhatsappNumber] = useState('');
-  const [whatsappMessage, setWhatsappMessage] = useState('Halo Matchaboy, saya ingin bertanya...');
+  const [whatsappMessage, setWhatsappMessage] = useState('Halo Arum Seduh, saya ingin bertanya...');
   const [spmbStartTime, setSpmbStartTime] = useState('08:00');
   const [spmbEndTime, setSpmbEndTime] = useState('13:00');
   const [spmbCloseTime, setSpmbCloseTime] = useState('16:00');

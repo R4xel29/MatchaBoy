@@ -7,6 +7,7 @@ import { formatRupiah, getActivePromo } from '@/lib/utils';
 import Image from 'next/image';
 import type { Product, Category } from '@/types';
 import { PromoCountdown } from './PromoCountdown';
+import { SearchOverlaySkeleton } from '@/components/ui/ShimmerSkeleton';
 
 interface SearchOverlayProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ interface SearchOverlayProps {
 
 export function SearchOverlay({ isOpen, onClose, onProductSelect, products, categories }: SearchOverlayProps) {
   const [query, setQuery] = useState('');
+  const [isSearchingLoading, setIsSearchingLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('combo');
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -72,6 +74,19 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
   }, [query, products, categories]);
 
   const isSearching = query.trim().length > 0;
+
+  // Debounce search query to show skeleton loader smoothly
+  useEffect(() => {
+    if (query.trim().length > 0) {
+      setIsSearchingLoading(true);
+      const timer = setTimeout(() => {
+        setIsSearchingLoading(false);
+      }, 150);
+      return () => clearTimeout(timer);
+    } else {
+      setIsSearchingLoading(false);
+    }
+  }, [query]);
 
   // Clear query saat overlay ditutup
   useEffect(() => {
@@ -228,7 +243,14 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
             {isSearching ? (
               /* ─── Mode Pencarian ─── */
               <div className="px-4 pt-4">
-                {searchResults.length > 0 ? (
+                {isSearchingLoading ? (
+                  <div className="space-y-3">
+                    <p className="text-[11px] text-[#8C7864] font-medium mb-3">
+                      Mencari &ldquo;{query}&rdquo;...
+                    </p>
+                    <SearchOverlaySkeleton />
+                  </div>
+                ) : searchResults.length > 0 ? (
                   <>
                     <p className="text-[11px] text-[#8C7864] font-medium mb-3">
                       {searchResults.length} hasil untuk &ldquo;{query}&rdquo;
@@ -331,7 +353,7 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
                                   )}
                                   {promo ? (
                                     <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-rose-500 text-white text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
-                                      🔥 Promo
+                                      <Flame className="w-2.5 h-2.5 text-white fill-white" /> Promo
                                     </span>
                                   ) : (
                                     <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-[#946F48] text-white text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
@@ -416,7 +438,7 @@ export function SearchOverlay({ isOpen, onClose, onProductSelect, products, cate
                                   )}
                                   {promo ? (
                                     <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-rose-500 text-white text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
-                                      🔥 Promo
+                                      <Flame className="w-2.5 h-2.5 text-white fill-white" /> Promo
                                     </span>
                                   ) : (
                                     <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-[#946F48] text-white text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5">
@@ -642,7 +664,7 @@ function MenuProductCard({
             {/* Badge */}
             {promo ? (
               <span className="absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md bg-rose-500 text-white text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5 border border-transparent">
-                🔥 Promo
+                <Flame className="w-2.5 h-2.5 text-white fill-white" /> Promo
               </span>
             ) : badge && (
               <span className={`absolute bottom-1.5 left-1.5 z-10 px-1.5 py-0.5 rounded-md ${badge.bg} ${badge.text} text-[7px] font-extrabold shadow-sm uppercase tracking-wider flex items-center gap-0.5 border ${product.badge === 'new' ? 'border-[#EADFC9]/30' : 'border-transparent'}`}>

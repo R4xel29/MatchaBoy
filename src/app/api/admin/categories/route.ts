@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateCategoryCache } from '@/lib/redis-cache';
 
 // GET /api/admin/categories — List all categories
 export async function GET() {
@@ -54,6 +55,8 @@ export async function POST(request: Request) {
             entityId: category.id,
             details: `Membuat kategori baru: "${name}"`
         });
+
+        await invalidateCategoryCache();
 
         return NextResponse.json(category, { status: 201 });
     } catch (error) {

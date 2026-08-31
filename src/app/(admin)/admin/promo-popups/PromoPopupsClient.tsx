@@ -342,6 +342,7 @@ export default function PromoPopupsClient({ initialPopups }: { initialPopups: Pr
                    src={popup.image} 
                    alt={popup.title} 
                    fill 
+                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                    className="object-cover transition-transform group-hover:scale-102"
                    unoptimized
                    onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x500/18442D/FFF?text=Error'; }} 
@@ -433,6 +434,7 @@ export default function PromoPopupsClient({ initialPopups }: { initialPopups: Pr
                             src={formData.image} 
                             alt="Miniatur Pratinjau" 
                             fill 
+                            sizes="120px"
                             className="object-cover"
                             unoptimized
                             onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/200x250/18442D/FFF?text=Error'; }}
@@ -618,7 +620,7 @@ export default function PromoPopupsClient({ initialPopups }: { initialPopups: Pr
                         <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
                         <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
                         <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
-                        <div className="h-4 w-40 bg-white rounded border border-slate-200 text-[8px] flex items-center px-2 text-slate-400 ml-2">https://matchaboy.com</div>
+                        <div className="h-4 w-40 bg-white rounded border border-slate-200 text-[8px] flex items-center px-2 text-slate-400 ml-2">https://arumseduh.com</div>
                       </div>
                       
                       <div className="h-[300px] bg-[#FFFBF5] relative p-6 flex flex-col justify-center items-center overflow-hidden">
@@ -763,7 +765,7 @@ export default function PromoPopupsClient({ initialPopups }: { initialPopups: Pr
                </div>
 
                <p className="text-[10px] text-center text-muted-foreground mt-3 font-medium">
-                 💡 Seret gambar di atas untuk menggeser. Gunakan slider untuk memperbesar.
+                 Seret gambar di atas untuk menggeser. Gunakan slider untuk memperbesar.
                </p>
 
                {/* Buttons Footer */}

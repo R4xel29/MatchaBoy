@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       modifiers: p.modifiers,
     }));
 
-    const systemInstruction = `Kamu adalah AI Voice-to-Order Parser khusus kasir F&B "Arum Seduh / Matchaboy".
+    const systemInstruction = `Kamu adalah AI Voice-to-Order Parser khusus kasir F&B "Arum Seduh".
 Tugasmu: Mengubah ucapan suara kasir/pelanggan bahasa Indonesia menjadi format JSON pesanan yang siap dimasukkan ke keranjang kasir POS.
 
 ATURAN DEFAULT KETAT (PENTING SEKALI):

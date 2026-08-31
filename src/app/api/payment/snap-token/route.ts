@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       responseCode: "2007300",
       responseMessage: "Successful",
-      accessToken: "snap-token-matchaboy-prod",
+      accessToken: "snap-token-arumseduh-prod",
       tokenType: "Bearer",
       expiresIn: 900
     });

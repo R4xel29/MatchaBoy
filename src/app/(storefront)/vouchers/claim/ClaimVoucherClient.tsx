@@ -119,7 +119,7 @@ export default function ClaimVoucherClient({
             ) : (
               <div className="flex flex-col items-center gap-1.5 text-gray-300">
                 <Ticket className="w-16 h-16 stroke-1 text-[#B48A5E]/40" />
-                <span className="text-xs font-bold uppercase tracking-wider text-[#B48A5E]/50">Matchaboy Promo</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-[#B48A5E]/50">Arum Seduh Promo</span>
               </div>
             )}
             
@@ -305,7 +305,7 @@ export default function ClaimVoucherClient({
             onClick={() => router.push('/')}
             className="w-full py-3.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 font-bold rounded-2xl transition-colors text-xs flex items-center justify-center gap-2"
           >
-            Buka Menu Matchaboy
+            Buka Menu Arum Seduh
           </button>
         )}
       </div>

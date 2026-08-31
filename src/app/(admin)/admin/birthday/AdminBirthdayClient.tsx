@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import {
   Cake, Gift, Calendar, Users, Search, Send, ShieldAlert,
-  PartyPopper, TrendingUp, Clock, Phone, Mail, DollarSign,
+  PartyPopper, TrendingUp, Clock, Phone, Mail, DollarSign, X,
 } from 'lucide-react';
 import { cn, formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
@@ -101,7 +101,7 @@ export default function AdminBirthdayClient({
           userId: user.id,
           voucherType,
           voucherValue: parseInt(voucherValue),
-          description: `Selamat Ulang Tahun! 🎂 Birthday Voucher dari Matchaboy`,
+          description: `Selamat Ulang Tahun! Birthday Voucher dari Arum Seduh`,
         }),
       });
 
@@ -126,7 +126,7 @@ export default function AdminBirthdayClient({
       }));
 
       setSendRewardModal(null);
-      showToast(`Birthday voucher berhasil dikirim ke ${user.name}! 🎉`, 'success');
+      showToast(`Birthday voucher berhasil dikirim ke ${user.name}!`, 'success');
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Gagal mengirim reward.';
       showToast(message, 'error');
@@ -274,7 +274,7 @@ export default function AdminBirthdayClient({
                     {/* Avatar */}
                     <div className="relative w-12 h-12 rounded-full overflow-hidden shrink-0 border-2 border-pink-200 bg-pink-50">
                       {user.image ? (
-                        <Image src={user.image} alt={user.name || ''} fill className="object-cover" />
+                        <Image src={user.image} alt={user.name || ''} fill sizes="48px" className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-pink-600 font-bold text-lg">
                           {(user.name || '?')[0].toUpperCase()}
@@ -287,7 +287,7 @@ export default function AdminBirthdayClient({
                         <h4 className="font-bold text-sm text-foreground">{user.name || 'Anonymous'}</h4>
                         {user.daysUntil === 0 && (
                           <span className="text-[9px] font-black uppercase tracking-wider text-pink-700 bg-pink-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            🎂 Hari Ini!
+                            <Cake className="w-3 h-3 text-pink-600" /> Hari Ini!
                           </span>
                         )}
                         {user.daysUntil === 1 && (
@@ -388,8 +388,8 @@ export default function AdminBirthdayClient({
                       {cell.day}
                     </span>
                     {cell.users.length > 0 && (
-                      <span className="text-[8px] font-black mt-0.5">
-                        🎂 {cell.users.length}
+                      <span className="text-[8px] font-black mt-0.5 flex items-center gap-0.5">
+                        <Cake className="w-2.5 h-2.5 text-pink-600 inline" /> {cell.users.length}
                       </span>
                     )}
                   </>
@@ -473,7 +473,7 @@ export default function AdminBirthdayClient({
               onClick={() => setSendRewardModal(null)}
               className="absolute top-4 right-4 text-muted-foreground hover:text-foreground w-7 h-7 rounded-full flex items-center justify-center bg-muted hover:bg-border transition-all"
             >
-              ✕
+              <X className="w-4 h-4" />
             </button>
 
             <h3 className="font-heading font-black text-base text-foreground mb-1 flex items-center gap-2">

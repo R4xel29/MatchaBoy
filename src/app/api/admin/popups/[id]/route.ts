@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidatePopupCache } from '@/lib/redis-cache';
 
 export async function PATCH(
   req: Request,
@@ -38,6 +39,8 @@ export async function PATCH(
       details: `Mengedit informasi Promo Popup: "${popup.title}"`,
     });
 
+    await invalidatePopupCache();
+
     return NextResponse.json(popup);
   } catch (error) {
     console.error('Error updating popup:', error);
@@ -69,6 +72,8 @@ export async function DELETE(
       entityId: id,
       details: `Menghapus Promo Popup: "${popup.title}"`,
     });
+
+    await invalidatePopupCache();
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

@@ -211,7 +211,7 @@ export default function AdminNotifyMeClient() {
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   {p.productImage ? (
                     <div className="relative w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-border bg-brand-50">
-                      <Image src={p.productImage} alt={p.productName} fill className="object-cover" />
+                      <Image src={p.productImage} alt={p.productName} fill sizes="48px" className="object-cover" />
                     </div>
                   ) : (
                     <div className="w-12 h-12 rounded-xl shrink-0 border border-border bg-brand-50/50 flex items-center justify-center text-lg">

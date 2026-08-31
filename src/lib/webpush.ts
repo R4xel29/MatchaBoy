@@ -4,7 +4,7 @@ import { prisma } from './prisma';
 // Ensure you have these environment variables set
 const publicVapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
 const privateVapidKey = process.env.VAPID_PRIVATE_KEY;
-const subject = process.env.VAPID_SUBJECT || 'mailto:admin@matchaboy.com';
+const subject = process.env.VAPID_SUBJECT || 'mailto:admin@arumseduh.com';
 
 if (publicVapidKey && privateVapidKey) {
   webpush.setVapidDetails(subject, publicVapidKey, privateVapidKey);

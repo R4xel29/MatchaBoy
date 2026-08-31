@@ -33,7 +33,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
 
   const getReferralLink = () => {
     if (typeof window === 'undefined') return '';
-    return `${window.location.origin}/register?ref=${referralCode || 'matchaboy'}`;
+    return `${window.location.origin}/register?ref=${referralCode || 'arumseduh'}`;
   };
 
   useEffect(() => {
@@ -48,10 +48,10 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
     canvas.width = 800;
     canvas.height = 800;
 
-    // 1. Draw Background Gradient (Rich forest green & matcha green)
+    // 1. Draw Background Gradient (Warm Amber Orange)
     const bgGrad = ctx.createLinearGradient(0, 0, 0, 800);
-    bgGrad.addColorStop(0, '#19341D'); // Super dark forest green
-    bgGrad.addColorStop(1, '#2E5A44'); // Smooth Matcha Green
+    bgGrad.addColorStop(0, '#7C2D12'); // Rich deep amber
+    bgGrad.addColorStop(1, '#EA580C'); // Smooth Warm Orange
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, 800, 800);
 
@@ -78,11 +78,11 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
     ctx.fillStyle = '#FEF08A';
     ctx.font = 'bold 36px Georgia, serif';
     ctx.textAlign = 'center';
-    ctx.fillText('🍵 MATCHABOY MOMENTS', 400, 100);
+    ctx.fillText('ARUM SEDUH MOMENTS', 400, 100);
 
     ctx.fillStyle = '#FAF8F5';
     ctx.font = '900 13px system-ui, sans-serif';
-    ctx.fillText('🌿 ARTISANAL PREMIUM MATCHA & ECO-BAKERY 🌿', 400, 135);
+    ctx.fillText('ARTISANAL PREMIUM TEA & ECO-BAKERY', 400, 135);
 
     // 5. Create the cream inner card overlay
     ctx.fillStyle = '#FAF8F5';
@@ -187,7 +187,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.font = '600 13px system-ui, sans-serif';
-    ctx.fillText('Matchaboy 🍵 - Bawa Tumblermu & Kurangi Sampah Plastik 🌍', 400, 715);
+    ctx.fillText('Arum Seduh - Bawa Tumblermu & Kurangi Sampah Plastik', 400, 715);
 
   }, [customerName, orderId, total, items, referralCode, qrLoaded]);
 
@@ -202,17 +202,17 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
           return;
         }
 
-        const file = new File([blob], `matchaboy-order-${orderId.slice(0, 8)}.png`, { type: 'image/png' });
+        const file = new File([blob], `arumseduh-order-${orderId.slice(0, 8)}.png`, { type: 'image/png' });
         
         const shareData = {
-          title: 'Matchaboy Moments',
-          text: `Cobain Matchaboy! Daftar pakai link referral saya dan dapatkan diskon langsung Rp3.000:\n${getReferralLink()}`,
+          title: 'Arum Seduh Moments',
+          text: `Cobain Arum Seduh! Daftar pakai link referral saya dan dapatkan diskon langsung Rp3.000:\n${getReferralLink()}`,
           files: [file],
         };
 
         if (navigator.canShare && navigator.canShare(shareData)) {
           await navigator.share(shareData);
-          showToast('Berhasil membagikan moments! 🍵', 'success');
+          showToast('Berhasil membagikan moments!', 'success');
         } else {
           // Fallback to clipboard and download
           handleDownload();
@@ -228,7 +228,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
 
   const handleShareWA = () => {
     const text = encodeURIComponent(
-      `Saya baru saja memesan matcha premium di Matchaboy! 🍵 Beli juga yuk! Daftar menggunakan link referral saya untuk diskon Rp3.000 langsung:\n${getReferralLink()}`
+      `Saya baru saja memesan minuman di Arum Seduh! Beli juga yuk! Daftar menggunakan link referral saya untuk diskon Rp3.000 langsung:\n${getReferralLink()}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
@@ -239,19 +239,19 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
 
     const dataUrl = canvas.toDataURL('image/png');
     const link = document.createElement('a');
-    link.download = `matchaboy-moments-${orderId.slice(0, 8)}.png`;
+    link.download = `arumseduh-moments-${orderId.slice(0, 8)}.png`;
     link.href = dataUrl;
     link.click();
-    showToast('Gambar moments berhasil diunduh! 📲', 'success');
+    showToast('Gambar moments berhasil diunduh!', 'success');
   };
 
   return (
     <div className="w-full bg-white border border-gray-100 rounded-[2rem] p-5 md:p-6 shadow-sm space-y-5 text-center mt-6">
       <div className="space-y-1">
-        <div className="inline-flex items-center gap-1 bg-[#2E5A44]/10 text-[#2E5A44] px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-[#2E5A44]/15">
-          <Sparkles className="w-3.5 h-3.5 fill-[#2E5A44] stroke-none animate-pulse" /> Matcha Moments Card
+        <div className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-200">
+          <Sparkles className="w-3.5 h-3.5 fill-orange-500 stroke-none animate-pulse" /> Arum Seduh Moments Card
         </div>
-        <h3 className="font-serif text-lg font-black text-gray-900 mt-2">Bagikan Momen Matchamu</h3>
+        <h3 className="font-serif text-lg font-black text-gray-900 mt-2">Bagikan Momen Spesialmu</h3>
         <p className="text-xs text-gray-500 font-semibold max-w-[320px] mx-auto leading-relaxed">
           Unduh atau bagikan kartu moments pesananmu beserta QR code referral pribadimu untuk mendapatkan reward minuman gratis!
         </p>

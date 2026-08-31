@@ -260,6 +260,7 @@ export function LoadingScreen({
               src="/icons/arus.png"
               alt="Arus"
               fill
+              sizes="56px"
               className="object-contain"
               priority
             />

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateProductCache } from '@/lib/redis-cache';
 
 // POST /api/admin/products — Create a new product
 export async function POST(request: Request) {
@@ -38,6 +39,8 @@ export async function POST(request: Request) {
             entityId: product.id,
             details: `Menambahkan produk baru: "${name}"`
         });
+
+        await invalidateProductCache();
 
         return NextResponse.json(product, { status: 201 });
     } catch (error) {

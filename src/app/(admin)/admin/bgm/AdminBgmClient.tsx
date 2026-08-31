@@ -395,7 +395,7 @@ export default function AdminBgmClient({ initialSongs }: Props) {
                 <input 
                   value={title} 
                   onChange={e => setTitle(e.target.value)} 
-                  placeholder="e.g. Uji Sunrise 🌅"
+                  placeholder="e.g. Arum Seduh Sunrise"
                   className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" 
                 />
               </div>
@@ -406,7 +406,7 @@ export default function AdminBgmClient({ initialSongs }: Props) {
                 <input 
                   value={artist} 
                   onChange={e => setArtist(e.target.value)} 
-                  placeholder="e.g. Matchaboy Chill"
+                  placeholder="e.g. Arum Seduh Chill"
                   className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all" 
                 />
               </div>
@@ -419,7 +419,7 @@ export default function AdminBgmClient({ initialSongs }: Props) {
                     {isUploading ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <>📁 Upload MP3</>
+                      <span className="flex items-center gap-1"><Music className="w-3.5 h-3.5" /> Upload MP3</span>
                     )}
                     <input 
                       type="file" 
@@ -469,10 +469,10 @@ export default function AdminBgmClient({ initialSongs }: Props) {
                   onChange={e => setTimePeriod(e.target.value)}
                   className="w-full px-3.5 py-2.5 text-sm bg-muted/30 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:bg-white transition-all cursor-pointer font-semibold"
                 >
-                  <option value="pagi">🌅 Pagi Hari (06:00 - 10:00)</option>
-                  <option value="siang">☀️ Siang Hari (10:00 - 16:00)</option>
-                  <option value="sore">🌇 Sore Hari (16:00 - 18:00)</option>
-                  <option value="malam">🌃 Malam Hari (18:00 - 06:00)</option>
+                  <option value="pagi">Pagi Hari (06:00 - 10:00)</option>
+                  <option value="siang">Siang Hari (10:00 - 16:00)</option>
+                  <option value="sore">Sore Hari (16:00 - 18:00)</option>
+                  <option value="malam">Malam Hari (18:00 - 06:00)</option>
                 </select>
               </div>
 

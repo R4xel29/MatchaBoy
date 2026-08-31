@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateProductCache } from '@/lib/redis-cache';
 
 // PATCH /api/admin/products/[id] — Update product fields
 export async function PATCH(
@@ -122,6 +123,8 @@ export async function PATCH(
             details: detailMessage
         });
 
+        await invalidateProductCache();
+
         return NextResponse.json(product);
     } catch (error) {
         console.error('Error updating product:', error);
@@ -161,6 +164,8 @@ export async function DELETE(
                 details: `Mengarsipkan produk (mengubah status menjadi Archived karena memiliki riwayat transaksi)`
             });
 
+            await invalidateProductCache();
+
             return NextResponse.json({ 
                 success: true, 
                 message: 'Produk diarsipkan karena memiliki riwayat transaksi.',
@@ -177,6 +182,8 @@ export async function DELETE(
             entityId: id,
             details: `Menghapus produk secara permanen`
         });
+
+        await invalidateProductCache();
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {

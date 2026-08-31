@@ -850,7 +850,7 @@ export default function SpmbClient({
                     <div key={item.id} className="flex gap-3 p-3.5 rounded-2xl border border-stone-150 bg-stone-50/70 hover:bg-stone-50 transition-colors items-start">
                       {item.image && (
                         <div className="relative w-14 h-14 rounded-xl overflow-hidden bg-stone-100 shrink-0 border border-stone-200/60">
-                          <Image src={item.image} alt={item.name} fill className="object-cover" />
+                          <Image src={item.image} alt={item.name} fill sizes="56px" className="object-cover" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0 text-left">

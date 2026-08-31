@@ -27,7 +27,7 @@ const PRIZES: Prize[] = [
   { id: 'p3', type: 'POINTS', value: '15', label: '15 Poin', description: 'Bonus 15 Arus Poin!', color: '#2E5A44' }, // Deep Forest Green
   { id: 'p4', type: 'VOUCHER', value: 'UPGRADE_SIZE', label: 'Size Up', description: 'Gratis Upgrade Ukuran Minuman!', color: '#EADFC9' }, // Light Matcha Cream
   { id: 'p5', type: 'POINTS', value: '50', label: '50 Poin', description: 'Jackpot! 50 Arus Poin!', color: '#B48A5E' }, // Golden Brown
-  { id: 'p6', type: 'MERCH', value: 'STICKER_PACK', label: 'Stickers', description: 'Matchaboy Sticker Pack Eksklusif!', color: '#1E3F20' }, // Dark Green Black
+  { id: 'p6', type: 'MERCH', value: 'STICKER_PACK', label: 'Stickers', description: 'Arum Seduh Sticker Pack Eksklusif!', color: '#EA580C' }, // Warm Amber Orange
 ];
 
 export function GachaOverlay({ isOpen, onClose, gachaChances, onSpinSuccess }: GachaOverlayProps) {
@@ -161,12 +161,12 @@ export function GachaOverlay({ isOpen, onClose, gachaChances, onSpinSuccess }: G
 
           {/* Title Area */}
           <div className="text-center space-y-1 mb-6 relative z-10">
-            <div className="inline-flex items-center gap-1 bg-[#2E5A44]/10 text-[#2E5A44] px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-[#2E5A44]/15">
-              <Sparkles className="w-3.5 h-3.5 fill-[#2E5A44] stroke-none animate-pulse" /> Matcha Lucky Draw
+            <div className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-200">
+              <Sparkles className="w-3.5 h-3.5 fill-orange-500 stroke-none animate-pulse" /> Arum Seduh Lucky Draw
             </div>
             <h2 className="font-serif text-2xl font-black text-gray-900 mt-2">Gacha Spin-the-Wheel</h2>
             <p className="text-xs text-gray-500 font-semibold max-w-[280px] mx-auto">
-              Putar roda keberuntunganmu dan menangkan hadiah menarik dari Matchaboy!
+              Putar roda keberuntunganmu dan menangkan hadiah menarik dari Arum Seduh!
             </p>
           </div>
 

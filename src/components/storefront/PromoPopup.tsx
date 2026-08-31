@@ -39,14 +39,14 @@ export function PromoPopup() {
             let shouldShow = false;
 
             if (freq === 'ONCE') {
-              const isSeen = localStorage.getItem(`matchaboy_promo_popup_seen_${item.id}`);
+              const isSeen = localStorage.getItem(`arumseduh_promo_popup_seen_${item.id}`) || localStorage.getItem(`matchaboy_promo_popup_seen_${item.id}`);
               if (!isSeen) shouldShow = true;
             } else if (freq === 'EVERY_SESSION') {
-              const isSeenSession = sessionStorage.getItem(`matchaboy_promo_popup_seen_session_${item.id}`);
+              const isSeenSession = sessionStorage.getItem(`arumseduh_promo_popup_seen_session_${item.id}`) || sessionStorage.getItem(`matchaboy_promo_popup_seen_session_${item.id}`);
               if (!isSeenSession) shouldShow = true;
             } else {
               // Time-based frequencies: EVERY_5_MIN, EVERY_10_MIN, EVERY_20_MIN, EVERY_30_MIN, EVERY_DAY
-              const lastSeenStr = localStorage.getItem(`matchaboy_promo_popup_last_seen_${item.id}`);
+              const lastSeenStr = localStorage.getItem(`arumseduh_promo_popup_last_seen_${item.id}`) || localStorage.getItem(`matchaboy_promo_popup_last_seen_${item.id}`);
               if (!lastSeenStr) {
                 shouldShow = true;
               } else {
@@ -94,11 +94,11 @@ export function PromoPopup() {
     const nowStr = Date.now().toString();
 
     if (freq === 'ONCE') {
-      localStorage.setItem(`matchaboy_promo_popup_seen_${currPopup.id}`, 'true');
+      localStorage.setItem(`arumseduh_promo_popup_seen_${currPopup.id}`, 'true');
     } else if (freq === 'EVERY_SESSION') {
-      sessionStorage.setItem(`matchaboy_promo_popup_seen_session_${currPopup.id}`, 'true');
+      sessionStorage.setItem(`arumseduh_promo_popup_seen_session_${currPopup.id}`, 'true');
     } else {
-      localStorage.setItem(`matchaboy_promo_popup_last_seen_${currPopup.id}`, nowStr);
+      localStorage.setItem(`arumseduh_promo_popup_last_seen_${currPopup.id}`, nowStr);
     }
   };
 
@@ -187,7 +187,7 @@ export function PromoPopup() {
                 alt={popup.title}
                 className="w-full h-full object-cover rounded-[2rem] mx-auto block"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = 'https://placehold.co/400x500/18442D/FFF?text=Promo+Matchaboy';
+                  (e.target as HTMLImageElement).src = 'https://placehold.co/400x500/EA580C/FFF?text=Promo+Arum+Seduh';
                 }}
               />
               

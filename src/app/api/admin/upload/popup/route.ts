@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import sharp from 'sharp';
 import { uploadToSupabase } from '@/lib/supabase';
+import { invalidatePopupCache } from '@/lib/redis-cache';
 
 export async function POST(request: NextRequest) {
     const session = await auth();
@@ -47,6 +48,8 @@ export async function POST(request: NextRequest) {
             processedBuffer,
             'image/webp'
         );
+
+        await invalidatePopupCache();
 
         return NextResponse.json({ url: publicUrl });
     } catch (error: any) {

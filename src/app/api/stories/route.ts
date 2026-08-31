@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getOrSetCache, invalidateStoriesCache, CACHE_KEYS, CACHE_TTL } from '@/lib/redis-cache';
 
 // Fallback stories if database is empty or connection fails
 const FALLBACK_STORIES = [
@@ -34,56 +35,64 @@ const FALLBACK_STORIES = [
 
 export async function GET() {
   try {
-    const now = new Date();
-    
-    // Get active stories that haven't expired
-    let stories = await prisma.story.findMany({
-      where: {
-        isActive: true,
-        expiresAt: {
-          gt: now,
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-
-    // Auto-seed if empty
-    if (stories.length === 0) {
-      const tomorrow = new Date();
-      tomorrow.setHours(tomorrow.getHours() + 24);
-      
-      const seedData = FALLBACK_STORIES.map(s => ({
-        title: s.title,
-        mediaUrl: s.mediaUrl,
-        mediaType: s.mediaType,
-        linkUrl: s.linkUrl,
-        isActive: s.isActive,
-        duration: s.duration,
-        expiresAt: tomorrow,
-      }));
-
-      // Insert into DB
-      await prisma.story.createMany({
-        data: seedData,
-      });
-
-      // Fetch again after seeding
-      stories = await prisma.story.findMany({
-        where: {
-          isActive: true,
-          expiresAt: {
-            gt: now,
+    const data = await getOrSetCache(
+      CACHE_KEYS.STORIES_ACTIVE,
+      async () => {
+        const now = new Date();
+        
+        // Get active stories that haven't expired
+        let stories = await prisma.story.findMany({
+          where: {
+            isActive: true,
+            expiresAt: {
+              gt: now,
+            },
           },
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-      });
-    }
+          orderBy: {
+            createdAt: 'asc',
+          },
+        });
 
-    return NextResponse.json({ success: true, stories });
+        // Auto-seed if empty
+        if (stories.length === 0) {
+          const tomorrow = new Date();
+          tomorrow.setHours(tomorrow.getHours() + 24);
+          
+          const seedData = FALLBACK_STORIES.map(s => ({
+            title: s.title,
+            mediaUrl: s.mediaUrl,
+            mediaType: s.mediaType,
+            linkUrl: s.linkUrl,
+            isActive: s.isActive,
+            duration: s.duration,
+            expiresAt: tomorrow,
+          }));
+
+          // Insert into DB
+          await prisma.story.createMany({
+            data: seedData,
+          });
+
+          // Fetch again after seeding
+          stories = await prisma.story.findMany({
+            where: {
+              isActive: true,
+              expiresAt: {
+                gt: now,
+              },
+            },
+            orderBy: {
+              createdAt: 'asc',
+            },
+          });
+        }
+
+        return { success: true, stories };
+      },
+      CACHE_TTL.STORIES
+    );
+
+    return NextResponse.json(data);
   } catch (error) {
     console.error('Error fetching stories:', error);
     // Graceful degradation with fallback mockup data
@@ -113,6 +122,8 @@ export async function POST(req: Request) {
         expiresAt,
       },
     });
+
+    await invalidateStoriesCache();
 
     return NextResponse.json({ success: true, story });
   } catch (error: any) {

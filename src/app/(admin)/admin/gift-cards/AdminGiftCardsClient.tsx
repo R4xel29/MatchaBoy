@@ -118,7 +118,7 @@ export default function AdminGiftCardsClient() {
         body: JSON.stringify({
           amount,
           recipientPhone: newRecipientPhone || '',
-          senderName: newSenderName || 'Matchaboy Admin',
+          senderName: newSenderName || 'Arum Seduh Admin',
           message: newMessage || null,
           expiresInDays: newExpiresInDays ? Number(newExpiresInDays) : null,
         }),
@@ -403,7 +403,7 @@ export default function AdminGiftCardsClient() {
                   value={newSenderName}
                   onChange={(e) => setNewSenderName(e.target.value)}
                   className="w-full px-4 py-2.5 text-sm rounded-xl border border-border bg-card focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  placeholder="Matchaboy Admin"
+                  placeholder="Arum Seduh Admin"
                 />
               </div>
 

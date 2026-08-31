@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidatePopupCache } from '@/lib/redis-cache';
 
 export async function GET() {
   const session = await auth();
@@ -51,6 +52,8 @@ export async function POST(req: Request) {
       entityId: popup.id,
       details: `Menambahkan Promo Popup baru: "${title}"`,
     });
+
+    await invalidatePopupCache();
 
     return NextResponse.json(popup, { status: 201 });
   } catch (error) {

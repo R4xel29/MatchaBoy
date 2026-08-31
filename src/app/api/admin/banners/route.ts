@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateBannerCache } from '@/lib/redis-cache';
 
 export async function GET() {
   const session = await auth();
@@ -52,6 +53,8 @@ export async function POST(req: Request) {
       entityId: banner.id,
       details: `Menambahkan Banner Promo baru: "${headline.replace(/\n/g, ' ')}"`,
     });
+
+    await invalidateBannerCache();
 
     return NextResponse.json(banner, { status: 201 });
   } catch (error) {

@@ -374,7 +374,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
               </span>
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-              Pusat Kendali Eksekutif AI Matchaboy
+              Pusat Kendali Eksekutif AI Arum Seduh
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
               Perintahkan Asisten AI untuk merancang menu baru beserta foto AI studio 8K, memproses struk belanja supplier multi-entitas, memprediksi sisa hari bahan baku (burn-rate), atau memasang flash sale di jam sepi.

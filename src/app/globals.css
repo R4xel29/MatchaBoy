@@ -41,9 +41,12 @@
   --color-cream-dark: #FFF5E6;
   --color-gold: #D4A574;
   --color-gold-light: #E8C9A0;
-  --color-matcha-dark: #1E3F20;
-  --color-matcha: #2E5A44;
-  --color-matcha-light: #E8F5E9;
+  --color-brand-orange-dark: #7C2D12;
+  --color-brand-orange: #EA580C;
+  --color-brand-orange-light: #FFEDD5;
+  --color-brand-amber-dark: #78350F;
+  --color-brand-amber: #D97706;
+  --color-brand-amber-light: #FEF3C7;
   --color-accent-gold: #D4AF37;
 
   /* Typography */
@@ -156,7 +159,7 @@
 }
 
 .glass-dark {
-  background: rgba(13, 27, 20, 0.85);
+  background: rgba(28, 22, 16, 0.85);
   backdrop-filter: blur(12px) saturate(180%);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
 }
@@ -166,7 +169,7 @@
   background: linear-gradient(135deg, #D4A574 0%, #B48A5E 50%, #946F48 100%);
 }
 
-/* Shimmer loading animation */
+/* Shimmer loading animation — Arum Seduh Warm Amber/Orange */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
@@ -175,12 +178,23 @@
 .shimmer {
   background: linear-gradient(
     90deg,
-    #f0f0f0 25%,
-    #e8e8e8 50%,
-    #f0f0f0 75%
+    rgba(254, 243, 199, 0.6) 25%,
+    rgba(255, 237, 213, 0.8) 50%,
+    rgba(254, 243, 199, 0.6) 75%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.dark .shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(120, 53, 15, 0.25) 25%,
+    rgba(154, 52, 18, 0.45) 50%,
+    rgba(120, 53, 15, 0.25) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
 }
 
 /* Noise texture overlay */

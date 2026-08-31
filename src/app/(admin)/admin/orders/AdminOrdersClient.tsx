@@ -3,9 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
-import { Search, MapPin, Package, Clock, ArrowUpRight, ShoppingBag, Truck, UserPlus, Bell } from 'lucide-react';
+import { Search, MapPin, Package, Clock, ArrowUpRight, ShoppingBag, Truck, UserPlus, Bell, Camera } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useToast } from '@/components/ui/Toast';
+import { AdminOrdersSkeleton } from '@/components/ui/ShimmerSkeleton';
 
 interface OrderItem { id: string; qty: number; price: number; modifiers?: string | null; product: { name: string; image: string | null; }; }
 interface OrderData {
@@ -28,6 +29,7 @@ interface Props {
   totalPages?: number;
   totalOrders?: number;
   pageSize?: number;
+  isLoading?: boolean;
 }
 
 export default function AdminOrdersClient({ 
@@ -35,7 +37,8 @@ export default function AdminOrdersClient({
   currentPage = 1,
   totalPages = 1,
   totalOrders = 0,
-  pageSize = 15
+  pageSize = 15,
+  isLoading = false
 }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -159,7 +162,9 @@ export default function AdminOrdersClient({
 
       {/* Order Cards */}
       <div className="space-y-3">
-        {filteredOrders.length === 0 ? (
+        {isLoading ? (
+          <AdminOrdersSkeleton />
+        ) : filteredOrders.length === 0 ? (
           <div className="py-16 text-center text-muted-foreground/50 bg-white rounded-2xl border border-border/40">
             <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No orders found</p>
@@ -195,7 +200,7 @@ export default function AdminOrdersClient({
                     </span>
                     {order.paymentProofUrl && (
                       <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">
-                        📸 Bukti Ada
+                        <Camera className="w-3 h-3 text-emerald-700" /> Bukti Ada
                       </span>
                     )}
                   </div>

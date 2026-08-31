@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateBannerCache } from '@/lib/redis-cache';
 
 export async function PATCH(
   req: Request,
@@ -40,6 +41,8 @@ export async function PATCH(
       details: `Mengedit informasi Banner Promo: "${banner.headline.replace(/\n/g, ' ')}"`,
     });
 
+    await invalidateBannerCache();
+
     return NextResponse.json(banner);
   } catch (error) {
     console.error('Error updating banner:', error);
@@ -71,6 +74,8 @@ export async function DELETE(
       entityId: id,
       details: `Menghapus Banner Promo: "${banner.headline.replace(/\n/g, ' ')}"`,
     });
+
+    await invalidateBannerCache();
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {

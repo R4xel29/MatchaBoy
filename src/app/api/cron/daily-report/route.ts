@@ -132,7 +132,7 @@ async function executeDailyReport() {
   // Prepare AI summary prompt
   const dataSummary = {
     tanggal: now.toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric" }),
-    namaToko: storeSettings?.storeName || "Matchaboy",
+    namaToko: storeSettings?.storeName || "Arum Seduh",
     totalOmzet: `Rp ${todayRevenue.toLocaleString("id-ID")}`,
     estimasiHppModalBahan: `Rp ${Math.round(todayEstimatedHPP).toLocaleString("id-ID")}`,
     estimasiLabaKotor: `Rp ${Math.round(todayGrossProfit).toLocaleString("id-ID")}`,
@@ -151,11 +151,11 @@ async function executeDailyReport() {
   let whatsappMessageText = "";
 
   try {
-    const systemPrompt = `Kamu adalah "Asisten Toko Matchaboy", asisten pribadi cerdas dan ramah bagi pemilik kedai matcha.
+    const systemPrompt = `Kamu adalah "Asisten Toko Arum Seduh", asisten pribadi cerdas dan ramah bagi pemilik kedai teh dan kopi.
 Tugasmu adalah menyusun Laporan Penjualan Harian yang dikirim ke WhatsApp pemilik toko.
 Format aturan:
 - Gunakan bahasa Indonesia santai namun profesional dan hangat (sapa pemilik dengan "Halo Bos" atau "Malam Bos").
-- Gunakan formatting WhatsApp: tebal gunakan asterisk (*kata*), emoji yang relevan (🍵, 📊, 💰, 🏆, ⚠️).
+- Gunakan formatting WhatsApp: tebal gunakan asterisk (*kata*).
 - Jangan terlalu panjang, buat padat, rapi, dan mudah di-scan dengan mata dalam 10 detik.
 - Tambahkan 1 kalimat penutup apresiatif atau tips singkat untuk esok hari.
 - JANGAN sertakan markdown backticks atau code block, langsung teks polos format WhatsApp.`;
@@ -169,16 +169,16 @@ Format aturan:
   } catch (aiErr) {
     console.error("[DAILY_REPORT] AI generation fallback to template:", aiErr);
     // Fallback template if AI fails
-    whatsappMessageText = `🍵 *REKAP PENJUALAN HARIAN MATCHABOY*\n📅 ${dataSummary.tanggal}\n\n` +
-      `📊 *Total Omzet:* ${dataSummary.totalOmzet}\n` +
-      `📦 *Terjual:* ${dataSummary.totalCupTerjual} (${dataSummary.totalTransaksi})\n` +
-      `📈 *Tren:* ${dataSummary.trenVsKemarin}\n\n` +
-      `💳 *Rincian Pembayaran:*\n` +
+    whatsappMessageText = `*REKAP PENJUALAN HARIAN ARUM SEDUH*\n${dataSummary.tanggal}\n\n` +
+      `*Total Omzet:* ${dataSummary.totalOmzet}\n` +
+      `*Terjual:* ${dataSummary.totalCupTerjual} (${dataSummary.totalTransaksi})\n` +
+      `*Tren:* ${dataSummary.trenVsKemarin}\n\n` +
+      `*Rincian Pembayaran:*\n` +
       `• QRIS: ${dataSummary.metodeBayar.qrisDoku}\n` +
       `• Tunai: ${dataSummary.metodeBayar.tunaiCash}\n\n` +
-      `🏆 *Top Menu Hari Ini:*\n${dataSummary.topMenu.map((m, idx) => `${idx + 1}. ${m}`).join("\n")}\n\n` +
-      (dataSummary.stokMenipis.length > 0 ? `⚠️ *Perhatian Stok:* ${dataSummary.stokMenipis.join(", ")}\n\n` : "") +
-      `_Terima kasih atas kerja keras hari ini, Bos! Selamat istirahat._ ✨`;
+      `*Top Menu Hari Ini:*\n${dataSummary.topMenu.map((m, idx) => `${idx + 1}. ${m}`).join("\n")}\n\n` +
+      (dataSummary.stokMenipis.length > 0 ? `*Perhatian Stok:* ${dataSummary.stokMenipis.join(", ")}\n\n` : "") +
+      `_Terima kasih atas kerja keras hari ini, Bos! Selamat istirahat._`;
   }
 
   // Determine recipient phone numbers

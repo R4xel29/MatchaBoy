@@ -224,14 +224,14 @@ export default function TVMenuBoard() {
       <header className="relative z-10 w-full px-12 py-8 flex items-center justify-between border-b border-[#D4A574]/15 bg-[#09150E]/80 backdrop-blur-md">
         <div className="flex items-center space-x-6">
           <div className="h-16 w-16 rounded-full bg-[#D4A574]/15 border-2 border-[#D4A574] flex items-center justify-between p-1.5 shadow-[0_0_15px_rgba(212,165,116,0.2)]">
-            <span className="text-3xl m-auto">🌿</span>
+            <Sparkles className="w-8 h-8 text-[#D4A574] m-auto" />
           </div>
           <div>
             <h1 className="text-4xl font-heading font-extrabold tracking-wider text-[#D4A574] uppercase">
-              Matchaboy
+              Arum Seduh
             </h1>
             <p className="text-sm font-sans tracking-widest text-[#FFFBF5]/60 uppercase mt-0.5">
-              Arum Seduh — Premium Matcha & Artisanal Bakery
+              Arum Seduh — Premium Tea, Coffee & Artisanal Bakery
             </p>
           </div>
         </div>
@@ -467,15 +467,15 @@ export default function TVMenuBoard() {
           <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-[#07110C] to-transparent z-20 pointer-events-none" />
 
           <div className="animate-marquee whitespace-nowrap flex space-x-16 text-lg font-sans font-bold tracking-wider text-[#FFFBF5]/80 uppercase">
-            <span>🌿 100% Organic Premium Uji Japanese Matcha & Hojicha</span>
-            <span>🥐 All pastries baked fresh in-house daily by our master baker</span>
-            <span>🌍 Bring your own Eco-Tumbler to receive 10% eco-discount instantly!</span>
-            <span>📱 Order ahead online or find us on Instagram @matchaboy.co 📸</span>
-            <span>🌟 Free high-speed WiFi for all customers — matchaboy-guest / matcha2026</span>
-            <span>🌿 100% Organic Premium Uji Japanese Matcha & Hojicha</span>
-            <span>🥐 All pastries baked fresh in-house daily by our master baker</span>
-            <span>🌍 Bring your own Eco-Tumbler to receive 10% eco-discount instantly!</span>
-            <span>📱 Order ahead online or find us on Instagram @matchaboy.co 📸</span>
+            <span>100% Organic Premium Tea & Artisanal Coffee</span>
+            <span>All pastries baked fresh in-house daily by our master baker</span>
+            <span>Bring your own Eco-Tumbler to receive 10% eco-discount instantly!</span>
+            <span>Order ahead online or find us on Instagram @arumseduh.co</span>
+            <span>Free high-speed WiFi for all customers — arumseduh-guest / arumseduh2026</span>
+            <span>100% Organic Premium Tea & Artisanal Coffee</span>
+            <span>All pastries baked fresh in-house daily by our master baker</span>
+            <span>Bring your own Eco-Tumbler to receive 10% eco-discount instantly!</span>
+            <span>Order ahead online or find us on Instagram @arumseduh.co</span>
           </div>
         </div>
       </footer>

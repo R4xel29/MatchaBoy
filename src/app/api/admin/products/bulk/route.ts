@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateProductCache } from '@/lib/redis-cache';
 
 export async function POST(request: Request) {
     try {
@@ -47,6 +48,8 @@ export async function POST(request: Request) {
                 details: `Bulk action: Deleted ${deletedCount} products permanently, archived ${archivedCount} products with order history.`
             });
 
+            await invalidateProductCache();
+
             return NextResponse.json({ 
                 success: true, 
                 message: `Berhasil memproses bulk delete. ${deletedCount} produk dihapus permanen, ${archivedCount} produk diarsipkan karena memiliki riwayat transaksi.`
@@ -67,6 +70,8 @@ export async function POST(request: Request) {
                 details: `Bulk action: Mengubah status ketersediaan ${ids.length} produk menjadi ${value || 'Available'}`
             });
 
+            await invalidateProductCache();
+
             return NextResponse.json({ success: true, message: 'Status ketersediaan berhasil diperbarui' });
         }
 
@@ -86,6 +91,8 @@ export async function POST(request: Request) {
                 entity: 'PRODUCT',
                 details: `Bulk action: Memindahkan ${ids.length} produk ke kategori ${value}`
             });
+
+            await invalidateProductCache();
 
             return NextResponse.json({ success: true, message: 'Kategori produk berhasil diperbarui' });
         }

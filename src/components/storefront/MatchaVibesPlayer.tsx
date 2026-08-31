@@ -16,32 +16,32 @@ interface Track {
 const PLAYLIST: Track[] = [
   {
     id: 'lofi-pagi',
-    title: 'Uji Sunrise 🌅',
-    artist: 'Matchaboy Chill',
+    title: 'Arum Seduh Sunrise',
+    artist: 'Arum Seduh Chill',
     url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
     mood: 'Fresh & Ceria (Gitar Akustik Lofi)',
     timePeriod: 'pagi',
   },
   {
     id: 'lofi-siang',
-    title: 'Kyoto Afternoon Cafe ☀️',
-    artist: 'Matchaboy Jazz',
+    title: 'Afternoon Cafe',
+    artist: 'Arum Seduh Jazz',
     url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
     mood: 'Energetic Jazz (Piano & Terompet Lofi)',
     timePeriod: 'siang',
   },
   {
     id: 'lofi-sore',
-    title: 'Golden Hour Tea 🌇',
-    artist: 'Matchaboy Ambient',
+    title: 'Golden Hour Tea',
+    artist: 'Arum Seduh Ambient',
     url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-    mood: 'Chill & Peaceful (Koto Jepang & Suling Bambu)',
+    mood: 'Chill & Peaceful (Koto & Suling Bambu)',
     timePeriod: 'sore',
   },
   {
     id: 'lofi-malam',
-    title: 'Midnight Whispers 🌃',
-    artist: 'Matchaboy Sleep',
+    title: 'Midnight Whispers',
+    artist: 'Arum Seduh Sleep',
     url: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
     mood: 'Deep Sleep (Lofi Synth & Suara Hujan)',
     timePeriod: 'malam',
@@ -247,7 +247,7 @@ export function MatchaVibesPlayer() {
               {/* Title & Info */}
               <div className="text-center mt-3 mb-6 space-y-1">
                 <span className="bg-[#FEF08A]/10 border border-[#FEF08A]/25 text-[#FEF08A] text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-widest leading-none">
-                  ✦ Matcha Vibes Player ✦
+                  ✦ Arum Seduh Vibes Player ✦
                 </span>
                 <h3 className="font-serif text-lg font-black text-white mt-1.5 leading-snug tracking-wide">
                   {currentTrack.title}
@@ -293,16 +293,15 @@ export function MatchaVibesPlayer() {
                   <div className="absolute inset-11 rounded-full border border-neutral-800/55" />
                   <div className="absolute inset-14 rounded-full border border-neutral-800/60" />
 
-                  {/* Center Label (Gold Matcha Brand) */}
+                  {/* Center Label (Gold Arum Seduh Brand) */}
                   <div 
                     style={{
                       animation: isPlaying ? 'disc-spin 8s linear infinite' : 'none',
                     }}
-                    className="relative w-16 h-16 rounded-full p-[1px] bg-gradient-to-tr from-[#FEF08A] via-[#2E5A44] to-[#D4A574] flex items-center justify-center overflow-hidden border border-[#FEF08A]/40"
+                    className="relative w-16 h-16 rounded-full p-[1px] bg-gradient-to-tr from-amber-300 via-orange-500 to-amber-600 flex items-center justify-center overflow-hidden border border-amber-300/40"
                   >
-                    <div className="w-full h-full rounded-full bg-[#1E3F20] flex flex-col items-center justify-center">
-                      <span className="text-[12px] leading-none select-none">🍃</span>
-                      <span className="text-[6px] font-black uppercase text-[#FEF08A] tracking-wider mt-0.5 select-none">Matcha</span>
+                    <div className="w-full h-full rounded-full bg-stone-900 flex flex-col items-center justify-center">
+                      <span className="text-[7px] font-black uppercase text-amber-300 tracking-wider text-center leading-tight select-none">Arum<br/>Seduh</span>
                     </div>
                   </div>
                 </div>

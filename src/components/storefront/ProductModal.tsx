@@ -578,7 +578,7 @@ export function ProductModal({
                   src={product.image}
                   alt={product.name}
                   fill
-                  sizes="100vw"
+                  sizes="(max-width: 768px) 100vw, 448px"
                   className="object-cover"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';

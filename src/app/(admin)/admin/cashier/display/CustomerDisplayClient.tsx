@@ -56,7 +56,7 @@ export default function CustomerDisplayClient() {
     qrisImage: null,
     qrisLabel: 'QRIS',
     qrisNmid: '',
-    storeName: 'Matchaboy',
+    storeName: 'Arum Seduh',
     storeAddress: '',
     banners: [],
   });
@@ -215,7 +215,7 @@ export default function CustomerDisplayClient() {
                     />
                   ) : (
                     <QRCodeSVG
-                      value={displayState?.orderId ? `QRIS-PAY-${displayState.orderId}-${totalPayable}` : `MATCHABOY-QRIS-${totalPayable}`}
+                      value={displayState?.orderId ? `QRIS-PAY-${displayState.orderId}-${totalPayable}` : `ARUM-SEDUH-QRIS-${totalPayable}`}
                       size={240}
                       level="H"
                       includeMargin={true}
@@ -265,9 +265,9 @@ export default function CustomerDisplayClient() {
                     <div className="w-20 h-20 rounded-3xl bg-orange-100 border border-orange-200 text-orange-600 flex items-center justify-center mx-auto">
                       <Sparkles className="w-10 h-10" />
                     </div>
-                    <h2 className="text-2xl font-black text-slate-900">Selamat Datang di Matchaboy</h2>
+                    <h2 className="text-2xl font-black text-slate-900">Selamat Datang di Arum Seduh</h2>
                     <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                      Nikmati varian Matcha racikan authentic dengan kualitas terbaik & promo hemat harian.
+                      Nikmati varian teh dan kopi racikan authentic dengan kualitas terbaik & promo hemat harian.
                     </p>
                   </div>
                 )}
@@ -276,9 +276,9 @@ export default function CustomerDisplayClient() {
                 <div className="p-4 rounded-2xl bg-white border border-orange-100 shadow-sm flex items-center justify-between text-xs text-slate-600 mt-auto">
                   <div className="flex items-center gap-2">
                     <Leaf className="w-4 h-4 text-emerald-500" />
-                    <span>Bawa Tumbler Sendiri = Diskon Poin & Ekstra Bonus 🌿</span>
+                    <span>Bawa Tumbler Sendiri = Diskon Poin & Ekstra Bonus</span>
                   </div>
-                  <span className="text-orange-600 font-bold">#MatchaboyExperience</span>
+                  <span className="text-orange-600 font-bold">#ArumSeduhExperience</span>
                 </div>
               </motion.div>
             )}

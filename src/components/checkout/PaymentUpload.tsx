@@ -108,7 +108,7 @@ export function PaymentUpload({ orderTotal, customerName, onProofUploaded, onPay
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `QRIS_MATCHABOY.png`;
+      link.download = `QRIS_ARUM_SEDUH.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

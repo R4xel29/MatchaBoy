@@ -461,7 +461,7 @@ export default function ProfileClient({
                       if (item.id === 'whatsapp') {
                         if (storeSettings?.whatsappNumber) {
                           const cleanNumber = storeSettings.whatsappNumber.replace(/[^0-9]/g, '');
-                          const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Matchaboy, saya ingin bertanya...')}`;
+                          const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Arum Seduh, saya ingin bertanya...')}`;
                           window.open(waUrl, '_blank');
                         } else {
                           showToast("Layanan WhatsApp sedang tidak aktif", "error");
@@ -1684,14 +1684,14 @@ function AddressesSection({ user }: { user: UserShape }) {
       }).addTo(map);
 
       const storeIcon = L.divIcon({
-        html: '<div class="relative flex items-center justify-center"><div class="absolute w-10 h-10 bg-[#D4A574]/20 rounded-full animate-pulse"></div><div class="w-7 h-7 bg-[#B48A5E] rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10 text-white font-bold text-[10px]">🏪</div></div>',
+        html: '<div class="relative flex items-center justify-center"><div class="absolute w-10 h-10 bg-[#D4A574]/20 rounded-full animate-pulse"></div><div class="w-7 h-7 bg-[#B48A5E] rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10 text-white font-bold text-[10px]"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg></div></div>',
         className: '',
         iconSize: [40, 40],
         iconAnchor: [20, 20],
       });
 
       storeMarkerRef.current = L.marker([storeLat, storeLng], { icon: storeIcon })
-        .bindPopup('<b>Matchaboy Store</b>')
+        .bindPopup('<b>Arum Seduh Store</b>')
         .addTo(map);
 
       setTimeout(() => {
@@ -3224,13 +3224,13 @@ function ReferralSection({ user }: { user: UserShape }) {
 
   const handleShare = async () => {
     const referralUrl = `${window.location.origin}/register?ref=${user.referralCode}`;
-    const text = `Selamat datang di Matchaboy! Kamu dapat Voucher Diskon Rp3.000, untuk pembelian minuman non-promo.
+    const text = `Selamat datang di Arum Seduh! Kamu dapat Voucher Diskon Rp3.000, untuk pembelian minuman non-promo.
 
 Yuk, simak cara pakainya di bawah ini:
 
-[A] Sebutkan nomor WhatsApp ini ke barista Matchaboy. Request pemakaian voucher di kasir.
+[A] Sebutkan nomor WhatsApp ini ke barista Arum Seduh. Request pemakaian voucher di kasir.
 
-[B] ATAU langsung Pakai vouchernya di Aplikasi Matchaboy 👇
+[B] ATAU langsung Pakai vouchernya di Aplikasi Arum Seduh:
 ${referralUrl}
 
 Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vouchernya sekarang!`;
@@ -3238,7 +3238,7 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
     if (navigator.share) {
       try {
         await navigator.share({
-          title: 'Referral Matchaboy',
+          title: 'Referral Arum Seduh',
           text: text,
           url: referralUrl
         });
@@ -3548,14 +3548,15 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
           {/* Input Klaim Voucher */}
           <div className="bg-white/80 border border-[#D4A574]/15 shadow-sm rounded-3xl p-5 space-y-4">
             <h3 className="font-serif text-sm font-bold text-gray-800 flex items-center gap-2">
-              🎟️ Punya Kode Voucher?
+              <Ticket className="w-4 h-4 text-[#B48A5E]" />
+              Punya Kode Voucher?
             </h3>
             <form onSubmit={(e) => { e.preventDefault(); handleClaim(claimCode); }} className="flex gap-2">
               <input
                 type="text"
                 value={claimCode}
                 onChange={(e) => setClaimCode(e.target.value)}
-                placeholder="Contoh: MATCHABOYBARU"
+                placeholder="Contoh: ARUMSEDUHBARU"
                 className="flex-1 min-w-0 px-3.5 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E]/60 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
                 disabled={claiming}
               />
@@ -4033,7 +4034,7 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
   const handleWAContact = () => {
     if (storeSettings?.whatsappNumber) {
       const cleanNumber = storeSettings.whatsappNumber.replace(/[^0-9]/g, '');
-      const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Matchaboy, saya butuh bantuan...')}`;
+      const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Arum Seduh, saya butuh bantuan...')}`;
       window.open(waUrl, '_blank');
     } else {
       showToast('Layanan WhatsApp tidak tersedia.', 'error');
@@ -4952,7 +4953,7 @@ function QuestsSection({ user }: { user: UserShape }) {
             <Target className="w-5 h-5" />
           </div>
           <div>
-            <h4 className="text-[15px] font-black text-gray-850 font-serif">Misi Setia Matchaboy</h4>
+            <h4 className="text-[15px] font-black text-gray-850 font-serif">Misi Setia Arum Seduh</h4>
             <p className="text-[11px] text-gray-500 font-medium">Selesaikan misi untuk mendapatkan Poin & Voucher gratis!</p>
           </div>
         </div>

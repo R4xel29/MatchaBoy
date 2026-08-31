@@ -44,6 +44,7 @@ import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalRe
 import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 import { printThermalReceipt } from '@/lib/thermal-printer';
 import { useToast } from '@/components/ui/Toast';
+import { AdminCatalogSkeleton } from '@/components/ui/ShimmerSkeleton';
 
 const DEFAULT_DRINK_SIZES = [
   { name: 'Regular', price: 0 },
@@ -128,9 +129,10 @@ interface Props {
   products: POSProduct[];
   categories: { id: string; name: string; slug: string }[];
   packagingStock?: { cupRegular: number; cupJumbo: number };
+  isLoading?: boolean;
 }
 
-export default function CashierPOSClient({ products, categories, packagingStock }: Props) {
+export default function CashierPOSClient({ products, categories, packagingStock, isLoading = false }: Props) {
   const { showToast } = useToast();
   const router = useRouter();
 
@@ -1148,58 +1150,67 @@ export default function CashierPOSClient({ products, categories, packagingStock 
           </div>
 
           {/* Product Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {filteredProducts.map((product) => (
-              <button
-                key={product.id}
-                onClick={() => handleProductClick(product)}
-                className={`group bg-white rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all duration-200 overflow-hidden text-left relative ${
-                  product.isSoldOut
-                    ? 'opacity-60 border-slate-200 cursor-not-allowed bg-slate-50'
-                    : 'hover:shadow-md hover:border-orange-300 border-border/40'
-                }`}
-              >
-                <div className="relative aspect-square bg-muted/30 overflow-hidden">
-                  {product.image ? (
-                    <img
-                      src={product.image}
-                      alt={product.name}
-                      className={`w-full h-full object-cover transition-transform duration-300 ${
-                        product.isSoldOut ? 'grayscale opacity-60' : 'group-hover:scale-105'
-                      }`}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
-                      <Coffee className="w-8 h-8" />
-                    </div>
-                  )}
-
-                  {product.isSoldOut ? (
-                    <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center">
-                      <span className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-extrabold text-[10px] uppercase tracking-wider shadow-md">
-                        Stok Habis
-                      </span>
-                    </div>
-                  ) : product.badge ? (
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider shadow-sm">
-                      {product.badge}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="p-3">
-                  <p className="text-[13px] font-semibold text-foreground line-clamp-1">{product.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{product.categoryName}</p>
-                  <div className="flex items-center justify-between mt-1">
-                    <p className="text-sm font-bold text-orange-600">{formatRupiah(product.price)}</p>
-                    {product.isSoldOut && (
-                      <span className="text-[10px] font-bold text-rose-600">Habis</span>
+          {isLoading ? (
+            <AdminCatalogSkeleton />
+          ) : filteredProducts.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground/50 bg-white rounded-2xl border border-border/40">
+              <ShoppingBag className="w-10 h-10 mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Tidak ada produk yang cocok</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {filteredProducts.map((product) => (
+                <button
+                  key={product.id}
+                  onClick={() => handleProductClick(product)}
+                  className={`group bg-white rounded-2xl border shadow-[0_1px_2px_rgba(0,0,0,0.03)] transition-all duration-200 overflow-hidden text-left relative ${
+                    product.isSoldOut
+                      ? 'opacity-60 border-slate-200 cursor-not-allowed bg-slate-50'
+                      : 'hover:shadow-md hover:border-orange-300 border-border/40'
+                  }`}
+                >
+                  <div className="relative aspect-square bg-muted/30 overflow-hidden">
+                    {product.image ? (
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className={`w-full h-full object-cover transition-transform duration-300 ${
+                          product.isSoldOut ? 'grayscale opacity-60' : 'group-hover:scale-105'
+                        }`}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
+                        <Coffee className="w-8 h-8" />
+                      </div>
                     )}
+
+                    {product.isSoldOut ? (
+                      <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center">
+                        <span className="px-2.5 py-1 rounded-lg bg-rose-600 text-white font-extrabold text-[10px] uppercase tracking-wider shadow-md">
+                          Stok Habis
+                        </span>
+                      </div>
+                    ) : product.badge ? (
+                      <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-amber-500 text-slate-950 text-[9px] font-black uppercase tracking-wider shadow-sm">
+                        {product.badge}
+                      </span>
+                    ) : null}
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+
+                  <div className="p-3">
+                    <p className="text-[13px] font-semibold text-foreground line-clamp-1">{product.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{product.categoryName}</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-sm font-bold text-orange-600">{formatRupiah(product.price)}</p>
+                      {product.isSoldOut && (
+                        <span className="text-[10px] font-bold text-rose-600">Habis</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* RIGHT: Cart & Order Panel */}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateCategoryCache } from '@/lib/redis-cache';
 
 // PATCH /api/admin/categories/[id] — Update a category
 export async function PATCH(
@@ -35,6 +36,8 @@ export async function PATCH(
             entityId: id,
             details: `Mengedit nama kategori menjadi: "${name}"`
         });
+
+        await invalidateCategoryCache();
 
         return NextResponse.json(category);
     } catch (error) {
@@ -73,6 +76,8 @@ export async function DELETE(
             entityId: id,
             details: `Menghapus kategori secara permanen`
         });
+
+        await invalidateCategoryCache();
 
         return new NextResponse(null, { status: 204 });
     } catch (error) {

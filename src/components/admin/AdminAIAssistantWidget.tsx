@@ -112,7 +112,7 @@ export function AdminAIAssistantWidget() {
     {
       id: "welcome",
       role: "assistant",
-      content: "Halo Bos! 🍵 Saya **Asisten Toko Matchaboy (Autonomous Operator)**.\n\nSaya sudah dilengkapi dengan **Perintah Suara (Voice)**, **Eksekusi Aksi Toko**, dan **Scan Struk Belanjaan**.\n\nBos bisa bicara langsung lewat tombol mikrofon (🎙️) atau ketik pesan. Ada yang bisa saya bantu analisa atau eksekusi?",
+      content: "Halo Bos! Saya **Asisten Toko Arum Seduh (Autonomous Operator)**.\n\nSaya sudah dilengkapi dengan **Perintah Suara (Voice)**, **Eksekusi Aksi Toko**, dan **Scan Struk Belanjaan**.\n\nBos bisa bicara langsung lewat tombol mikrofon atau ketik pesan. Ada yang bisa saya bantu analisa atau eksekusi?",
       timestamp: new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -120,7 +120,7 @@ export function AdminAIAssistantWidget() {
   // Load chat history from localStorage on mount
   useEffect(() => {
     try {
-      const savedHistory = localStorage.getItem("matchaboy_ai_chat_history");
+      const savedHistory = localStorage.getItem("arumseduh_ai_chat_history") || localStorage.getItem("matchaboy_ai_chat_history");
       if (savedHistory) {
         const parsed = JSON.parse(savedHistory);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -136,7 +136,7 @@ export function AdminAIAssistantWidget() {
   useEffect(() => {
     if (messages.length > 1 || (messages.length === 1 && messages[0].id !== "welcome")) {
       try {
-        localStorage.setItem("matchaboy_ai_chat_history", JSON.stringify(messages));
+        localStorage.setItem("arumseduh_ai_chat_history", JSON.stringify(messages));
       } catch (err) {
         console.warn("Failed to save chat history to localStorage:", err);
       }
@@ -478,6 +478,7 @@ export function AdminAIAssistantWidget() {
 
   const handleClearChat = () => {
     try {
+      localStorage.removeItem("arumseduh_ai_chat_history");
       localStorage.removeItem("matchaboy_ai_chat_history");
     } catch (_) {}
     setMessages([
@@ -586,12 +587,12 @@ export function AdminAIAssistantWidget() {
           animate={{ scale: 1, opacity: 1 }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-full bg-gradient-to-r from-emerald-600 via-teal-600 to-amber-600 text-white font-bold text-xs shadow-xl shadow-emerald-600/30 flex items-center gap-2.5 border border-white/30 cursor-pointer group"
+          className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white font-bold text-xs shadow-xl shadow-orange-500/30 flex items-center gap-2.5 border border-white/30 cursor-pointer group"
           title="Buka Asisten AI Toko"
         >
           <div className="relative flex items-center justify-center">
-            <Sparkles className="w-4.5 h-4.5 text-amber-300 animate-pulse" />
-            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-300 animate-ping" />
+            <Sparkles className="w-4.5 h-4.5 text-amber-200 animate-pulse" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-300 animate-ping" />
           </div>
           <span className="font-heading tracking-tight">Asisten Toko AI</span>
         </motion.button>
@@ -608,19 +609,19 @@ export function AdminAIAssistantWidget() {
             className="fixed bottom-6 right-6 z-50 w-[94vw] sm:w-[440px] h-[600px] max-h-[88vh] bg-white rounded-3xl shadow-2xl border border-slate-200/80 flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-amber-700 p-4 text-white flex items-center justify-between shadow-md">
+            <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 p-4 text-white flex items-center justify-between shadow-md">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center border border-white/20 shadow-inner">
-                  <Bot className="w-5 h-5 text-amber-300" />
+                  <Bot className="w-5 h-5 text-amber-200" />
                 </div>
                 <div>
                   <h3 className="font-heading font-extrabold text-sm flex items-center gap-1.5">
-                    <span>Asisten Toko Matchaboy</span>
-                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-400/30 text-amber-200 border border-amber-300/40">
+                    <span>Asisten Toko Arum Seduh</span>
+                    <span className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider bg-amber-400/30 text-amber-100 border border-amber-300/40">
                       Co-Pilot 3.6
                     </span>
                   </h3>
-                  <p className="text-[10px] text-emerald-100 flex items-center gap-1">
+                  <p className="text-[10px] text-amber-100 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     Online • Action Calling & Vision Active
                   </p>

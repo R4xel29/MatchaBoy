@@ -20,6 +20,7 @@ import { useCartStore } from '@/stores/cart-store';
 import { formatRupiah } from '@/lib/utils';
 import { ProductRecommendations } from '@/components/checkout/ProductRecommendations';
 import { ProductModal } from '@/components/storefront/ProductModal';
+import { CheckoutSummarySkeleton } from '@/components/ui/ShimmerSkeleton';
 import Image from 'next/image';
 import type { Product, CartItem } from '@/types';
 import { calculateDistance, calculateDeliveryFee, isWithinDeliveryRange } from '@/lib/delivery-utils';
@@ -276,7 +277,7 @@ export default function CheckoutPage() {
   const [isStoreCurrentlyOpen, setIsStoreCurrentlyOpen] = useState(false);
   const [pickupWarningShown, setPickupWarningShown] = useState(() => {
     if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('matchaboy_pickup_warning_shown') === 'true';
+      return (sessionStorage.getItem('arumseduh_pickup_warning_shown') || sessionStorage.getItem('matchaboy_pickup_warning_shown')) === 'true';
     }
     return false;
   });
@@ -937,8 +938,9 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (typeof window !== 'undefined' && isVoucherRestored) {
       if (appliedVoucher) {
-        localStorage.setItem('matchaboy_applied_voucher_code', appliedVoucher.code);
+        localStorage.setItem('arumseduh_applied_voucher_code', appliedVoucher.code);
       } else {
+        localStorage.removeItem('arumseduh_applied_voucher_code');
         localStorage.removeItem('matchaboy_applied_voucher_code');
       }
     }
@@ -947,7 +949,7 @@ export default function CheckoutPage() {
   // Restore applied voucher code on mount/auth/vouchers load
   useEffect(() => {
     if (session?.user && userVouchers.length > 0 && !isVoucherRestored) {
-      const savedCode = localStorage.getItem('matchaboy_applied_voucher_code');
+      const savedCode = localStorage.getItem('arumseduh_applied_voucher_code') || localStorage.getItem('matchaboy_applied_voucher_code');
       if (savedCode) {
         const matched = usableVouchers.find(v => v.code === savedCode);
         if (matched) {
@@ -963,6 +965,7 @@ export default function CheckoutPage() {
               const data = await res.json();
               setAppliedVoucher(data.voucher);
             } else {
+              localStorage.removeItem('arumseduh_applied_voucher_code');
               localStorage.removeItem('matchaboy_applied_voucher_code');
             }
           })
@@ -971,7 +974,7 @@ export default function CheckoutPage() {
       }
       setIsVoucherRestored(true);
     }
-  }, [session?.user?.id, userVouchers, usableVouchers, isVoucherRestored]);
+  }, [session, userVouchers, usableVouchers, isVoucherRestored]);
 
   const getEndTime = (timeStr: string | null) => {
     if (!timeStr || timeStr === 'Sekarang') return '';
@@ -1279,6 +1282,7 @@ export default function CheckoutPage() {
 
       clearCart();
       if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('arumseduh_pickup_warning_shown');
         sessionStorage.removeItem('matchaboy_pickup_warning_shown');
       }
       
@@ -1327,11 +1331,7 @@ export default function CheckoutPage() {
 
   // Auth Guard
   if (status === 'loading') {
-    return (
-      <div className="min-h-dvh bg-background flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-[#B48A5E] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <CheckoutSummarySkeleton />;
   }
 
   if (status === 'unauthenticated') {
@@ -1349,7 +1349,7 @@ export default function CheckoutPage() {
             Login Diperlukan
           </h3>
           <p className="text-sm text-gray-500 mb-6 leading-relaxed">
-            Kamu harus masuk terlebih dahulu untuk melanjutkan pemesanan matcha favoritmu.
+            Kamu harus masuk terlebih dahulu untuk melanjutkan pemesanan menu Arum Seduh favoritmu.
           </p>
           <button
             type="button"
@@ -1367,11 +1367,7 @@ export default function CheckoutPage() {
   // Empty cart guard
   if (checkoutItems.length === 0) {
     if (loadingGroupCart) {
-      return (
-        <div className="min-h-dvh bg-background flex items-center justify-center">
-          <div className="w-8 h-8 border-3 border-[#B48A5E] border-t-transparent rounded-full animate-spin" />
-        </div>
-      );
+      return <CheckoutSummarySkeleton />;
     }
     return (
       <div className="min-h-dvh bg-[#FFFBF5] flex flex-col items-center justify-center px-6 text-center">
@@ -1405,7 +1401,7 @@ export default function CheckoutPage() {
               </div>
               <h3 className="text-center font-serif text-lg font-bold text-gray-950 mb-2">Waktu Pengambilan</h3>
               <p className="text-center text-xs text-gray-500 mb-6 leading-relaxed">
-                Demi kualitas citarasa minuman terbaik, disarankan untuk <strong>tidak mengambil pesanan lebih dari 7 menit</strong> dari waktu yang dijadwalkan. 🍵
+                Demi kualitas citarasa minuman terbaik, disarankan untuk <strong>tidak mengambil pesanan lebih dari 7 menit</strong> dari waktu yang dijadwalkan.
               </p>
               <button
                 type="button"
@@ -1413,10 +1409,10 @@ export default function CheckoutPage() {
                   setShowPickupWarning(false);
                   setPickupWarningShown(true);
                   if (typeof window !== 'undefined') {
-                    sessionStorage.setItem('matchaboy_pickup_warning_shown', 'true');
+                    sessionStorage.setItem('arumseduh_pickup_warning_shown', 'true');
                   }
                 }}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-sm shadow-md shadow-[#B48A5E]/10"
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-sm shadow-md shadow-orange-500/10"
               >
                 Saya Mengerti
               </button>
@@ -1436,17 +1432,17 @@ export default function CheckoutPage() {
               initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
               className="w-full max-w-sm rounded-[2rem] bg-white p-7 shadow-2xl border border-gray-100"
             >
-              <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100/60 flex items-center justify-center">
-                <Leaf className="w-7 h-7 text-emerald-600 animate-pulse" />
+              <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100/60 flex items-center justify-center">
+                <Leaf className="w-7 h-7 text-orange-600 animate-pulse" />
               </div>
               <h3 className="text-center font-serif text-lg font-bold text-gray-950 mb-2">Bawa Tumbler Sendiri</h3>
               <p className="text-center text-xs text-gray-500 mb-6 leading-relaxed">
-                Pastikan Anda <strong>betul-betul membawa tumbler sendiri</strong> dengan ukuran yang cukup besar (disarankan ukuran Large/besar) saat mengambil pesanan di gerai Matchaboy. 🌿
+                Pastikan Anda <strong>betul-betul membawa tumbler sendiri</strong> dengan ukuran yang cukup besar (disarankan ukuran Large/besar) saat mengambil pesanan di gerai Arum Seduh.
               </p>
               <button
                 type="button"
                 onClick={() => setShowTumblerWarning(false)}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-green-600 text-white font-bold text-sm shadow-md shadow-emerald-600/10"
+                className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-sm shadow-md shadow-orange-500/10"
               >
                 Saya Mengerti
               </button>
@@ -2418,7 +2414,7 @@ export default function CheckoutPage() {
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-gray-400">
                     <Ticket className="w-12 h-12 stroke-1 text-[#B48A5E]" />
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Matchaboy Promo</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Arum Seduh Promo</span>
                   </div>
                 )}
                 

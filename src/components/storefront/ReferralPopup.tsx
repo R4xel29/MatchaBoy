@@ -60,7 +60,7 @@ export function ReferralPopup({ referralCode }: ReferralPopupProps) {
       return;
     }
     const text = encodeURIComponent(
-      `Cobain Matchaboy! 🍵 Matcha premium yang enak banget. Daftar pakai link ini dan dapatkan diskon langsung Rp3.000 tanpa batas belanja:\n${getReferralUrl()}`
+      `Cobain Arum Seduh! Minuman premium yang nikmat banget. Daftar pakai link ini dan dapatkan diskon langsung Rp3.000 tanpa batas belanja:\n${getReferralUrl()}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };

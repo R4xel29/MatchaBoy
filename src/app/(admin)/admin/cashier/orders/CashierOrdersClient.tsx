@@ -1071,7 +1071,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                   <div className="space-y-1.5">
                     <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Bukti Pembayaran</p>
                     <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-stone-200">
-                      <Image src={selectedOrder.paymentProofUrl} alt="Bukti Bayar" fill className="object-cover" />
+                      <Image src={selectedOrder.paymentProofUrl} alt="Bukti Bayar" fill sizes="(max-width: 768px) 100vw, 450px" className="object-cover" />
                     </div>
                   </div>
                 )}

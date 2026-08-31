@@ -88,7 +88,7 @@ export async function GET(req: Request) {
                 const user = userMap.get(r.userId || '')
                 return {
                     id: r.userId,
-                    name: user?.name || 'Teman Matchaboy',
+                    name: user?.name || 'Teman Arum Seduh',
                     image: user?.image || null,
                     value: r._sum.total || 0
                 }
@@ -101,7 +101,7 @@ export async function GET(req: Request) {
                 const user = userMap.get(r.userId || '')
                 return {
                     id: r.userId,
-                    name: user?.name || 'Teman Matchaboy',
+                    name: user?.name || 'Teman Arum Seduh',
                     image: user?.image || null,
                     value: r._count.id || 0
                 }
@@ -114,7 +114,7 @@ export async function GET(req: Request) {
                 const user = userMap.get(r.referredById || '')
                 return {
                     id: r.referredById,
-                    name: user?.name || 'Teman Matchaboy',
+                    name: user?.name || 'Teman Arum Seduh',
                     image: user?.image || null,
                     value: r._count.id || 0
                 }
@@ -140,7 +140,7 @@ export async function GET(req: Request) {
 
         const ecoChampions = ecoChampionsRaw.map(u => ({
             id: u.id,
-            name: u.name || 'Teman Matchaboy',
+            name: u.name || 'Teman Arum Seduh',
             image: u.image || null,
             value: u.tumblerCount
         }))

@@ -443,7 +443,7 @@ export default function AdminReviewsClient({
                     {/* User avatar */}
                     <div className="relative w-10 h-10 rounded-full overflow-hidden shrink-0 border border-border bg-brand-50">
                       {review.user.image ? (
-                        <Image src={review.user.image} alt={review.user.name || ''} fill className="object-cover" />
+                        <Image src={review.user.image} alt={review.user.name || ''} fill sizes="40px" className="object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-brand-600 font-bold text-sm">
                           {(review.user.name || '?')[0].toUpperCase()}
@@ -501,7 +501,7 @@ export default function AdminReviewsClient({
                       <div className="flex gap-2 flex-wrap">
                         {reviewImages.map((img, idx) => (
                           <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden border border-border">
-                            <Image src={img} alt={`Review image ${idx + 1}`} fill className="object-cover" />
+                            <Image src={img} alt={`Review image ${idx + 1}`} fill sizes="80px" className="object-cover" />
                           </div>
                         ))}
                       </div>
@@ -547,7 +547,7 @@ export default function AdminReviewsClient({
                                   <div className="flex items-center gap-2">
                                     {reply.user.image ? (
                                       <div className="relative w-5 h-5 rounded-full overflow-hidden shrink-0 border">
-                                        <Image src={reply.user.image} alt={reply.user.name || ''} fill className="object-cover" />
+                                        <Image src={reply.user.image} alt={reply.user.name || ''} fill sizes="20px" className="object-cover" />
                                       </div>
                                     ) : (
                                       <div className="w-5 h-5 rounded-full bg-brand-100 flex items-center justify-center text-[10px] font-bold text-brand-700">

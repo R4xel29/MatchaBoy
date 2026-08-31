@@ -390,7 +390,7 @@ export default function AdminGroupOrdersClient() {
                         >
                           {item.productImage ? (
                             <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 border border-border">
-                              <Image src={item.productImage} alt={item.productName} fill className="object-cover" />
+                              <Image src={item.productImage} alt={item.productName} fill sizes="40px" className="object-cover" />
                             </div>
                           ) : (
                             <div className="w-10 h-10 rounded-lg shrink-0 border border-border bg-brand-50/50 flex items-center justify-center text-sm">

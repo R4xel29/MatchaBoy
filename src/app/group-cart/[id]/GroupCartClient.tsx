@@ -8,7 +8,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
     Users, Share2, Copy, Check, ShoppingBag, Trash2, Plus, 
     Minus, X, CheckSquare, Square, ChevronRight, Info, AlertTriangle, 
-    ArrowRight, Loader2, Sparkles, MessageCircle, ExternalLink
+    ArrowRight, Loader2, Sparkles, MessageCircle, ExternalLink,
+    User, Coffee, Search
 } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 
@@ -77,7 +78,7 @@ export default function GroupCartClient({
     // Check if name is saved in localStorage
     useEffect(() => {
         if (typeof window !== 'undefined') {
-            const savedName = localStorage.getItem('matchaboy_group_member_name')
+            const savedName = localStorage.getItem('arumseduh_group_member_name') || localStorage.getItem('matchaboy_group_member_name')
             if (savedName) {
                 setMemberName(savedName)
                 setIsJoining(false)
@@ -124,10 +125,10 @@ export default function GroupCartClient({
     const handleJoin = (e: React.FormEvent) => {
         e.preventDefault()
         if (!nameInput.trim()) return
-        localStorage.setItem('matchaboy_group_member_name', nameInput.trim())
+        localStorage.setItem('arumseduh_group_member_name', nameInput.trim())
         setMemberName(nameInput.trim())
         setIsJoining(false)
-        showToast(`Selamat bergabung, ${nameInput.trim()}! 🍵`, 'success')
+        showToast(`Selamat bergabung, ${nameInput.trim()}!`, 'success')
     }
 
     const handleCopyLink = () => {
@@ -143,7 +144,7 @@ export default function GroupCartClient({
         if (typeof window === 'undefined') return
         const link = `${window.location.origin}/group-cart/${groupCartId}`
         const text = encodeURIComponent(
-            `Halo! Yuk gabung ke Group Order Matchaboy bareng saya. Klik link ini untuk langsung menambahkan menu favoritmu:\n${link}`
+            `Halo! Yuk gabung ke Group Order Arum Seduh bareng saya. Klik link ini untuk langsung menambahkan menu favoritmu:\n${link}`
         )
         window.open(`https://wa.me/?text=${text}`, '_blank')
     }
@@ -281,15 +282,15 @@ export default function GroupCartClient({
                 <motion.div 
                     initial={{ scale: 0.95, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
-                    className="w-full max-w-md bg-white rounded-3xl border border-[#D4A574]/20 p-8 shadow-xl relative z-10 text-center space-y-6"
+                    className="w-full max-w-md bg-white rounded-3xl border border-orange-200/60 p-8 shadow-xl relative z-10 text-center space-y-6"
                 >
-                    <div className="w-20 h-20 bg-[#1E3F20] rounded-2xl mx-auto flex items-center justify-center text-4xl shadow-md border border-[#EADFC9]/20">
-                        🍵
+                    <div className="w-20 h-20 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-2xl mx-auto flex items-center justify-center text-4xl shadow-md border border-orange-200/40 text-white">
+                        <Coffee className="w-10 h-10" />
                     </div>
                     <div className="space-y-2">
-                        <span className="text-[10px] font-black uppercase text-[#8C6239] tracking-[0.25em]">Group Order</span>
+                        <span className="text-[10px] font-black uppercase text-orange-600 tracking-[0.25em]">Group Order</span>
                         <h2 className="font-serif text-2xl font-black text-gray-900 tracking-tight">
-                            Matchaboy Collaborative
+                            Arum Seduh Collaborative
                         </h2>
                         <p className="text-xs text-muted-foreground max-w-xs mx-auto">
                             Bergabunglah dalam pesanan bersama yang dibuat oleh <span className="font-bold text-gray-800">{creatorName}</span>. Silakan masukkan nama panggilanmu.
@@ -302,7 +303,7 @@ export default function GroupCartClient({
                                 Nama Lengkap / Panggilan
                             </label>
                             <div className="relative">
-                                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400">👤</span>
+                                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-gray-400"><User className="w-4 h-4" /></span>
                                 <input
                                     type="text"
                                     placeholder="Contoh: Andi, Budi, Susi"
@@ -329,7 +330,7 @@ export default function GroupCartClient({
 
     return (
         <div className="min-h-screen bg-[#FAF8F5] pb-24 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(212,235,214,0.35)_0%,_rgba(250,248,245,0)_60%)] pointer-events-none z-0" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(254,243,199,0.4)_0%,_rgba(250,248,245,0)_60%)] pointer-events-none z-0" />
             <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.01)_1px,_transparent_1px),_linear-gradient(90deg,_rgba(0,0,0,0.01)_1px,_transparent_1px)] bg-[size:32px_32px] pointer-events-none z-0 opacity-40" />
 
             {/* Toast Notification */}
@@ -345,17 +346,17 @@ export default function GroupCartClient({
                                 : 'bg-rose-50 border-rose-200 text-rose-800'
                         }`}
                     >
-                        {toast.type === 'success' ? '✅' : '⚠️'} {toast.message}
+                        {toast.type === 'success' ? <Check className="w-4 h-4 text-emerald-600" /> : <AlertTriangle className="w-4 h-4 text-rose-600" />} {toast.message}
                     </motion.div>
                 )}
             </AnimatePresence>
 
             {/* Collaborative Header */}
-            <header className="bg-white/80 backdrop-blur-md border-b border-[#EADFC9]/30 sticky top-0 z-50 px-4 py-3">
+            <header className="bg-white/80 backdrop-blur-md border-b border-orange-100 sticky top-0 z-50 px-4 py-3">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-[#1E3F20] rounded-xl flex items-center justify-center text-xl shadow-md border border-[#EADFC9]/20">
-                            🍵
+                        <div className="w-10 h-10 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-xl flex items-center justify-center text-white shadow-md border border-orange-200/40">
+                            <Coffee className="w-5 h-5" />
                         </div>
                         <div>
                             <div className="flex items-center gap-1.5">
@@ -363,7 +364,7 @@ export default function GroupCartClient({
                                 <h1 className="font-serif text-lg font-black text-gray-900 leading-none">Group Cart</h1>
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                                Dibuat oleh <span className="font-bold text-gray-800">{creatorName}</span> • Anggota Anda: <span className="font-bold text-[#8C6239]">{memberName}</span>
+                                Dibuat oleh <span className="font-bold text-gray-800">{creatorName}</span> • Anggota Anda: <span className="font-bold text-orange-600">{memberName}</span>
                             </p>
                         </div>
                     </div>
@@ -371,7 +372,7 @@ export default function GroupCartClient({
                     <div className="flex items-center gap-2">
                         <button
                             onClick={handleCopyLink}
-                            className="px-3.5 py-2 rounded-xl bg-[#FAF8F5] hover:bg-[#EADFC9]/20 border border-[#D4A574]/20 text-xs font-bold text-gray-700 flex items-center gap-1.5 transition-all"
+                            className="px-3.5 py-2 rounded-xl bg-[#FAF8F5] hover:bg-orange-50 border border-orange-200/40 text-xs font-bold text-gray-700 flex items-center gap-1.5 transition-all"
                         >
                             {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-gray-600" />}
                             Salin Link
@@ -394,16 +395,16 @@ export default function GroupCartClient({
                     <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-5">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                             <div>
-                                <h2 className="font-serif font-black text-lg text-gray-900">Browse Menu Matchaboy</h2>
+                                <h2 className="font-serif font-black text-lg text-gray-900">Browse Menu Arum Seduh</h2>
                                 <p className="text-xs text-muted-foreground">Silakan pilih minuman premium dan tambahkan langsung ke keranjang bersama.</p>
                             </div>
 
                             {/* Search bar */}
                             <div className="relative w-full md:w-64">
-                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400">🔍</span>
+                                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400"><Search className="w-4 h-4" /></span>
                                 <input
                                     type="text"
-                                    placeholder="Cari matcha..."
+                                    placeholder="Cari menu..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-border bg-[#FAF8F5] focus:outline-none focus:border-brand-500"

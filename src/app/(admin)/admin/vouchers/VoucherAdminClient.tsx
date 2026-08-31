@@ -255,7 +255,7 @@ export default function VoucherAdminClient({
     }
     
     // Parse valid products description
-    let validProductsText = 'Semua Menu Matchaboy'
+    let validProductsText = 'Semua Menu Arum Seduh'
     if (templateData.validProductIds) {
       try {
         const parsed = JSON.parse(templateData.validProductIds)
@@ -292,7 +292,7 @@ export default function VoucherAdminClient({
         </head>
         <body>
           <div class="container">
-            <div class="logo">Matchaboy.</div>
+            <div class="logo">Arum Seduh.</div>
             <div class="badge">${discountText}</div>
             <div class="title">${templateData.title}</div>
             <div class="desc">${templateData.description}</div>
@@ -667,7 +667,7 @@ export default function VoucherAdminClient({
             <Ticket className="w-7 h-7 text-[#B48A5E]" />
             Sistem Manajemen Voucher
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Buat, edit, dan awasi distribusi kupon promo diskon Matchaboy.</p>
+          <p className="text-sm text-gray-500 mt-1">Buat, edit, dan awasi distribusi kupon promo diskon Arum Seduh.</p>
         </div>
 
         <button
@@ -893,7 +893,7 @@ export default function VoucherAdminClient({
             <div>
               <h4 className="font-bold mb-1">Pengaturan Voucher Sistem Terintegrasi</h4>
               <p>
-                Bagian ini memungkinkan Anda untuk mengelola voucher yang otomatis diterbitkan oleh sistem Matchaboy untuk alur Referral (Ajak Teman) dan Eco Tumbler. Anda dapat mengubah nominal diskon, minimum belanja, masa berlaku, atau mengaitkan kunci sistem dengan kode template voucher yang berbeda.
+                Bagian ini memungkinkan Anda untuk mengelola voucher yang otomatis diterbitkan oleh sistem Arum Seduh untuk alur Referral (Ajak Teman) dan Eco Tumbler. Anda dapat mengubah nominal diskon, minimum belanja, masa berlaku, atau mengaitkan kunci sistem dengan kode template voucher yang berbeda.
               </p>
             </div>
           </div>
@@ -1212,7 +1212,7 @@ export default function VoucherAdminClient({
                                     </div>
                                   )
                                 }
-                                return <p className="text-gray-500 mt-0.5">Semua produk menu Matchaboy</p>
+                                return <p className="text-gray-500 mt-0.5">Semua produk menu Arum Seduh</p>
                               })()}
                             </div>
                           </div>
@@ -1822,7 +1822,7 @@ export default function VoucherAdminClient({
                   <div className="flex gap-2 p-2 bg-amber-500/[0.03] border border-amber-500/10 rounded-2xl">
                     <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-[10px] text-amber-800 font-medium leading-relaxed">
-                      💡 <strong>Catatan:</strong> Jika tidak memilih produk sama sekali, voucher secara otomatis dianggap valid untuk <strong>seluruh menu</strong> di Matchaboy. Jika Anda memilih beberapa produk, potongan harga voucher *hanya memotong* subtotal produk-produk terpilih itu saja saat checkout.
+                      <strong>Catatan:</strong> Jika tidak memilih produk sama sekali, voucher secara otomatis dianggap valid untuk <strong>seluruh menu</strong> di Arum Seduh. Jika Anda memilih beberapa produk, potongan harga voucher *hanya memotong* subtotal produk-produk terpilih itu saja saat checkout.
                     </p>
                   </div>
                 </div>

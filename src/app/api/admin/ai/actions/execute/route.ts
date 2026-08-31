@@ -63,10 +63,10 @@ export async function POST(req: Request) {
           data: {
             openTime: updateData.openTime || "08:00",
             closeTime: updateData.closeTime || "21:00",
-            storeName: updateData.storeName || "Matchaboy HQ",
-            storeAddress: updateData.storeAddress || "Jl. Matcha No. 1",
+            storeName: updateData.storeName || "Arum Seduh HQ",
+            storeAddress: updateData.storeAddress || "Jl. Arum Seduh No. 1",
             whatsappNumber: updateData.whatsappNumber || "",
-            whatsappMessage: updateData.whatsappMessage || "Halo Matchaboy...",
+            whatsappMessage: updateData.whatsappMessage || "Halo Arum Seduh...",
             ...updateData,
           },
         });
@@ -125,7 +125,7 @@ export async function POST(req: Request) {
           discountValue: Number(discountValue) || 10,
           minPurchase: Number(minPurchase) || 0,
           maxDiscount: maxDiscount ? Number(maxDiscount) : null,
-          terms: terms || "Berlaku untuk seluruh menu Matchaboy.",
+          terms: terms || "Berlaku untuk seluruh menu Arum Seduh.",
           expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           usageLimit: Number(usageLimit) || 50,
           targetNewUserOnly: false,
@@ -197,7 +197,7 @@ export async function POST(req: Request) {
         const prod = await tx.product.create({
           data: {
             name,
-            description: description || `Menu spesial ${name} khas Matchaboy.`,
+            description: description || `Menu spesial ${name} khas Arum Seduh.`,
             price: Number(price) || 0,
             image: finalImage,
             badge: badge === "none" ? null : badge,
@@ -598,7 +598,7 @@ export async function POST(req: Request) {
           amount: Number(amount) || 0,
           category,
           date: new Date(),
-          notes: notes || "Dicatat via Asisten AI Matchaboy",
+          notes: notes || "Dicatat via Asisten AI Arum Seduh",
         },
       });
 

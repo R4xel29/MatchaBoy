@@ -26,7 +26,7 @@ export function StoryBar() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('matchaboy_viewed_stories');
+        const saved = localStorage.getItem('arumseduh_viewed_stories');
         if (saved) {
           setViewedStories(new Set(JSON.parse(saved)));
         }
@@ -38,11 +38,11 @@ export function StoryBar() {
 
   // Save viewed stories to localStorage
   const markStoryAsViewed = (id: string) => {
-    setViewedStories(prev => {
+    setViewedStories((prev) => {
       const next = new Set(prev);
       next.add(id);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('matchaboy_viewed_stories', JSON.stringify(Array.from(next)));
+        localStorage.setItem('arumseduh_viewed_stories', JSON.stringify(Array.from(next)));
       }
       return next;
     });
@@ -50,13 +50,13 @@ export function StoryBar() {
 
   useEffect(() => {
     fetch('/api/stories')
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data?.success && data.stories) {
           setStories(data.stories);
         }
       })
-      .catch(err => console.error('Error fetching stories:', err))
+      .catch((err) => console.error('Error fetching stories:', err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -123,19 +123,23 @@ export function StoryBar() {
 
   return (
     <>
-      <style dangerouslySetInnerHTML={{ __html: `
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
         @keyframes story-halo-glow {
-          0%, 100% { border-color: rgba(212, 165, 116, 0.85); box-shadow: 0 0 8px rgba(46, 90, 68, 0.35); }
+          0%, 100% { border-color: rgba(249, 115, 22, 0.85); box-shadow: 0 0 8px rgba(249, 115, 22, 0.35); }
           50% { border-color: rgba(254, 240, 138, 0.95); box-shadow: 0 0 14px rgba(254, 240, 138, 0.55); }
         }
-      `}} />
+      `,
+        }}
+      />
 
       {/* STORY BAR CONTAINER */}
-      <div className="w-full bg-white rounded-3xl border border-gray-150 p-4.5 shadow-sm overflow-hidden select-none mb-6">
+      <div className="w-full bg-white rounded-3xl border border-amber-100/80 p-4.5 shadow-sm overflow-hidden select-none mb-6">
         <div className="flex items-center gap-1.5 mb-3 px-1">
-          <Sparkles className="w-4 h-4 text-[#2E5A44] animate-pulse" />
+          <Sparkles className="w-4 h-4 text-orange-500 animate-pulse" />
           <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest leading-none">
-            Behind the Scenes 🍃
+            Cerita & Promo Hari Ini ✨
           </h3>
         </div>
 
@@ -150,15 +154,15 @@ export function StoryBar() {
                 className="flex flex-col items-center gap-2 shrink-0 cursor-pointer active:scale-95 transition-transform bg-transparent border-0 outline-none"
               >
                 {/* Visual Ring Halo */}
-                <div 
+                <div
                   style={{
                     animation: !hasViewed ? 'story-halo-glow 3s ease-in-out infinite' : 'none',
                     borderColor: hasViewed ? '#E5E2DD' : undefined,
                     boxShadow: hasViewed ? 'none' : undefined,
                   }}
-                  className={`w-15 h-15 rounded-full p-[2.5px] border-2 flex items-center justify-center`}
+                  className="w-15 h-15 rounded-full p-[2.5px] border-2 flex items-center justify-center"
                 >
-                  <div className="relative w-full h-full rounded-full overflow-hidden bg-brand-50 border border-gray-100">
+                  <div className="relative w-full h-full rounded-full overflow-hidden bg-amber-50 border border-amber-150">
                     <Image
                       src={story.mediaUrl}
                       alt={story.title}
@@ -169,7 +173,7 @@ export function StoryBar() {
                   </div>
                 </div>
                 <span className="text-[10px] font-black text-gray-800 tracking-tight max-w-[65px] truncate text-center">
-                  {story.title.split(':')[0] || 'Matchaboy'}
+                  {story.title.split(':')[0] || 'Arum Seduh'}
                 </span>
               </button>
             );
@@ -184,7 +188,7 @@ export function StoryBar() {
             {/* Left/Right click trigger areas */}
             <div className="absolute inset-y-0 left-0 w-1/4 z-20 cursor-w-resize" onClick={handlePrev} />
             <div className="absolute inset-y-0 right-0 w-1/4 z-20 cursor-e-resize" onClick={handleNext} />
-            
+
             {/* Top Close Click */}
             <div className="absolute top-4 right-4 z-30 flex items-center gap-3">
               <button
@@ -210,7 +214,7 @@ export function StoryBar() {
                   if (idx === activeStoryIndex) width = `${progress}%`;
                   return (
                     <div key={s.id} className="flex-1 h-[3px] rounded-full bg-white/25 overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-white rounded-full transition-all duration-300 ease-out"
                         style={{ width }}
                       />
@@ -221,12 +225,12 @@ export function StoryBar() {
 
               {/* STORY CREATOR INFO */}
               <div className="absolute top-8 inset-x-4 z-30 flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-full bg-[#1E3F20] border border-[#FEF08A]/60 flex items-center justify-center text-xs">
-                  <span>🍃</span>
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 border border-amber-200 flex items-center justify-center text-xs text-white font-black">
+                  <Sparkles className="w-4 h-4" />
                 </div>
                 <div className="flex flex-col text-left">
                   <span className="text-xs font-black text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]">
-                    Matchaboy Official
+                    Arum Seduh Official
                   </span>
                   <span className="text-[9px] font-bold text-gray-300 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] uppercase tracking-wider">
                     Barista Live Story
@@ -244,7 +248,7 @@ export function StoryBar() {
                   className="object-cover"
                   sizes="(max-width: 768px) 100vw, 450px"
                 />
-                
+
                 {/* Ambient Shadow gradient at top and bottom */}
                 <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
               </div>
@@ -255,7 +259,7 @@ export function StoryBar() {
                   <h4 className="font-serif font-black text-lg text-white leading-snug drop-shadow-[0_1.5px_4px_rgba(0,0,0,0.8)]">
                     {stories[activeStoryIndex].title}
                   </h4>
-                  <p className="text-[10px] text-[#FEF08A] font-black uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] flex items-center gap-1">
+                  <p className="text-[10px] text-amber-200 font-black uppercase tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] flex items-center gap-1">
                     <span>✦ Live Promo / Story ✦</span>
                   </p>
                 </div>
@@ -271,7 +275,7 @@ export function StoryBar() {
                         window.location.href = url;
                       }
                     }}
-                    className="w-full py-4 bg-gradient-to-tr from-[#FEF08A] to-[#D4A574] hover:shadow-lg text-[#2A1F16] text-[12.5px] font-black rounded-2xl shadow-xl z-30 flex items-center justify-center gap-2 cursor-pointer border border-[#FEF08A]/30 active:scale-95 transition-all"
+                    className="w-full py-4 bg-gradient-to-tr from-amber-300 via-orange-400 to-amber-500 hover:shadow-lg text-[#2A1F16] text-[12.5px] font-black rounded-2xl shadow-xl z-30 flex items-center justify-center gap-2 cursor-pointer border border-amber-200/50 active:scale-95 transition-all"
                   >
                     <ShoppingBag className="w-4.5 h-4.5" />
                     <span>Lihat Menu / Pesan Sekarang</span>

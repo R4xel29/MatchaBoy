@@ -1,10 +1,13 @@
-﻿/**
- * Voice Dictionary & Phonetic Normalizer for Cafe & Matchaboy F&B Terms
+/**
+ * Voice Dictionary & Phonetic Normalizer for Cafe & Arum Seduh F&B Terms
  * Converts common Indonesian speech recognition mishearings into accurate English/Indonesian cafe terms.
  */
 
 const PHONETIC_MAP: Array<{ pattern: RegExp; replacement: string }> = [
-  // Matcha variants
+  // Arum Seduh variants
+  { pattern: /\b(arum seduh|arumseduh|harum seduh|arum sedu)\b/gi, replacement: "Arum Seduh" },
+
+  // Tea & Matcha variants
   { pattern: /\b(maca|macha|matca|matsa|macaa|matja|machaboy|macaboy|maca boy|macha boy)\b/gi, replacement: "Matcha" },
   
   // Latte variants

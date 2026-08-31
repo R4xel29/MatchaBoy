@@ -543,7 +543,7 @@ export default function CustomerDisplayClient() {
 
                     <div className="relative bg-white p-2 rounded-2xl">
                       <QRCodeSVG
-                        value={spmbUrl || 'https://matchaboy.app/spmb'}
+                        value={spmbUrl || 'https://arumseduh.app/spmb'}
                         size={210}
                         level="H"
                         includeMargin={true}

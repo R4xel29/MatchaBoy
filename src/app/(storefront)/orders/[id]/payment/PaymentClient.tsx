@@ -56,7 +56,7 @@ export default function PaymentClient({
       const url = canvas.toDataURL('image/png');
       const link = document.createElement('a')
       link.href = url
-      link.download = `QRIS_MATCHABOY_${order.id.slice(0, 8).toUpperCase()}.png`
+      link.download = `QRIS_ARUM_SEDUH_${order.id.slice(0, 8).toUpperCase()}.png`
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -454,14 +454,14 @@ export default function PaymentClient({
               </div>
 
               {/* Info mode QRIS */}
-              <div className="mt-3 px-3 py-2 rounded-xl bg-green-50 border border-green-100 w-full text-center">
-                <p className="text-[10px] text-green-600 font-bold">
-                  ✅ Nominal sudah otomatis terisi: <span className="text-green-800">{formatRupiah(order.total)}</span>
+              <div className="mt-3 px-3 py-2 rounded-xl bg-orange-50 border border-orange-100 w-full text-center">
+                <p className="text-[10px] text-orange-600 font-bold">
+                  Nominal sudah otomatis terisi: <span className="text-orange-800">{formatRupiah(order.total)}</span>
                 </p>
               </div>
 
               <p className="text-[10px] text-gray-400 font-bold uppercase mt-3">Nama Merchant</p>
-              <h3 className="text-base font-serif font-black text-gray-900 mt-0.5">MATCHABOY</h3>
+              <h3 className="text-base font-serif font-black text-gray-900 mt-0.5">ARUM SEDUH</h3>
 
               <button
                 type="button"
@@ -549,14 +549,14 @@ export default function PaymentClient({
                     <div className="w-5 h-5 rounded-full bg-[#4C2A86] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">2</div>
                     <div>
                       <p className="font-bold text-gray-800">Konfirmasi Pembayaran</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Pilih notifikasi tagihan Matchaboy, verifikasi nominal <span className="text-[#4C2A86] font-extrabold">{formatRupiah(order.total)}</span>, lalu masukkan PIN OVO Anda.</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Pilih notifikasi tagihan Arum Seduh, verifikasi nominal <span className="text-[#4C2A86] font-extrabold">{formatRupiah(order.total)}</span>, lalu masukkan PIN OVO Anda.</p>
                     </div>
                   </div>
 
                   <div className="flex gap-3">
                     <div className="w-5 h-5 rounded-full bg-[#4C2A86] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">3</div>
                     <div>
-                      <p className="font-bold text-gray-800">Kembali Ke Matchaboy</p>
+                      <p className="font-bold text-gray-800">Kembali Ke Arum Seduh</p>
                       <p className="text-[10px] text-gray-400 mt-0.5">Pesanan Anda akan terverifikasi secara otomatis dalam beberapa detik setelah transaksi sukses.</p>
                     </div>
                   </div>

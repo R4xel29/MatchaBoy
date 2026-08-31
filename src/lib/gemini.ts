@@ -27,7 +27,7 @@ function normalizeArgs(
 ): GenAIOptions {
   if (typeof firstArg === 'object' && firstArg !== null) {
     return {
-      prompt: firstArg.prompt || 'Halo, tolong berikan analisa toko Matchaboy.',
+      prompt: firstArg.prompt || 'Halo, tolong berikan analisa toko Arum Seduh.',
       systemInstruction: firstArg.systemInstruction,
       image: firstArg.image,
       model: firstArg.model || ACTIVE_MODELS[0],
@@ -35,7 +35,7 @@ function normalizeArgs(
   }
 
   return {
-    prompt: firstArg || 'Halo, tolong berikan analisa toko Matchaboy.',
+    prompt: firstArg || 'Halo, tolong berikan analisa toko Arum Seduh.',
     systemInstruction,
     image,
     model: model || ACTIVE_MODELS[0],
@@ -58,7 +58,7 @@ export async function generateStoreAIResponse(
 
   const { prompt, systemInstruction, image, model } = normalizeArgs(optionsOrPrompt, sysInst, img, mdl);
 
-  const cleanPrompt = (prompt && prompt.trim()) ? prompt.trim() : 'Halo, tolong berikan analisa data toko Matchaboy.';
+  const cleanPrompt = (prompt && prompt.trim()) ? prompt.trim() : 'Halo, tolong berikan analisa data toko Arum Seduh.';
   const contentsPayload: any = image?.data
     ? [
         { text: cleanPrompt },
@@ -114,7 +114,7 @@ export async function generateStoreAIStream(
 
   const { prompt, systemInstruction, image, model } = normalizeArgs(optionsOrPrompt, sysInst, img, mdl);
 
-  const cleanPrompt = (prompt && prompt.trim()) ? prompt.trim() : 'Halo, tolong berikan analisa data toko Matchaboy.';
+  const cleanPrompt = (prompt && prompt.trim()) ? prompt.trim() : 'Halo, tolong berikan analisa data toko Arum Seduh.';
   const contentsPayload: any = image?.data
     ? [
         { text: cleanPrompt },

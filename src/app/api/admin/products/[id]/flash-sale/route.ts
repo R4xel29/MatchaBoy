@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { logAdminAction } from '@/lib/admin-logger';
+import { invalidateProductCache } from '@/lib/redis-cache';
 
 // POST /api/admin/products/[id]/flash-sale — Set/Update active promo (flash sale) inside modifiers
 export async function POST(
@@ -62,6 +63,8 @@ export async function POST(
       details: `Mengaktifkan Flash Sale untuk "${product.name}" (Harga Promo: Rp${Number(promoPrice).toLocaleString('id-ID')}, berakhir pada ${new Date(endDate).toLocaleString('id-ID')})`
     });
 
+    await invalidateProductCache();
+
     return NextResponse.json({ success: true, product: updatedProduct });
   } catch (error: any) {
     console.error('Error setting flash sale:', error);
@@ -118,6 +121,8 @@ export async function DELETE(
       entityId: id,
       details: `Menonaktifkan Flash Sale untuk "${product.name}"`
     });
+
+    await invalidateProductCache();
 
     return NextResponse.json({ success: true, product: updatedProduct });
   } catch (error: any) {

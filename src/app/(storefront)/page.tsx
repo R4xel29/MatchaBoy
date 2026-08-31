@@ -1,26 +1,64 @@
 import { prisma } from "@/lib/prisma"
+import { getOrSetCache, CACHE_KEYS, CACHE_TTL } from "@/lib/redis-cache"
 import StorefrontClient from "./StorefrontClient"
 
 export const revalidate = 10 // Revalidate page cache at most every 10 seconds (ISR)
 
 export default async function StorefrontPage() {
   const [categories, products, banners, packagingIngredients] = await Promise.all([
-    prisma.category.findMany({
-      orderBy: { createdAt: 'asc' }
-    }),
-    prisma.product.findMany({
-      where: {
-        OR: [
-          { badge: null },
-          { badge: { not: 'archived' } }
-        ]
-      },
-      orderBy: { createdAt: 'desc' } // Newest first
-    }),
-    prisma.heroBanner.findMany({
-      where: { isActive: true },
-      orderBy: { order: 'asc' }
-    }),
+    getOrSetCache(
+      CACHE_KEYS.CATEGORIES_ALL,
+      () =>
+        prisma.category.findMany({
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+          },
+        }),
+      CACHE_TTL.CATEGORIES
+    ),
+    getOrSetCache(
+      CACHE_KEYS.PRODUCTS_ALL,
+      () =>
+        prisma.product.findMany({
+          where: {
+            OR: [
+              { badge: null },
+              { badge: { not: 'archived' } }
+            ]
+          },
+          orderBy: { createdAt: 'desc' }, // Newest first
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            image: true,
+            categoryId: true,
+            badge: true,
+            modifiers: true,
+          },
+        }),
+      CACHE_TTL.PRODUCTS
+    ),
+    getOrSetCache(
+      CACHE_KEYS.BANNERS_ACTIVE,
+      () =>
+        prisma.heroBanner.findMany({
+          where: { isActive: true },
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            image: true,
+            alt: true,
+            headline: true,
+            subheadline: true,
+          },
+        }),
+      CACHE_TTL.BANNERS
+    ),
     prisma.ingredient.findMany({
       where: { isPackaging: true },
       select: { id: true, name: true, stock: true },
@@ -54,7 +92,7 @@ export default async function StorefrontPage() {
     let modifiers = undefined;
     if (p.modifiers) {
       try {
-        modifiers = JSON.parse(p.modifiers);
+        modifiers = typeof p.modifiers === 'string' ? JSON.parse(p.modifiers) : p.modifiers;
       } catch {
         modifiers = undefined;
       }
