@@ -15,6 +15,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary } from '@/lib/receipt-modifiers';
 import { BluetoothPrinterPill } from './BluetoothPrinterPill';
 import { isBluetoothPrinterConnected, printDirectBluetooth, printCgvTicketRasterBluetooth } from '@/lib/bluetooth-printer';
 
@@ -34,6 +35,8 @@ export interface ReceiptData {
     qty: number;
     price: number;
     totalPrice?: number;
+    originalPrice?: number;
+    promoDiscount?: number;
     iceLevel?: string;
     sugarLevel?: string;
     matchaLevel?: number;
@@ -49,6 +52,8 @@ export interface ReceiptData {
   tumblerDiscount?: number;
   voucherDiscount?: number;
   voucherCode?: string;
+  voucherTitle?: string;
+  hasTumbler?: boolean;
   total: number;
   cashPaid?: number;
   change?: number;
@@ -152,52 +157,35 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     minute: '2-digit',
   });
 
-  const totalDiscount = (order.discount || 0) + (order.tumblerDiscount || 0) + (order.voucherDiscount || 0);
+  const summary = calculateGrossReceiptSummary(order);
+  const totalDiscount = summary.totalFlashSaleDiscount + summary.voucherDiscount + summary.tumblerDiscount;
   const orderIdShort = order.id.slice(0, 8).toUpperCase();
   const tableDisplay = order.tableNumber ? `MEJA ${order.tableNumber}` : (order.queueNumber ? `A-${order.queueNumber}` : (order.orderType === 'DINE_IN' ? 'DINE IN' : 'PICKUP'));
 
   // Clean HTML generator specifically designed for 58mm / 80mm ESC/POS Thermal Printers in CGV Cinema Ticket Style
   const generateCustomerReceiptHtml = () => {
     let itemsHtml = '';
-    order.items.forEach((item) => {
-      const itemTotalPrice = (item.totalPrice || item.price) * item.qty;
-      const priceFormatted = formatRupiah(itemTotalPrice);
-      
-      let modsHtml = '';
-      if (item.sugarLevel) {
-        modsHtml += `<div class="cgv-mod-line">» <b>GULA:</b> <span class="cgv-mod-val">${item.sugarLevel.toUpperCase()}</span></div>`;
-      }
-      if (item.iceLevel) {
-        modsHtml += `<div class="cgv-mod-line">» <b>ES:</b> <span class="cgv-mod-val">${item.iceLevel.toUpperCase()}</span></div>`;
-      }
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
-        modsHtml += `<div class="cgv-mod-line">» <b>MATCHA:</b> <span class="cgv-mod-val">LEVEL ${item.matchaLevel}</span></div>`;
-      }
-      if (item.size) {
-        modsHtml += `<div class="cgv-mod-line">» <b>UKURAN:</b> <span class="cgv-mod-val">${item.size.toUpperCase()}</span></div>`;
-      }
-      if (item.shotName) {
-        modsHtml += `<div class="cgv-mod-line">» <b>SHOT:</b> <span class="cgv-mod-val">${item.shotName.toUpperCase()}</span></div>`;
-      }
-      if (item.addOns && item.addOns.length > 0) {
-        item.addOns.forEach((a) => {
-          modsHtml += `<div class="cgv-mod-line">» <b>TOPPING:</b> <span class="cgv-mod-val">+${a.name.toUpperCase()} (${formatRupiah(a.price)})</span></div>`;
-        });
-      }
-      if (item.bundleSelections && item.bundleSelections.length > 0) {
-        item.bundleSelections.forEach((b) => {
-          modsHtml += `<div class="cgv-mod-line">» <b>PILIHAN:</b> <span class="cgv-mod-val">${(b.productName || b.groupName || '').toUpperCase()}</span></div>`;
-        });
-      }
-      if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-        modsHtml += `<div class="cgv-mod-line">» <b>VARIAN:</b> <span class="cgv-mod-val">${item.modifiersString.toUpperCase()}</span></div>`;
-      }
+    summary.items.forEach((pItem) => {
+      const parsed = parseItemModifiers({
+        ...pItem.rawItem,
+        originalPrice: pItem.unitOriginalPrice,
+        promoDiscount: pItem.unitDiscount,
+        price: pItem.unitFinalPrice,
+        modifiersString: pItem.modifiersString,
+      });
+      const modLines = getReceiptModifierLines(parsed, true);
+      const modsHtml = modLines.map((l) => `
+        <div class="cgv-mod-line">» <b>${l.label}:</b> <span class="cgv-mod-val">${l.value}</span></div>
+      `).join('');
 
       itemsHtml += `
         <div class="cgv-item-card">
           <div class="cgv-item-header">
-            <span class="cgv-item-name">[ ${item.qty}x ] ${item.name.toUpperCase()}</span>
-            <span class="cgv-item-price">${priceFormatted}</span>
+            <span class="cgv-item-name">[ ${pItem.qty}x ] ${pItem.name.toUpperCase()}</span>
+            <span class="cgv-item-price">
+              ${pItem.hasDiscount ? `<span style="text-decoration: line-through; color: #666; font-size: 10px; margin-right: 4px;">${formatRupiah(pItem.totalOriginalPrice)}</span>` : ''}
+              ${formatRupiah(pItem.totalFinalPrice)}
+            </span>
           </div>
           ${modsHtml ? `<div class="cgv-mod-box">${modsHtml}</div>` : ''}
         </div>
@@ -478,18 +466,36 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
 
           <div class="row">
             <span>Subtotal:</span>
-            <span class="bold">${formatRupiah(order.subtotal)}</span>
+            <span class="bold">${formatRupiah(summary.grossSubtotal)}</span>
           </div>
-          ${totalDiscount > 0 ? `
+          ${summary.totalFlashSaleDiscount > 0 ? `
             <div class="row">
-              <span>Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}:</span>
-              <span class="bold">-${formatRupiah(totalDiscount)}</span>
+              <span>Diskon Flash Sale:</span>
+              <span class="bold">-${formatRupiah(summary.totalFlashSaleDiscount)}</span>
+            </div>
+          ` : ''}
+          ${summary.voucherDiscount > 0 ? `
+            <div class="row">
+              <span>${summary.voucherLabel}:</span>
+              <span class="bold">-${formatRupiah(summary.voucherDiscount)}</span>
+            </div>
+          ` : ''}
+          ${summary.tumblerDiscount > 0 ? `
+            <div class="row">
+              <span>Diskon Bawa Tumbler:</span>
+              <span class="bold">-${formatRupiah(summary.tumblerDiscount)}</span>
+            </div>
+          ` : ''}
+          ${summary.deliveryFee > 0 ? `
+            <div class="row">
+              <span>Ongkos Kirim:</span>
+              <span class="bold">${formatRupiah(summary.deliveryFee)}</span>
             </div>
           ` : ''}
 
           <div class="cgv-total-banner">
             <span>TOTAL</span>
-            <span>${formatRupiah(order.total)}</span>
+            <span>${formatRupiah(summary.finalTotal)}</span>
           </div>
 
           <div class="row" style="font-size: 9.5px;">
@@ -542,32 +548,11 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
   const generateKitchenTicketHtml = () => {
     let itemsHtml = '';
     order.items.forEach((item) => {
-      let modsHtml = '';
-      if (item.sugarLevel) {
-        modsHtml += `<div style="font-size: 12px; font-weight: 900; color: #000;">» GULA: ${item.sugarLevel.toUpperCase()}</div>`;
-      }
-      if (item.iceLevel) {
-        modsHtml += `<div style="font-size: 12px; font-weight: 900; color: #000;">» ES: ${item.iceLevel.toUpperCase()}</div>`;
-      }
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
-        modsHtml += `<div style="font-size: 12px; font-weight: 900; color: #000;">» MATCHA: LEVEL ${item.matchaLevel}</div>`;
-      }
-      if (item.size) {
-        modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» SIZE: ${item.size.toUpperCase()}</div>`;
-      }
-      if (item.shotName) {
-        modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» SHOT: ${item.shotName.toUpperCase()}</div>`;
-      }
-      if (item.addOns && item.addOns.length > 0) {
-        item.addOns.forEach((a) => {
-          modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» +TOPPING: ${a.name.toUpperCase()}</div>`;
-        });
-      }
-      if (item.bundleSelections && item.bundleSelections.length > 0) {
-        item.bundleSelections.forEach((b) => {
-          modsHtml += `<div style="font-size: 11px; font-weight: 900; color: #000;">» PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}</div>`;
-        });
-      }
+      const parsed = parseItemModifiers(item);
+      const modLines = getReceiptModifierLines(parsed, false);
+      const modsHtml = modLines.map((l) => `
+        <div style="font-size: 11px; font-weight: 900; color: #000;">» ${l.label}: ${l.value}</div>
+      `).join('');
 
       itemsHtml += `
         <div style="border-bottom: 1.5px dashed #000; padding: 5px 0;">
@@ -753,34 +738,39 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     receiptText += `[ LOKASI ]  : ${order.orderType === 'DINE_IN' ? `MEJA ${order.tableNumber || '?'}` : (order.queueNumber ? `ANTRIAN A-${order.queueNumber}` : order.orderType)}\n`;
     receiptText += `--------------------------------\n`;
     receiptText += `[ DETAIL PESANAN ]\n`;
-    order.items.forEach((item) => {
-      receiptText += `* ${item.qty}x ${item.name.toUpperCase().padEnd(18)} ${formatRupiah((item.totalPrice || item.price) * item.qty).padStart(10)}\n`;
-      if (item.sugarLevel) receiptText += `  » GULA: ${item.sugarLevel.toUpperCase()}\n`;
-      if (item.iceLevel) receiptText += `  » ES: ${item.iceLevel.toUpperCase()}\n`;
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) receiptText += `  » MATCHA: LEVEL ${item.matchaLevel}\n`;
-      if (item.size) receiptText += `  » UKURAN: ${item.size.toUpperCase()}\n`;
-      if (item.shotName) receiptText += `  » SHOT: ${item.shotName.toUpperCase()}\n`;
-      if (item.addOns && item.addOns.length > 0) {
-        item.addOns.forEach((a) => {
-          receiptText += `  » TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`;
-        });
-      }
-      if (item.bundleSelections && item.bundleSelections.length > 0) {
-        item.bundleSelections.forEach((b) => {
-          receiptText += `  » PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`;
-        });
-      }
-      if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-        receiptText += `  » VARIAN: ${item.modifiersString.toUpperCase()}\n`;
-      }
+    summary.items.forEach((item) => {
+      const parsed = parseItemModifiers({
+        ...item.rawItem,
+        originalPrice: item.unitOriginalPrice,
+        promoDiscount: item.unitDiscount,
+        price: item.unitFinalPrice,
+        modifiersString: item.modifiersString,
+      });
+      const priceDisplay = item.hasDiscount 
+        ? `${formatRupiah(item.totalOriginalPrice)} -> ${formatRupiah(item.totalFinalPrice)}`
+        : formatRupiah(item.totalFinalPrice);
+      receiptText += `* ${item.qty}x ${item.name.toUpperCase().padEnd(16)} ${priceDisplay.padStart(12)}\n`;
+      const modLines = getReceiptModifierLines(parsed, true);
+      modLines.forEach((l) => {
+        receiptText += `  » ${l.label}: ${l.value}\n`;
+      });
     });
     receiptText += `--------------------------------\n`;
-    receiptText += `Subtotal                ${formatRupiah(order.subtotal).padStart(10)}\n`;
-    if (totalDiscount > 0) {
-      const discountLabel = `Diskon${order.voucherCode ? ` (${order.voucherCode})` : ''}`.padEnd(20);
-      receiptText += `${discountLabel} -${formatRupiah(totalDiscount).padStart(9)}\n`;
+    receiptText += `Subtotal                ${formatRupiah(summary.grossSubtotal).padStart(10)}\n`;
+    if (summary.totalFlashSaleDiscount > 0) {
+      receiptText += `${'Diskon Flash Sale'.padEnd(20)} -${formatRupiah(summary.totalFlashSaleDiscount).padStart(9)}\n`;
     }
-    receiptText += `TOTAL AKHIR             ${formatRupiah(order.total).padStart(10)}\n`;
+    if (summary.voucherDiscount > 0) {
+      const vLabel = summary.voucherLabel.length > 20 ? summary.voucherLabel.slice(0, 19) + '…' : summary.voucherLabel;
+      receiptText += `${vLabel.padEnd(20)} -${formatRupiah(summary.voucherDiscount).padStart(9)}\n`;
+    }
+    if (summary.tumblerDiscount > 0) {
+      receiptText += `${'Diskon Tumbler'.padEnd(20)} -${formatRupiah(summary.tumblerDiscount).padStart(9)}\n`;
+    }
+    if (summary.deliveryFee > 0) {
+      receiptText += `${'Ongkos Kirim'.padEnd(20)}  ${formatRupiah(summary.deliveryFee).padStart(9)}\n`;
+    }
+    receiptText += `TOTAL AKHIR             ${formatRupiah(summary.finalTotal).padStart(10)}\n`;
     receiptText += `METODE: ${order.paymentMethod.padEnd(12)} (LUNAS)\n`;
     if (order.cashPaid) {
       receiptText += `DITERIMA                ${formatRupiah(order.cashPaid).padStart(10)}\n`;
@@ -932,50 +922,49 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
                     </span>
 
                     <div className="divide-y divide-dashed divide-slate-400 mt-1">
-                      {order.items.map((item, idx) => (
-                        <div key={idx} className="py-2 space-y-1">
-                          <div className="flex justify-between items-start">
-                            <span className="font-black text-xs uppercase flex-1 pr-2">
-                              [ {item.qty}x ] {item.name}
-                            </span>
-                            <span className="font-black text-xs shrink-0">
-                              {formatRupiah((item.totalPrice || item.price) * item.qty)}
-                            </span>
-                          </div>
+                      {summary.items.map((item, idx) => {
+                        const parsed = parseItemModifiers({
+                          ...item.rawItem,
+                          originalPrice: item.unitOriginalPrice,
+                          promoDiscount: item.unitDiscount,
+                          price: item.unitFinalPrice,
+                          modifiersString: item.modifiersString,
+                        });
+                        const modLines = getReceiptModifierLines(parsed, true);
+                        return (
+                          <div key={idx} className="py-2 space-y-1">
+                            <div className="flex justify-between items-start">
+                              <span className="font-black text-xs uppercase flex-1 pr-2">
+                                [ {item.qty}x ] {item.name}
+                              </span>
+                              <div className="text-right shrink-0">
+                                {item.hasDiscount && (
+                                  <span className="line-through text-slate-400 text-[10px] mr-1.5 font-normal">
+                                    {formatRupiah(item.totalOriginalPrice)}
+                                  </span>
+                                )}
+                                <span className="font-black text-xs">
+                                  {formatRupiah(item.totalFinalPrice)}
+                                </span>
+                              </div>
+                            </div>
 
-                          {/* Super Clear & Bold Modifiers */}
-                          <div className="border-l-2 border-black pl-2 space-y-0.5 text-[10px] font-bold text-black mt-1">
-                            {item.sugarLevel && (
-                              <div>» <span className="font-black">GULA:</span> <span className="underline font-black">{item.sugarLevel.toUpperCase()}</span></div>
-                            )}
-                            {item.iceLevel && (
-                              <div>» <span className="font-black">ES:</span> <span className="underline font-black">{item.iceLevel.toUpperCase()}</span></div>
-                            )}
-                            {item.matchaLevel !== undefined && item.matchaLevel > 0 && (
-                              <div>» <span className="font-black">MATCHA:</span> <span className="underline font-black">LEVEL {item.matchaLevel}</span></div>
-                            )}
-                            {item.size && (
-                              <div>» <span className="font-black">UKURAN:</span> <span className="underline font-black">{item.size.toUpperCase()}</span></div>
-                            )}
-                            {item.shotName && (
-                              <div>» <span className="font-black">SHOT:</span> <span className="underline font-black">{item.shotName.toUpperCase()}</span></div>
-                            )}
-                            {item.addOns && item.addOns.length > 0 && (
-                              item.addOns.map((addon, aIdx) => (
-                                <div key={aIdx}>» <span className="font-black">TOPPING:</span> <span className="underline font-black">+{addon.name.toUpperCase()} ({formatRupiah(addon.price)})</span></div>
-                              ))
-                            )}
-                            {item.bundleSelections && item.bundleSelections.length > 0 && (
-                              item.bundleSelections.map((bundle, bIdx) => (
-                                <div key={bIdx}>» <span className="font-black">PILIHAN:</span> <span className="underline font-black">{(bundle.productName || bundle.groupName || '').toUpperCase()}</span></div>
-                              ))
-                            )}
-                            {item.modifiersString && !item.sugarLevel && !item.iceLevel && (
-                              <div>» <span className="font-black">VARIAN:</span> <span className="underline font-black">{item.modifiersString.toUpperCase()}</span></div>
+                            {/* Super Clear & Bold Modifiers */}
+                            {modLines.length > 0 && (
+                              <div className="border-l-2 border-black pl-2 space-y-0.5 text-[10px] font-bold text-black mt-1">
+                                {modLines.map((l, lIdx) => (
+                                  <div key={lIdx}>
+                                    » <span className="font-black">{l.label}:</span>{' '}
+                                    <span className={l.label === 'POTONGAN' ? 'font-black text-amber-700 bg-amber-50 px-1 rounded' : 'underline font-black'}>
+                                      {l.value}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
                             )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -991,19 +980,37 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
                     <div className="space-y-1 text-[10px]">
                       <div className="flex justify-between">
                         <span className="text-slate-700">Subtotal:</span>
-                        <span className="font-bold">{formatRupiah(order.subtotal)}</span>
+                        <span className="font-bold">{formatRupiah(summary.grossSubtotal)}</span>
                       </div>
-                      {totalDiscount > 0 && (
+                      {summary.totalFlashSaleDiscount > 0 && (
                         <div className="flex justify-between text-slate-800">
-                          <span>Diskon / Promo{order.voucherCode ? ` (${order.voucherCode})` : ''}:</span>
-                          <span className="font-bold text-red-600">-{formatRupiah(totalDiscount)}</span>
+                          <span>Diskon Flash Sale:</span>
+                          <span className="font-bold text-red-600">-{formatRupiah(summary.totalFlashSaleDiscount)}</span>
+                        </div>
+                      )}
+                      {summary.voucherDiscount > 0 && (
+                        <div className="flex justify-between text-slate-800">
+                          <span>{summary.voucherLabel}:</span>
+                          <span className="font-bold text-red-600">-{formatRupiah(summary.voucherDiscount)}</span>
+                        </div>
+                      )}
+                      {summary.tumblerDiscount > 0 && (
+                        <div className="flex justify-between text-slate-800">
+                          <span>Diskon Bawa Tumbler:</span>
+                          <span className="font-bold text-emerald-600">-{formatRupiah(summary.tumblerDiscount)}</span>
+                        </div>
+                      )}
+                      {summary.deliveryFee > 0 && (
+                        <div className="flex justify-between text-slate-800">
+                          <span>Ongkos Kirim:</span>
+                          <span className="font-bold">{formatRupiah(summary.deliveryFee)}</span>
                         </div>
                       )}
 
                       {/* Total Inverted Banner */}
                       <div className="bg-black text-white px-2 py-1.5 flex justify-between font-black text-xs tracking-wide my-1.5">
                         <span>TOTAL</span>
-                        <span>{formatRupiah(order.total)}</span>
+                        <span>{formatRupiah(summary.finalTotal)}</span>
                       </div>
 
                       <div className="flex justify-between text-[10px]">
@@ -1101,34 +1108,26 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
 
                   {/* Kitchen Items with Large Bold Modifiers */}
                   <div className="divide-y-2 divide-dashed divide-black py-1 space-y-2">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="pt-2 first:pt-0 space-y-1">
-                        <div className="font-black text-sm uppercase text-black">
-                          [ {item.qty}x ] {item.name}
-                        </div>
+                    {order.items.map((item, idx) => {
+                      const parsed = parseItemModifiers(item);
+                      const modLines = getReceiptModifierLines(parsed, false);
+                      return (
+                        <div key={idx} className="pt-2 first:pt-0 space-y-1">
+                          <div className="font-black text-sm uppercase text-black">
+                            [ {item.qty}x ] {item.name}
+                          </div>
 
-                        {/* Modifiers for Barista */}
-                        <div className="border-l-2 border-black pl-2 space-y-0.5 text-[11px] font-black text-black">
-                          {item.sugarLevel && <div>» GULA: {item.sugarLevel.toUpperCase()}</div>}
-                          {item.iceLevel && <div>» ES: {item.iceLevel.toUpperCase()}</div>}
-                          {item.matchaLevel !== undefined && item.matchaLevel > 0 && (
-                            <div>» MATCHA: LEVEL {item.matchaLevel}</div>
-                          )}
-                          {item.size && <div>» UKURAN: {item.size.toUpperCase()}</div>}
-                          {item.shotName && <div>» SHOT: {item.shotName.toUpperCase()}</div>}
-                          {item.addOns && item.addOns.length > 0 && (
-                            item.addOns.map((addon, aIdx) => (
-                              <div key={aIdx}>» +TOPPING: {addon.name.toUpperCase()}</div>
-                            ))
-                          )}
-                          {item.bundleSelections && item.bundleSelections.length > 0 && (
-                            item.bundleSelections.map((bundle, bIdx) => (
-                              <div key={bIdx}>» PILIHAN: {(bundle.productName || bundle.groupName || '').toUpperCase()}</div>
-                            ))
+                          {/* Modifiers for Barista */}
+                          {modLines.length > 0 && (
+                            <div className="border-l-2 border-black pl-2 space-y-0.5 text-[11px] font-black text-black">
+                              {modLines.map((l, lIdx) => (
+                                <div key={lIdx}>» {l.label}: {l.value}</div>
+                              ))}
+                            </div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   {order.notes && (

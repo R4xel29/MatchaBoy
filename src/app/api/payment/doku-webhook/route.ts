@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
           await prisma.order.update({
             where: { id: order.id },
             data: {
-              status: 'COMPLETED',
+              status: 'PENDING',
               paymentProofUrl: '/verified-webhook.svg',
               customerPhone: isSpmbPending ? (cleanPhone || 'SPMB-PAID') : order.customerPhone,
               notes: order.notes 
@@ -203,14 +203,6 @@ export async function POST(req: NextRequest) {
                 : '[DOKU Webhook] Pembayaran otomatis sukses via DOKU.',
             },
           });
-
-          // Award loyalty points automatically
-          try {
-            const { processOrderCompletion } = await import('@/lib/loyalty-utils');
-            await processOrderCompletion(order.id);
-          } catch (loyaltyErr) {
-            console.error('[DOKU WEBHOOK] Loyalty completion error:', loyaltyErr);
-          }
 
           // Send WhatsApp payment confirmation & notify admin/kitchen that order is paid
           try {

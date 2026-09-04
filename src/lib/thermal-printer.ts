@@ -1,4 +1,5 @@
 import { formatRupiah } from './utils';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary } from './receipt-modifiers';
 import { isBluetoothPrinterConnected, printDirectBluetooth } from './bluetooth-printer';
 
 export interface ThermalPrintOrder {
@@ -17,6 +18,8 @@ export interface ThermalPrintOrder {
     qty: number;
     price: number;
     totalPrice?: number;
+    originalPrice?: number;
+    promoDiscount?: number;
     iceLevel?: string;
     sugarLevel?: string;
     matchaLevel?: number;
@@ -32,6 +35,8 @@ export interface ThermalPrintOrder {
   tumblerDiscount?: number;
   voucherDiscount?: number;
   voucherCode?: string;
+  voucherTitle?: string;
+  hasTumbler?: boolean;
   total: number;
   cashPaid?: number;
   change?: number;
@@ -100,25 +105,9 @@ export async function printThermalReceipt(
   if (isKitchenTicket) {
     let itemsHtml = '';
     order.items.forEach((item) => {
-      let mods = '';
-      if (item.sugarLevel) mods += `<div>• Gula: ${item.sugarLevel}</div>`;
-      if (item.iceLevel) mods += `<div>• Es: ${item.iceLevel}</div>`;
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) mods += `<div>• Matcha: Level ${item.matchaLevel}</div>`;
-      if (item.size) mods += `<div>• Size: ${item.size}</div>`;
-      if (item.shotName) mods += `<div>• Shot: ${item.shotName}</div>`;
-      if (item.addOns && item.addOns.length > 0) {
-        item.addOns.forEach((a) => {
-          mods += `<div>• +${a.name}</div>`;
-        });
-      }
-      if (item.bundleSelections && item.bundleSelections.length > 0) {
-        item.bundleSelections.forEach((b) => {
-          mods += `<div>• ${b.productName || b.groupName}</div>`;
-        });
-      }
-      if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-        mods += `<div>• ${item.modifiersString}</div>`;
-      }
+      const parsed = parseItemModifiers(item);
+      const modLines = getReceiptModifierLines(parsed, false);
+      const mods = modLines.map((l) => `<div style="font-weight: bold;">» ${l.label}: ${l.value}</div>`).join('');
 
       itemsHtml += `
         <div style="border-bottom: 1px dashed #000; padding: 4px 0;">
@@ -197,34 +186,27 @@ export async function printThermalReceipt(
       </html>
     `;
   } else {
+    const summary = calculateGrossReceiptSummary(order);
     let itemsHtml = '';
-    order.items.forEach((item) => {
-      const priceFormatted = formatRupiah((item.totalPrice || item.price) * item.qty);
-      let mods = '';
-      if (item.sugarLevel) mods += `<div class="mod-line">• Gula: ${item.sugarLevel}</div>`;
-      if (item.iceLevel) mods += `<div class="mod-line">• Es: ${item.iceLevel}</div>`;
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) mods += `<div class="mod-line">• Matcha: Level ${item.matchaLevel}</div>`;
-      if (item.size) mods += `<div class="mod-line">• Ukuran: ${item.size}</div>`;
-      if (item.shotName) mods += `<div class="mod-line">• Shot: ${item.shotName}</div>`;
-      if (item.addOns && item.addOns.length > 0) {
-        item.addOns.forEach((a) => {
-          mods += `<div class="mod-line">• +${a.name} (${formatRupiah(a.price)})</div>`;
-        });
-      }
-      if (item.bundleSelections && item.bundleSelections.length > 0) {
-        item.bundleSelections.forEach((b) => {
-          mods += `<div class="mod-line">• ${b.productName || b.groupName}</div>`;
-        });
-      }
-      if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-        mods += `<div class="mod-line">• ${item.modifiersString}</div>`;
-      }
+    summary.items.forEach((pItem) => {
+      const parsed = parseItemModifiers({
+        ...pItem.rawItem,
+        originalPrice: pItem.unitOriginalPrice,
+        promoDiscount: pItem.unitDiscount,
+        price: pItem.unitFinalPrice,
+        modifiersString: pItem.modifiersString,
+      });
+      const modLines = getReceiptModifierLines(parsed, true);
+      const mods = modLines.map((l) => `<div class="mod-line">» <b>${l.label}:</b> ${l.value}</div>`).join('');
 
       itemsHtml += `
         <div class="item-block">
           <div class="row">
-            <span class="item-name">${item.qty}x ${item.name}</span>
-            <span class="item-price">${priceFormatted}</span>
+            <span class="item-name">${pItem.qty}x ${pItem.name}</span>
+            <span class="item-price">
+              ${pItem.hasDiscount ? `<span style="text-decoration: line-through; color: #666; font-size: 10px; margin-right: 4px;">${formatRupiah(pItem.totalOriginalPrice)}</span>` : ''}
+              ${formatRupiah(pItem.totalFinalPrice)}
+            </span>
           </div>
           ${mods ? `<div class="mod-container">${mods}</div>` : ''}
         </div>
@@ -354,12 +336,30 @@ export async function printThermalReceipt(
 
           <div class="row">
             <span>Subtotal</span>
-            <span>${formatRupiah(order.subtotal)}</span>
+            <span>${formatRupiah(summary.grossSubtotal)}</span>
           </div>
-          ${totalDiscount > 0 ? `
+          ${summary.totalFlashSaleDiscount > 0 ? `
             <div class="row">
-              <span>Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}</span>
-              <span>-${formatRupiah(totalDiscount)}</span>
+              <span>Diskon Flash Sale</span>
+              <span>-${formatRupiah(summary.totalFlashSaleDiscount)}</span>
+            </div>
+          ` : ''}
+          ${summary.voucherDiscount > 0 ? `
+            <div class="row">
+              <span>${summary.voucherLabel}</span>
+              <span>-${formatRupiah(summary.voucherDiscount)}</span>
+            </div>
+          ` : ''}
+          ${summary.tumblerDiscount > 0 ? `
+            <div class="row">
+              <span>Diskon Bawa Tumbler</span>
+              <span>-${formatRupiah(summary.tumblerDiscount)}</span>
+            </div>
+          ` : ''}
+          ${summary.deliveryFee > 0 ? `
+            <div class="row">
+              <span>Ongkos Kirim</span>
+              <span>${formatRupiah(summary.deliveryFee)}</span>
             </div>
           ` : ''}
 
@@ -367,7 +367,7 @@ export async function printThermalReceipt(
 
           <div class="row-total">
             <span>TOTAL</span>
-            <span>${formatRupiah(order.total)}</span>
+            <span>${formatRupiah(summary.finalTotal)}</span>
           </div>
           <div class="row">
             <span>Metode (${order.paymentMethod})</span>

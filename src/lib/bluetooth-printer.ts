@@ -4,6 +4,7 @@
  */
 
 import { formatRupiah } from './utils';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary } from './receipt-modifiers';
 import html2canvas from 'html2canvas';
 
 export interface BluetoothPrinterDevice {
@@ -304,10 +305,13 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   boldOff();
   writeText('\n');
 
-  (order.items || []).forEach((item: any) => {
-    const itemPrice = (item.totalPrice || item.price) * item.qty;
-    const itemTitle = `[ ${item.qty}x ] ${item.name.toUpperCase()}`;
-    const priceStr = formatRupiah(itemPrice);
+  const summary = calculateGrossReceiptSummary(order);
+
+  (summary.items || []).forEach((pItem: any) => {
+    const itemTitle = `[ ${pItem.qty}x ] ${pItem.name.toUpperCase()}`;
+    const priceStr = pItem.hasDiscount
+      ? `${formatRupiah(pItem.totalOriginalPrice)}->${formatRupiah(pItem.totalFinalPrice)}`
+      : formatRupiah(pItem.totalFinalPrice);
 
     boldOn();
     if (itemTitle.length + priceStr.length + 1 <= maxCols) {
@@ -320,34 +324,17 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
 
     // Modifiers in Bold with clear vertical line indicator
     boldOn();
-    if (item.sugarLevel) {
-      writeText(`  | >> GULA  : ${item.sugarLevel.toUpperCase()}\n`);
-    }
-    if (item.iceLevel) {
-      writeText(`  | >> ES    : ${item.iceLevel.toUpperCase()}\n`);
-    }
-    if (item.matchaLevel !== undefined && item.matchaLevel > 0) {
-      writeText(`  | >> MATCHA: LEVEL ${item.matchaLevel}\n`);
-    }
-    if (item.size) {
-      writeText(`  | >> UKURAN: ${item.size.toUpperCase()}\n`);
-    }
-    if (item.shotName) {
-      writeText(`  | >> SHOT  : ${item.shotName.toUpperCase()}\n`);
-    }
-    if (item.addOns && item.addOns.length > 0) {
-      item.addOns.forEach((a: any) => {
-        writeText(`  | >> TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})\n`);
-      });
-    }
-    if (item.bundleSelections && item.bundleSelections.length > 0) {
-      item.bundleSelections.forEach((b: any) => {
-        writeText(`  | >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`);
-      });
-    }
-    if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-      writeText(`  | >> VARIAN: ${item.modifiersString.toUpperCase()}\n`);
-    }
+    const parsed = parseItemModifiers({
+      ...pItem.rawItem,
+      originalPrice: pItem.unitOriginalPrice,
+      promoDiscount: pItem.unitDiscount,
+      price: pItem.unitFinalPrice,
+      modifiersString: pItem.modifiersString,
+    });
+    const modLines = getReceiptModifierLines(parsed, true);
+    modLines.forEach((m) => {
+      writeText(`  | >> ${m.label.padEnd(7)}: ${m.value}\n`);
+    });
     boldOff();
     writeText('--------------------------------\n');
   });
@@ -359,10 +346,19 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   alignLeft();
 
   // 7. Payment Summary
-  writeText(padLine('Subtotal:', formatRupiah(order.subtotal || order.total), maxCols));
-  if (totalDiscount > 0) {
-    const promoLabel = `Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}:`;
-    writeText(padLine(promoLabel, `-${formatRupiah(totalDiscount)}`, maxCols));
+  writeText(padLine('Subtotal:', formatRupiah(summary.grossSubtotal), maxCols));
+  if (summary.totalFlashSaleDiscount > 0) {
+    writeText(padLine('Diskon Flash Sale:', `-${formatRupiah(summary.totalFlashSaleDiscount)}`, maxCols));
+  }
+  if (summary.voucherDiscount > 0) {
+    const vLabel = summary.voucherLabel.length > 17 ? summary.voucherLabel.slice(0, 16) + '…:' : `${summary.voucherLabel}:`;
+    writeText(padLine(vLabel, `-${formatRupiah(summary.voucherDiscount)}`, maxCols));
+  }
+  if (summary.tumblerDiscount > 0) {
+    writeText(padLine('Diskon Bawa Tumbler:', `-${formatRupiah(summary.tumblerDiscount)}`, maxCols));
+  }
+  if (summary.deliveryFee > 0) {
+    writeText(padLine('Ongkos Kirim:', formatRupiah(summary.deliveryFee), maxCols));
   }
 
   // 8. Solid Black TOTAL Banner (Inverted Ribbon)
@@ -370,7 +366,7 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   reverseOn();
   boldOn();
   write([0x1b, 0x21, 0x10]); // Double height
-  writeText(padLine(' TOTAL', `${formatRupiah(order.total)} `, maxCols));
+  writeText(padLine(' TOTAL', `${formatRupiah(summary.finalTotal)} `, maxCols));
   write([0x1b, 0x21, 0x00]); // Normal text
   boldOff();
   reverseOff();
@@ -495,17 +491,11 @@ export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array
 
     // Modifiers
     boldOn();
-    if (item.sugarLevel) writeText(`  >> GULA  : ${item.sugarLevel.toUpperCase()}\n`);
-    if (item.iceLevel) writeText(`  >> ES    : ${item.iceLevel.toUpperCase()}\n`);
-    if (item.matchaLevel !== undefined && item.matchaLevel > 0) writeText(`  >> MATCHA: LEVEL ${item.matchaLevel}\n`);
-    if (item.size) writeText(`  >> UKURAN: ${item.size.toUpperCase()}\n`);
-    if (item.shotName) writeText(`  >> SHOT  : ${item.shotName.toUpperCase()}\n`);
-    if (item.addOns && item.addOns.length > 0) {
-      item.addOns.forEach((a: any) => writeText(`  >> +TOPPING: ${a.name.toUpperCase()}\n`));
-    }
-    if (item.bundleSelections && item.bundleSelections.length > 0) {
-      item.bundleSelections.forEach((b: any) => writeText(`  >> PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}\n`));
-    }
+    const parsed = parseItemModifiers(item);
+    const modLines = getReceiptModifierLines(parsed, false);
+    modLines.forEach((m) => {
+      writeText(`  >> ${m.label.padEnd(7)}: ${m.value}\n`);
+    });
     boldOff();
     writeText('--------------------------------\n');
   });
@@ -559,20 +549,27 @@ export function renderCgvTicketCanvas(
   canvas.width = width;
   
   // Calculate dynamic height
-  const items = order.items || [];
+  const summary = calculateGrossReceiptSummary(order);
+  const items = isKitchen ? (order.items || []) : summary.items;
   let modifierLinesCount = 0;
-  items.forEach((item: any) => {
-    if (item.sugarLevel) modifierLinesCount++;
-    if (item.iceLevel) modifierLinesCount++;
-    if (item.matchaLevel) modifierLinesCount++;
-    if (item.size) modifierLinesCount++;
-    if (item.shotName) modifierLinesCount++;
-    if (item.addOns) modifierLinesCount += item.addOns.length;
-    if (item.bundleSelections) modifierLinesCount += item.bundleSelections.length;
-    if (item.modifiersString) modifierLinesCount++;
+  items.forEach((pItem: any) => {
+    const parsed = parseItemModifiers({
+      ...(pItem.rawItem || pItem),
+      originalPrice: pItem.unitOriginalPrice,
+      promoDiscount: pItem.unitDiscount,
+      price: pItem.unitFinalPrice || pItem.price,
+      modifiersString: pItem.modifiersString || pItem.modifiers,
+    });
+    const lines = getReceiptModifierLines(parsed, !isKitchen);
+    modifierLinesCount += lines.length;
   });
 
-  const estimatedHeight = 680 + (items.length * 48) + (modifierLinesCount * 24);
+  const extraDiscountRows = (summary.totalFlashSaleDiscount > 0 ? 1 : 0) +
+    (summary.voucherDiscount > 0 ? 1 : 0) +
+    (summary.tumblerDiscount > 0 ? 1 : 0) +
+    (summary.deliveryFee > 0 ? 1 : 0);
+
+  const estimatedHeight = 680 + (items.length * 48) + (modifierLinesCount * 24) + (extraDiscountRows * 20);
   canvas.height = estimatedHeight;
 
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -716,14 +713,36 @@ export function renderCgvTicketCanvas(
     y += badge2.height + 10;
 
     // Items List
-    items.forEach((item: any) => {
-      const itemPrice = (item.totalPrice || item.price) * item.qty;
+    summary.items.forEach((pItem: any) => {
       ctx.fillStyle = '#000000';
       ctx.font = '900 13px monospace, sans-serif';
       
-      ctx.fillText(`[ ${item.qty}X ] ${item.name.toUpperCase()}`, paddingX, y + 12);
+      ctx.fillText(`[ ${pItem.qty}X ] ${pItem.name.toUpperCase()}`, paddingX, y + 12);
       ctx.textAlign = 'right';
-      ctx.fillText(formatRupiah(itemPrice), width - paddingX, y + 12);
+
+      if (pItem.hasDiscount) {
+        ctx.font = 'bold 10px monospace, sans-serif';
+        ctx.fillStyle = '#777777';
+        const origStr = formatRupiah(pItem.totalOriginalPrice);
+        const finalStr = formatRupiah(pItem.totalFinalPrice);
+        const finalW = ctx.measureText(finalStr).width;
+        ctx.fillText(origStr, width - paddingX - finalW - 8, y + 12);
+
+        // Strike through original price
+        const origW = ctx.measureText(origStr).width;
+        ctx.strokeStyle = '#777777';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(width - paddingX - finalW - 8 - origW, y + 8);
+        ctx.lineTo(width - paddingX - finalW - 8, y + 8);
+        ctx.stroke();
+
+        ctx.font = '900 13px monospace, sans-serif';
+        ctx.fillStyle = '#000000';
+        ctx.fillText(finalStr, width - paddingX, y + 12);
+      } else {
+        ctx.fillText(formatRupiah(pItem.totalFinalPrice), width - paddingX, y + 12);
+      }
       ctx.textAlign = 'left';
       y += 18;
 
@@ -731,21 +750,15 @@ export function renderCgvTicketCanvas(
       const modStartX = paddingX + 8;
       const modStartY = y;
       
-      const modifierLines: string[] = [];
-      if (item.sugarLevel) modifierLines.push(`GULA: ${item.sugarLevel.toUpperCase()}`);
-      if (item.iceLevel) modifierLines.push(`ES: ${item.iceLevel.toUpperCase()}`);
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) modifierLines.push(`MATCHA: LEVEL ${item.matchaLevel}`);
-      if (item.size) modifierLines.push(`UKURAN: ${item.size.toUpperCase()}`);
-      if (item.shotName) modifierLines.push(`SHOT: ${item.shotName.toUpperCase()}`);
-      if (item.addOns && item.addOns.length > 0) {
-        item.addOns.forEach((a: any) => modifierLines.push(`TOPPING: +${a.name.toUpperCase()} (${formatRupiah(a.price)})`));
-      }
-      if (item.bundleSelections && item.bundleSelections.length > 0) {
-        item.bundleSelections.forEach((b: any) => modifierLines.push(`PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}`));
-      }
-      if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-        modifierLines.push(`VARIAN: ${item.modifiersString.toUpperCase()}`);
-      }
+      const parsed = parseItemModifiers({
+        ...pItem.rawItem,
+        originalPrice: pItem.unitOriginalPrice,
+        promoDiscount: pItem.unitDiscount,
+        price: pItem.unitFinalPrice,
+        modifiersString: pItem.modifiersString,
+      });
+      const modLines = getReceiptModifierLines(parsed, true);
+      const modifierLines = modLines.map((m) => `${m.label}: ${m.value}`);
 
       if (modifierLines.length > 0) {
         ctx.font = 'bold 10.5px monospace, sans-serif';
@@ -786,16 +799,38 @@ export function renderCgvTicketCanvas(
     ctx.font = 'bold 11px monospace, sans-serif';
     ctx.fillText('Subtotal:', paddingX, y + 11);
     ctx.textAlign = 'right';
-    ctx.fillText(formatRupiah(order.subtotal || order.total), width - paddingX, y + 11);
+    ctx.fillText(formatRupiah(summary.grossSubtotal), width - paddingX, y + 11);
     y += 16;
 
-    const totalDiscount = (order.discount || 0) + (order.tumblerDiscount || 0) + (order.voucherDiscount || 0);
-    if (totalDiscount > 0) {
-      const promoLabel = `Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}:`;
+    if (summary.totalFlashSaleDiscount > 0) {
       ctx.textAlign = 'left';
-      ctx.fillText(promoLabel, paddingX, y + 11);
+      ctx.fillText('Diskon Flash Sale:', paddingX, y + 11);
       ctx.textAlign = 'right';
-      ctx.fillText(`-${formatRupiah(totalDiscount)}`, width - paddingX, y + 11);
+      ctx.fillText(`-${formatRupiah(summary.totalFlashSaleDiscount)}`, width - paddingX, y + 11);
+      y += 16;
+    }
+
+    if (summary.voucherDiscount > 0) {
+      ctx.textAlign = 'left';
+      ctx.fillText(`${summary.voucherLabel}:`, paddingX, y + 11);
+      ctx.textAlign = 'right';
+      ctx.fillText(`-${formatRupiah(summary.voucherDiscount)}`, width - paddingX, y + 11);
+      y += 16;
+    }
+
+    if (summary.tumblerDiscount > 0) {
+      ctx.textAlign = 'left';
+      ctx.fillText('Diskon Bawa Tumbler:', paddingX, y + 11);
+      ctx.textAlign = 'right';
+      ctx.fillText(`-${formatRupiah(summary.tumblerDiscount)}`, width - paddingX, y + 11);
+      y += 16;
+    }
+
+    if (summary.deliveryFee > 0) {
+      ctx.textAlign = 'left';
+      ctx.fillText('Ongkos Kirim:', paddingX, y + 11);
+      ctx.textAlign = 'right';
+      ctx.fillText(formatRupiah(summary.deliveryFee), width - paddingX, y + 11);
       y += 16;
     }
 
@@ -812,7 +847,7 @@ export function renderCgvTicketCanvas(
     ctx.fillText('TOTAL', paddingX + 8, y + (bannerH / 2));
     
     ctx.textAlign = 'right';
-    ctx.fillText(formatRupiah(order.total), width - paddingX - 8, y + (bannerH / 2));
+    ctx.fillText(formatRupiah(summary.finalTotal), width - paddingX - 8, y + (bannerH / 2));
     ctx.textBaseline = 'alphabetic';
     y += bannerH + 12;
 
@@ -937,21 +972,9 @@ export function renderCgvTicketCanvas(
       const modStartX = paddingX + 8;
       const modStartY = y;
       
-      const modifierLines: string[] = [];
-      if (item.sugarLevel) modifierLines.push(`GULA: ${item.sugarLevel.toUpperCase()}`);
-      if (item.iceLevel) modifierLines.push(`ES: ${item.iceLevel.toUpperCase()}`);
-      if (item.matchaLevel !== undefined && item.matchaLevel > 0) modifierLines.push(`MATCHA: LEVEL ${item.matchaLevel}`);
-      if (item.size) modifierLines.push(`UKURAN: ${item.size.toUpperCase()}`);
-      if (item.shotName) modifierLines.push(`SHOT: ${item.shotName.toUpperCase()}`);
-      if (item.addOns && item.addOns.length > 0) {
-        item.addOns.forEach((a: any) => modifierLines.push(`TOPPING: +${a.name.toUpperCase()}`));
-      }
-      if (item.bundleSelections && item.bundleSelections.length > 0) {
-        item.bundleSelections.forEach((b: any) => modifierLines.push(`PILIHAN: ${(b.productName || b.groupName || '').toUpperCase()}`));
-      }
-      if (item.modifiersString && !item.sugarLevel && !item.iceLevel) {
-        modifierLines.push(`VARIAN: ${item.modifiersString.toUpperCase()}`);
-      }
+      const parsed = parseItemModifiers(item);
+      const modLines = getReceiptModifierLines(parsed, false);
+      const modifierLines = modLines.map((m) => `${m.label}: ${m.value}`);
 
       if (modifierLines.length > 0) {
         ctx.font = 'bold 11px monospace, sans-serif';

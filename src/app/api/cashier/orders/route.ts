@@ -47,32 +47,52 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
     });
 
-    const mappedOrders = orders.map((o) => ({
-      id: o.id,
-      customerName: o.customerName,
-      customerPhone: o.customerPhone,
-      orderType: o.orderType,
-      tableNumber: o.tableNumber,
-      address: o.address,
-      paymentMethod: o.paymentMethod,
-      total: o.total,
-      status: o.status,
-      cancelReason: o.cancelReason,
-      notes: o.notes,
-      source: o.source,
-      createdAt: o.createdAt.toISOString(),
-      paymentProofUrl: o.paymentProofUrl,
-      pickupDate: o.pickupDate ? o.pickupDate.toISOString() : null,
-      pickupTime: o.pickupTime,
-      queueNumber: o.queueNumber,
-      items: o.items.map((item) => ({
-        id: item.id,
-        qty: item.qty,
-        price: item.price,
-        modifiers: item.modifiers,
-        product: { name: item.product.name, image: item.product.image },
-      })),
-    }));
+    const voucherCodes = Array.from(new Set(orders.map(o => o.voucherCode).filter(Boolean))) as string[];
+    const voucherTemplates = voucherCodes.length > 0 ? await prisma.voucherTemplate.findMany({
+      where: { code: { in: voucherCodes } },
+      select: { code: true, title: true }
+    }) : [];
+    const templateMap = new Map<string, string>(voucherTemplates.map(t => [t.code.toUpperCase(), t.title]));
+
+    const mappedOrders = orders.map((o) => {
+      const vCode = o.voucherCode ? o.voucherCode.trim() : null;
+      const vTitle = vCode ? (templateMap.get(vCode.toUpperCase()) || null) : null;
+      return {
+        id: o.id,
+        customerName: o.customerName,
+        customerPhone: o.customerPhone,
+        orderType: o.orderType,
+        tableNumber: o.tableNumber,
+        address: o.address,
+        paymentMethod: o.paymentMethod,
+        subtotal: o.subtotal,
+        deliveryFee: o.deliveryFee,
+        total: o.total,
+        voucherCode: o.voucherCode,
+        voucherTitle: vTitle,
+        hasTumbler: o.hasTumbler,
+        status: o.status,
+        cancelReason: o.cancelReason,
+        notes: o.notes,
+        source: o.source,
+        createdAt: o.createdAt.toISOString(),
+        paymentProofUrl: o.paymentProofUrl,
+        pickupDate: o.pickupDate ? o.pickupDate.toISOString() : null,
+        pickupTime: o.pickupTime,
+        queueNumber: o.queueNumber,
+        items: o.items.map((item) => ({
+          id: item.id,
+          qty: item.qty,
+          price: item.price,
+          modifiers: item.modifiers,
+          product: { 
+            name: item.product.name, 
+            price: item.product.price, 
+            image: item.product.image 
+          },
+        })),
+      };
+    });
 
     const settings = await prisma.storeSettings.findFirst();
     const pickupAlarmLeadTime = settings?.pickupAlarmLeadTime ?? 30;
@@ -286,14 +306,11 @@ export async function POST(req: Request) {
     const secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount) + deliveryFee;
 
     // Determine initial status based on order type
-    // Walk-in POS orders → directly COMPLETED
-    // Delivery → ASSIGNED (needs processing)
-    // Dine In → PREPARING (goes to kitchen queue)
-    let initialStatus = 'COMPLETED'
+    // Per Rule 6 & user preference: orders start at PENDING (Pesanan Diterima / Menunggu Masak)
+    // Delivery → ASSIGNED (needs courier assignment)
+    let initialStatus = 'PENDING'
     if (orderType === 'DELIVERY') {
       initialStatus = 'ASSIGNED'
-    } else if (orderType === 'DINE_IN') {
-      initialStatus = 'PREPARING'
     }
 
     const prefix = orderType === 'DELIVERY' ? 'DLV' : (orderType === 'DINE_IN' ? 'DIN' : 'POS')

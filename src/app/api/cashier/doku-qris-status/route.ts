@@ -24,11 +24,11 @@ export async function POST(req: Request) {
       },
     });
 
-    if (order && order.status === 'COMPLETED') {
+    if (order && (order.status !== 'PENDING_PAYMENT' || order.paymentProofUrl === '/verified-webhook.svg')) {
       return NextResponse.json({
         paid: true,
         orderId: order.id,
-        status: 'COMPLETED',
+        status: order.status,
         customerName: order.customerName,
         totalPayable: order.total,
       });
@@ -54,24 +54,20 @@ export async function POST(req: Request) {
       }
     }
 
-    // 3. If paid, complete the order automatically in DB & execute loyalty completion
-    if (isPaid && order && order.status !== 'COMPLETED') {
+    // 3. If paid, update the order to PENDING (Pesanan Diterima) in DB
+    if (isPaid && order && order.status === 'PENDING_PAYMENT') {
       order = await prisma.order.update({
         where: { id: order.id },
-        data: { status: 'COMPLETED' },
+        data: {
+          status: 'PENDING',
+          paymentProofUrl: '/verified-cashier-qris.svg',
+        },
       });
-
-      // Award loyalty points automatically if user is attached
-      try {
-        await processOrderCompletion(order.id);
-      } catch (err) {
-        console.error('Failed to process loyalty completion for QRIS order:', err);
-      }
 
       return NextResponse.json({
         paid: true,
         orderId: order.id,
-        status: 'COMPLETED',
+        status: 'PENDING',
         customerName: order.customerName,
         totalPayable: order.total,
       });
@@ -79,7 +75,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       paid: isPaid,
-      status: isPaid ? 'COMPLETED' : 'PENDING',
+      status: isPaid ? (order?.status || 'PENDING') : 'PENDING_PAYMENT',
     });
   } catch (error: any) {
     console.error('[DOKU QRIS STATUS CHECK ERROR]', error);

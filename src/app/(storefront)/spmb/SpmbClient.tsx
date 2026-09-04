@@ -16,6 +16,7 @@ import { useCartStore } from '@/stores/cart-store';
 import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import { formatRupiah, getActivePromo, getEffectiveProductDisplay } from '@/lib/utils';
+import { isFoodItem } from '@/lib/receipt-modifiers';
 import type { Product, Category } from '@/types';
 import { 
   FloorElementVisual,
@@ -111,7 +112,7 @@ export default function SpmbClient({
         size: item.size || 'Normal',
         sizePrice: (item as any).sizePrice || 0,
         addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
-        price: item.price,
+        price: (item as any).price || item.basePrice,
       }));
 
       const res = await fetch('/api/checkout/validate-voucher', {
@@ -162,7 +163,7 @@ export default function SpmbClient({
           size: item.size || 'Normal',
           sizePrice: (item as any).sizePrice || 0,
           addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
-          price: item.price,
+          price: (item as any).price || item.basePrice,
         }));
 
         const res = await fetch('/api/checkout/validate-voucher', {
@@ -382,22 +383,59 @@ export default function SpmbClient({
     setErrorMsg('');
 
     try {
-      const itemsPayload = cartItems.map((item) => ({
-        productId: item.productId,
-        name: item.name,
-        quantity: item.quantity,
-        size: item.size || 'Normal',
-        sizePrice: (item as any).sizePrice || 0,
-        shot: (item as any).shot || undefined,
-        addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
-        modsString: (item.size && item.size !== 'Normal' && item.size !== 'Regular' ? `Size: ${item.size}, ` : '') +
-          (item.matchaLevel !== undefined && item.matchaLevel !== null ? `Matcha: Level ${item.matchaLevel}, ` : '') +
-          ((item as any).shot ? `${(item as any).shot}, ` : '') +
-          item.iceLevel + ', ' + item.sugarLevel +
-          (item.addOns && item.addOns.length > 0 ? ', ' + item.addOns.map((a: any) => a.name).join(', ') : ''),
-        bundleSelections: item.bundleSelections,
-        matchaLevel: (item as any).matchaLevel
-      }));
+      const itemsPayload = cartItems.map((item) => {
+        const prod = products.find((p) => p.id === item.productId);
+        const category = categories?.find((c: any) => c.id === (prod as any)?.categoryId || c.slug === (prod as any)?.category?.slug);
+        const isFood = isFoodItem(prod?.name || item.name) || (
+          (prod?.modifiers as any)?.productType === 'makanan' ||
+          category?.slug === 'makanan' ||
+          category?.slug === 'snack' ||
+          category?.slug === 'food' ||
+          category?.name?.toLowerCase().includes('makan')
+        );
+
+        const parts: string[] = [];
+        if (!isFood && item.matchaLevel !== undefined && item.matchaLevel !== null && prod?.modifiers?.showMatcha === true) {
+          parts.push(`Matcha Lvl: ${item.matchaLevel}`);
+        }
+        if (!isFood && (item as any).shot && (prod?.modifiers?.showEspressoShot === true || (prod?.modifiers?.espressoShots && prod.modifiers.espressoShots.length > 0))) {
+          parts.push(`${(item as any).shot}`);
+        }
+        if (!isFood && item.size && item.size !== 'Normal' && item.size !== 'Regular') {
+          parts.push(`Size: ${item.size}`);
+        }
+        if (!isFood) {
+          if (item.iceLevel && item.sugarLevel) {
+            parts.push(`${item.iceLevel} → ${item.sugarLevel}`);
+          } else if (item.iceLevel) {
+            parts.push(item.iceLevel);
+          } else if (item.sugarLevel) {
+            parts.push(item.sugarLevel);
+          }
+        }
+        if (item.addOns && item.addOns.length > 0) {
+          parts.push('+' + item.addOns.map((a: any) => a.name).join(', +'));
+        }
+
+        const activePromo = getActivePromo(prod);
+        if (activePromo && prod && activePromo.promoPrice < prod.price) {
+          const pot = prod.price - activePromo.promoPrice;
+          parts.push(`Potongan: ${formatRupiah(prod.price)} - ${formatRupiah(pot)} = ${formatRupiah(activePromo.promoPrice)}`);
+        }
+
+        return {
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          size: isFood ? undefined : (item.size || 'Normal'),
+          sizePrice: (item as any).sizePrice || 0,
+          shot: isFood ? undefined : ((item as any).shot || undefined),
+          addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
+          modsString: parts.length > 0 ? parts.join(', ') : null,
+          bundleSelections: item.bundleSelections,
+          matchaLevel: isFood ? undefined : (item as any).matchaLevel
+        };
+      });
 
       const backendPaymentMethod = paymentMethod === 'QRIS' ? 'QRIS_INSTAN' : 'COD';
       
@@ -975,27 +1013,56 @@ export default function SpmbClient({
                       )}
                       <div className="flex-1 min-w-0 text-left">
                         <h4 className="text-xs font-bold text-stone-900 line-clamp-1">{item.name}</h4>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
-                            {item.size || 'Normal'}
-                          </span>
-                          <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
-                            {item.iceLevel}
-                          </span>
-                          <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
-                            {item.sugarLevel}
-                          </span>
-                          {(item as any).shot && (
-                            <span className="inline-block text-[9px] font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
-                              {(item as any).shot}
-                            </span>
-                          )}
-                          {item.addOns && item.addOns.length > 0 && item.addOns.map((a: any) => (
-                            <span key={a.id} className="inline-block text-[9px] font-semibold bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded">
-                              +{a.name}
-                            </span>
-                          ))}
-                        </div>
+                        {(() => {
+                          const prod = products.find((p) => p.id === item.productId);
+                          const category = categories?.find((c: any) => c.id === (prod as any)?.categoryId || c.slug === (prod as any)?.category?.slug);
+                          const isFood = isFoodItem(prod?.name || item.name) || (
+                            (prod?.modifiers as any)?.productType === 'makanan' ||
+                            category?.slug === 'makanan' ||
+                            category?.slug === 'snack' ||
+                            category?.slug === 'food' ||
+                            category?.name?.toLowerCase().includes('makan')
+                          );
+                          const activePromo = prod ? getActivePromo(prod) : null;
+                          const promoPotongan = activePromo && prod && activePromo.promoPrice < prod.price ? (prod.price - activePromo.promoPrice) : 0;
+
+                          return (
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {!isFood && (item.size && item.size !== 'Normal' && item.size !== 'Regular') && (
+                                <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
+                                  {item.size}
+                                </span>
+                              )}
+                              {!isFood && (item.iceLevel || item.sugarLevel) && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
+                                  {item.iceLevel && <span>{item.iceLevel}</span>}
+                                  {item.iceLevel && item.sugarLevel && <span className="text-orange-600 font-bold">→</span>}
+                                  {item.sugarLevel && <span>{item.sugarLevel}</span>}
+                                </span>
+                              )}
+                              {!isFood && item.matchaLevel !== undefined && prod?.modifiers?.showMatcha === true && (
+                                <span className="inline-block text-[9px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                                  Matcha Lvl {item.matchaLevel}
+                                </span>
+                              )}
+                              {!isFood && (item as any).shot && (prod?.modifiers?.showEspressoShot === true || (prod?.modifiers?.espressoShots && prod.modifiers.espressoShots.length > 0)) && (
+                                <span className="inline-block text-[9px] font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
+                                  {(item as any).shot}
+                                </span>
+                              )}
+                              {item.addOns && item.addOns.length > 0 && item.addOns.map((a: any) => (
+                                <span key={a.id} className="inline-block text-[9px] font-semibold bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded">
+                                  +{a.name}
+                                </span>
+                              ))}
+                              {promoPotongan > 0 && prod && activePromo && (
+                                <span className="inline-block text-[9px] font-bold bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded">
+                                  Potongan: {formatRupiah(prod.price)} - {formatRupiah(promoPotongan)} = {formatRupiah(activePromo.promoPrice)}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                         <p className="text-xs font-extrabold text-orange-600 mt-1.5">{formatRupiah(item.totalPrice)}</p>
                       </div>
                       

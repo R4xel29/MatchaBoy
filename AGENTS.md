@@ -22,3 +22,25 @@
    - Validasi dan kalkulasi potongan harga WAJIB dihitung ulang di backend secara universal via `validateAndCalculateDiscount` dari `@/lib/discount-utils`.
    - Setiap pembatalan pesanan (baik dari pembeli, kasir, admin, atau cron pembayaran kedaluwarsa) WAJIB memanggil `revertVoucherUsage` untuk memulihkan status voucher personal maupun kuota `usageCount` template promo.
 
+6. SIKLUS HIDUP PESANAN PASCA PEMBAYARAN:
+   - Setiap pesanan yang telah menyelesaikan pembayaran (baik pembayaran tunai di kasir maupun pembayaran otomatis melalui QRIS / webhook DOKU) WAJIB masuk ke status 'PENDING' (Pesanan Diterima / Menunggu Masak).
+   - DILARANG mengarahkan pesanan yang baru lunas langsung ke status 'COMPLETED'. Pesanan harus melalui tahapan proses antrean dapur: 'PENDING' -> 'PREPARING' (Masak) -> 'READY' (Siap Saji) -> 'COMPLETED' (Selesai).
+   - Pengurangan stok bahan baku dilakukan saat pesanan memasuki proses masak ('PREPARING'), dan poin loyalitas atau komisi referral diberikan saat pesanan berstatus 'COMPLETED'.
+
+7. VALIDASI MODIFIER & KONSISTENSI STRUK (POS & SPMB):
+   - Produk kategori Makanan ('makanan' / 'food' / 'snack') DILARANG memiliki modifier minuman seperti level es, level gula, kepekatan matcha, atau espresso shot.
+   - Menu Kopi DILARANG memiliki keterangan matcha level jika 'showMatcha' bernilai false.
+   - Menu Non-Espresso / Matcha DILARANG memiliki opsi single/double shot jika 'showEspressoShot' bernilai false.
+   - Pada antarmuka dan teks ringkasan pesanan SPMB, opsi es dan gula WAJIB dipisahkan oleh tanda panah '→' (contoh: "Normal Ice → Biasa"), bukan tanda koma.
+   - Pada struk cetak kasir (thermal printer), setiap modifier wajib dicetak per baris secara konsisten baik pesanan dari POS maupun SPMB menggunakan tanda panah chevron '»' (contoh: '» ES: NORMAL ICE', '» GULA: BIASA').
+
+8. TRANSPARANSI POTONGAN HARGA (DISKON & PROMO):
+   - Pada menu atau pesanan yang memiliki potongan harga/diskon promo, struk dan rincian pesanan WAJIB menampilkan rincian potongan secara eksplisit dan transparan.
+   - Format wajib menunjukkan harga semula, besaran potongan, dan harga akhir (contoh: 'Rp 11.000 - Rp 1.000 = Rp 10.000' atau baris '» POTONGAN: -Rp 1.000'), bukan langsung menampilkan harga akhir saja tanpa penjelasan.
+
+9. STANDAR ADOPSI DESAIN UI (STITCH / FIGMA / MOCKUP):
+   - Setiap peremajaan antarmuka berdasarkan desain eksternal (seperti StitchMCP) WAJIB mempertahankan 100% fitur, modal, alur validasi, event listener, dan tombol aksi yang sudah ada (*zero feature regression*).
+   - Seluruh token warna dari mockup wajib diselaraskan dengan identitas resmi Arum Seduh (nuansa Oranye & Kuning Amber, bukan warna acak atau hijau default).
+   - Gunakan ikon vektor Lucide React secara konsisten dan dilarang memakai emoji sistem operasi pada teks antarmuka atau tombol aksi.
+
+

@@ -38,7 +38,8 @@ import {
   Tag,
   Ticket,
 } from 'lucide-react';
-import { formatRupiah } from '@/lib/utils';
+import { formatRupiah, getActivePromo } from '@/lib/utils';
+import { isFoodItem } from '@/lib/receipt-modifiers';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
 import { PosTablePickerModal } from '@/components/cashier/PosTablePickerModal';
 import { VoiceOrderModal } from '@/components/cashier/VoiceOrderModal';
@@ -111,6 +112,8 @@ type CartItemPOS = {
   productId: string;
   name: string;
   basePrice: number;
+  originalPrice?: number;
+  promoDiscount?: number;
   quantity: number;
   iceLevel: string;
   sugarLevel: string;
@@ -478,13 +481,13 @@ export default function CashierPOSClient({ products, categories, packagingStock,
 
   // Modifier modal state
   const [modifierProduct, setModifierProduct] = useState<POSProduct | null>(null);
-  const [modIce, setModIce] = useState('Normal Ice');
-  const [modSugar, setModSugar] = useState('Biasa');
-  const [modMatcha, setModMatcha] = useState(5);
+  const [modIce, setModIce] = useState('');
+  const [modSugar, setModSugar] = useState('');
+  const [modMatcha, setModMatcha] = useState<number | undefined>(undefined);
   const [modSize, setModSize] = useState('Normal');
   const [modSizePrice, setModSizePrice] = useState(0);
-  const [modShot, setModShot] = useState('Single Shot');
-  const [modShotCount, setModShotCount] = useState(1);
+  const [modShot, setModShot] = useState('');
+  const [modShotCount, setModShotCount] = useState(0);
   const [modShotPrice, setModShotPrice] = useState(0);
   const [activeStep, setActiveStep] = useState<'MATCHA' | 'SWEETNESS' | 'ICE' | 'SIZE' | 'ESPRESSO'>('SWEETNESS');
   const [modAddOns, setModAddOns] = useState<{ id: string; name: string; price: number }[]>([]);
@@ -524,7 +527,7 @@ export default function CashierPOSClient({ products, categories, packagingStock,
         activeModifier: modifierProduct ? {
           productName: modifierProduct.name,
           productImage: modifierProduct.image,
-          price: modifierProduct.price + modSizePrice + modShotPrice + (modMatcha >= 9 ? 2000 : (modMatcha >= 7 ? 1000 : 0)),
+          price: (getActivePromo(modifierProduct)?.promoPrice ?? modifierProduct.price) + modSizePrice + modShotPrice + (modMatcha && modMatcha >= 9 ? 2000 : (modMatcha && modMatcha >= 7 ? 1000 : 0)),
           iceLevel: modIce,
           sugarLevel: modSugar,
           matchaLevel: modMatcha,
@@ -651,6 +654,19 @@ export default function CashierPOSClient({ products, categories, packagingStock,
     }
   };
 
+  const checkIsFood = (prod?: POSProduct | null) => {
+    if (!prod) return false;
+    const category = categories.find((c) => c.id === prod.categoryId);
+    return (
+      isFoodItem(prod.name) ||
+      (prod.modifiers as any)?.productType === 'makanan' ||
+      category?.slug === 'makanan' ||
+      category?.slug === 'snack' ||
+      category?.slug === 'food' ||
+      category?.name?.toLowerCase().includes('makan')
+    );
+  };
+
   // Add to cart
   const handleProductClick = (product: POSProduct) => {
     if (product.isSoldOut) {
@@ -665,70 +681,96 @@ export default function CashierPOSClient({ products, categories, packagingStock,
       return;
     }
 
+    const isFood = checkIsFood(product);
     const mods = product.modifiers;
-    const effectiveSizes = getEffectiveSizes(mods);
-    const effectiveShots = getEffectiveShots(mods);
-    const hasModifiers = mods && (
-      mods.showSweetness !== false ||
-      mods.showMatcha === true ||
-      effectiveShots.length > 0 ||
-      effectiveSizes.length > 0 ||
-      mods.iceLevel?.length ||
-      mods.sugarLevel?.length ||
-      (mods.addOns && mods.addOns.length > 0)
-    );
+    const effectiveSizes = isFood ? [] : getEffectiveSizes(mods);
+    const effectiveShots = isFood ? [] : getEffectiveShots(mods);
+    const hasAddOns = !!(mods?.addOns && mods.addOns.length > 0);
+    const showSweetness = !isFood && mods?.showSweetness !== false;
+    const showMatcha = !isFood && mods?.showMatcha === true;
+    const showEspresso = !isFood && (mods?.showEspressoShot === true || effectiveShots.length > 0);
+
+    const hasModifiers = hasAddOns || showSweetness || showMatcha || showEspresso || effectiveSizes.length > 0;
 
     if (hasModifiers) {
       setModifierProduct(product);
-      setModIce(mods?.defaultIce || mods?.iceLevel?.[0] || 'Normal Ice');
-      setModSugar(mods?.defaultSugar || mods?.sugarLevel?.[0] || 'Biasa');
-      setModMatcha(mods?.defaultMatcha ?? 5);
-      const cupRegStock = packagingStock?.cupRegular ?? 999;
-      const cupJumboStock = packagingStock?.cupJumbo ?? 999;
-
-      if (cupRegStock <= 0 && cupJumboStock > 0 && !hasTumbler) {
-        const largeOpt = effectiveSizes.find(
-          (s) => s.name.toLowerCase().includes('large') || s.name.toLowerCase().includes('jumbo')
-        );
-        setModSize(largeOpt?.name || 'Large');
-        setModSizePrice(largeOpt?.price ?? 3000);
-      } else {
-        const firstSize = effectiveSizes[0];
-        setModSize(firstSize?.name || 'Regular');
-        setModSizePrice(firstSize?.price || 0);
-      }
-
-      const firstShot = effectiveShots[0];
-      setModShot(firstShot?.name || 'Single Shot');
-      setModShotCount(firstShot?.shots || 1);
-      setModShotPrice(firstShot?.price || 0);
-
-      if (effectiveShots.length > 0) {
-        setActiveStep('ESPRESSO');
-      } else if (mods?.showMatcha) {
-        setActiveStep('MATCHA');
-      } else if (mods?.showSweetness !== false) {
-        setActiveStep('SWEETNESS');
-      } else if (effectiveSizes.length > 0) {
-        setActiveStep('SIZE');
-      } else {
-        setActiveStep('ICE');
-      }
-
       setModAddOns([]);
       setModQty(1);
+
+      if (isFood) {
+        setModIce('');
+        setModSugar('');
+        setModMatcha(undefined);
+        setModSize('');
+        setModSizePrice(0);
+        setModShot('');
+        setModShotCount(0);
+        setModShotPrice(0);
+      } else {
+        setModIce(showSweetness ? (mods?.defaultIce || mods?.iceLevel?.[0] || 'Normal Ice') : '');
+        setModSugar(showSweetness ? (mods?.defaultSugar || mods?.sugarLevel?.[0] || 'Biasa') : '');
+        setModMatcha(showMatcha ? (mods?.defaultMatcha ?? 5) : undefined);
+
+        const cupRegStock = packagingStock?.cupRegular ?? 999;
+        const cupJumboStock = packagingStock?.cupJumbo ?? 999;
+
+        if (effectiveSizes.length > 0) {
+          if (cupRegStock <= 0 && cupJumboStock > 0 && !hasTumbler) {
+            const largeOpt = effectiveSizes.find(
+              (s) => s.name.toLowerCase().includes('large') || s.name.toLowerCase().includes('jumbo')
+            );
+            setModSize(largeOpt?.name || 'Large');
+            setModSizePrice(largeOpt?.price ?? 3000);
+          } else {
+            const firstSize = effectiveSizes[0];
+            setModSize(firstSize?.name || 'Regular');
+            setModSizePrice(firstSize?.price || 0);
+          }
+        } else {
+          setModSize('');
+          setModSizePrice(0);
+        }
+
+        if (showEspresso) {
+          const firstShot = effectiveShots[0];
+          setModShot(firstShot?.name || 'Single Shot');
+          setModShotCount(firstShot?.shots || 1);
+          setModShotPrice(firstShot?.price || 0);
+        } else {
+          setModShot('');
+          setModShotCount(0);
+          setModShotPrice(0);
+        }
+
+        if (showEspresso) {
+          setActiveStep('ESPRESSO');
+        } else if (showMatcha) {
+          setActiveStep('MATCHA');
+        } else if (showSweetness) {
+          setActiveStep('SWEETNESS');
+        } else if (effectiveSizes.length > 0) {
+          setActiveStep('SIZE');
+        } else {
+          setActiveStep('ICE');
+        }
+      }
     } else {
-      addToCart(product, 'Normal Ice', 'Biasa', 5, 'Regular', 0, 'Single Shot', 1, 0, [], 1);
+      addToCart(product, '', '', undefined, '', 0, '', 0, 0, [], 1);
     }
   };
 
-  const getMatchaCharge = (level?: number) => 0;
+  const getMatchaCharge = (level?: number) => {
+    if (!level) return 0;
+    if (level === 7 || level === 8) return 1000;
+    if (level >= 9) return 2000;
+    return 0;
+  };
 
   const addToCart = (
     product: POSProduct,
     iceLevel: string,
     sugarLevel: string,
-    matchaLevel: number,
+    matchaLevel: number | undefined,
     size: string,
     sizePrice: number,
     shotName: string,
@@ -737,11 +779,16 @@ export default function CashierPOSClient({ products, categories, packagingStock,
     addOns: { id: string; name: string; price: number }[],
     qty: number
   ) => {
+    const activePromo = getActivePromo(product);
+    const effectiveBasePrice = activePromo ? activePromo.promoPrice : product.price;
+    const originalPrice = product.price;
+    const promoDiscount = activePromo && activePromo.promoPrice < product.price ? (originalPrice - activePromo.promoPrice) : 0;
+
     const addOnIds = addOns.map((a) => a.id).sort().join(',');
-    const cartId = `${product.id}__${iceLevel}__${sugarLevel}__${matchaLevel}__${size}__${shotName}__${addOnIds}`;
+    const cartId = `${product.id}__${iceLevel || ''}__${sugarLevel || ''}__${matchaLevel ?? 'none'}__${size || ''}__${shotName || ''}__${addOnIds}`;
     const addOnTotal = addOns.reduce((sum, a) => sum + a.price, 0);
     const matchaCharge = getMatchaCharge(matchaLevel);
-    const itemPrice = product.price + sizePrice + shotPrice + addOnTotal + matchaCharge;
+    const itemPrice = effectiveBasePrice + sizePrice + shotPrice + addOnTotal + matchaCharge;
 
     setCart((prev) => {
       const existing = prev.find((i) => i.id === cartId);
@@ -758,7 +805,9 @@ export default function CashierPOSClient({ products, categories, packagingStock,
           id: cartId,
           productId: product.id,
           name: product.name,
-          basePrice: product.price,
+          basePrice: effectiveBasePrice,
+          originalPrice,
+          promoDiscount,
           quantity: qty,
           iceLevel,
           sugarLevel,
@@ -778,8 +827,9 @@ export default function CashierPOSClient({ products, categories, packagingStock,
 
   const handleModifierConfirm = () => {
     if (!modifierProduct) return;
+    const isFood = checkIsFood(modifierProduct);
 
-    if (!hasTumbler) {
+    if (!isFood && !hasTumbler && modSize) {
       const isLarge = modSize.toLowerCase().includes('large') || modSize.toLowerCase().includes('jumbo');
       const isRegular = modSize.toLowerCase().includes('normal') || modSize.toLowerCase().includes('regular');
       const cupRegStock = packagingStock?.cupRegular ?? 999;
@@ -795,7 +845,19 @@ export default function CashierPOSClient({ products, categories, packagingStock,
       }
     }
 
-    addToCart(modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modShot, modShotCount, modShotPrice, modAddOns, modQty);
+    addToCart(
+      modifierProduct,
+      isFood ? '' : modIce,
+      isFood ? '' : modSugar,
+      isFood ? undefined : modMatcha,
+      isFood ? '' : modSize,
+      isFood ? 0 : modSizePrice,
+      isFood ? '' : modShot,
+      isFood ? 0 : modShotCount,
+      isFood ? 0 : modShotPrice,
+      modAddOns,
+      modQty
+    );
     setModifierProduct(null);
   };
 
@@ -916,15 +978,40 @@ export default function CashierPOSClient({ products, categories, packagingStock,
         voucherCode: appliedVoucher?.code || undefined,
         isQrisConfirm: paymentMethod === 'QRIS',
         invoiceNumber: currentInvoiceNumber || pendingQrisInvoiceRef.current || undefined,
-        items: cart.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          addOnIds: item.addOns.map((a) => a.id),
-          sizePrice: item.sizePrice || 0,
-          shotPrice: item.shotPrice || 0,
-          matchaLevel: item.matchaLevel,
-          modsString: `${item.matchaLevel !== undefined ? `Matcha Lvl: ${item.matchaLevel}, ` : ''}${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map((a) => a.name).join(', +') : ''}`,
-        })),
+        items: cart.map((item) => {
+          const parts: string[] = [];
+          if (item.matchaLevel !== undefined && item.matchaLevel !== null) {
+            parts.push(`Matcha Lvl: ${item.matchaLevel}`);
+          }
+          if (item.shotName) {
+            parts.push(`Shot: ${item.shotName}`);
+          }
+          if (item.size && item.size !== 'Normal' && item.size !== 'Regular') {
+            parts.push(`Size: ${item.size}`);
+          }
+          if (item.iceLevel && item.sugarLevel) {
+            parts.push(`${item.iceLevel} → ${item.sugarLevel}`);
+          } else if (item.iceLevel) {
+            parts.push(item.iceLevel);
+          } else if (item.sugarLevel) {
+            parts.push(item.sugarLevel);
+          }
+          if (item.addOns && item.addOns.length > 0) {
+            parts.push('+' + item.addOns.map((a) => a.name).join(', +'));
+          }
+          if (item.promoDiscount && item.promoDiscount > 0 && item.originalPrice) {
+            parts.push(`Potongan: ${formatRupiah(item.originalPrice)} - ${formatRupiah(item.promoDiscount)} = ${formatRupiah(item.basePrice)}`);
+          }
+          return {
+            productId: item.productId,
+            quantity: item.quantity,
+            addOnIds: item.addOns.map((a) => a.id),
+            sizePrice: item.sizePrice || 0,
+            shotPrice: item.shotPrice || 0,
+            matchaLevel: item.matchaLevel,
+            modsString: parts.length > 0 ? parts.join(', ') : null,
+          };
+        }),
       };
 
       const res = await fetch('/api/cashier/orders', {
@@ -957,12 +1044,14 @@ export default function CashierPOSClient({ products, categories, packagingStock,
           name: item.name,
           qty: item.quantity,
           price: item.basePrice,
+          originalPrice: item.originalPrice,
+          promoDiscount: item.promoDiscount,
           totalPrice: item.totalPrice,
-          iceLevel: item.iceLevel,
-          sugarLevel: item.sugarLevel,
+          iceLevel: item.iceLevel || undefined,
+          sugarLevel: item.sugarLevel || undefined,
           matchaLevel: item.matchaLevel,
-          size: item.size,
-          shotName: item.shotName,
+          size: item.size || undefined,
+          shotName: item.shotName || undefined,
           addOns: item.addOns,
         })),
         subtotal,
@@ -2014,7 +2103,7 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                 })()}
 
                 {/* Ice Level */}
-                {modifierProduct.modifiers?.showSweetness !== false && (
+                {!checkIsFood(modifierProduct) && modifierProduct.modifiers?.showSweetness !== false && (
                   <div
                     onClick={() => setActiveStep('ICE')}
                     className={`p-3 rounded-2xl border transition-all ${
@@ -2046,7 +2135,7 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                 )}
 
                 {/* Sugar Level */}
-                {modifierProduct.modifiers?.showSweetness !== false && (
+                {!checkIsFood(modifierProduct) && modifierProduct.modifiers?.showSweetness !== false && (
                   <div
                     onClick={() => setActiveStep('SWEETNESS')}
                     className={`p-3 rounded-2xl border transition-all ${
@@ -2078,7 +2167,7 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                 )}
 
                 {/* Matcha Intensity */}
-                {modifierProduct.modifiers?.showMatcha === true && (
+                {!checkIsFood(modifierProduct) && modifierProduct.modifiers?.showMatcha === true && (
                   <div
                     onClick={() => setActiveStep('MATCHA')}
                     className={`p-3 rounded-2xl border transition-all ${
@@ -2090,14 +2179,14 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                         🍵 Kepekatan Matcha
                       </p>
                       <span className="text-xs font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-200">
-                        Level {modMatcha} {modMatcha >= 9 ? '(+Rp 2.000)' : (modMatcha >= 7 ? '(+Rp 1.000)' : '')}
+                        Level {modMatcha ?? 5} {(modMatcha ?? 0) >= 9 ? '(+Rp 2.000)' : ((modMatcha ?? 0) >= 7 ? '(+Rp 1.000)' : '')}
                       </span>
                     </div>
                     <input
                       type="range"
                       min="1"
                       max="10"
-                      value={modMatcha}
+                      value={modMatcha ?? 5}
                       onChange={(e) => {
                         setModMatcha(parseInt(e.target.value));
                         setActiveStep('MATCHA');
@@ -2166,7 +2255,7 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 text-white font-bold text-sm hover:shadow-md transition-all active:scale-[0.98]"
                 >
                   Tambah ke Pesanan — {formatRupiah(
-                    (modifierProduct.price + modSizePrice + modShotPrice + getMatchaCharge(modMatcha) + modAddOns.reduce((s, a) => s + a.price, 0)) * modQty
+                    ((getActivePromo(modifierProduct)?.promoPrice ?? modifierProduct.price) + modSizePrice + modShotPrice + getMatchaCharge(modMatcha) + modAddOns.reduce((s, a) => s + a.price, 0)) * modQty
                   )}
                 </button>
               </div>

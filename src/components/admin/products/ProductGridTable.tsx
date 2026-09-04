@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React from 'react';
 import {
   Edit2,
   Trash2,
@@ -8,8 +8,7 @@ import {
   ChefHat,
   DollarSign,
   Package,
-  Power,
-  PowerOff,
+  Eye,
   Archive,
   ArchiveRestore,
   Layers,
@@ -18,8 +17,10 @@ import {
   AlertTriangle,
   Coins,
   Percent,
+  Sparkles,
+  MoreVertical,
 } from 'lucide-react';
-import { formatRupiah } from '@/lib/utils';
+import { formatRupiah, getActivePromo } from '@/lib/utils';
 import type { ProductItem, IngredientItem, ModifiersData } from './types';
 
 interface ProductGridTableProps {
@@ -27,6 +28,8 @@ interface ProductGridTableProps {
   ingredients: IngredientItem[];
   viewMode: 'table' | 'grid';
   selectedIds: string[];
+  inspectedProductId?: string | null;
+  onInspectProduct?: (product: ProductItem) => void;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: () => void;
   onEdit: (product: ProductItem) => void;
@@ -43,6 +46,8 @@ export function ProductGridTable({
   ingredients,
   viewMode,
   selectedIds,
+  inspectedProductId,
+  onInspectProduct,
   onToggleSelect,
   onToggleSelectAll,
   onEdit,
@@ -70,8 +75,10 @@ export function ProductGridTable({
       }
     });
 
-    const profit = product.price - hpp;
-    const margin = product.price > 0 ? (profit / product.price) * 100 : 0;
+    const activePromo = getActivePromo(product);
+    const effectivePrice = activePromo ? activePromo.promoPrice : product.price;
+    const profit = effectivePrice - hpp;
+    const margin = effectivePrice > 0 ? (profit / effectivePrice) * 100 : 0;
     return {
       hasRecipe: true,
       totalHpp: Math.round(hpp),
@@ -82,7 +89,10 @@ export function ProductGridTable({
   const getProductType = (product: ProductItem) => {
     if (!product.modifiers) return 'Minuman';
     try {
-      const parsed: ModifiersData = JSON.parse(product.modifiers);
+      const parsed: ModifiersData =
+        typeof product.modifiers === 'string'
+          ? JSON.parse(product.modifiers)
+          : product.modifiers;
       if (parsed.isBundle) return 'Paket Combo';
       if (parsed.productType === 'makanan') return 'Makanan';
       return 'Minuman';
@@ -91,63 +101,89 @@ export function ProductGridTable({
     }
   };
 
+  const getIngredientsPreview = (product: ProductItem) => {
+    if (product.productIngredients && product.productIngredients.length > 0) {
+      const names = product.productIngredients
+        .map((r) => r.ingredient?.name || ingredients.find((i) => i.id === r.ingredientId)?.name)
+        .filter(Boolean);
+      if (names.length > 0) {
+        return `Bahan: ${names.slice(0, 3).join(', ')}${names.length > 3 ? '...' : ''}`;
+      }
+    }
+    return product.description ? product.description : 'Resep belum terhubung';
+  };
+
+  const getVariantsPreview = (product: ProductItem): string[] => {
+    if (!product.modifiers) return [];
+    try {
+      const parsed =
+        typeof product.modifiers === 'string'
+          ? JSON.parse(product.modifiers)
+          : product.modifiers;
+      if (parsed.sizes && Array.isArray(parsed.sizes) && parsed.sizes.length > 0) {
+        return parsed.sizes.map((s: any) => s.name);
+      }
+    } catch {}
+    return [];
+  };
+
   if (products.length === 0) {
     return (
-      <div className="py-16 text-center rounded-3xl border-2 border-dashed border-stone-200 bg-white shadow-sm">
-        <Package className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-        <h4 className="font-heading font-bold text-sm text-stone-700">Tidak ada produk ditemukan</h4>
-        <p className="text-xs text-stone-400 mt-1">
-          Coba sesuaikan kata kunci pencarian atau filter kategori di atas.
+      <div className="py-16 text-center rounded-3xl border-2 border-dashed border-slate-200 bg-white shadow-xs">
+        <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+        <h4 className="font-bold text-sm text-slate-800">Tidak ada produk ditemukan</h4>
+        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+          Coba sesuaikan kata kunci pencarian atau bersihkan filter di atas untuk melihat menu lainnya.
         </p>
       </div>
     );
   }
 
-  // ── TABLE VIEW ──
+  // ── TABLE VIEW (Matriks Tabel) ──
   if (viewMode === 'table') {
     return (
-      <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden text-left">
+      <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden text-left">
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-stone-100 bg-stone-50/80 text-stone-500 font-bold uppercase tracking-wider text-[10px]">
+              <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                 <th className="p-4 w-10">
                   <input
                     type="checkbox"
                     checked={allSelected}
                     onChange={onToggleSelectAll}
-                    className="rounded text-orange-500 w-4 h-4 cursor-pointer"
+                    className="rounded text-orange-500 w-4 h-4 cursor-pointer focus:ring-orange-400"
                   />
                 </th>
-                <th className="py-4 px-3 text-left">Menu Produk</th>
-                <th className="py-4 px-3 text-left">Kategori & Tipe</th>
-                <th className="py-4 px-3 text-left">Harga Jual</th>
-                <th className="py-4 px-3 text-left">Estimasi HPP & Margin</th>
-                <th className="py-4 px-3 text-left">Status Stok</th>
-                <th className="py-4 px-4 text-right">Aksi Cepat</th>
+                <th className="py-3.5 px-3 text-left">Menu Produk</th>
+                <th className="py-3.5 px-3 text-left">Kategori & Tipe</th>
+                <th className="py-3.5 px-3 text-left">Harga Jual</th>
+                <th className="py-3.5 px-3 text-left">Estimasi HPP & Margin</th>
+                <th className="py-3.5 px-3 text-left">Status & Ketersediaan</th>
+                <th className="py-3.5 px-4 text-right">Aksi Cepat</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100 font-medium text-stone-700">
+            <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {products.map((p) => {
                 const isSelected = selectedIds.includes(p.id);
+                const isInspected = inspectedProductId === p.id;
                 const isArchived = p.badge === 'archived';
                 const isSoldOut = p.badge === 'sold-out';
                 const type = getProductType(p);
                 const hppInfo = getProductHppInfo(p);
-
-                let mods: ModifiersData = {};
-                try {
-                  if (p.modifiers) mods = JSON.parse(p.modifiers);
-                } catch {}
-
-                const hasActivePromo = mods.promo?.isActive && mods.promo?.promoPrice;
+                const activePromo = getActivePromo(p);
+                const currentPrice = activePromo ? activePromo.promoPrice : p.price;
 
                 return (
                   <tr
                     key={p.id}
-                    className={`hover:bg-stone-50/80 transition-colors ${
-                      isSelected ? 'bg-orange-50/40' : ''
-                    } ${isArchived ? 'opacity-60 bg-stone-50/40' : ''}`}
+                    className={`transition-colors ${
+                      isInspected
+                        ? 'bg-orange-50/60'
+                        : isSelected
+                        ? 'bg-orange-50/30'
+                        : 'hover:bg-slate-50/80'
+                    } ${isArchived ? 'opacity-60 bg-slate-50/40' : ''}`}
                   >
                     {/* Checkbox */}
                     <td className="p-4">
@@ -155,67 +191,71 @@ export function ProductGridTable({
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => onToggleSelect(p.id)}
-                        className="rounded text-orange-500 w-4 h-4 cursor-pointer"
+                        className="rounded text-orange-500 w-4 h-4 cursor-pointer focus:ring-orange-400"
                       />
                     </td>
 
-                    {/* Product Info */}
+                    {/* Product Name & Image */}
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-12 rounded-2xl overflow-hidden bg-stone-100 border border-stone-200 shrink-0 aspect-square">
+                        <div
+                          onClick={() => onInspectProduct?.(p)}
+                          className="relative w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 cursor-pointer group"
+                          title="Klik untuk inspeksi di panel samping"
+                        >
                           {p.image ? (
                             <img
                               src={p.image}
                               alt={p.name}
-                              className={`w-full h-full object-cover ${
+                              className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-200 ${
                                 isSoldOut ? 'grayscale opacity-70' : ''
                               }`}
                             />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-stone-300">
-                              <Package className="w-5 h-5" />
+                            <div className="w-full h-full flex items-center justify-center text-slate-300">
+                              <Package className="w-6 h-6" />
                             </div>
                           )}
-                          {hasActivePromo && (
-                            <span className="absolute bottom-0 inset-x-0 bg-rose-600 text-white text-[8px] font-black text-center py-0.5">
-                              PROMO
-                            </span>
-                          )}
                         </div>
-                        <div className="min-w-0 max-w-[200px] sm:max-w-[240px]">
-                          <p className="font-bold text-stone-900 text-xs truncate hover:text-orange-600 transition-colors">
+
+                        <div className="min-w-0 max-w-xs">
+                          <button
+                            type="button"
+                            onClick={() => onInspectProduct?.(p)}
+                            className="font-bold text-slate-900 hover:text-orange-600 truncate block text-left transition-colors"
+                          >
                             {p.name}
-                          </p>
-                          <p className="text-[11px] text-stone-400 line-clamp-1 mt-0.5">
-                            {p.description || 'Tidak ada deskripsi'}
-                          </p>
+                          </button>
+                          <div className="text-[11px] text-slate-400 font-mono mt-0.5 truncate">
+                            SKU: {p.id.slice(0, 8).toUpperCase()}
+                          </div>
                         </div>
                       </div>
                     </td>
 
                     {/* Category & Type */}
                     <td className="py-3 px-3">
-                      <span className="px-2.5 py-1 rounded-lg bg-stone-100 text-stone-700 font-bold text-[10px]">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
                         {p.category.name}
                       </span>
-                      <span className="block text-[10px] text-stone-400 mt-1 font-semibold">
+                      <span className="block text-[10px] text-slate-400 mt-1 font-semibold">
                         {type}
                       </span>
                     </td>
 
                     {/* Price */}
                     <td className="py-3 px-3">
-                      {hasActivePromo ? (
+                      {activePromo ? (
                         <div>
-                          <span className="text-[10px] text-stone-400 line-through block">
+                          <span className="text-[10px] text-slate-400 line-through block">
                             {formatRupiah(p.price)}
                           </span>
-                          <span className="font-bold text-xs text-rose-600">
-                            {formatRupiah(mods.promo!.promoPrice)}
+                          <span className="font-extrabold text-xs text-rose-600">
+                            {formatRupiah(currentPrice)}
                           </span>
                         </div>
                       ) : (
-                        <span className="font-bold text-xs text-stone-900">
+                        <span className="font-extrabold text-xs text-slate-900">
                           {formatRupiah(p.price)}
                         </span>
                       )}
@@ -225,7 +265,7 @@ export function ProductGridTable({
                     <td className="py-3 px-3">
                       {hppInfo.hasRecipe ? (
                         <div>
-                          <div className="flex items-center gap-1 text-[11px] font-bold text-stone-700">
+                          <div className="flex items-center gap-1 text-[11px] font-bold text-slate-700">
                             <Coins className="w-3 h-3 text-amber-500" />
                             HPP: {formatRupiah(hppInfo.totalHpp)}
                           </div>
@@ -245,47 +285,67 @@ export function ProductGridTable({
                         <button
                           type="button"
                           onClick={() => onOpenRecipe(p)}
-                          className="px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-[10px] font-bold flex items-center gap-1 border border-amber-200 transition-colors"
+                          className="px-2 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-[10px] font-bold flex items-center gap-1 border border-amber-200 transition-colors cursor-pointer"
                         >
-                          <AlertTriangle className="w-3 h-3 text-amber-500" /> Belum Ada Resep
+                          <AlertTriangle className="w-3 h-3 text-amber-500" /> Resep Belum Ada
                         </button>
                       )}
                     </td>
 
-                    {/* Status Badge */}
+                    {/* Live Availability Toggle Switch */}
                     <td className="py-3 px-3">
-                      {isArchived ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-stone-200 text-stone-700">
-                          Diarsipkan
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => onToggleAvailability(p)}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${
+                            !isSoldOut && !isArchived ? 'bg-emerald-500' : 'bg-slate-300'
+                          }`}
+                          title={!isSoldOut ? 'Klik untuk set Habis' : 'Klik untuk set Tersedia'}
+                        >
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+                              !isSoldOut && !isArchived ? 'translate-x-4.5' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                        <span
+                          className={`text-[11px] font-bold ${
+                            isArchived
+                              ? 'text-slate-400'
+                              : isSoldOut
+                              ? 'text-rose-600'
+                              : 'text-emerald-600'
+                          }`}
+                        >
+                          {isArchived ? 'Arsip' : isSoldOut ? 'Habis' : 'Tersedia'}
                         </span>
-                      ) : isSoldOut ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
-                          Habis (Sold Out)
-                        </span>
-                      ) : p.badge === 'best-seller' ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                          ⭐ Best Seller
-                        </span>
-                      ) : p.badge === 'new' ? (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800">
-                          ✨ Baru
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          Tersedia
-                        </span>
-                      )}
+                      </div>
                     </td>
 
-                    {/* Actions */}
+                    {/* Quick Actions */}
                     <td className="py-3 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {/* Quick Inspector */}
+                        <button
+                          type="button"
+                          title="Inspeksi Cepat di Panel Samping"
+                          onClick={() => onInspectProduct?.(p)}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            isInspected
+                              ? 'bg-orange-500 text-white'
+                              : 'text-slate-500 hover:text-orange-600 hover:bg-orange-50'
+                          }`}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+
                         {/* Quick Price */}
                         <button
                           type="button"
                           title="Ubah Harga / Promo Cepat"
                           onClick={() => onQuickPrice(p)}
-                          className="p-1.5 rounded-lg text-stone-500 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
                         >
                           <DollarSign className="w-4 h-4" />
                         </button>
@@ -295,7 +355,7 @@ export function ProductGridTable({
                           type="button"
                           title="Resep & HPP"
                           onClick={() => onOpenRecipe(p)}
-                          className="p-1.5 rounded-lg text-stone-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
                         >
                           <ChefHat className="w-4 h-4" />
                         </button>
@@ -305,7 +365,7 @@ export function ProductGridTable({
                           type="button"
                           title="Duplikasi Produk (1-Klik)"
                           onClick={() => onDuplicate(p)}
-                          className="p-1.5 rounded-lg text-stone-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
                         >
                           <Copy className="w-4 h-4" />
                         </button>
@@ -315,7 +375,7 @@ export function ProductGridTable({
                           type="button"
                           title="Edit Lengkap"
                           onClick={() => onEdit(p)}
-                          className="p-1.5 rounded-lg text-stone-500 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -325,7 +385,7 @@ export function ProductGridTable({
                           type="button"
                           title={isArchived ? 'Pulihkan Produk' : 'Arsipkan Produk'}
                           onClick={() => onToggleArchive(p)}
-                          className="p-1.5 rounded-lg text-stone-500 hover:text-purple-600 hover:bg-purple-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-purple-600 hover:bg-purple-50 transition-colors cursor-pointer"
                         >
                           {isArchived ? (
                             <ArchiveRestore className="w-4 h-4" />
@@ -339,7 +399,7 @@ export function ProductGridTable({
                           type="button"
                           title="Hapus Produk"
                           onClick={() => onDelete(p)}
-                          className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -355,175 +415,254 @@ export function ProductGridTable({
     );
   }
 
-  // ── GRID CARD VIEW ──
+  // ── VISUAL BENTO CARD VIEW (Modern Bento Cards from Stitch) ──
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-left">
+    <div className="space-y-3.5 text-left">
       {products.map((p) => {
         const isSelected = selectedIds.includes(p.id);
+        const isInspected = inspectedProductId === p.id;
         const isArchived = p.badge === 'archived';
         const isSoldOut = p.badge === 'sold-out';
         const type = getProductType(p);
         const hppInfo = getProductHppInfo(p);
-
-        let mods: ModifiersData = {};
-        try {
-          if (p.modifiers) mods = JSON.parse(p.modifiers);
-        } catch {}
-
-        const hasActivePromo = mods.promo?.isActive && mods.promo?.promoPrice;
+        const activePromo = getActivePromo(p);
+        const currentPrice = activePromo ? activePromo.promoPrice : p.price;
+        const ingredientsText = getIngredientsPreview(p);
+        const variants = getVariantsPreview(p);
 
         return (
           <div
             key={p.id}
-            className={`bg-white rounded-3xl border transition-all flex flex-col justify-between overflow-hidden shadow-sm hover:shadow-md ${
-              isSelected ? 'border-orange-500 ring-2 ring-orange-500/20' : 'border-stone-200'
-            } ${isArchived ? 'opacity-60 bg-stone-50/40' : ''}`}
+            className={`group bg-white rounded-2xl border transition-all duration-200 p-4 relative overflow-hidden shadow-xs hover:shadow-elevated ${
+              isInspected
+                ? 'border-orange-500/90 ring-4 ring-orange-500/10 shadow-md'
+                : isSelected
+                ? 'border-orange-400 bg-orange-50/20'
+                : 'border-slate-200/80 hover:border-slate-300'
+            } ${isArchived ? 'opacity-65 bg-slate-50/50' : ''}`}
           >
-            <div>
-              {/* Card Image Header (aspect-square 1:1) */}
-              <div className="relative w-full aspect-square bg-stone-100 overflow-hidden">
-                {p.image ? (
-                  <img
-                    src={p.image}
-                    alt={p.name}
-                    className={`w-full h-full object-cover ${
-                      isSoldOut ? 'grayscale opacity-70' : ''
-                    }`}
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-stone-300">
-                    <Package className="w-12 h-12" />
-                  </div>
-                )}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              {/* Left Details */}
+              <div className="flex items-start sm:items-center gap-3.5 min-w-0 flex-1">
+                {/* Checkbox */}
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onToggleSelect(p.id)}
+                  className="w-4 h-4 mt-1 sm:mt-0 rounded border-slate-300 text-orange-500 focus:ring-orange-400 cursor-pointer shrink-0"
+                />
 
-                {/* Checkbox overlay */}
-                <div className="absolute top-3 left-3 z-10">
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSelect(p.id)}
-                    className="rounded text-orange-500 w-5 h-5 cursor-pointer bg-white/90 shadow-sm"
-                  />
-                </div>
-
-                {/* Badges Overlay */}
-                <div className="absolute top-3 right-3 flex flex-col gap-1 items-end z-10">
-                  {hasActivePromo && (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-rose-600 text-white shadow-sm flex items-center gap-0.5">
-                      <Flame className="w-3 h-3" /> Promo
-                    </span>
+                {/* Image */}
+                <div
+                  onClick={() => onInspectProduct?.(p)}
+                  className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 border border-slate-200 cursor-pointer group/img"
+                  title="Klik untuk pratinjau inspector"
+                >
+                  {p.image ? (
+                    <img
+                      src={p.image}
+                      alt={p.name}
+                      className={`w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-300 ${
+                        isSoldOut ? 'grayscale opacity-70' : ''
+                      }`}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                      <Package className="w-8 h-8" />
+                    </div>
                   )}
-                  {p.badge === 'best-seller' && (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500 text-white shadow-sm">
-                      Best Seller
-                    </span>
-                  )}
-                  {p.badge === 'new' && (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-orange-500 text-white shadow-sm">
-                      Baru
-                    </span>
-                  )}
-                  {isSoldOut && (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-stone-600 text-white shadow-sm">
-                      Habis
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Card Body */}
-              <div className="p-4 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 font-bold text-[10px]">
+                  <span className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/65 backdrop-blur-md text-[8px] sm:text-[9px] font-extrabold text-white uppercase tracking-wider">
                     {p.category.name}
                   </span>
-                  <span className="text-[10px] font-bold text-stone-400">{type}</span>
                 </div>
 
-                <h4 className="font-bold text-sm text-stone-900 line-clamp-1">{p.name}</h4>
-                <p className="text-xs text-stone-500 line-clamp-2 leading-relaxed">
-                  {p.description || 'Tidak ada deskripsi'}
-                </p>
+                {/* Details */}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3
+                      onClick={() => onInspectProduct?.(p)}
+                      className="font-bold text-slate-900 text-sm sm:text-base truncate hover:text-orange-600 cursor-pointer transition-colors"
+                    >
+                      {p.name}
+                    </h3>
 
-                {/* Pricing */}
-                <div className="pt-2 border-t border-stone-100 flex items-center justify-between">
-                  <div>
-                    {hasActivePromo && (
-                      <span className="text-[10px] text-stone-400 line-through block">
-                        {formatRupiah(p.price)}
+                    {/* Status Badges */}
+                    {p.badge === 'best-seller' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                        Best Seller
                       </span>
                     )}
-                    <span className="font-extrabold text-sm text-orange-600">
-                      {formatRupiah(hasActivePromo ? mods.promo!.promoPrice : p.price)}
-                    </span>
+                    {p.badge === 'new' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                        Baru
+                      </span>
+                    )}
+                    {activePromo && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-0.5">
+                        <Flame className="w-3 h-3 text-rose-500" /> Flash Sale
+                      </span>
+                    )}
+                    {isSoldOut && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                        Habis
+                      </span>
+                    )}
                   </div>
 
-                  {hppInfo.hasRecipe ? (
-                    <span
-                      className={`text-[10px] font-black px-2 py-0.5 rounded-md ${
-                        hppInfo.marginPercent >= 60
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
-                      }`}
-                    >
-                      Margin {hppInfo.marginPercent}%
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => onOpenRecipe(p)}
-                      className="text-[9px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200"
-                    >
-                      No Resep
-                    </button>
-                  )}
+                  {/* SKU & Ingredients */}
+                  <div className="text-[11px] text-slate-400 font-mono mt-0.5 line-clamp-1">
+                    SKU: {p.id.slice(0, 8).toUpperCase()} • {ingredientsText}
+                  </div>
+
+                  {/* Pricing, Variants & Margin */}
+                  <div className="flex items-center gap-2 mt-2 flex-wrap text-xs">
+                    {variants.length > 0 ? (
+                      variants.map((v, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-medium"
+                        >
+                          {v}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-medium">
+                        {type}
+                      </span>
+                    )}
+
+                    <span className="text-slate-300">•</span>
+
+                    {/* Price */}
+                    <div className="flex items-center gap-1.5">
+                      {activePromo && (
+                        <span className="text-[11px] text-slate-400 line-through">
+                          {formatRupiah(p.price)}
+                        </span>
+                      )}
+                      <span className="text-xs font-extrabold text-slate-900">
+                        {formatRupiah(currentPrice)}
+                      </span>
+                    </div>
+
+                    {/* Margin */}
+                    {hppInfo.hasRecipe ? (
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                          hppInfo.marginPercent >= 60
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : hppInfo.marginPercent >= 40
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-rose-50 text-rose-700 border border-rose-200'
+                        }`}
+                      >
+                        Margin {hppInfo.marginPercent}%
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onOpenRecipe(p)}
+                        className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 hover:bg-amber-100 transition-colors cursor-pointer"
+                      >
+                        Atur Resep
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Card Footer Actions */}
-            <div className="p-3 border-t border-stone-100 bg-stone-50 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => onQuickPrice(p)}
-                className="text-xs font-bold text-stone-600 hover:text-orange-600 flex items-center gap-1"
-              >
-                <DollarSign className="w-3.5 h-3.5" /> Edit Harga
-              </button>
+              {/* Right: Live Stock Switch & Quick Controls */}
+              <div className="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 shrink-0">
+                {/* Instant Availability Toggle Switch */}
+                <div className="flex flex-col items-start md:items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`text-[11px] font-bold ${
+                        isSoldOut ? 'text-rose-600' : 'text-emerald-600'
+                      }`}
+                    >
+                      {isSoldOut ? 'Habis' : 'Tersedia'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onToggleAvailability(p)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${
+                        !isSoldOut && !isArchived ? 'bg-emerald-500' : 'bg-slate-300'
+                      }`}
+                      title={!isSoldOut ? 'Klik untuk set Habis' : 'Klik untuk set Tersedia'}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${
+                          !isSoldOut && !isArchived ? 'translate-x-4.5' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {isSoldOut ? 'Katalog nonaktif' : 'Siap dipesan kasir'}
+                  </span>
+                </div>
 
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  title="Duplikasi Menu"
-                  onClick={() => onDuplicate(p)}
-                  className="p-1.5 rounded-lg text-stone-400 hover:text-blue-600 hover:bg-white transition-colors"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Resep & HPP"
-                  onClick={() => onOpenRecipe(p)}
-                  className="p-1.5 rounded-lg text-stone-400 hover:text-emerald-600 hover:bg-white transition-colors"
-                >
-                  <ChefHat className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Edit Lengkap"
-                  onClick={() => onEdit(p)}
-                  className="p-1.5 rounded-lg text-stone-400 hover:text-amber-600 hover:bg-white transition-colors"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  title="Hapus"
-                  onClick={() => onDelete(p)}
-                  className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-white transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {/* Quick Action Buttons */}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onInspectProduct?.(p)}
+                    className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer ${
+                      isInspected
+                        ? 'bg-orange-500 text-white shadow-xs'
+                        : 'bg-orange-50 text-orange-600 hover:bg-orange-100'
+                    }`}
+                    title="Lihat di Quick Inspector"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onQuickPrice(p)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-amber-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Ubah Harga / Promo"
+                  >
+                    <DollarSign className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecipe(p)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-emerald-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Resep & HPP"
+                  >
+                    <ChefHat className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onDuplicate(p)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-blue-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Duplikasi Menu (1-Klik)"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onEdit(p)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer"
+                    title="Edit Lengkap"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onDelete(p)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                    title="Hapus / Arsipkan"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

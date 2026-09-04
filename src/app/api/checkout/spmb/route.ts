@@ -340,7 +340,7 @@ export async function POST(req: Request) {
       });
 
       if (validVoucherCode) {
-        await applyVoucherUsage(tx, validVoucherCode, null);
+        await applyVoucherUsage(tx, validVoucherCode);
       }
 
       return newOrder;

@@ -47,6 +47,7 @@ import { LiveTableMinimap } from '@/components/admin/tables/LiveTableMinimap';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
 import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 import { printThermalReceipt, ThermalPrintOrder } from '@/lib/thermal-printer';
+import { formatOrderCardModifiers } from '@/lib/receipt-modifiers';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -55,7 +56,7 @@ interface OrderItem {
   qty: number;
   price: number;
   modifiers?: string | null;
-  product: { name: string; image: string | null };
+  product: { name: string; price?: number; image: string | null };
 }
 
 interface OrderData {
@@ -78,6 +79,8 @@ interface OrderData {
   pickupTime?: string | null;
   queueNumber?: string | null;
   voucherCode?: string | null;
+  voucherTitle?: string | null;
+  hasTumbler?: boolean;
   source?: string | null;
   notes?: string | null;
 }
@@ -225,16 +228,24 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
       tableNumber: order.tableNumber,
       paymentMethod: order.paymentMethod,
       createdAt: order.createdAt,
-      items: order.items.map((item) => ({
-        name: item.product.name,
-        qty: item.qty,
-        price: item.price,
-        modifiersString: item.modifiers || undefined,
-      })),
+      items: order.items.map((item) => {
+        const origPrice = item.product.price && item.product.price > item.price ? item.product.price : undefined;
+        const pDiscount = origPrice ? (origPrice - item.price) : undefined;
+        return {
+          name: item.product.name,
+          qty: item.qty,
+          price: item.price,
+          originalPrice: origPrice,
+          promoDiscount: pDiscount,
+          modifiersString: item.modifiers || undefined,
+        };
+      }),
       subtotal: rawSubtotal,
       deliveryFee: order.deliveryFee || 0,
       voucherDiscount: computedDiscount,
       voucherCode: order.voucherCode || undefined,
+      voucherTitle: order.voucherTitle || undefined,
+      hasTumbler: order.hasTumbler || false,
       total: order.total,
       notes: order.notes || undefined,
     };
@@ -383,16 +394,24 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                   tableNumber: ord.tableNumber,
                   paymentMethod: ord.paymentMethod,
                   createdAt: ord.createdAt,
-                  items: ord.items.map((item) => ({
-                    name: item.product.name,
-                    qty: item.qty,
-                    price: item.price,
-                    modifiersString: item.modifiers || undefined,
-                  })),
+                  items: ord.items.map((item) => {
+                    const origPrice = item.product.price && item.product.price > item.price ? item.product.price : undefined;
+                    const pDiscount = origPrice ? (origPrice - item.price) : undefined;
+                    return {
+                      name: item.product.name,
+                      qty: item.qty,
+                      price: item.price,
+                      originalPrice: origPrice,
+                      promoDiscount: pDiscount,
+                      modifiersString: item.modifiers || undefined,
+                    };
+                  }),
                   subtotal: rawSubtotal,
                   deliveryFee: ord.deliveryFee || 0,
                   voucherDiscount: computedDiscount,
                   voucherCode: ord.voucherCode || undefined,
+                  voucherTitle: ord.voucherTitle || undefined,
+                  hasTumbler: ord.hasTumbler || false,
                   total: ord.total,
                   notes: ord.notes || undefined,
                 };
@@ -852,24 +871,37 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
               {/* Items List */}
               <div className="p-4 space-y-2 flex-1">
                 <div className="space-y-1.5">
-                  {order.items.map((item) => (
-                    <div key={item.id} className="p-2.5 rounded-2xl border border-stone-100 bg-stone-50/50 flex items-start justify-between gap-3 text-xs">
-                      <div>
-                        <p className="font-bold text-stone-900 leading-tight">
-                          <span className="text-orange-600 font-black mr-1">{item.qty}x</span>
-                          {item.product.name}
-                        </p>
-                        {item.modifiers && (
-                          <p className="text-[10px] text-stone-500 mt-0.5 leading-snug">
-                            {item.modifiers}
+                  {order.items.map((item) => {
+                    const { tags, promoText } = formatOrderCardModifiers(item.modifiers, item.product.name);
+                    return (
+                      <div key={item.id} className="p-2.5 rounded-2xl border border-stone-100 bg-stone-50/50 flex items-start justify-between gap-3 text-xs">
+                        <div>
+                          <p className="font-bold text-stone-900 leading-tight">
+                            <span className="text-orange-600 font-black mr-1">{item.qty}x</span>
+                            {item.product.name}
                           </p>
-                        )}
+                          {(tags.length > 0 || promoText) && (
+                            <div className="mt-1 space-y-0.5">
+                              {tags.length > 0 && (
+                                <p className="text-[10px] text-stone-500 leading-snug">
+                                  {tags.join(' • ')}
+                                </p>
+                              )}
+                              {promoText && (
+                                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60">
+                                  <Sparkles className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                                  {promoText}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <span className="font-bold text-stone-700 shrink-0">
+                          {formatRupiah(item.price * item.qty)}
+                        </span>
                       </div>
-                      <span className="font-bold text-stone-700 shrink-0">
-                        {formatRupiah(item.price * item.qty)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {order.notes && (
@@ -1049,15 +1081,30 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                 <div className="space-y-1.5">
                   <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Item Pesanan</p>
                   <div className="space-y-1">
-                    {selectedOrder.items.map((item) => (
-                      <div key={item.id} className="p-2.5 rounded-xl border border-stone-100 bg-stone-50/50 flex justify-between items-center text-xs">
-                        <div>
-                          <span className="font-bold text-stone-900">{item.qty}x {item.product.name}</span>
-                          {item.modifiers && <p className="text-[10px] text-stone-500">{item.modifiers}</p>}
+                    {selectedOrder.items.map((item) => {
+                      const { tags, promoText } = formatOrderCardModifiers(item.modifiers, item.product.name);
+                      return (
+                        <div key={item.id} className="p-2.5 rounded-xl border border-stone-100 bg-stone-50/50 flex justify-between items-center text-xs">
+                          <div>
+                            <span className="font-bold text-stone-900">{item.qty}x {item.product.name}</span>
+                            {(tags.length > 0 || promoText) && (
+                              <div className="mt-0.5 space-y-0.5">
+                                {tags.length > 0 && (
+                                  <p className="text-[10px] text-stone-500">{tags.join(' • ')}</p>
+                                )}
+                                {promoText && (
+                                  <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-1 py-0.5 rounded border border-amber-200/60">
+                                    <Sparkles className="w-2 h-2 text-amber-600 shrink-0" />
+                                    {promoText}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <span className="font-bold text-stone-700">{formatRupiah(item.price * item.qty)}</span>
                         </div>
-                        <span className="font-bold text-stone-700">{formatRupiah(item.price * item.qty)}</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
