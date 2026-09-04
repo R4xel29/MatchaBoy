@@ -29,6 +29,7 @@ export async function sendWhatsAppMessage(phone: string, text: string, imageUrl?
     const isGroup = phone.endsWith('@g.us');
     const res = await fetch(waProviderUrl, {
       method: "POST",
+      signal: AbortSignal.timeout(2500),
       headers: { 
         "Content-Type": "application/json",
         "x-api-key": apiKey
@@ -442,6 +443,10 @@ export async function sendAdminNewOrderNotification(orderId: string) {
     orderDetails += `\n*Daftar Produk:*\n${itemsStr}\n\n`;
     orderDetails += `*Ringkasan Pembayaran:*\n`;
     orderDetails += `Subtotal: Rp ${formattedSubtotal}\n`;
+    const discountAmount = Math.max(0, order.subtotal + order.deliveryFee - order.total);
+    if (discountAmount > 0) {
+      orderDetails += `Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}: -Rp ${discountAmount.toLocaleString('id-ID')}\n`;
+    }
     if (order.orderType === 'DELIVERY') {
       orderDetails += `Ongkir: Rp ${formattedDeliveryFee}\n`;
     }
@@ -449,10 +454,8 @@ export async function sendAdminNewOrderNotification(orderId: string) {
     orderDetails += `*Metode Pembayaran:* ${order.paymentMethod}\n`;
     orderDetails += `*Status:* ${order.status}\n`;
 
-    // Send to all admin numbers
-    for (const adminPhone of adminNumbers) {
-      await sendWhatsAppMessage(adminPhone, orderDetails);
-    }
+    // Send to all admin numbers concurrently
+    await Promise.allSettled(adminNumbers.map((adminPhone) => sendWhatsAppMessage(adminPhone, orderDetails)));
   } catch (error) {
     console.error(`[WHATSAPP_SERVICE] Gagal mengirim new order notification untuk order ${orderId}:`, error);
   }
@@ -620,9 +623,8 @@ export async function sendKitchenNotification(orderId: string) {
     message += `⏰ *Waktu Pesanan:* ${timeStr} WIB\n`;
     message += `💳 *Pembayaran:* ${order.paymentMethod} (Status: ${order.status})`;
 
-    for (const target of targetList) {
-      await sendWhatsAppMessage(target, message);
-    }
+    // Send to all kitchen targets concurrently
+    await Promise.allSettled(targetList.map((target) => sendWhatsAppMessage(target, message)));
   } catch (error) {
     console.error(`[WHATSAPP_SERVICE] Gagal mengirim kitchen notification untuk order ${orderId}:`, error);
   }

@@ -35,6 +35,8 @@ import {
   Save,
   Mic,
   Printer,
+  Tag,
+  Ticket,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import QRCameraScanner from '@/components/cashier/QRCameraScanner';
@@ -161,6 +163,17 @@ export default function CashierPOSClient({ products, categories, packagingStock,
   const [completedReceiptData, setCompletedReceiptData] = useState<ReceiptData | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
+  // Voucher & Discount State
+  const [voucherCodeInput, setVoucherCodeInput] = useState('');
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<{
+    code: string;
+    discountAmount: number;
+    description: string;
+    type?: string;
+  } | null>(null);
+
   // Cashier Shift & Petty Cash State
   const [shiftData, setShiftData] = useState<{ activeShift: any; reconciliation: any; history: any[] } | null>(null);
   const [showOpenShiftModal, setShowOpenShiftModal] = useState(false);
@@ -251,7 +264,55 @@ export default function CashierPOSClient({ products, categories, packagingStock,
     return Math.round((subtotal * loyaltySettings.tumblerDiscountPct) / 100);
   }, [hasTumbler, loyaltySettings, subtotal]);
 
-  const totalPayable = subtotal - tumblerDiscount;
+  const voucherDiscount = appliedVoucher?.discountAmount || 0;
+  const totalPayable = Math.max(0, subtotal - tumblerDiscount - voucherDiscount);
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCodeInput.trim()) return;
+    setVoucherLoading(true);
+    setVoucherError('');
+    try {
+      const res = await fetch('/api/checkout/validate-voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: voucherCodeInput.trim(),
+          subtotal,
+          items: cart.map((i) => ({
+            productId: i.productId,
+            quantity: i.quantity,
+            price: i.basePrice,
+            size: i.size,
+            sizePrice: i.sizePrice,
+            addOnIds: i.addOns.map((a) => a.id),
+          })),
+          userId: phoneLookupResult?.id || null,
+          customerPhone: customerPhone || phoneLookupResult?.phone || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Kode promo tidak valid');
+      setAppliedVoucher({
+        code: data.voucher.code,
+        discountAmount: data.voucher.discountAmount,
+        description: data.voucher.description,
+        type: data.voucher.type,
+      });
+      showToast(`Promo "${data.voucher.description}" diterapkan!`, 'success');
+    } catch (err: any) {
+      setVoucherError(err.message || 'Gagal menerapkan promo');
+      showToast(err.message || 'Gagal menerapkan promo', 'error');
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
+  const handleRemoveVoucher = () => {
+    setAppliedVoucher(null);
+    setVoucherCodeInput('');
+    setVoucherError('');
+    showToast('Promo voucher dibatalkan', 'info');
+  };
 
   const [isQrisConfirmed, setIsQrisConfirmed] = useState(false);
   const [dokuQrContent, setDokuQrContent] = useState<string | null>(null);
@@ -271,6 +332,8 @@ export default function CashierPOSClient({ products, categories, packagingStock,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           amount: totalPayable,
+          subtotal,
+          voucherCode: appliedVoucher?.code || undefined,
           invoiceNumber: invNum,
           customerName: customerName || 'Pelanggan Arum Seduh',
           customerPhone: customerPhone || phoneLookupResult?.phone || '-',
@@ -325,6 +388,8 @@ export default function CashierPOSClient({ products, categories, packagingStock,
               cart,
               subtotal,
               tumblerDiscount,
+              voucherDiscount,
+              voucherCode: appliedVoucher?.code || null,
               totalPayable,
               customerName: customerName || 'Pelanggan Arum Seduh',
               orderType,
@@ -389,6 +454,8 @@ export default function CashierPOSClient({ products, categories, packagingStock,
         cart,
         subtotal,
         tumblerDiscount,
+        voucherDiscount,
+        voucherCode: appliedVoucher?.code || null,
         totalPayable,
         customerName,
         orderType,
@@ -427,7 +494,7 @@ export default function CashierPOSClient({ products, categories, packagingStock,
       }
       localStorage.setItem('pos_customer_display_state', JSON.stringify(statePayload));
     } catch {}
-  }, [cart, subtotal, tumblerDiscount, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modShot, modShotCount, modShotPrice, activeStep]);
+  }, [cart, subtotal, tumblerDiscount, voucherDiscount, appliedVoucher, totalPayable, customerName, orderType, paymentMethod, hasTumbler, selectedTable, showSuccess, lastOrderId, dokuQrContent, dokuQrImageUrl, modifierProduct, modIce, modSugar, modMatcha, modSize, modSizePrice, modShot, modShotCount, modShotPrice, activeStep]);
 
   // User activity tracker for Cashier POS to keep customer display active
 
@@ -791,6 +858,7 @@ export default function CashierPOSClient({ products, categories, packagingStock,
         notes,
         paymentMethod,
         hasTumbler,
+        voucherCode: appliedVoucher?.code || undefined,
         isQrisConfirm: paymentMethod === 'QRIS',
         invoiceNumber: currentInvoiceNumber || pendingQrisInvoiceRef.current || undefined,
         items: cart.map((item) => ({
@@ -843,13 +911,20 @@ export default function CashierPOSClient({ products, categories, packagingStock,
           addOns: item.addOns,
         })),
         subtotal,
+        discount: voucherDiscount,
         tumblerDiscount,
+        voucherDiscount,
+        voucherCode: appliedVoucher?.code || undefined,
         total: totalPayable,
         pointsEarned: earnedPoints,
         notes,
       };
       setCompletedReceiptData(receiptData);
       setShowReceiptModal(true);
+
+      setAppliedVoucher(null);
+      setVoucherCodeInput('');
+      setVoucherError('');
 
       // Auto-print receipt if enabled in store settings
       if (receiptSettings?.autoPrintOnCheckout) {
@@ -1547,10 +1622,91 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                         setPaymentMethod('CASH');
                         setIsQrisConfirmed(false);
                       }}
-                      className="w-full py-2 px-3 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 border border-orange-300 shadow-sm"
+                      className="w-full py-2 px-3 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-xs transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 border border-orange-300 shadow-sm cursor-pointer"
                     >
-                      💵 Pelanggan Ganti ke Tunai (Batalkan QRIS)
+                      <Banknote className="w-4 h-4 text-amber-700" />
+                      <span>Pelanggan Ganti ke Tunai (Batalkan QRIS)</span>
                     </button>
+                  </div>
+                )}
+
+                {/* Promo / Voucher Code Input */}
+                <div className="pt-2 pb-1 border-t border-dashed border-orange-200/80">
+                  {!appliedVoucher ? (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <div className="relative flex-1">
+                          <Tag className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                          <input
+                            type="text"
+                            placeholder="Kode Diskon / Promo..."
+                            value={voucherCodeInput}
+                            onChange={(e) => setVoucherCodeInput(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleApplyVoucher();
+                              }
+                            }}
+                            className="w-full pl-8 pr-2.5 py-2 text-xs font-semibold uppercase bg-orange-50/50 border border-stone-200 rounded-xl focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-all placeholder:normal-case placeholder:font-normal placeholder:text-stone-400 text-stone-900"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleApplyVoucher}
+                          disabled={voucherLoading || !voucherCodeInput.trim()}
+                          className="px-3 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed shrink-0 flex items-center gap-1 cursor-pointer"
+                        >
+                          {voucherLoading ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5" />
+                          )}
+                          <span>Pakai</span>
+                        </button>
+                      </div>
+                      {voucherError && (
+                        <p className="text-[10px] text-rose-600 font-medium px-1">{voucherError}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between p-2 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200 text-stone-900 text-xs shadow-sm">
+                      <div className="flex items-center gap-2 min-w-0 pr-1">
+                        <div className="w-6 h-6 rounded-lg bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                          <Ticket className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-xs text-orange-950 truncate">
+                            {appliedVoucher.code} <span className="text-orange-600 font-black">(-{formatRupiah(appliedVoucher.discountAmount)})</span>
+                          </p>
+                          <p className="text-[10px] text-stone-500 truncate">{appliedVoucher.description}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleRemoveVoucher}
+                        className="w-6 h-6 rounded-lg hover:bg-orange-200/50 text-stone-400 hover:text-stone-700 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                        title="Hapus Promo"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Subtotal Display */}
+                <div className="flex justify-between items-center text-xs text-stone-600 px-1 pt-1">
+                  <span>Subtotal</span>
+                  <span>{formatRupiah(subtotal)}</span>
+                </div>
+
+                {/* Voucher Discount Display */}
+                {appliedVoucher && voucherDiscount > 0 && (
+                  <div className="flex justify-between items-center text-xs text-orange-600 font-semibold px-1">
+                    <span className="flex items-center gap-1">
+                      <Tag className="w-3.5 h-3.5" /> Diskon Promo ({appliedVoucher.code})
+                    </span>
+                    <span>-{formatRupiah(voucherDiscount)}</span>
                   </div>
                 )}
 
@@ -1586,12 +1742,12 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                   ) : paymentMethod === 'QRIS' ? (
                     <>
                       <Check className="w-4 h-4" />
-                      ✓ Konfirmasi QRIS Lunas ({formatRupiah(totalPayable)})
+                      <span>Konfirmasi QRIS Lunas ({formatRupiah(totalPayable)})</span>
                     </>
                   ) : (
                     <>
-                      <Check className="w-4 h-4" />
-                      💰 Selesaikan & Bayar Tunai ({formatRupiah(totalPayable)})
+                      <Banknote className="w-4 h-4" />
+                      <span>Selesaikan & Bayar Tunai ({formatRupiah(totalPayable)})</span>
                     </>
                   )}
                 </button>

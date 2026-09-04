@@ -18,6 +18,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Nominal pembayaran tidak valid' }, { status: 400 });
     }
 
+    const voucherCode = body.voucherCode ? body.voucherCode.toString().trim() : null;
+    const subtotal = Number(body.subtotal) || amount;
+
     // Create a PENDING_PAYMENT order in Prisma DB so DOKU Webhook & Polling can find & update it
     try {
       await prisma.order.upsert({
@@ -31,8 +34,9 @@ export async function POST(req: Request) {
           tableNumber: tableNumber,
           address: orderType === 'DINE_IN' ? `Dine In - Meja ${tableNumber}` : 'POS QRIS Order',
           paymentMethod: 'QRIS',
-          subtotal: Math.round(amount),
+          subtotal: Math.round(subtotal),
           total: Math.round(amount),
+          voucherCode: voucherCode,
           status: 'PENDING_PAYMENT',
           paymentProofUrl: invoiceNumber,
           paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),
@@ -47,7 +51,9 @@ export async function POST(req: Request) {
           } : undefined,
         },
         update: {
+          subtotal: Math.round(subtotal),
           total: Math.round(amount),
+          voucherCode: voucherCode,
           customerName: customerName,
           status: 'PENDING_PAYMENT',
           paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),

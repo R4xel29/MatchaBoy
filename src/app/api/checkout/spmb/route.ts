@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getActivePromo } from '@/lib/utils';
 import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors';
 import { getNextQueueSequence } from '@/lib/rate-limit-redis';
+import { validateAndCalculateDiscount, applyVoucherUsage, revertVoucherUsage } from '@/lib/discount-utils';
 
 const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`;
 
@@ -259,7 +260,32 @@ export async function POST(req: Request) {
       });
     }
 
-    const secureTotal = secureSubtotal; // 0 delivery fee for SPMB campus delivery
+    // Calculate voucher / promo discount securely
+    let voucherDiscount = 0;
+    let validVoucherCode: string | null = null;
+    const requestedVoucher = body.voucherCode || body.promoCode;
+    if (requestedVoucher) {
+      const codeToTest = requestedVoucher.trim().toUpperCase();
+      const discountResult = await validateAndCalculateDiscount({
+        voucherCode: codeToTest,
+        subtotal: secureSubtotal,
+        cartItems: body.items.map((it: any) => ({
+          productId: it.productId,
+          quantity: it.quantity,
+          price: it.price || 0,
+        })),
+        userId: null,
+      });
+
+      if (!discountResult.valid) {
+        throw new ValidationError(discountResult.message || 'Kode promo tidak valid');
+      }
+
+      voucherDiscount = discountResult.discountAmount;
+      validVoucherCode = discountResult.code || codeToTest;
+    }
+
+    const secureTotal = Math.max(0, secureSubtotal - voucherDiscount); // 0 delivery fee for SPMB campus delivery
 
     // Generate unique order ID starting with SPMB-
     let orderId = '';
@@ -301,6 +327,7 @@ export async function POST(req: Request) {
           subtotal: secureSubtotal,
           deliveryFee: 0,
           total: secureTotal,
+          voucherCode: validVoucherCode,
           paymentMethod: requestedMethod === 'QRIS_INSTAN' ? 'QRIS' : requestedMethod,
           status: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? 'PENDING_PAYMENT' : 'PENDING',
           notes: body.notes || null,
@@ -311,6 +338,10 @@ export async function POST(req: Request) {
           }
         }
       });
+
+      if (validVoucherCode) {
+        await applyVoucherUsage(tx, validVoucherCode, null);
+      }
 
       return newOrder;
     }, {
@@ -361,6 +392,9 @@ export async function POST(req: Request) {
         }
       } catch (qrisError: any) {
         console.error('[QRIS DOKU CHECKOUT ERROR]', qrisError);
+        if (validVoucherCode) {
+          await revertVoucherUsage(prisma, validVoucherCode).catch((e) => console.error('[SPMB REVERT VOUCHER ERROR]', e));
+        }
         await prisma.order.update({
           where: { id: order.id },
           data: { status: 'CANCELLED', notes: `DOKU Checkout QRIS Failure: ${qrisError.message}` }
@@ -443,6 +477,9 @@ export async function POST(req: Request) {
           console.log('[SPMB QRIS INSTAN] Fallback to Doku Hosted Checkout.');
         } catch (qrisError: any) {
           console.error('[QRIS INSTAN FALLBACK ERROR]', qrisError);
+          if (validVoucherCode) {
+            await revertVoucherUsage(prisma, validVoucherCode).catch((e) => console.error('[SPMB REVERT VOUCHER ERROR]', e));
+          }
           await prisma.order.update({
             where: { id: order.id },
             data: { status: 'CANCELLED', notes: `Gagal membuat QRIS Instan: ${qrisError.message}` }

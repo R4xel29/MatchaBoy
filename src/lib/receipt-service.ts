@@ -102,6 +102,7 @@ Terima kasih telah berbelanja di *Arum Seduh*! Nikmati matcha terbaikmu! ğŸƒğŸ’
 
     const res = await fetch(waProviderUrl, {
       method: "POST",
+      signal: AbortSignal.timeout(2500),
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey

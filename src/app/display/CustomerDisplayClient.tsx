@@ -36,6 +36,8 @@ export type POSDisplayState = {
   }[];
   subtotal: number;
   tumblerDiscount: number;
+  voucherDiscount?: number;
+  voucherCode?: string | null;
   totalPayable: number;
   customerName: string;
   orderType: 'PICKUP' | 'DINE_IN';
@@ -901,6 +903,15 @@ export default function CustomerDisplayClient() {
 
           {/* Bottom Total & Checkout Summary */}
           <div className="pt-4 border-t border-orange-100 space-y-3">
+            {displayState?.voucherDiscount && displayState.voucherDiscount > 0 && (
+              <div className="flex justify-between items-center text-xs font-medium text-orange-600 px-1">
+                <span className="flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5" /> Diskon Promo {displayState.voucherCode ? `(${displayState.voucherCode})` : ''}
+                </span>
+                <span>-{formatRupiah(displayState.voucherDiscount)}</span>
+              </div>
+            )}
+
             {displayState?.hasTumbler && displayState.tumblerDiscount > 0 && (
               <div className="flex justify-between items-center text-xs font-medium text-emerald-600 px-1">
                 <span className="flex items-center gap-1.5">

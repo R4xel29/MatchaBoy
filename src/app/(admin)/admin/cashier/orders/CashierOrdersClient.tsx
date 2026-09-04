@@ -77,6 +77,7 @@ interface OrderData {
   pickupDate?: string | null;
   pickupTime?: string | null;
   queueNumber?: string | null;
+  voucherCode?: string | null;
   source?: string | null;
   notes?: string | null;
 }
@@ -211,6 +212,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   }, [initialOrders]);
 
   const handleOpenReceipt = (order: OrderData) => {
+    const rawSubtotal = order.subtotal || order.total;
+    const computedDiscount = Math.max(0, rawSubtotal + (order.deliveryFee || 0) - order.total);
+
     const receiptData: ReceiptData = {
       id: order.id,
       orderNumber: order.queueNumber ? `A-${order.queueNumber}` : undefined,
@@ -227,7 +231,10 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
         price: item.price,
         modifiersString: item.modifiers || undefined,
       })),
-      subtotal: order.subtotal || order.total,
+      subtotal: rawSubtotal,
+      deliveryFee: order.deliveryFee || 0,
+      voucherDiscount: computedDiscount,
+      voucherCode: order.voucherCode || undefined,
       total: order.total,
       notes: order.notes || undefined,
     };
@@ -363,6 +370,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
               if (isEligible && !autoPrintedOrderIdsRef.current.has(ord.id)) {
                 autoPrintedOrderIdsRef.current.add(ord.id);
 
+                const rawSubtotal = ord.subtotal || ord.total;
+                const computedDiscount = Math.max(0, rawSubtotal + (ord.deliveryFee || 0) - ord.total);
+
                 const thermalOrder: ThermalPrintOrder = {
                   id: ord.id,
                   orderNumber: ord.queueNumber ? `A-${ord.queueNumber}` : undefined,
@@ -379,7 +389,10 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
                     price: item.price,
                     modifiersString: item.modifiers || undefined,
                   })),
-                  subtotal: ord.subtotal || ord.total,
+                  subtotal: rawSubtotal,
+                  deliveryFee: ord.deliveryFee || 0,
+                  voucherDiscount: computedDiscount,
+                  voucherCode: ord.voucherCode || undefined,
                   total: ord.total,
                   notes: ord.notes || undefined,
                 };

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { restoreStockForOrder } from '@/lib/inventory-utils'
+import { revertVoucherUsage } from '@/lib/discount-utils'
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -109,20 +110,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         }
       }
 
-      // 3. Restore used voucher if any
+      // 3. Restore used voucher or template quota if any
       if (order.voucherCode) {
-        const voucher = await tx.voucher.findUnique({
-          where: { code: order.voucherCode }
-        })
-        if (voucher && voucher.isUsed) {
-          await tx.voucher.update({
-            where: { id: voucher.id },
-            data: {
-              isUsed: false,
-              usedAt: null
-            }
-          })
-        }
+        await revertVoucherUsage(tx, order.voucherCode);
       }
 
       return updated

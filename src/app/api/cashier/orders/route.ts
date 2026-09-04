@@ -3,6 +3,7 @@ import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 import { cleanupUnconfirmedSpmbOrders, autoCancelExpiredQrisOrders } from '@/lib/order-utils'
 import { getNextQueueSequence } from '@/lib/rate-limit-redis'
+import { validateAndCalculateDiscount, applyVoucherUsage } from '@/lib/discount-utils'
 
 // Lightweight JSON endpoint for client-side polling (replaces router.refresh)
 export async function GET() {
@@ -263,7 +264,26 @@ export async function POST(req: Request) {
       }
     }
 
-    const secureTotal = secureSubtotal - tumblerDiscount + deliveryFee
+    // Voucher / Promo discount
+    const voucherCode = body.voucherCode ? body.voucherCode.toString().trim() : null;
+    let voucherDiscount = 0;
+    let validatedDiscount: any = null;
+    if (voucherCode) {
+      validatedDiscount = await validateAndCalculateDiscount({
+        code: voucherCode,
+        items: body.items,
+        subtotal: secureSubtotal,
+        userId: body.userId || null,
+        customerPhone: body.customerPhone || null,
+      });
+
+      if (!validatedDiscount.valid) {
+        return NextResponse.json({ error: validatedDiscount.error || 'Kode promo tidak valid' }, { status: 400 });
+      }
+      voucherDiscount = validatedDiscount.discountAmount || 0;
+    }
+
+    const secureTotal = Math.max(0, secureSubtotal - tumblerDiscount - voucherDiscount) + deliveryFee;
 
     // Determine initial status based on order type
     // Walk-in POS orders → directly COMPLETED
@@ -312,12 +332,21 @@ export async function POST(req: Request) {
             paymentMethod: body.paymentMethod || 'CASH',
             status: initialStatus,
             hasTumbler,
+            voucherCode: validatedDiscount ? validatedDiscount.code : (voucherCode || null),
             paymentProofUrl: '/verified-cashier.svg',
             items: {
               create: orderItemsToCreate
             }
           }
         });
+
+        if (validatedDiscount) {
+          await applyVoucherUsage(tx, {
+            code: validatedDiscount.code,
+            voucherId: validatedDiscount.voucherId,
+            templateId: validatedDiscount.templateId,
+          });
+        }
 
         if (orderType === 'DINE_IN' && body.tableNumber) {
           await tx.diningTable.updateMany({
@@ -348,12 +377,21 @@ export async function POST(req: Request) {
             paymentMethod: body.paymentMethod || 'CASH',
             status: initialStatus,
             hasTumbler,
+            voucherCode: validatedDiscount ? validatedDiscount.code : (voucherCode || null),
             queueNumber,
             items: {
               create: orderItemsToCreate
             }
           }
         });
+
+        if (validatedDiscount) {
+          await applyVoucherUsage(tx, {
+            code: validatedDiscount.code,
+            voucherId: validatedDiscount.voucherId,
+            templateId: validatedDiscount.templateId,
+          });
+        }
 
         if (orderType === 'DINE_IN' && body.tableNumber) {
           await tx.diningTable.updateMany({
@@ -395,18 +433,18 @@ export async function POST(req: Request) {
       })
     }
 
-    // Send admin notification
-    try {
-      const { sendAdminNewOrderNotification } = await import('@/lib/whatsapp-service');
-      await sendAdminNewOrderNotification(order.id);
-    } catch (e) {
-      console.error('[POS CHECKOUT] Admin notification error:', e);
-    }
+    // Send admin notification asynchronously in background (non-blocking for instant POS response)
+    import('@/lib/whatsapp-service').then(({ sendAdminNewOrderNotification }) => {
+      sendAdminNewOrderNotification(order.id).catch((e) => console.error('[POS CHECKOUT] Admin notification error:', e));
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,
       orderId: order.id,
+      subtotal: secureSubtotal,
       total: secureTotal,
+      voucherDiscount,
+      voucherCode: order.voucherCode,
       pointsAwarded: !!pointsResult,
       pointsEarned: pointsResult?.pointsToAdd || 0,
       newPoints: pointsResult?.newPoints || null,

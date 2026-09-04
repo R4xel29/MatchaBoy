@@ -58,7 +58,10 @@ export async function getOrSetCache<T>(
   }
 
   try {
-    const cachedData = await redisClient.get<T>(key);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Redis get timeout')), 800)
+    );
+    const cachedData = await Promise.race([redisClient.get<T>(key), timeoutPromise]);
     if (cachedData !== null && cachedData !== undefined) {
       return cachedData;
     }
@@ -85,7 +88,10 @@ export async function getOrSetCache<T>(
 export async function getCache<T>(key: string): Promise<T | null> {
   if (!redisClient) return null;
   try {
-    return await redisClient.get<T>(key);
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('Redis getCache timeout')), 800)
+    );
+    return await Promise.race([redisClient.get<T>(key), timeoutPromise]);
   } catch (err) {
     console.warn(`[Arum Seduh Cache] Redis getCache error for key "${key}":`, err);
     return null;

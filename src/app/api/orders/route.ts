@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getActivePromo } from '@/lib/utils';
 import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors';
 import { getNextQueueSequence } from '@/lib/rate-limit-redis';
+import { validateAndCalculateDiscount, applyVoucherUsage } from '@/lib/discount-utils';
 
 function generateOrderId(): string {
   const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -194,7 +195,25 @@ export async function POST(req: Request) {
       });
     }
 
-    const secureTotal = secureSubtotal;
+    // Validate voucher/promo if provided
+    const voucherCode = body.voucherCode ? body.voucherCode.toString().trim() : null;
+    let voucherDiscount = 0;
+    let validatedDiscount: any = null;
+    if (voucherCode) {
+      validatedDiscount = await validateAndCalculateDiscount({
+        code: voucherCode,
+        items: body.items,
+        subtotal: secureSubtotal,
+        customerPhone: body.phone || null,
+      });
+
+      if (!validatedDiscount.valid) {
+        throw new ValidationError(validatedDiscount.error || 'Kode promo tidak valid');
+      }
+      voucherDiscount = validatedDiscount.discountAmount || 0;
+    }
+
+    const secureTotal = Math.max(0, secureSubtotal - voucherDiscount);
 
     // Generate unique order ID instantly
     const timeStr = Date.now().toString(36).toUpperCase().slice(-4);
@@ -229,6 +248,7 @@ export async function POST(req: Request) {
         subtotal: secureSubtotal,
         deliveryFee: 0,
         total: secureTotal,
+        voucherCode: validatedDiscount ? validatedDiscount.code : (voucherCode || null),
         paymentMethod: requestedMethod === 'QRIS_INSTAN' ? 'QRIS' : requestedMethod,
         status: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? 'PENDING_PAYMENT' : 'PENDING',
         notes: body.notes || null,
@@ -239,6 +259,14 @@ export async function POST(req: Request) {
         }
       }
     });
+
+    if (validatedDiscount) {
+      await applyVoucherUsage(prisma, {
+        code: validatedDiscount.code,
+        voucherId: validatedDiscount.voucherId,
+        templateId: validatedDiscount.templateId,
+      });
+    }
 
     // Update table status if dining table exists
     if (tableNumber) {

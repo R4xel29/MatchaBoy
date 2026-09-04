@@ -44,9 +44,11 @@ export interface ReceiptData {
     bundleSelections?: Array<{ groupName?: string; productName?: string }>;
   }>;
   subtotal: number;
+  deliveryFee?: number;
   discount?: number;
   tumblerDiscount?: number;
   voucherDiscount?: number;
+  voucherCode?: string;
   total: number;
   cashPaid?: number;
   change?: number;
@@ -480,7 +482,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
           </div>
           ${totalDiscount > 0 ? `
             <div class="row">
-              <span>Diskon / Promo:</span>
+              <span>Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}:</span>
               <span class="bold">-${formatRupiah(totalDiscount)}</span>
             </div>
           ` : ''}
@@ -775,7 +777,8 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     receiptText += `--------------------------------\n`;
     receiptText += `Subtotal                ${formatRupiah(order.subtotal).padStart(10)}\n`;
     if (totalDiscount > 0) {
-      receiptText += `Diskon / Promo         -${formatRupiah(totalDiscount).padStart(10)}\n`;
+      const discountLabel = `Diskon${order.voucherCode ? ` (${order.voucherCode})` : ''}`.padEnd(20);
+      receiptText += `${discountLabel} -${formatRupiah(totalDiscount).padStart(9)}\n`;
     }
     receiptText += `TOTAL AKHIR             ${formatRupiah(order.total).padStart(10)}\n`;
     receiptText += `METODE: ${order.paymentMethod.padEnd(12)} (LUNAS)\n`;
@@ -992,8 +995,8 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
                       </div>
                       {totalDiscount > 0 && (
                         <div className="flex justify-between text-slate-800">
-                          <span>Diskon / Promo:</span>
-                          <span className="font-bold">-{formatRupiah(totalDiscount)}</span>
+                          <span>Diskon / Promo{order.voucherCode ? ` (${order.voucherCode})` : ''}:</span>
+                          <span className="font-bold text-red-600">-{formatRupiah(totalDiscount)}</span>
                         </div>
                       )}
 

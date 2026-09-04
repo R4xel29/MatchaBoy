@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendWhatsAppMessage, standardizeJid } from "@/lib/whatsapp-service";
 import { restoreStockForOrder } from "@/lib/inventory-utils";
+import { revertVoucherUsage } from "@/lib/discount-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -92,20 +93,9 @@ export async function GET(req: Request) {
             }
           }
 
-          // 3. Restore used voucher if any
+          // 3. Restore used voucher or template quota if any
           if (order.voucherCode) {
-            const voucher = await tx.voucher.findUnique({
-              where: { code: order.voucherCode }
-            });
-            if (voucher && voucher.isUsed) {
-              await tx.voucher.update({
-                where: { id: voucher.id },
-                data: {
-                  isUsed: false,
-                  usedAt: null
-                }
-              });
-            }
+            await revertVoucherUsage(tx, order.voucherCode);
           }
         });
 

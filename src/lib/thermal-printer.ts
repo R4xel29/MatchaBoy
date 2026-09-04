@@ -27,9 +27,11 @@ export interface ThermalPrintOrder {
     bundleSelections?: Array<{ groupName?: string; productName?: string }>;
   }>;
   subtotal: number;
+  deliveryFee?: number;
   discount?: number;
   tumblerDiscount?: number;
   voucherDiscount?: number;
+  voucherCode?: string;
   total: number;
   cashPaid?: number;
   change?: number;
@@ -356,7 +358,7 @@ export async function printThermalReceipt(
           </div>
           ${totalDiscount > 0 ? `
             <div class="row">
-              <span>Diskon / Promo</span>
+              <span>Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}</span>
               <span>-${formatRupiah(totalDiscount)}</span>
             </div>
           ` : ''}

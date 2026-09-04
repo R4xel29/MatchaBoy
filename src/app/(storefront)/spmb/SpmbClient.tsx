@@ -8,7 +8,8 @@ import {
   ShoppingBag, Trash2, Plus, Minus, User, MapPin, 
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
   ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Sparkles,
-  Flame, Clock, AlertTriangle, DoorOpen, Tv, Archive, Coffee, Flower2, Columns, Accessibility, Compass, Map
+  Flame, Clock, AlertTriangle, DoorOpen, Tv, Archive, Coffee, Flower2, Columns, Accessibility, Compass, Map,
+  Tag, Ticket
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
@@ -84,6 +85,65 @@ export default function SpmbClient({
   const [notes, setNotes] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<'QRIS' | 'COD'>('QRIS');
   
+  // Voucher & Promo State
+  const [promoCodeInput, setPromoCodeInput] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountAmount: number;
+    description: string;
+    type?: string;
+  } | null>(null);
+
+  const promoDiscount = appliedPromo?.discountAmount || 0;
+  const finalPayable = Math.max(0, totalPrice - promoDiscount);
+
+  const handleApplyPromo = async () => {
+    if (!promoCodeInput.trim()) return;
+    setPromoLoading(true);
+    setPromoError('');
+    try {
+      const itemsPayload = cartItems.map((item) => ({
+        productId: item.productId,
+        name: item.name,
+        quantity: item.quantity,
+        size: item.size || 'Normal',
+        sizePrice: (item as any).sizePrice || 0,
+        addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
+        price: item.price,
+      }));
+
+      const res = await fetch('/api/checkout/validate-voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: promoCodeInput.trim(),
+          subtotal: totalPrice,
+          items: itemsPayload,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Kode promo tidak valid');
+      setAppliedPromo({
+        code: data.voucher.code,
+        discountAmount: data.voucher.discountAmount,
+        description: data.voucher.description,
+        type: data.voucher.type,
+      });
+    } catch (err: any) {
+      setPromoError(err.message || 'Gagal menerapkan promo');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const handleRemovePromo = () => {
+    setAppliedPromo(null);
+    setPromoCodeInput('');
+    setPromoError('');
+  };
+
   // Checkout Status
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -304,6 +364,7 @@ export default function SpmbClient({
         pickupTime: isPickUp ? pickupTimeStr : undefined,
         paymentMethod: backendPaymentMethod,
         items: itemsPayload,
+        voucherCode: appliedPromo?.code || undefined,
         notes: isPickUp 
           ? (notes ? `[Pick Up: ${pickupTimeStr}] ${notes}` : `[Pick Up: ${pickupTimeStr}]`)
           : (notes || undefined)
@@ -326,6 +387,9 @@ export default function SpmbClient({
       setActiveOrderId(data.orderId);
 
       clearCart();
+      setAppliedPromo(null);
+      setPromoCodeInput('');
+      setPromoError('');
       setIsCartOpen(false);
 
       if (paymentMethod === 'QRIS') {
@@ -1121,6 +1185,92 @@ export default function SpmbClient({
                     </div>
                   </div>
 
+                  {/* Kode Diskon / Voucher Promo */}
+                  <div className="space-y-2 text-left pt-1">
+                    <label className="text-[11px] font-bold text-stone-700 flex items-center gap-1.5">
+                      <Tag className="w-3.5 h-3.5 text-orange-500" />
+                      <span>Kode Diskon / Voucher</span>
+                    </label>
+
+                    {!appliedPromo ? (
+                      <div className="space-y-1.5">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Contoh: HEMAT10..."
+                            value={promoCodeInput}
+                            onChange={(e) => setPromoCodeInput(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleApplyPromo();
+                              }
+                            }}
+                            className="flex-1 px-4 py-2.5 rounded-2xl border border-stone-200 bg-stone-50/50 text-xs font-semibold uppercase focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all placeholder:normal-case placeholder:font-normal text-stone-900"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleApplyPromo}
+                            disabled={promoLoading || !promoCodeInput.trim()}
+                            className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 flex items-center gap-1 cursor-pointer shrink-0"
+                          >
+                            {promoLoading ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Sparkles className="w-3.5 h-3.5" />
+                            )}
+                            <span>Pakai</span>
+                          </button>
+                        </div>
+                        {promoError && (
+                          <p className="text-[11px] text-rose-600 font-medium px-1">{promoError}</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-2xl bg-orange-50/80 border border-orange-200/90 flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                          <div className="w-7 h-7 rounded-xl bg-orange-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                            <Ticket className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-orange-950 truncate">
+                              {appliedPromo.code} <span className="text-orange-600 font-extrabold">(-{formatRupiah(appliedPromo.discountAmount)})</span>
+                            </p>
+                            <p className="text-[10px] text-stone-500 truncate">{appliedPromo.description}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemovePromo}
+                          className="w-7 h-7 rounded-full hover:bg-orange-200/50 text-stone-400 hover:text-stone-700 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                          title="Hapus Promo"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ringkasan Biaya */}
+                  <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200/70 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Subtotal Pesanan</span>
+                      <span>{formatRupiah(totalPrice)}</span>
+                    </div>
+                    {appliedPromo && promoDiscount > 0 && (
+                      <div className="flex justify-between text-orange-600 font-semibold">
+                        <span className="flex items-center gap-1">
+                          <Tag className="w-3 h-3" /> Diskon Promo ({appliedPromo.code})
+                        </span>
+                        <span>-{formatRupiah(promoDiscount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold text-stone-900 pt-1.5 border-t border-stone-200 text-sm">
+                      <span>Total Pembayaran</span>
+                      <span className="text-orange-600">{formatRupiah(finalPayable)}</span>
+                    </div>
+                  </div>
+
                   {errorMsg && (
                     <div className="p-3 bg-rose-50 text-rose-700 rounded-2xl text-xs font-medium text-left border border-rose-200">
                        {errorMsg}
@@ -1141,7 +1291,7 @@ export default function SpmbClient({
                       <>
                         <span>Kirim Pesanan</span>
                         <span className="opacity-80">•</span>
-                        <span>{formatRupiah(totalPrice)}</span>
+                        <span>{formatRupiah(finalPayable)}</span>
                       </>
                     )}
                   </motion.button>

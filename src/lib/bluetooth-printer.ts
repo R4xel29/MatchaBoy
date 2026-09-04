@@ -361,7 +361,8 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   // 7. Payment Summary
   writeText(padLine('Subtotal:', formatRupiah(order.subtotal || order.total), maxCols));
   if (totalDiscount > 0) {
-    writeText(padLine('Diskon / Promo:', `-${formatRupiah(totalDiscount)}`, maxCols));
+    const promoLabel = `Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}:`;
+    writeText(padLine(promoLabel, `-${formatRupiah(totalDiscount)}`, maxCols));
   }
 
   // 8. Solid Black TOTAL Banner (Inverted Ribbon)
@@ -790,8 +791,9 @@ export function renderCgvTicketCanvas(
 
     const totalDiscount = (order.discount || 0) + (order.tumblerDiscount || 0) + (order.voucherDiscount || 0);
     if (totalDiscount > 0) {
+      const promoLabel = `Diskon / Promo${order.voucherCode ? ` (${order.voucherCode})` : ''}:`;
       ctx.textAlign = 'left';
-      ctx.fillText('Diskon / Promo:', paddingX, y + 11);
+      ctx.fillText(promoLabel, paddingX, y + 11);
       ctx.textAlign = 'right';
       ctx.fillText(`-${formatRupiah(totalDiscount)}`, width - paddingX, y + 11);
       y += 16;

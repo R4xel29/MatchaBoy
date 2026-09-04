@@ -1,89 +1,93 @@
-import { NextResponse } from 'next/server'
-import { auth } from '@/auth'
-import { prisma } from '@/lib/prisma'
+import { NextResponse } from 'next/server';
+import { auth } from '@/auth';
+import { prisma } from '@/lib/prisma';
+import { validateAndCalculateDiscount } from '@/lib/discount-utils';
 
 export async function POST(req: Request) {
-    try {
-        const session = await auth()
-        const body = await req.json()
+  try {
+    const session = await auth();
+    const body = await req.json();
 
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: 'Login diperlukan' }, { status: 401 })
-        }
-
-        const { code } = body
-        if (!code) {
-            return NextResponse.json({ error: 'Kode voucher kosong' }, { status: 400 })
-        }
-
-        const cleanCode = code.trim().toUpperCase()
-
-        // 1. Check if the user already has a claimed unused voucher matching either the instance code or the template code
-        let voucher = await prisma.voucher.findFirst({
-            where: {
-                userId: session.user.id,
-                isUsed: false,
-                OR: [
-                    { code: cleanCode },
-                    { template: { code: cleanCode } }
-                ]
-            },
-            include: { template: true }
-        })
-
-        if (!voucher) {
-            return NextResponse.json({ error: 'Voucher tidak valid atau belum diklaim' }, { status: 400 })
-        }
-
-        if (voucher.isUsed) {
-            return NextResponse.json({ error: 'Voucher sudah digunakan' }, { status: 400 })
-        }
-
-        if (voucher.expiresAt && voucher.expiresAt < new Date()) {
-            return NextResponse.json({ error: 'Voucher sudah kadaluarsa' }, { status: 400 })
-        }
-
-        let validProductIds: string[] = []
-        let validProductNames: string[] = []
-        if (voucher.template?.validProductIds) {
-            try {
-                const parsed = JSON.parse(voucher.template.validProductIds)
-                if (Array.isArray(parsed)) {
-                    validProductIds = parsed
-                    const products = await prisma.product.findMany({
-                        where: { id: { in: validProductIds } },
-                        select: { name: true }
-                    })
-                    validProductNames = products.map(p => p.name)
-                }
-            } catch (e) {
-                console.error('Error parsing validProductIds:', e)
-            }
-        }
-
-        // Return unified voucher shape
-        return NextResponse.json({ 
-            success: true, 
-            voucher: {
-                id: voucher.id,
-                code: voucher.code,
-                type: voucher.type,
-                description: voucher.description,
-                discountAmount: voucher.discountAmount || voucher.template?.discountValue || 0,
-                minPurchase: voucher.template?.minPurchase || 0,
-                maxDiscount: voucher.template?.maxDiscount || null,
-                validProductIds,
-                validProductNames,
-                template: voucher.template ? {
-                    discountValue: voucher.template.discountValue,
-                    minPurchase: voucher.template.minPurchase,
-                    maxDiscount: voucher.template.maxDiscount,
-                    validProductIds: voucher.template.validProductIds
-                } : null
-            }
-        })
-    } catch (error: any) {
-        console.error('Validate voucher error:', error)
-        return NextResponse.json({ error: error.message || 'Gagal memvalidasi voucher' }, { status: 500 })
+    const { code, items, subtotal, customerPhone, userId } = body;
+    if (!code || !code.trim()) {
+      return NextResponse.json({ error: 'Kode voucher atau promo wajib diisi' }, { status: 400 });
     }
+
+    const cleanCode = code.trim().toUpperCase();
+
+    // Priority for userId: explicitly provided in body (e.g. from cashier looking up member), or active session
+    const effectiveUserId = userId || (session?.user?.role !== 'CASHIER' ? session?.user?.id : null);
+
+    // Calculate subtotal if not provided from items
+    let effectiveSubtotal = Number(subtotal) || 0;
+    if (effectiveSubtotal <= 0 && Array.isArray(items) && items.length > 0) {
+      effectiveSubtotal = items.reduce((sum: number, item: any) => {
+        const itemPrice = Number(item.price || item.basePrice || 0) + Number(item.sizePrice || 0);
+        return sum + itemPrice * Number(item.quantity || item.qty || 1);
+      }, 0);
+    }
+
+    // Call unified discount calculator
+    const result = await validateAndCalculateDiscount({
+      code: cleanCode,
+      items: items || [],
+      subtotal: effectiveSubtotal,
+      userId: effectiveUserId,
+      customerPhone: customerPhone || null,
+    });
+
+    if (!result.valid) {
+      return NextResponse.json({ error: result.error || 'Voucher atau kode promo tidak valid' }, { status: 400 });
+    }
+
+    // Resolve eligible product names if validProductIds exist
+    let validProductIds: string[] = [];
+    let validProductNames: string[] = [];
+    if (result.templateId) {
+      const tmpl = await prisma.voucherTemplate.findUnique({
+        where: { id: result.templateId },
+        select: { validProductIds: true },
+      });
+      if (tmpl?.validProductIds) {
+        try {
+          const parsed = JSON.parse(tmpl.validProductIds);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            validProductIds = parsed;
+            const prods = await prisma.product.findMany({
+              where: { id: { in: validProductIds } },
+              select: { name: true },
+            });
+            validProductNames = prods.map((p) => p.name);
+          }
+        } catch {}
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      voucher: {
+        id: result.voucherId || result.templateId || result.code,
+        code: result.code,
+        type: result.type,
+        description: result.description,
+        discountAmount: result.discountAmount,
+        minPurchase: result.minPurchase || 0,
+        maxDiscount: result.maxDiscount || null,
+        validProductIds,
+        validProductNames,
+        template: {
+          discountValue: result.discountAmount,
+          minPurchase: result.minPurchase || 0,
+          maxDiscount: result.maxDiscount || null,
+          validProductIds: validProductIds.length > 0 ? JSON.stringify(validProductIds) : null,
+        },
+      },
+    });
+  } catch (error: any) {
+    console.error('Validate voucher error:', error);
+    return NextResponse.json(
+      { error: error.message || 'Gagal memvalidasi kode voucher' },
+      { status: 500 }
+    );
+  }
 }

@@ -185,13 +185,15 @@ export async function getNextQueueSequence(prefix: string): Promise<string> {
       const todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(now);
       const redisKey = `seq:order:${prefix.toLowerCase()}:${todayStr}`;
       
-      const nextVal = await redis.incr(redisKey);
-      // Set expiry to 36 hours so it cleans up after the day ends
-      await redis.expire(redisKey, 36 * 3600);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Redis timeout')), 800)
+      );
+      const nextVal = await Promise.race([redis.incr(redisKey), timeoutPromise]);
+      redis.expire(redisKey, 36 * 3600).catch(() => {});
       
       return String(nextVal).padStart(3, '0');
     } catch (error) {
-      console.error('[Queue Sequence] Redis sequence error, falling back to DB count:', error);
+      console.warn('[Queue Sequence] Redis sequence timeout or error, falling back to DB count:', error);
     }
   }
 

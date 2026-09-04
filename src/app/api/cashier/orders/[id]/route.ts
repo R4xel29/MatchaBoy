@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { processOrderCompletion } from '@/lib/loyalty-utils'
 import { deductStockForOrder, restoreStockForOrder } from '@/lib/inventory-utils'
 import { logAdminAction } from '@/lib/admin-logger'
+import { revertVoucherUsage } from '@/lib/discount-utils'
 
 const VALID_STATUSES = [
   'PENDING', 'PENDING_PAYMENT', 'PREPARING', 'READY', 'COMPLETED',
@@ -109,20 +110,9 @@ export async function PATCH(
           }
         }
 
-        // 3. Restore used voucher if any
+        // 3. Restore used voucher or template quota if any
         if (existingOrder.voucherCode) {
-          const voucher = await tx.voucher.findUnique({
-            where: { code: existingOrder.voucherCode }
-          })
-          if (voucher && voucher.isUsed) {
-            await tx.voucher.update({
-              where: { id: voucher.id },
-              data: {
-                isUsed: false,
-                usedAt: null
-              }
-            })
-          }
+          await revertVoucherUsage(tx, existingOrder.voucherCode);
         }
       }
 
