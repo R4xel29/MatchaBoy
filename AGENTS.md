@@ -43,4 +43,10 @@
    - Seluruh token warna dari mockup wajib diselaraskan dengan identitas resmi Arum Seduh (nuansa Oranye & Kuning Amber, bukan warna acak atau hijau default).
    - Gunakan ikon vektor Lucide React secara konsisten dan dilarang memakai emoji sistem operasi pada teks antarmuka atau tombol aksi.
 
+10. PROTOKOL OTOMATIS COMMIT & PUSH PASCA-VERIFIKASI:
+    - Setiap kali pembuatan fitur, perbaikan bug, atau refaktor kode telah diverifikasi berhasil (misal: exit code 0 pada `npx tsx tests/run-all-tests.ts` dan `npm run build`), asisten WAJIB LANGSUNG menjalankan `git add .`, membuat commit dengan pesan konvensional deskriptif, dan mengeksekusi `git push origin <branch>` SEBELUM mengirimkan pesan laporan akhir kepada pengguna.
+    - Laporan akhir wajib selalu mencantumkan commit hash (contoh: `1f1d338`) dan nama branch tujuan (`master`).
+    - DILARANG mengakhiri tugas tanpa melakukan commit & push jika terdapat perubahan berkas yang valid dan terverifikasi.
+
+
 
