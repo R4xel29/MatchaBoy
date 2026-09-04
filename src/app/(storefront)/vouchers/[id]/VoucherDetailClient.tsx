@@ -35,6 +35,8 @@ export default function VoucherDetailClient({ voucher, products }: { voucher: an
     switch (type) {
       case 'DISCOUNT_PCT': return 'Diskon Persentase'
       case 'DISCOUNT_RP': return 'Potongan Harga'
+      case 'B2G1':
+      case 'BUY_X_GET_Y': return 'Beli 2 Gratis 1'
       case 'FREE_DRINK': return 'Gratis Minuman'
       case 'FREE_TOPPING': return 'Gratis Topping'
       case 'UPGRADE_SIZE': return 'Upgrade Ukuran'
@@ -50,6 +52,9 @@ export default function VoucherDetailClient({ voucher, products }: { voucher: an
         return `${template.discountValue}% OFF`
       } else if (template.type === 'DISCOUNT_RP') {
         return formatCurrency(template.discountValue)
+      } else if (template.type === 'B2G1' || template.type === 'BUY_X_GET_Y') {
+        const buyQty = template.discountValue > 0 ? template.discountValue : 2;
+        return `BELI ${buyQty} GRATIS 1`
       } else if (template.type === 'FREE_DRINK') {
         return 'FREE DRINK'
       } else if (template.type === 'FREE_TOPPING') {
@@ -62,6 +67,7 @@ export default function VoucherDetailClient({ voucher, products }: { voucher: an
     }
     
     // Legacy mapping
+    if (v.type === 'B2G1' || v.type === 'BUY_X_GET_Y') return 'BELI 2 GRATIS 1'
     if (v.type === 'FREE_DRINK') return 'FREE DRINK'
     if (v.type === 'FREE_TOPPING') return 'FREE TOPPING'
     if (v.type === 'UPGRADE_SIZE') return 'FREE UPGRADE'
@@ -71,6 +77,9 @@ export default function VoucherDetailClient({ voucher, products }: { voucher: an
 
   const getVoucherGradient = (type: string) => {
     switch (type) {
+      case 'B2G1':
+      case 'BUY_X_GET_Y':
+        return 'from-orange-600 to-amber-600'
       case 'FREE_DRINK':
       case 'FREE_TOPPING':
         return 'from-[#1E3A1A] to-[#122210]' // Premium Dark Forest Matcha Green

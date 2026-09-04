@@ -314,6 +314,61 @@ export default function CashierPOSClient({ products, categories, packagingStock,
     showToast('Promo voucher dibatalkan', 'info');
   };
 
+  // Auto-revalidate applied voucher if cart items change (e.g. B2G1 quantity drops below 3)
+  useEffect(() => {
+    if (!appliedVoucher) return;
+    if (cart.length === 0) {
+      setAppliedVoucher(null);
+      return;
+    }
+
+    let active = true;
+    const revalidate = async () => {
+      try {
+        const res = await fetch('/api/checkout/validate-voucher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: appliedVoucher.code,
+            subtotal,
+            items: cart.map((i) => ({
+              productId: i.productId,
+              quantity: i.quantity,
+              price: i.basePrice,
+              size: i.size,
+              sizePrice: i.sizePrice,
+              addOnIds: i.addOns.map((a) => a.id),
+            })),
+            userId: phoneLookupResult?.id || null,
+            customerPhone: customerPhone || phoneLookupResult?.phone || null,
+          }),
+        });
+        const data = await res.json();
+        if (!active) return;
+        if (res.ok && data.voucher) {
+          setAppliedVoucher({
+            code: data.voucher.code,
+            discountAmount: data.voucher.discountAmount,
+            description: data.voucher.description,
+            type: data.voucher.type,
+          });
+        } else {
+          setAppliedVoucher(null);
+          showToast(data.error || 'Promo dilepas karena isi pesanan tidak lagi memenuhi syarat.', 'error');
+        }
+      } catch {
+        // silent on network hiccup
+      }
+    };
+
+    const timer = setTimeout(revalidate, 400);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [cart, subtotal]);
+
+
   const [isQrisConfirmed, setIsQrisConfirmed] = useState(false);
   const [dokuQrContent, setDokuQrContent] = useState<string | null>(null);
   const [dokuQrImageUrl, setDokuQrImageUrl] = useState<string | null>(null);

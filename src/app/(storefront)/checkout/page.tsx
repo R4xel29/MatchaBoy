@@ -726,7 +726,7 @@ export default function CheckoutPage() {
 
       if (selectedVoucherFilter === 'semua') return true;
       if (selectedVoucherFilter === 'diskon') {
-        return v.type === 'DISCOUNT_RP' || v.type === 'DISCOUNT_PCT' || v.type === 'FREE_DRINK' || v.type === 'FREE_TOPPING' || v.type === 'UPGRADE_SIZE' || v.type === 'REFERRAL_REWARD';
+        return v.type === 'DISCOUNT_RP' || v.type === 'DISCOUNT_PCT' || v.type === 'FREE_DRINK' || v.type === 'FREE_TOPPING' || v.type === 'UPGRADE_SIZE' || v.type === 'REFERRAL_REWARD' || v.type === 'B2G1' || v.type === 'BUY_X_GET_Y';
       }
       if (selectedVoucherFilter === 'cashback') {
         return v.type === 'CASHBACK' || v.description?.toLowerCase().includes('cashback') || v.title?.toLowerCase().includes('cashback');
@@ -877,6 +877,41 @@ export default function CheckoutPage() {
         return itemSizePrice > max ? itemSizePrice : max;
       }, 0);
       return maxSizeUpgrade;
+    }
+
+    if (appliedVoucher.type === 'B2G1' || appliedVoucher.type === 'BUY_X_GET_Y') {
+      const rawBuyQty = (appliedVoucher as any).template?.discountValue || (appliedVoucher as any).discountValue || 2;
+      const buyQty = rawBuyQty > 0 ? rawBuyQty : 2;
+      const getQty = 1;
+      const requiredSetQty = buyQty + getQty;
+
+      const individualUnitPrices: number[] = [];
+      for (const item of eligibleItems) {
+        const singlePrice = item.isBundle && item.bundleSelections
+          ? (item.basePrice + item.bundleSelections.reduce((sum: number, a: any) => sum + (a.priceAdjustment || 0), 0))
+          : (item.basePrice + (item.sizePrice || 0) + (item.addOns ? item.addOns.reduce((s: number, a: any) => s + a.price, 0) : 0));
+        for (let q = 0; q < (item.quantity || 1); q++) {
+          individualUnitPrices.push(singlePrice);
+        }
+      }
+
+      if (individualUnitPrices.length < requiredSetQty) {
+        return 0;
+      }
+
+      const numFree = Math.floor(individualUnitPrices.length / requiredSetQty) * getQty;
+      individualUnitPrices.sort((a, b) => a - b);
+
+      const maxDiscount = appliedVoucher.maxDiscount ?? (appliedVoucher as any).template?.maxDiscount;
+      let totalDiscount = 0;
+      for (let i = 0; i < numFree; i++) {
+        let price = individualUnitPrices[i];
+        if (maxDiscount && maxDiscount > 0) {
+          price = Math.min(price, maxDiscount);
+        }
+        totalDiscount += price;
+      }
+      return Math.min(totalDiscount, eligibleSubtotal);
     }
     
     // Resolve discount value from either discountAmount or template.discountValue

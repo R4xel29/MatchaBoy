@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Ticket, Plus, Edit, Trash2, Search, Calendar, DollarSign, Percent, 
   ShoppingBag, Check, X, Upload, Loader2, Info, Eye, Tag, AlertCircle, FileText,
-  Copy, Download, Printer, Share2, FileSpreadsheet
+  Copy, Download, Printer, Share2, FileSpreadsheet, Sparkles
 } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 import Image from 'next/image'
@@ -265,9 +265,12 @@ export default function VoucherAdminClient({
       } catch {}
     }
 
-    const discountText = templateData.type === 'DISCOUNT_PCT' 
-      ? `Potongan ${templateData.discountValue}%`
-      : `Potongan ${formatRupiah(templateData.discountValue)}`
+    let discountText = `Potongan ${formatRupiah(templateData.discountValue)}`
+    if (templateData.type === 'DISCOUNT_PCT') {
+      discountText = `Potongan ${templateData.discountValue}%`
+    } else if (templateData.type === 'B2G1' || templateData.type === 'BUY_X_GET_Y') {
+      discountText = `Beli ${templateData.discountValue > 0 ? templateData.discountValue : 2} Gratis 1`
+    }
 
     printWindow.document.write(`
       <html>
@@ -388,7 +391,7 @@ export default function VoucherAdminClient({
     return templates.filter(t => {
       const matchesSearch = t.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             t.title.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesType = typeFilter === 'ALL' || t.type === typeFilter
+      const matchesType = typeFilter === 'ALL' || t.type === typeFilter || (typeFilter === 'B2G1' && (t.type === 'B2G1' || t.type === 'BUY_X_GET_Y'))
       return matchesSearch && matchesType
     })
   }, [templates, searchQuery, typeFilter])
@@ -554,7 +557,9 @@ export default function VoucherAdminClient({
     }
 
     if (discountValue === undefined || discountValue === null || isNaN(discountValue) || discountValue <= 0) {
-      newErrors.discountValue = "Nilai potongan harus lebih besar dari 0."
+      newErrors.discountValue = (type === 'B2G1' || type === 'BUY_X_GET_Y')
+        ? "Jumlah beli minimal 1 cup (rekomendasi: 2)."
+        : "Nilai potongan harus lebih besar dari 0."
     } else if (type === 'DISCOUNT_PCT' && discountValue > 100) {
       newErrors.discountValue = "Nilai potongan persentase maksimal adalah 100%."
     }
@@ -563,7 +568,7 @@ export default function VoucherAdminClient({
       newErrors.minPurchase = "Minimal total belanja tidak boleh bernilai negatif."
     }
 
-    if (type === 'DISCOUNT_PCT' && maxDiscount !== null && (isNaN(maxDiscount) || maxDiscount < 0)) {
+    if ((type === 'DISCOUNT_PCT' || type === 'B2G1' || type === 'BUY_X_GET_Y') && maxDiscount !== null && (isNaN(maxDiscount) || maxDiscount < 0)) {
       newErrors.maxDiscount = "Batas diskon maksimal tidak boleh bernilai negatif."
     }
 
@@ -598,7 +603,7 @@ export default function VoucherAdminClient({
       type,
       discountValue: Number(discountValue),
       minPurchase: Number(minPurchase),
-      maxDiscount: (type === 'DISCOUNT_PCT' && maxDiscount !== null && maxDiscount > 0) ? Number(maxDiscount) : null,
+      maxDiscount: ((type === 'DISCOUNT_PCT' || type === 'B2G1' || type === 'BUY_X_GET_Y') && maxDiscount !== null && maxDiscount > 0) ? Number(maxDiscount) : null,
       terms,
       expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
       usageLimit: Number(usageLimit),
@@ -743,7 +748,8 @@ export default function VoucherAdminClient({
               {[
                 { id: 'ALL', label: 'Semua Tipe' },
                 { id: 'DISCOUNT_RP', label: 'Diskon Nominal' },
-                { id: 'DISCOUNT_PCT', label: 'Diskon Persentase' }
+                { id: 'DISCOUNT_PCT', label: 'Diskon Persentase' },
+                { id: 'B2G1', label: 'Beli 2 Gratis 1' },
               ].map((opt) => (
                 <button
                   key={opt.id}
@@ -791,10 +797,18 @@ export default function VoucherAdminClient({
                     
                     {/* Discount Badge */}
                     <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-md text-white font-extrabold text-[10px] tracking-wide uppercase flex items-center gap-1">
-                      {t.type === 'DISCOUNT_PCT' ? <Percent className="w-3.5 h-3.5" /> : <DollarSign className="w-3.5 h-3.5" />}
+                      {t.type === 'DISCOUNT_PCT' ? (
+                        <Percent className="w-3.5 h-3.5" />
+                      ) : t.type === 'B2G1' || t.type === 'BUY_X_GET_Y' ? (
+                        <ShoppingBag className="w-3.5 h-3.5" />
+                      ) : (
+                        <DollarSign className="w-3.5 h-3.5" />
+                      )}
                       <span>
                         {t.type === 'DISCOUNT_PCT' 
                           ? `Potongan ${t.discountValue}%` 
+                          : t.type === 'B2G1' || t.type === 'BUY_X_GET_Y'
+                          ? `Beli ${t.discountValue > 0 ? t.discountValue : 2} Gratis 1`
                           : `Potongan ${formatRupiah(t.discountValue)}`}
                       </span>
                     </div>
@@ -820,11 +834,11 @@ export default function VoucherAdminClient({
                         <span>Min. Belanja:</span>
                         <span className="font-bold text-gray-700">{formatRupiah(t.minPurchase)}</span>
                       </div>
-                      {t.type === 'DISCOUNT_PCT' && (
+                      {(t.type === 'DISCOUNT_PCT' || t.type === 'B2G1' || t.type === 'BUY_X_GET_Y') && (
                         <div className="flex justify-between">
-                          <span>Maks. Diskon:</span>
+                          <span>{t.type === 'DISCOUNT_PCT' ? 'Maks. Diskon:' : 'Batas Nilai Cup Gratis:'}</span>
                           <span className="font-bold text-red-600">
-                            {t.maxDiscount ? formatRupiah(t.maxDiscount) : 'Tanpa Batas'}
+                            {t.maxDiscount ? formatRupiah(t.maxDiscount) : '100% Gratis'}
                           </span>
                         </div>
                       )}
@@ -1117,6 +1131,8 @@ export default function VoucherAdminClient({
                             <div className="absolute top-4 left-4 px-3 py-1.5 rounded-full bg-black/45 backdrop-blur-md text-white font-extrabold text-[10px] tracking-wide uppercase">
                               {detailData.type === 'DISCOUNT_PCT' 
                                 ? `Potongan ${detailData.discountValue}%` 
+                                : detailData.type === 'B2G1' || detailData.type === 'BUY_X_GET_Y'
+                                ? `Beli ${detailData.discountValue > 0 ? detailData.discountValue : 2} Gratis 1`
                                 : `Potongan ${formatRupiah(detailData.discountValue)}`}
                             </div>
                           </div>
@@ -1163,10 +1179,14 @@ export default function VoucherAdminClient({
                               <p className="text-sm font-extrabold text-gray-800 mt-1">{formatRupiah(detailData.minPurchase)}</p>
                             </div>
                             <div className="bg-white p-4 rounded-2xl border border-gray-100">
-                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Maksimal Diskon</span>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                                {detailData.type === 'B2G1' || detailData.type === 'BUY_X_GET_Y' ? 'Batas Nilai Cup Gratis' : 'Maksimal Diskon'}
+                              </span>
                               <p className="text-sm font-extrabold text-gray-800 mt-1">
                                 {detailData.type === 'DISCOUNT_PCT' 
                                   ? (detailData.maxDiscount ? formatRupiah(detailData.maxDiscount) : 'Tanpa Batas')
+                                  : detailData.type === 'B2G1' || detailData.type === 'BUY_X_GET_Y'
+                                  ? (detailData.maxDiscount ? formatRupiah(detailData.maxDiscount) : '100% Gratis Tanpa Batas')
                                   : 'N/A (Bukan Persentase)'}
                               </p>
                             </div>
@@ -1560,11 +1580,18 @@ export default function VoucherAdminClient({
                         id="type"
                         name="type"
                         value={type}
-                        onChange={(e) => setType(e.target.value)}
+                        onChange={(e) => {
+                          const newType = e.target.value;
+                          setType(newType);
+                          if ((newType === 'B2G1' || newType === 'BUY_X_GET_Y') && (!discountValue || discountValue === 0)) {
+                            setDiscountValue(2);
+                          }
+                        }}
                         className="w-full px-4 py-3 rounded-2xl border border-gray-250 text-xs focus:outline-none focus:border-[#B48A5E] bg-white"
                       >
                         <option value="DISCOUNT_RP">Diskon Nominal (Rp)</option>
                         <option value="DISCOUNT_PCT">Diskon Persentase (%)</option>
+                        <option value="B2G1">Beli 2 Gratis 1 (Buy X Get 1)</option>
                         <option value="FREE_DRINK">Gratis Minuman</option>
                         <option value="FREE_TOPPING">Gratis Topping</option>
                         <option value="UPGRADE_SIZE">Upgrade Size</option>
@@ -1573,7 +1600,11 @@ export default function VoucherAdminClient({
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 mb-1.5">
-                        Nilai Potongan {type === 'DISCOUNT_PCT' ? '(%)' : '(Rp)'} *
+                        {type === 'DISCOUNT_PCT' 
+                          ? 'Nilai Potongan (%) *' 
+                          : type === 'B2G1' || type === 'BUY_X_GET_Y' 
+                          ? 'Jumlah Beli (Cup) *' 
+                          : 'Nilai Potongan (Rp) *'}
                       </label>
                       <input
                         type="number"
@@ -1618,28 +1649,32 @@ export default function VoucherAdminClient({
                       )}
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">Batas Diskon Maksimal (Rp)</label>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+                        {type === 'B2G1' || type === 'BUY_X_GET_Y' 
+                          ? 'Batas Nilai Cup Gratis (Rp)' 
+                          : 'Batas Diskon Maksimal (Rp)'}
+                      </label>
                       <input
                         type="number"
                         id="maxDiscount"
                         name="maxDiscount"
                         min={0}
-                        disabled={type !== 'DISCOUNT_PCT'}
-                        value={type === 'DISCOUNT_PCT' ? (maxDiscount !== null ? maxDiscount : '') : ''}
+                        disabled={type !== 'DISCOUNT_PCT' && type !== 'B2G1' && type !== 'BUY_X_GET_Y'}
+                        value={type === 'DISCOUNT_PCT' || type === 'B2G1' || type === 'BUY_X_GET_Y' ? (maxDiscount !== null ? maxDiscount : '') : ''}
                         onChange={(e) => { 
                           const val = e.target.value;
                           setMaxDiscount(val === '' ? null : Number(val));
                           clearError('maxDiscount');
                         }}
-                        placeholder={type === 'DISCOUNT_PCT' ? 'Tanpa batas' : 'Hanya untuk tipe Persentase (%)'}
+                        placeholder={type === 'B2G1' || type === 'BUY_X_GET_Y' ? 'Kosongkan jika 100% gratis' : type === 'DISCOUNT_PCT' ? 'Tanpa batas' : 'Tidak berlaku'}
                         className={`w-full px-4 py-3 rounded-2xl border text-xs focus:outline-none transition-all ${
-                          type !== 'DISCOUNT_PCT' ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' :
+                          type !== 'DISCOUNT_PCT' && type !== 'B2G1' && type !== 'BUY_X_GET_Y' ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' :
                           errors.maxDiscount 
                             ? 'border-red-500 bg-red-50/10 focus:border-red-600 focus:ring-1 focus:ring-red-600' 
                             : 'border-gray-250 focus:border-[#B48A5E]'
                         }`}
                       />
-                      {errors.maxDiscount && type === 'DISCOUNT_PCT' && (
+                      {errors.maxDiscount && (type === 'DISCOUNT_PCT' || type === 'B2G1' || type === 'BUY_X_GET_Y') && (
                         <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1 font-medium">
                           <AlertCircle className="w-3.5 h-3.5 shrink-0" />
                           {errors.maxDiscount}
@@ -1647,6 +1682,18 @@ export default function VoucherAdminClient({
                       )}
                     </div>
                   </div>
+
+                  {(type === 'B2G1' || type === 'BUY_X_GET_Y') && (
+                    <div className="bg-amber-500/[0.05] border border-amber-500/20 p-4 rounded-2xl text-xs text-amber-900 leading-relaxed flex items-start gap-3">
+                      <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">Mekanisme Promo Beli {discountValue > 0 ? discountValue : 2} Gratis 1:</p>
+                        <p className="text-[11px] text-amber-800/90 mt-0.5">
+                          Pelanggan/kasir wajib memasukkan minimal {(discountValue > 0 ? discountValue : 2) + 1} cup ke keranjang ({discountValue > 0 ? discountValue : 2} berbayar + 1 gratis). Sistem akan secara otomatis menggratiskan 1 cup dengan harga termurah.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* 3. Quota and Expiry */}

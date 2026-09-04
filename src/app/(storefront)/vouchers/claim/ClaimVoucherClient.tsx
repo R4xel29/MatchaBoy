@@ -56,6 +56,9 @@ export default function ClaimVoucherClient({
         return `Diskon ${formatRupiah(template.discountValue)}`
       case 'DISCOUNT_PCT':
         return `Diskon ${template.discountValue}%`
+      case 'B2G1':
+      case 'BUY_X_GET_Y':
+        return `Beli ${template.discountValue > 0 ? template.discountValue : 2} Gratis 1`
       case 'FREE_DRINK':
         return 'Gratis Minuman'
       case 'FREE_TOPPING':

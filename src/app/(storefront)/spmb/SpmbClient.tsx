@@ -144,6 +144,62 @@ export default function SpmbClient({
     setPromoError('');
   };
 
+  // Auto-revalidate applied promo if cart items change (e.g. B2G1 quantity drops below 3)
+  useEffect(() => {
+    if (!appliedPromo) return;
+    if (cartItems.length === 0) {
+      setAppliedPromo(null);
+      return;
+    }
+
+    let active = true;
+    const revalidate = async () => {
+      try {
+        const itemsPayload = cartItems.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: item.quantity,
+          size: item.size || 'Normal',
+          sizePrice: (item as any).sizePrice || 0,
+          addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
+          price: item.price,
+        }));
+
+        const res = await fetch('/api/checkout/validate-voucher', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: appliedPromo.code,
+            subtotal: totalPrice,
+            items: itemsPayload,
+          }),
+        });
+        const data = await res.json();
+        if (!active) return;
+        if (res.ok && data.voucher) {
+          setAppliedPromo({
+            code: data.voucher.code,
+            discountAmount: data.voucher.discountAmount,
+            description: data.voucher.description,
+            type: data.voucher.type,
+          });
+        } else {
+          setAppliedPromo(null);
+          setPromoError(data.error || 'Promo dilepas karena keranjang tidak memenuhi syarat.');
+        }
+      } catch {
+        // silent
+      }
+    };
+
+    const timer = setTimeout(revalidate, 400);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [cartItems, totalPrice]);
+
+
   // Checkout Status
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');

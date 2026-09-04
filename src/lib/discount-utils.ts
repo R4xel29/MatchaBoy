@@ -159,11 +159,12 @@ export async function validateAndCalculateDiscount(
   const validProductIdsJson = matchedTemplate?.validProductIds;
   let discountAmount = 0;
 
-  // Calculate subtotal of eligible products
+  // Calculate subtotal of eligible products and track individual unit prices
   let validProductsSubtotal = 0;
   let maxSingleUnitEligiblePrice = 0;
   let maxEligibleToppingPrice = 0;
   let maxEligibleSizePrice = 0;
+  const eligibleUnitPrices: number[] = [];
 
   for (const item of (items || [])) {
     const isEligible = isProductValidForVoucher(item.productId, validProductIdsJson);
@@ -204,6 +205,12 @@ export async function validateAndCalculateDiscount(
           maxSingleUnitEligiblePrice = unitPrice;
         }
 
+        // Collect all individual units for quantity-based bundles (e.g. Beli 2 Gratis 1)
+        const qty = Math.max(1, Number(item.quantity) || 1);
+        for (let q = 0; q < qty; q++) {
+          eligibleUnitPrices.push(unitPrice);
+        }
+
         if (item.size && item.size !== 'Normal' && item.size !== 'Regular') {
           if (sizePrice > maxEligibleSizePrice) {
             maxEligibleSizePrice = sizePrice;
@@ -234,6 +241,40 @@ export async function validateAndCalculateDiscount(
   } else if (templateType === 'DISCOUNT_RP') {
     const fixedVal = matchedTemplate?.discountValue ?? matchedVoucher?.discountAmount ?? 0;
     discountAmount = Math.min(fixedVal, baseEligibleTotal, subtotal);
+  } else if (templateType === 'B2G1' || templateType === 'BUY_X_GET_Y') {
+    // Buy X Get Y: buyQty is configured in discountValue (default: 2 for B2G1)
+    const rawBuyQty = matchedTemplate?.discountValue ?? matchedVoucher?.discountAmount ?? 2;
+    const buyQty = rawBuyQty > 0 ? rawBuyQty : 2;
+    const getQty = 1; // 1 free item per set
+    const requiredSetQty = buyQty + getQty; // e.g. 2 + 1 = 3
+
+    if (eligibleUnitPrices.length < requiredSetQty) {
+      const shortage = requiredSetQty - eligibleUnitPrices.length;
+      return {
+        valid: false,
+        error: `Promo Beli ${buyQty} Gratis ${getQty} memerlukan minimal ${requiredSetQty} produk di keranjang (${buyQty} berbayar + ${getQty} gratis). Silakan tambahkan ${shortage} produk lagi.`,
+        message: `Tambahkan ${shortage} produk lagi untuk menikmati promo Beli ${buyQty} Gratis ${getQty}`,
+        discountAmount: 0,
+      };
+    }
+
+    // Number of free items based on complete bundle sets
+    const numberOfFreeItems = Math.floor(eligibleUnitPrices.length / requiredSetQty) * getQty;
+
+    // Sort ascending to get the CHEAPEST item(s) free (standard F&B business rule)
+    const sortedPrices = [...eligibleUnitPrices].sort((a, b) => a - b);
+    const maxDiscountCap = matchedTemplate?.maxDiscount ?? null;
+
+    let computedDiscount = 0;
+    for (let i = 0; i < numberOfFreeItems; i++) {
+      let freeItemPrice = sortedPrices[i];
+      if (maxDiscountCap && maxDiscountCap > 0) {
+        freeItemPrice = Math.min(freeItemPrice, maxDiscountCap);
+      }
+      computedDiscount += freeItemPrice;
+    }
+
+    discountAmount = Math.min(computedDiscount, subtotal);
   } else if (templateType === 'FREE_DRINK') {
     const cap = matchedTemplate?.discountValue ?? matchedVoucher?.discountAmount ?? 25000;
     discountAmount = Math.min(cap, maxSingleUnitEligiblePrice || cap, subtotal);
