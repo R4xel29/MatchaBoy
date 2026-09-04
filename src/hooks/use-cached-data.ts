@@ -3,25 +3,54 @@
 import useSWR, { SWRConfiguration } from 'swr';
 
 /**
- * Universal JSON fetcher with error status wrapping
+ * Struktur objek detail error yang dikembalikan oleh API endpoint.
  */
-export const fetcher = async <T = any>(url: string): Promise<T> => {
+export interface FetchErrorInfo {
+  error?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * Custom Error class untuk penanganan kegagalan fetch HTTP pada SWR.
+ */
+export class FetchError extends Error {
+  status?: number;
+  info?: FetchErrorInfo;
+
+  constructor(message: string, status?: number, info?: FetchErrorInfo) {
+    super(message);
+    this.name = 'FetchError';
+    this.status = status;
+    this.info = info;
+  }
+}
+
+/**
+ * Universal JSON fetcher untuk SWR dengan wrapping status error HTTP.
+ *
+ * @template T - Tipe data JSON yang diharapkan dari endpoint
+ * @param url - URL API endpoint tujuan
+ * @returns Data respons JSON bertipe T
+ */
+export const fetcher = async <T = unknown>(url: string): Promise<T> => {
   const res = await fetch(url);
   if (!res.ok) {
-    let errorInfo: any = {};
+    let errorInfo: FetchErrorInfo = {};
     try {
-      errorInfo = await res.json();
+      errorInfo = (await res.json()) as FetchErrorInfo;
     } catch {
       errorInfo = { message: res.statusText };
     }
-    const error: any = new Error(errorInfo?.error || errorInfo?.message || `Request failed with status ${res.status}`);
-    error.status = res.status;
-    error.info = errorInfo;
-    throw error;
+    const message = errorInfo?.error || errorInfo?.message || `Request failed with status ${res.status}`;
+    throw new FetchError(message, res.status, errorInfo);
   }
-  return res.json();
+  return res.json() as Promise<T>;
 };
 
+/**
+ * Data dompet digital Arum Seduh Wallet pengguna.
+ */
 export interface WalletData {
   balance: number;
   transactions: any[];
@@ -39,8 +68,10 @@ export interface WalletData {
 }
 
 /**
- * SWR Hook for User Wallet balance & transaction history
- * Deduplication: 5s, auto-revalidates on window focus & reconnect
+ * SWR Hook untuk saldo Arum Seduh Wallet pengguna dan riwayat transaksi.
+ * Interval deduplikasi: 5 detik; otomatis revalidasi saat window kembali aktif & koneksi pulih.
+ *
+ * @param config - Konfigurasi opsional SWR
  */
 export function useWallet(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<WalletData>(
@@ -68,6 +99,9 @@ export function useWallet(config?: SWRConfiguration) {
   };
 }
 
+/**
+ * Data program loyalitas member Arum Seduh.
+ */
 export interface LoyaltyData {
   points: number;
   arusLevel: string;
@@ -80,8 +114,10 @@ export interface LoyaltyData {
 }
 
 /**
- * SWR Hook for User Loyalty tier, points, vouchers, and point history
- * Deduplication: 5s, auto-revalidates on window focus & reconnect
+ * SWR Hook untuk data loyalitas member (Tier tingkat Arus, poin reward, kode referral, dan voucher).
+ * Interval deduplikasi: 5 detik; otomatis revalidasi saat window fokus.
+ *
+ * @param config - Konfigurasi opsional SWR
  */
 export function useLoyalty(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<LoyaltyData>(
@@ -133,8 +169,12 @@ export interface WeatherRecommendationData {
 }
 
 /**
- * SWR Hook for Weather and Weather-Based recommendations
- * Deduplication: 10 minutes
+ * SWR Hook untuk rekomendasi menu kontekstual berbasis perkiraan cuaca lokal (suhu, cuaca panas/hujan).
+ * Interval deduplikasi: 10 menit.
+ *
+ * @param lat - Latitude lokasi pelanggan (opsional)
+ * @param lon - Longitude lokasi pelanggan (opsional)
+ * @param config - Konfigurasi SWR opsional
  */
 export function useWeather(lat?: number, lon?: number, config?: SWRConfiguration) {
   const queryParams = new URLSearchParams();
@@ -178,8 +218,10 @@ export interface ActiveOrderItem {
 }
 
 /**
- * SWR Hook for Active non-completed user orders
- * Auto-refresh: 10s interval
+ * SWR Hook untuk memantau status pesanan aktif pelanggan (PENDING, PREPARING, ON_DELIVERY, READY).
+ * Polling otomatis setiap 10 detik.
+ *
+ * @param config - Konfigurasi SWR opsional
  */
 export function useActiveOrders(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<ActiveOrderItem[]>(
@@ -215,8 +257,10 @@ export interface QueueData {
 }
 
 /**
- * SWR Hook for Live Queue ticket board
- * Auto-refresh: 5s interval
+ * SWR Hook untuk papan display antrean dapur/barista publik (Live Queue Board).
+ * Polling otomatis setiap 5 detik.
+ *
+ * @param config - Konfigurasi SWR opsional
  */
 export function useQueueOrders(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<QueueData>(
@@ -250,8 +294,10 @@ export interface FeaturedReviewsData {
 }
 
 /**
- * SWR Hook for Featured customer reviews
- * Deduplication: 5 minutes
+ * SWR Hook untuk daftar testimoni/ulasan bintang 5 pilihan pelanggan di homepage.
+ * Interval deduplikasi: 5 menit.
+ *
+ * @param config - Konfigurasi SWR opsional
  */
 export function useFeaturedReviews(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<FeaturedReviewsData>(
@@ -274,8 +320,10 @@ export function useFeaturedReviews(config?: SWRConfiguration) {
 }
 
 /**
- * SWR Hook for Active Promotional Popups
- * Deduplication: 10 minutes
+ * SWR Hook untuk modal pop-up promosi aktif Arum Seduh.
+ * Interval deduplikasi: 10 menit.
+ *
+ * @param config - Konfigurasi SWR opsional
  */
 export function useActivePopups(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<any[]>(
@@ -303,8 +351,10 @@ export interface StoriesData {
 }
 
 /**
- * SWR Hook for Active Stories
- * Deduplication: 5 minutes
+ * SWR Hook untuk feed cerita visual toko (Instagram-style stories bar).
+ * Interval deduplikasi: 5 menit.
+ *
+ * @param config - Konfigurasi SWR opsional
  */
 export function useStories(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<StoriesData>(
@@ -336,8 +386,10 @@ export interface ProductCatalogData {
 }
 
 /**
- * SWR Hook for Full Product Catalog & Categories
- * Deduplication: 15 minutes
+ * SWR Hook untuk seluruh katalog produk Arum Seduh, kategori, dan ketersediaan stok packaging (Cup Regular & Jumbo).
+ * Interval deduplikasi: 15 menit dengan auto-revalidasi saat window fokus.
+ *
+ * @param config - Konfigurasi SWR opsional
  */
 export function useProducts(config?: SWRConfiguration) {
   const { data, error, isLoading, isValidating, mutate } = useSWR<ProductCatalogData>(

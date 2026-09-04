@@ -4,29 +4,103 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { CartItem, IceLevel, SugarLevel, AddOn } from '@/types';
 
-interface CartState {
+/**
+ * Struktur objek voucher promosi yang diterapkan pada keranjang belanja.
+ */
+export interface AppliedVoucherData {
+    id?: string;
+    code?: string;
+    title?: string;
+    type: string;
+    discountAmount?: number;
+    discountValue?: number;
+    maxDiscount?: number;
+    minPurchase?: number;
+    validProductIds?: string[] | string | null;
+    template?: {
+        code?: string;
+        type?: string;
+        discountValue?: number;
+        maxDiscount?: number;
+        minPurchase?: number;
+        validProductIds?: string[] | string | null;
+    };
+    [key: string]: unknown;
+}
+
+/**
+ * Item pilihan paket bundle (untuk bundle multi-produk).
+ */
+export interface BundleSelectionItem {
+    groupId?: string;
+    productId?: string;
+    iceLevel?: string;
+    sugarLevel?: string;
+    priceAdjustment?: number;
+    [key: string]: unknown;
+}
+
+/**
+ * State and actions definition untuk global cart store Arum Seduh (Zustand).
+ */
+export interface CartState {
+    /** Daftar item belanja yang ada di keranjang */
     items: CartItem[];
-    appliedVoucher: any | null;
+    /** Voucher promo aktif yang sedang dipasang ke keranjang */
+    appliedVoucher: AppliedVoucherData | null;
+    /** Nomor meja kasir / SPMB dine-in (opsional) */
     tableNumber: string | null;
+    /** Menambahkan produk beserta modifier ke dalam keranjang */
     addItem: (item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
+    /** Memperbarui produk yang sudah ada di keranjang (misal ganti gula/es/topping) */
     editItem: (oldId: string, item: Omit<CartItem, 'id' | 'totalPrice'>) => void;
+    /** Menghapus item dari keranjang berdasarkan ID komposit */
     removeItem: (id: string) => void;
+    /** Mengubah jumlah pesanan item dalam keranjang */
     updateQuantity: (id: string, quantity: number) => void;
+    /** Mengosongkan keranjang dan mereset voucher serta nomor meja */
     clearCart: () => void;
-    setAppliedVoucher: (voucher: any | null) => void;
+    /** Memasang atau melepas voucher promo keranjang */
+    setAppliedVoucher: (voucher: AppliedVoucherData | null) => void;
+    /** Mengatur nomor meja untuk pesanan dine-in */
     setTableNumber: (table: string | null) => void;
+    /** Menghitung total seluruh kuantitas item dalam keranjang */
     totalItems: () => number;
+    /** Menghitung subtotal kotor seluruh item dalam keranjang */
     totalPrice: () => number;
+    /** Menghitung estimasi potongan diskon voucher pada keranjang belanja */
     getVoucherDiscount: () => number;
 }
 
+/**
+ * Parameter input untuk kalkulasi harga item per baris.
+ */
+export interface CalcItemTotalInput { 
+    basePrice: number; 
+    addOns: AddOn[]; 
+    quantity: number;
+    isBundle?: boolean;
+    bundleSelections?: BundleSelectionItem[];
+    sizePrice?: number;
+    matchaLevel?: number;
+    shot?: string;
+    shotPrice?: number;
+}
+
+/**
+ * Menghasilkan hash identitas unik (ID komposit) untuk item keranjang belanja.
+ * Menggabungkan ID produk, level es, level gula, ukuran, topping add-on, dan opsi lainnya
+ * agar item dengan modifier berbeda tidak tertumpuk di keranjang.
+ *
+ * @returns String ID komposit unik
+ */
 function generateCartItemId(
     productId: string,
     iceLevel: IceLevel,
     sugarLevel: SugarLevel,
     addOns: AddOn[],
     isBundle?: boolean,
-    bundleSelections?: any[],
+    bundleSelections?: BundleSelectionItem[],
     size?: string,
     matchaLevel?: number,
     hasTumbler?: boolean,
@@ -46,17 +120,14 @@ function generateCartItemId(
     return `${productId}__${iceLevel}__${sugarLevel}__${size || 'Normal'}__${addOnIds}${mLevel}${tumbler}${shotSig}`;
 }
 
-function calcItemTotal(item: { 
-    basePrice: number; 
-    addOns: AddOn[]; 
-    quantity: number;
-    isBundle?: boolean;
-    bundleSelections?: any[];
-    sizePrice?: number;
-    matchaLevel?: number;
-    shot?: string;
-    shotPrice?: number;
-}): number {
+/**
+ * Menghitung total harga kotor sebuah item pesanan termasuk penyesuaian ukuran,
+ * biaya ekstra shot, add-on topping, dan kuantitas.
+ *
+ * @param item - Objek konfigurasi item
+ * @returns Total harga dalam Rupiah
+ */
+function calcItemTotal(item: CalcItemTotalInput): number {
     if (item.isBundle && item.bundleSelections) {
         const adjustments = item.bundleSelections.reduce((sum, a) => sum + (a.priceAdjustment || 0), 0);
         return (item.basePrice + adjustments) * item.quantity;
@@ -68,6 +139,10 @@ function calcItemTotal(item: {
     return (item.basePrice + sizeAdj + addOnTotal + shotAdj + matchaAdj) * item.quantity;
 }
 
+/**
+ * Global Zustand Cart Store untuk Arum Seduh.
+ * Terhubung dengan Web LocalStorage (`Arus-cart-v1`) untuk persistensi keranjang pelanggan.
+ */
 export const useCartStore = create<CartState>()(
     persist(
         (set, get) => ({
@@ -84,9 +159,9 @@ export const useCartStore = create<CartState>()(
                     item.isBundle,
                     item.bundleSelections,
                     item.size,
-                    (item as any).matchaLevel,
-                    (item as any).hasTumbler,
-                    (item as any).shot
+                    item.matchaLevel,
+                    item.hasTumbler,
+                    item.shot
                 );
 
                 set((state) => {
@@ -125,9 +200,9 @@ export const useCartStore = create<CartState>()(
                     item.isBundle,
                     item.bundleSelections,
                     item.size,
-                    (item as any).matchaLevel,
-                    (item as any).hasTumbler,
-                    (item as any).shot
+                    item.matchaLevel,
+                    item.hasTumbler,
+                    item.shot
                 );
 
                 set((state) => {

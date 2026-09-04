@@ -1,14 +1,29 @@
 /**
- * Helper to calculate the next trigger time for an Auto-Reorder schedule.
- * 
- * @param frequency - 'DAILY', 'WEEKLY', or 'MONTHLY'
- * @param dayOfWeek - 0-6 (Sunday-Saturday), used for 'WEEKLY'
- * @param dayOfMonth - 1-31, used for 'MONTHLY'
- * @param timeSlot - time of day in format 'HH:mm'
- * @param referenceDate - the starting date/time to calculate from (defaults to now)
+ * Tipe frekuensi pengulangan pesanan otomatis pelanggan.
+ */
+export type ReorderFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY';
+
+/**
+ * Menghitung jadwal waktu pemicu berikutnya (*next triggered at*) untuk fitur Auto-Reorder.
+ *
+ * Mendukung frekuensi harian (Daily), mingguan (Weekly dengan `dayOfWeek` 0=Minggu s/d 6=Sabtu),
+ * dan bulanan (Monthly dengan `dayOfMonth` 1-31 serta penyesuaian otomatis batas hari dalam bulan).
+ *
+ * @param {ReorderFrequency | string} frequency - Jenis frekuensi jadwal ('DAILY', 'WEEKLY', atau 'MONTHLY')
+ * @param {number | null} dayOfWeek - Hari dalam pekan (0 = Minggu, 6 = Sabtu) untuk tipe WEEKLY
+ * @param {number | null} dayOfMonth - Tanggal dalam bulan (1 - 31) untuk tipe MONTHLY
+ * @param {string} timeSlot - Waktu eksekusi harian dalam format string "HH:mm" (contoh: "08:30")
+ * @param {Date} [referenceDate=new Date()] - Tanggal acuan perhitungan jadwal (default: waktu sekarang)
+ * @returns {Date} Objek `Date` waktu jadwal pemicu berikutnya
+ *
+ * @example
+ * ```typescript
+ * const nextTime = calculateNextTriggeredAt('WEEKLY', 1, null, '09:00');
+ * console.log('Jadwal Senin Depan:', nextTime.toISOString());
+ * ```
  */
 export function calculateNextTriggeredAt(
-    frequency: string,
+    frequency: ReorderFrequency | string,
     dayOfWeek: number | null,
     dayOfMonth: number | null,
     timeSlot: string,

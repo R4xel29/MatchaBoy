@@ -1,49 +1,60 @@
 import { prisma } from './prisma';
 import { supabaseAdmin } from './supabase';
+import { revertVoucherUsage } from './discount-utils';
+import type { Order } from '@prisma/client';
 
 /**
- * ✅ BUG FIX #6: Fixed race condition in order expiry
- * 
- * Reusable utility to check, cancel, and refund an order if it is expired,
- * or force-cancel it immediately (e.g. on manual user cancellation).
- * 
- * Automatically refunds points and restores any applied vouchers using a secure transaction.
- * 
- * FIXES:
- * - Removed pre-transaction query that caused race conditions
- * - All checks now happen inside transaction with atomic updates
- * - Uses updateMany with WHERE condition for atomic status check
+ * Membatalkan pesanan yang telah kedaluwarsa atau dibatalkan secara manual,
+ * serta memulihkan kuota voucher, poin loyalitas, reservasi meja, dan stok bahan baku.
+ *
+ * Sesuai aturan **AGENTS.md Bagian 5**:
+ * Memanggil `revertVoucherUsage` untuk memastikan pemulihan voucher personal
+ * maupun kuota pemakaian template voucher secara atomik dalam transaksi database.
+ *
+ * @param {string} orderId - ID pesanan unik yang akan dibatalkan
+ * @param {boolean} [force=false] - Jika true, paksa batalkan tanpa mengecek batas waktu kedaluwarsa
+ * @param {string} [cancelReasonText] - Catatan alasan pembatalan pesanan
+ * @returns {Promise<Order | null>} Data pesanan setelah status diperbarui, atau null jika tidak ditemukan
+ * @throws {Error} Jika terjadi kegagalan transaksi database
+ *
+ * @example
+ * ```typescript
+ * const cancelledOrder = await expireOrder('order-123', true, 'Dibatalkan oleh kasir');
+ * ```
  */
-export async function expireOrder(orderId: string, force: boolean = false, cancelReasonText?: string) {
+export async function expireOrder(
+  orderId: string,
+  force: boolean = false,
+  cancelReasonText?: string
+): Promise<Order | null> {
   try {
-    console.log(`[Order Expiry] Processing order ${orderId}. Force: ${force}`);
+    console.log(`[Order Expiry] Memproses pesanan ${orderId}. Force: ${force}`);
     
     let shouldRestoreStock = false;
     
     const result = await prisma.$transaction(async (tx) => {
-      // ✅ FIX: Query order INSIDE transaction (no pre-check outside)
       const order = await tx.order.findUnique({
         where: { id: orderId }
       });
 
       if (!order) {
-        console.log(`[Order Expiry] Order ${orderId} not found`);
+        console.log(`[Order Expiry] Pesanan ${orderId} tidak ditemukan`);
         return null;
       }
 
-      // Check if order is in a cancellable pending status
+      // Pastikan status pesanan masih dapat dibatalkan
       if (order.status !== 'PENDING_PAYMENT' && order.status !== 'PENDING') {
-        console.log(`[Order Expiry] Order ${orderId} status is ${order.status}, skipping cancellation`);
+        console.log(`[Order Expiry] Status pesanan ${orderId} adalah ${order.status}, lewati pembatalan`);
         return order;
       }
 
-      // Check if expired: either paymentExpiredAt is passed, or QRIS order is >= 5 minutes old
+      // Cek apakah waktu pembayaran telah habis (batas QRIS standar: 5 menit)
       const isQris = order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN';
       const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60);
       const isExpired = (order.paymentExpiredAt && new Date() > order.paymentExpiredAt) || (isQris && orderAgeMinutes >= 5);
       
       if (!isExpired && !force) {
-        console.log(`[Order Expiry] Order ${orderId} not expired yet and not forced`);
+        console.log(`[Order Expiry] Pesanan ${orderId} belum kedaluwarsa dan tidak dipaksa`);
         return order;
       }
 
@@ -52,7 +63,7 @@ export async function expireOrder(orderId: string, force: boolean = false, cance
         : 'Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran.';
       const finalCancelReason = cancelReasonText || defaultReason;
 
-      // ✅ FIX: Use updateMany with atomic WHERE condition
+      // Update status secara atomik
       const updateResult = await tx.order.updateMany({
         where: { 
           id: orderId,
@@ -67,16 +78,15 @@ export async function expireOrder(orderId: string, force: boolean = false, cance
         }
       });
 
-      // If updateMany affected 0 rows, status changed between our check and update
       if (updateResult.count === 0) {
-        console.log(`[Order Expiry] Order ${orderId} status changed during transaction, skipping refund`);
+        console.log(`[Order Expiry] Status pesanan ${orderId} berubah saat transaksi berlangsung, lewati pengembalian dana`);
         return await tx.order.findUnique({ where: { id: orderId } });
       }
 
       shouldRestoreStock = true;
-      console.log(`[Order Expiry] Order ${orderId} cancelled successfully, processing refunds & table releases`);
+      console.log(`[Order Expiry] Pesanan ${orderId} berhasil dibatalkan, memproses pengembalian dana & pelepasan meja`);
 
-      // 1. Release dining table if occupied
+      // 1. Bebaskan status meja jika Dine-In
       if (order.tableNumber) {
         await tx.diningTable.updateMany({
           where: { number: order.tableNumber },
@@ -84,11 +94,11 @@ export async function expireOrder(orderId: string, force: boolean = false, cance
         });
       }
 
-      // 2. Restore points if any
+      // 2. Kembalikan poin loyalitas yang sempat ditukar jika ada
       const pointHistories = await tx.pointHistory.findMany({
         where: {
           orderId: orderId,
-          amount: { lt: 0 } // Negative points (redeemed)
+          amount: { lt: 0 }
         }
       });
 
@@ -96,13 +106,11 @@ export async function expireOrder(orderId: string, force: boolean = false, cance
         const refundAmount = Math.abs(ph.amount);
         
         if (order.userId) {
-          // Return points to user
           await tx.user.update({
             where: { id: order.userId },
             data: { points: { increment: refundAmount } }
           });
           
-          // Log refund in history
           await tx.pointHistory.create({
             data: {
               userId: order.userId,
@@ -113,29 +121,16 @@ export async function expireOrder(orderId: string, force: boolean = false, cance
             }
           });
           
-          console.log(`[Order Expiry] Refunded ${refundAmount} points to user ${order.userId}`);
+          console.log(`[Order Expiry] Mengembalikan ${refundAmount} poin ke pengguna ${order.userId}`);
         }
       }
 
-      // 3. Restore used voucher if any
+      // 3. Pulihkan voucher personal dan kuota template promo via universal helper
       if (order.voucherCode) {
-        const voucher = await tx.voucher.findUnique({
-          where: { code: order.voucherCode }
-        });
-        
-        if (voucher && voucher.isUsed) {
-          await tx.voucher.update({
-            where: { id: voucher.id },
-            data: {
-              isUsed: false,
-              usedAt: null
-            }
-          });
-          console.log(`[Order Expiry] Restored voucher ${order.voucherCode}`);
-        }
+        await revertVoucherUsage(tx, order.voucherCode);
+        console.log(`[Order Expiry] Memulihkan voucher ${order.voucherCode}`);
       }
 
-      // Return updated order
       return await tx.order.findUnique({ where: { id: orderId } });
     });
     
@@ -156,8 +151,18 @@ export async function expireOrder(orderId: string, force: boolean = false, cance
 }
 
 /**
- * Automatically checks and cancels all expired QRIS orders that are pending
- * for >= 5 minutes (or where paymentExpiredAt <= now).
+ * Memindai dan membatalkan otomatis seluruh pesanan QRIS yang belum lunas
+ * setelah melewati batas waktu 5 menit atau melebihi waktu `paymentExpiredAt`.
+ *
+ * Mengembalikan kuota voucher, poin, dan bahan baku untuk setiap pesanan yang dibatalkan.
+ *
+ * @returns {Promise<number>} Jumlah pesanan yang berhasil dibatalkan
+ *
+ * @example
+ * ```typescript
+ * const cancelledCount = await autoCancelExpiredQrisOrders();
+ * console.log(`Dibatalkan: ${cancelledCount} pesanan QRIS kedaluwarsa.`);
+ * ```
  */
 export async function autoCancelExpiredQrisOrders(): Promise<number> {
   try {
@@ -186,7 +191,7 @@ export async function autoCancelExpiredQrisOrders(): Promise<number> {
 
     if (expiredPendingOrders.length === 0) return 0;
 
-    console.log(`[Auto-Cancel QRIS] Found ${expiredPendingOrders.length} expired QRIS/pending orders to cancel.`);
+    console.log(`[Auto-Cancel QRIS] Ditemukan ${expiredPendingOrders.length} pesanan kedaluwarsa untuk dibatalkan.`);
     let cancelledCount = 0;
 
     for (const ord of expiredPendingOrders) {
@@ -198,27 +203,32 @@ export async function autoCancelExpiredQrisOrders(): Promise<number> {
         );
         cancelledCount++;
       } catch (err) {
-        console.error(`[Auto-Cancel QRIS Error] Failed to cancel order ${ord.id}:`, err);
+        console.error(`[Auto-Cancel QRIS Error] Gagal membatalkan pesanan ${ord.id}:`, err);
       }
     }
 
     return cancelledCount;
   } catch (err) {
-    console.error('[Auto-Cancel QRIS Error] Failed to execute scan:', err);
+    console.error('[Auto-Cancel QRIS Error] Gagal menjalankan pemindaian:', err);
     return 0;
   }
 }
 
 /**
- * Automatically cleans up old user-uploaded payment proof files.
- * Finds orders older than 30 days that have a payment proof URL.
- * Deletes the files from Supabase Storage and clears the DB fields.
+ * Membersihkan berkas bukti pembayaran lama pelanggan yang berusia lebih dari 30 hari.
+ * Menghapus fisik file dari Supabase Storage dan mengosongkan kolom `paymentProofUrl` di database.
+ *
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await cleanupOldPaymentProofs();
+ * ```
  */
-export async function cleanupOldPaymentProofs() {
+export async function cleanupOldPaymentProofs(): Promise<void> {
   try {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     
-    // Find orders older than 30 days with a payment proof
     const oldOrders = await prisma.order.findMany({
       where: {
         createdAt: { lt: thirtyDaysAgo },
@@ -234,46 +244,51 @@ export async function cleanupOldPaymentProofs() {
 
     if (oldOrders.length === 0) return;
 
-    console.log(`[Cleanup] Found ${oldOrders.length} orders older than 30 days with payment proof urls.`);
+    console.log(`[Cleanup] Ditemukan ${oldOrders.length} bukti pembayaran lama > 30 hari.`);
 
     for (const order of oldOrders) {
       const url = order.paymentProofUrl;
       if (!url || url === '/verified-cashier.svg') continue;
 
-      // Parse Supabase filename/path
       const storageMarker = '/storage/v1/object/public/products/';
       const markerIndex = url.indexOf(storageMarker);
       
       if (markerIndex !== -1) {
         const path = decodeURIComponent(url.slice(markerIndex + storageMarker.length));
         try {
-          console.log(`[Cleanup] Deleting storage file: ${path}`);
+          console.log(`[Cleanup] Menghapus file storage: ${path}`);
           const { error } = await supabaseAdmin.storage.from('products').remove([path]);
           if (error) {
-            console.error(`[Cleanup Error] Failed to delete file ${path} from storage:`, error);
+            console.error(`[Cleanup Error] Gagal menghapus file ${path} dari storage:`, error);
           }
         } catch (storageErr) {
-          console.error(`[Cleanup Error] Exception deleting file ${path}:`, storageErr);
+          console.error(`[Cleanup Error] Exception menghapus file ${path}:`, storageErr);
         }
       }
 
-      // Clear from database
       await prisma.order.update({
         where: { id: order.id },
         data: { paymentProofUrl: null },
       });
-      console.log(`[Cleanup] Cleared paymentProofUrl for order #${order.id}`);
+      console.log(`[Cleanup] Dikosongkan paymentProofUrl untuk pesanan #${order.id}`);
     }
   } catch (err) {
-    console.error('[Cleanup Error] Failed to execute payment proof cleanup:', err);
+    console.error('[Cleanup Error] Gagal mengeksekusi pembersihan bukti bayar:', err);
   }
 }
 
 /**
- * Automatically deletes guest SPMB orders where customerPhone is 'SPMB-PENDING'
- * and they are older than 5 minutes for QRIS, or 30 minutes for COD.
+ * Menghapus pesanan tamu SPMB sementara yang belum terkonfirmasi (nomor telepon diawali 'SPMB-PENDING').
+ * Batas waktu: 5 menit untuk pembayaran QRIS, atau 30 menit untuk Cash on Delivery (COD).
+ *
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await cleanupUnconfirmedSpmbOrders();
+ * ```
  */
-export async function cleanupUnconfirmedSpmbOrders() {
+export async function cleanupUnconfirmedSpmbOrders(): Promise<void> {
   try {
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
@@ -288,10 +303,10 @@ export async function cleanupUnconfirmedSpmbOrders() {
       }
     });
     if (deleteResult.count > 0) {
-      console.log(`[SPMB Cleanup] Deleted ${deleteResult.count} unconfirmed SPMB orders.`);
+      console.log(`[SPMB Cleanup] Berhasil menghapus ${deleteResult.count} pesanan SPMB unconfirmed.`);
     }
   } catch (err) {
-    console.error('[SPMB Cleanup Error] Failed to delete unconfirmed SPMB orders:', err);
+    console.error('[SPMB Cleanup Error] Gagal menghapus pesanan SPMB unconfirmed:', err);
   }
 }
 

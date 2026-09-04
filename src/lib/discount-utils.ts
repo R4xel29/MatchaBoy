@@ -1,44 +1,102 @@
 import { prisma } from '@/lib/prisma';
 import { formatRupiah } from '@/lib/utils';
+import type { Prisma } from '@prisma/client';
 
+/**
+ * Representasi item pesanan/keranjang untuk evaluasi diskon voucher.
+ */
 export interface DiscountItemInput {
+  /** ID produk unik di database */
   productId: string;
+  /** Kuantitas item yang dipesan */
   quantity: number;
+  /** Ukuran cup (misal: 'Normal', 'Large', 'Jumbo') */
   size?: string | null;
+  /** Harga tambahan ukuran */
   sizePrice?: number;
+  /** Daftar ID topping / add-on terpilih */
   addOnIds?: string[];
+  /** Daftar objek add-on lengkap terpilih */
   addOns?: Array<{ id: string; name?: string; price?: number }>;
+  /** Harga per unit yang dikirim dari klien (akan divalidasi ulang dengan DB) */
   price?: number;
+  /** Harga dasar produk sebelum penyesuaian */
   basePrice?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
+/**
+ * Parameter input untuk validasi dan kalkulasi diskon universal.
+ */
 export interface ValidateDiscountParams {
+  /** Kode voucher umum atau personal */
   code?: string;
+  /** Alias alternatif untuk kode voucher */
   voucherCode?: string;
+  /** Daftar item pesanan untuk diverifikasi kelayakannya */
   items?: DiscountItemInput[];
+  /** Alias alternatif daftar item keranjang */
   cartItems?: DiscountItemInput[];
+  /** Total harga kotor sebelum diskon */
   subtotal: number;
+  /** ID pengguna terdaftar (opsional untuk personal voucher) */
   userId?: string | null;
+  /** Nomor telepon pelanggan (opsional untuk lookup user voucher otomatis di kasir) */
   customerPhone?: string | null;
 }
 
+/**
+ * Hasil kalkulasi dan validasi diskon voucher.
+ */
 export interface DiscountValidationResult {
+  /** Apakah voucher valid dan dapat diterapkan */
   valid: boolean;
+  /** Pesan error jika tidak valid */
   error?: string;
+  /** Pesan notifikasi ramah pengguna */
   message?: string;
+  /** Kode voucher yang telah distandarisasi (UPPERCASE) */
   code?: string;
+  /** Nominal potongan harga final yang dapat dipotongkan ke subtotal */
   discountAmount: number;
+  /** Tipe skema promo (misal: 'DISCOUNT_RP', 'DISCOUNT_PCT', 'B2G1', dsb.) */
   type?: string;
+  /** Deskripsi rincian promo untuk dicetak di struk */
   description?: string;
+  /** ID voucher personal pengguna di database (jika ada) */
   voucherId?: string | null;
+  /** ID template promo global di database (jika ada) */
   templateId?: string | null;
+  /** Syarat minimum pembelanjaan untuk mengaktifkan promo */
   minPurchase?: number;
+  /** Batas maksimal potongan diskon (khusus persentase atau B2G1) */
   maxDiscount?: number | null;
 }
 
 /**
- * Checks if a product is eligible for the voucher based on validProductIds JSON
+ * Parameter untuk pemakaian voucher dalam transaksi database.
+ */
+export type ApplyVoucherParams =
+  | string
+  | {
+      code: string;
+      voucherId?: string | null;
+      templateId?: string | null;
+    };
+
+/**
+ * Memeriksa apakah suatu produk memenuhi syarat penggunaan voucher tertentu
+ * berdasarkan konfigurasi JSON daftar ID produk yang diperbolehkan.
+ *
+ * @param {string} productId - ID produk yang akan diperiksa
+ * @param {string | null} [validProductIdsJson] - String JSON array berisi ID produk yang valid (contoh: '["id1","id2"]')
+ * @returns {boolean} `true` jika produk memenuhi syarat atau jika tidak ada batasan produk
+ *
+ * @example
+ * ```typescript
+ * const isValid = isProductValidForVoucher('prod-123', '["prod-123", "prod-456"]');
+ * // returns true
+ * ```
  */
 export function isProductValidForVoucher(
   productId: string,
@@ -46,7 +104,7 @@ export function isProductValidForVoucher(
 ): boolean {
   if (!validProductIdsJson || validProductIdsJson === '[]') return true;
   try {
-    const validIds: string[] = JSON.parse(validProductIdsJson);
+    const validIds: unknown = JSON.parse(validProductIdsJson);
     if (!Array.isArray(validIds) || validIds.length === 0) return true;
     return validIds.includes(productId);
   } catch {
@@ -55,7 +113,33 @@ export function isProductValidForVoucher(
 }
 
 /**
- * Universal validator and calculator for vouchers and voucher templates.
+ * Validator dan kalkulator universal diskon pesanan Arum Seduh.
+ *
+ * Fungsi ini bertindak sebagai satu-satunya *single source of truth* kalkulasi promo
+ * baik untuk transaksi Checkout Online maupun POS Kasir.
+ *
+ * Karakteristik penting:
+ * - Menilai ulang harga produk langsung dari database untuk mencegah manipulasi harga dari klien.
+ * - Mendukung personal voucher (terikat ke User ID atau nomor telepon) dan voucher template umum.
+ * - Mengecek masa berlaku (kadaluwarsa) dan kuota pemakaian (`usageLimit`).
+ * - Menghitung diskon multi-skema: Persentase (`DISCOUNT_PCT`), Potongan Tetap (`DISCOUNT_RP`),
+ *   Beli X Gratis Y (`B2G1`), Gratis Minuman (`FREE_DRINK`), Gratis Topping (`FREE_TOPPING`),
+ *   dan Upgrade Ukuran (`UPGRADE_SIZE`).
+ *
+ * @param {ValidateDiscountParams} params - Data kode promo, keranjang item, dan identitas pembeli
+ * @returns {Promise<DiscountValidationResult>} Hasil evaluasi diskon beserta nominal potongannya
+ *
+ * @example
+ * ```typescript
+ * const discount = await validateAndCalculateDiscount({
+ *   code: 'DISKON10K',
+ *   subtotal: 50000,
+ *   items: [{ productId: 'prod-1', quantity: 2, price: 25000 }]
+ * });
+ * if (discount.valid) {
+ *   console.log('Potongan:', discount.discountAmount);
+ * }
+ * ```
  */
 export async function validateAndCalculateDiscount(
   params: ValidateDiscountParams
@@ -78,8 +162,11 @@ export async function validateAndCalculateDiscount(
     where: { id: { in: productIds } },
   });
 
-  let matchedVoucher: any = null;
-  let matchedTemplate: any = null;
+  type VoucherRecord = Prisma.VoucherGetPayload<{ include: { template: true } }>;
+  type TemplateRecord = Prisma.VoucherTemplateGetPayload<Record<string, never>>;
+
+  let matchedVoucher: VoucherRecord | null = null;
+  let matchedTemplate: TemplateRecord | null = null;
 
   // 2. Try looking up personal User Voucher first if userId or customerPhone provided
   let effectiveUserId = userId;
@@ -311,16 +398,26 @@ export async function validateAndCalculateDiscount(
 }
 
 /**
- * Apply voucher usage inside a database transaction
+ * Mencatat penggunaan voucher ke dalam basis data di dalam Prisma `$transaction`.
+ *
+ * Menandai personal voucher pengguna sebagai `isUsed = true`, atau
+ * menginkremen kolom `usageCount` pada template voucher global.
+ *
+ * @param {Prisma.TransactionClient} tx - Klien transaksi aktif Prisma
+ * @param {ApplyVoucherParams} params - Kode voucher atau objek ID rujukan
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await prisma.$transaction(async (tx) => {
+ *   await applyVoucherUsage(tx, { code: 'WELCOME10', templateId: 'tpl-1' });
+ * });
+ * ```
  */
 export async function applyVoucherUsage(
-  tx: any,
-  params: string | {
-    code: string;
-    voucherId?: string | null;
-    templateId?: string | null;
-  }
-) {
+  tx: Prisma.TransactionClient,
+  params: ApplyVoucherParams
+): Promise<void> {
   const code = typeof params === 'string' ? params : params.code;
   const voucherId = typeof params === 'object' ? params.voucherId : undefined;
   const templateId = typeof params === 'object' ? params.templateId : undefined;
@@ -334,7 +431,6 @@ export async function applyVoucherUsage(
     return;
   }
 
-  // If voucherId not given, attempt updating voucher by code
   const personalVoucher = await tx.voucher.findFirst({
     where: { code: cleanCode, isUsed: false },
   });
@@ -360,14 +456,32 @@ export async function applyVoucherUsage(
 }
 
 /**
- * Revert voucher usage when order is cancelled or expired
+ * Memulihkan kuota penggunaan voucher ketika suatu pesanan dibatalkan atau kedaluwarsa.
+ *
+ * Sesuai aturan **AGENTS.md Bagian 5 (INTEGRITAS PROMO & ROLLBACK DISKON)**:
+ * Setiap pembatalan pesanan WAJIB memulihkan status voucher personal (`isUsed = false`)
+ * maupun mengurangi kembali kuota `usageCount` pada voucher template.
+ *
+ * @param {Prisma.TransactionClient} tx - Klien transaksi aktif Prisma
+ * @param {string | null | undefined} code - Kode promo yang ingin di-rollback
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await prisma.$transaction(async (tx) => {
+ *   await revertVoucherUsage(tx, order.voucherCode);
+ * });
+ * ```
  */
-export async function revertVoucherUsage(tx: any, code: string | null | undefined) {
+export async function revertVoucherUsage(
+  tx: Prisma.TransactionClient,
+  code: string | null | undefined
+): Promise<void> {
   if (!code) return;
   const cleanCode = code.trim().toUpperCase();
 
   try {
-    // 1. Revert personal voucher if it was used
+    // 1. Pulihkan personal voucher jika pernah ditandai terpakai
     const personalVoucher = await tx.voucher.findFirst({
       where: { code: cleanCode },
     });
@@ -378,7 +492,7 @@ export async function revertVoucherUsage(tx: any, code: string | null | undefine
       });
     }
 
-    // 2. Decrement template usage count
+    // 2. Kembalikan kuota pemakaian template global (decrement)
     const template = await tx.voucherTemplate.findFirst({
       where: { code: cleanCode },
     });
@@ -389,6 +503,6 @@ export async function revertVoucherUsage(tx: any, code: string | null | undefine
       });
     }
   } catch (err) {
-    console.error(`[VOUCHER REVERT ERROR] Failed to revert voucher ${cleanCode}:`, err);
+    console.error(`[VOUCHER REVERT ERROR] Gagal mengembalikan status voucher ${cleanCode}:`, err);
   }
 }

@@ -42,9 +42,18 @@ export const CACHE_KEYS = {
 };
 
 /**
- * High-performance Cache-Aside wrapper.
- * Attempts to retrieve cached value from Redis. If missing or on error,
- * executes fetcher, caches result in background, and returns fresh data.
+ * High-performance Cache-Aside wrapper dengan proteksi race timeout (Rule 4).
+ * Mencoba membaca data dari Upstash Redis dengan batas waktu fallback 800ms.
+ * Jika key tidak ditemukan, terjadi timeout, atau terjadi error jaringan:
+ * langsung menjalankan callback `fetcher` (misalnya query Prisma DB),
+ * lalu menyimpan hasilnya ke Redis secara asinkron (non-blocking).
+ *
+ * @template T - Tipe data yang disimpan/di-fetch
+ * @param key - Cache key unik (misal: CACHE_KEYS.PRODUCTS_ALL)
+ * @param fetcher - Fungsi asinkron penarik data segar jika cache miss
+ * @param ttlSeconds - Masa aktif cache dalam detik (default: 900 detik / 15 menit)
+ * @param tags - Tag opsional untuk pelacakan invalidasi masa depan
+ * @returns Data hasil cache atau data segar dari fetcher
  */
 export async function getOrSetCache<T>(
   key: string,
@@ -83,7 +92,11 @@ export async function getOrSetCache<T>(
 }
 
 /**
- * Retrieve cached item directly.
+ * Mengambil nilai cache secara langsung dari Redis dengan fallback timeout 800ms.
+ *
+ * @template T - Tipe data yang diharapkan
+ * @param key - Kunci Redis yang akan dibaca
+ * @returns Nilai data cache jika ditemukan, atau null jika miss/error/timeout
  */
 export async function getCache<T>(key: string): Promise<T | null> {
   if (!redisClient) return null;
@@ -99,7 +112,12 @@ export async function getCache<T>(key: string): Promise<T | null> {
 }
 
 /**
- * Set cache item directly.
+ * Menyimpan data ke Redis secara langsung dengan TTL tertentu.
+ *
+ * @template T - Tipe data yang disimpan
+ * @param key - Kunci cache tujuan
+ * @param data - Payload data yang akan diserialisasi
+ * @param ttlSeconds - Durasi simpan dalam detik (default 900s)
  */
 export async function setCache<T>(
   key: string,
@@ -115,7 +133,9 @@ export async function setCache<T>(
 }
 
 /**
- * Invalidate specific cache keys.
+ * Menghapus satu atau lebih kunci cache dari Redis (cache invalidation).
+ *
+ * @param keys - Daftar kunci Redis yang akan dihapus
  */
 export async function delCache(...keys: string[]): Promise<void> {
   if (!redisClient || keys.length === 0) return;
@@ -127,7 +147,7 @@ export async function delCache(...keys: string[]): Promise<void> {
 }
 
 /**
- * Invalidate Product and Catalog caches.
+ * Menginvalidasi cache katalog produk dan kategori, serta memicu revalidasi rute Next.js.
  */
 export async function invalidateProductCache(): Promise<void> {
   try {
@@ -145,7 +165,7 @@ export async function invalidateProductCache(): Promise<void> {
 }
 
 /**
- * Invalidate Category caches.
+ * Menginvalidasi cache kategori dan produk terkait.
  */
 export async function invalidateCategoryCache(): Promise<void> {
   try {
@@ -163,7 +183,7 @@ export async function invalidateCategoryCache(): Promise<void> {
 }
 
 /**
- * Invalidate Hero Banner caches.
+ * Menginvalidasi cache banner promosi utama (Hero Banners) dan revalidasi path homepage.
  */
 export async function invalidateBannerCache(): Promise<void> {
   try {
@@ -180,7 +200,7 @@ export async function invalidateBannerCache(): Promise<void> {
 }
 
 /**
- * Invalidate Promo Popup caches.
+ * Menginvalidasi cache popup promosi aktif dan revalidasi endpoint terkait.
  */
 export async function invalidatePopupCache(): Promise<void> {
   try {
@@ -197,7 +217,7 @@ export async function invalidatePopupCache(): Promise<void> {
 }
 
 /**
- * Invalidate Featured Review caches.
+ * Menginvalidasi cache testimoni/ulasan pilihan pelanggan (featured reviews).
  */
 export async function invalidateReviewsCache(): Promise<void> {
   try {
@@ -214,7 +234,7 @@ export async function invalidateReviewsCache(): Promise<void> {
 }
 
 /**
- * Invalidate Active Stories caches.
+ * Menginvalidasi cache cerita aktif toko (Arum Seduh Instagram-style stories).
  */
 export async function invalidateStoriesCache(): Promise<void> {
   try {
@@ -231,7 +251,7 @@ export async function invalidateStoriesCache(): Promise<void> {
 }
 
 /**
- * Invalidate All Arum Seduh caches.
+ * Menginvalidasi seluruh kunci cache aplikasi Arum Seduh secara serentak (master cache flush).
  */
 export async function invalidateAllCaches(): Promise<void> {
   try {

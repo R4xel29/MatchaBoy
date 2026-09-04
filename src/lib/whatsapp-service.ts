@@ -1,5 +1,18 @@
 import { prisma } from './prisma';
 
+/**
+ * Menstandarisasi nomor telepon lokal Indonesia atau JID WhatsApp ke format internasional resmi (62...).
+ * Mendukung format grup (`@g.us`), awalan '08', atau awalan '8'.
+ *
+ * @param {string} phone - Nomor telepon atau WhatsApp JID mentah
+ * @returns {string} Nomor telepon terstandarisasi dengan kode negara 62 atau JID grup
+ *
+ * @example
+ * ```typescript
+ * standardizeJid('08123456789'); // '628123456789'
+ * standardizeJid('12036302@g.us'); // '12036302@g.us'
+ * ```
+ */
 export function standardizeJid(phone: string): string {
   if (phone.endsWith('@g.us')) {
     return phone;
@@ -13,7 +26,24 @@ export function standardizeJid(phone: string): string {
   return standardized;
 }
 
-export async function sendWhatsAppMessage(phone: string, text: string, imageUrl?: string) {
+/**
+ * Mengirim pesan teks atau media via WhatsApp Gateway secara asinkron (*fire-and-forget*).
+ *
+ * Sesuai aturan **AGENTS.md Bagian 4**:
+ * Seluruh pemanggilan fetch ke provider WhatsApp WAJIB menyertakan `signal: AbortSignal.timeout(2500)`
+ * agar proses server tidak menggantung jika bot/gateway offline.
+ *
+ * @param {string} phone - Nomor tujuan atau WhatsApp group JID
+ * @param {string} text - Konten pesan WhatsApp
+ * @param {string} [imageUrl] - URL gambar opsional untuk dikirimkan
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendWhatsAppMessage('628123456789', 'Halo dari Arum Seduh!');
+ * ```
+ */
+export async function sendWhatsAppMessage(phone: string, text: string, imageUrl?: string): Promise<void> {
   const cleanDigits = phone.replace(/[^0-9]/g, '');
   if (!phone || phone.trim() === '' || (!phone.endsWith('@g.us') && cleanDigits.length < 7)) {
     console.log(`[WHATSAPP_SERVICE] Nomor telepon "${phone}" tidak valid atau terlalu pendek. Skip kirim WA.`);
@@ -49,7 +79,18 @@ export async function sendWhatsAppMessage(phone: string, text: string, imageUrl?
   }
 }
 
-export async function sendReadyNotification(orderId: string) {
+/**
+ * Mengirim notifikasi bahwa pesanan telah siap (status READY) kepada pelanggan.
+ *
+ * @param {string} orderId - ID pesanan unik
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendReadyNotification(order.id);
+ * ```
+ */
+export async function sendReadyNotification(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId }
@@ -83,7 +124,19 @@ export async function sendReadyNotification(orderId: string) {
   }
 }
 
-export async function sendCompletedNotification(orderId: string) {
+/**
+ * Mengirim notifikasi bahwa pesanan telah selesai (status COMPLETED) kepada pelanggan
+ * beserta ajakan promo/referral di web resmi Arum Seduh.
+ *
+ * @param {string} orderId - ID pesanan unik yang selesai
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendCompletedNotification(order.id);
+ * ```
+ */
+export async function sendCompletedNotification(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId }
@@ -99,10 +152,8 @@ export async function sendCompletedNotification(orderId: string) {
       return;
     }
 
-    // Standardize phone number for WhatsApp
     const standardizedPhone = standardizeJid(order.customerPhone);
 
-    // Custom message format
     let message = '';
     const isCod = order.paymentMethod === 'COD';
     const lunasSuffix = isCod ? ' (Lunas)' : '';
@@ -120,7 +171,20 @@ export async function sendCompletedNotification(orderId: string) {
   }
 }
 
-export async function sendCancelledNotification(orderId: string, reason?: string) {
+/**
+ * Mengirim notifikasi pembatalan pesanan (status CANCELLED) kepada pelanggan
+ * beserta alasan pembatalan jika ada.
+ *
+ * @param {string} orderId - ID pesanan unik yang dibatalkan
+ * @param {string} [reason] - Alasan pembatalan pesanan
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendCancelledNotification(order.id, 'Stok bahan habis');
+ * ```
+ */
+export async function sendCancelledNotification(orderId: string, reason?: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId }
@@ -136,10 +200,8 @@ export async function sendCancelledNotification(orderId: string, reason?: string
       return;
     }
 
-    // Standardize phone number for WhatsApp
     const standardizedPhone = standardizeJid(order.customerPhone);
 
-    // Custom message format
     let message = '';
     const reasonText = reason ? `\nAlasan: *${reason}*` : '';
     if (order.source === 'SPMB') {
@@ -154,7 +216,17 @@ export async function sendCancelledNotification(orderId: string, reason?: string
   }
 }
 
-export async function sendAdminOrderSummary() {
+/**
+ * Mengirimkan rangkuman rekap pesanan SPMB hari ini dan besok kepada seluruh nomor WhatsApp Admin Arum Seduh.
+ *
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendAdminOrderSummary();
+ * ```
+ */
+export async function sendAdminOrderSummary(): Promise<void> {
   try {
     const storeSettings = await prisma.storeSettings.findFirst();
     if (!storeSettings || !storeSettings.adminWaNumbers) {
@@ -310,7 +382,19 @@ export async function sendAdminOrderSummary() {
   }
 }
 
-export async function sendPickupReminder(orderId: string) {
+/**
+ * Mengirim pesan pengingat pengambilan (*pickup reminder*) kepada pelanggan
+ * untuk pesanan Takeaway/Pickup yang sudah siap namun belum diambil di outlet.
+ *
+ * @param {string} orderId - ID pesanan unik yang siap diambil
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendPickupReminder(order.id);
+ * ```
+ */
+export async function sendPickupReminder(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId }
@@ -326,7 +410,6 @@ export async function sendPickupReminder(orderId: string) {
       return;
     }
 
-    // Standardize phone number for WhatsApp
     const standardizedPhone = standardizeJid(order.customerPhone);
 
     const formatDateOnly = (date: Date | null) => {
@@ -366,7 +449,18 @@ export async function sendPickupReminder(orderId: string) {
   }
 }
 
-export async function sendAdminNewOrderNotification(orderId: string) {
+/**
+ * Mengirimkan pesan pemberitahuan pesanan baru masuk ke nomor WhatsApp Admin secara asinkron.
+ *
+ * @param {string} orderId - ID pesanan unik yang baru dibuat
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendAdminNewOrderNotification(order.id);
+ * ```
+ */
+export async function sendAdminNewOrderNotification(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -461,7 +555,18 @@ export async function sendAdminNewOrderNotification(orderId: string) {
   }
 }
 
-export async function sendPaymentSuccessNotification(orderId: string) {
+/**
+ * Mengirim pesan konfirmasi pembayaran sukses kepada pelanggan beserta tautan pelacakan pesanan.
+ *
+ * @param {string} orderId - ID pesanan unik yang telah lunas
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendPaymentSuccessNotification(order.id);
+ * ```
+ */
+export async function sendPaymentSuccessNotification(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId }
@@ -497,7 +602,19 @@ export async function sendPaymentSuccessNotification(orderId: string) {
   }
 }
 
-export async function sendOnDeliveryNotification(orderId: string) {
+/**
+ * Mengirim notifikasi bahwa pesanan sedang diantar oleh kurir (status ON_DELIVERY)
+ * beserta informasi nama kurir, kendaraan, pelat nomor, tautan GPS, dan 4-digit PIN verifikasi serah terima.
+ *
+ * @param {string} orderId - ID pesanan unik yang sedang dikirim
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendOnDeliveryNotification(order.id);
+ * ```
+ */
+export async function sendOnDeliveryNotification(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -552,7 +669,18 @@ export async function sendOnDeliveryNotification(orderId: string) {
   }
 }
 
-export async function sendKitchenNotification(orderId: string) {
+/**
+ * Mengirimkan tiket notifikasi pesanan dapur ke nomor atau grup WhatsApp Kitchen / Barista Arum Seduh.
+ *
+ * @param {string} orderId - ID pesanan unik yang masuk proses persiapan
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendKitchenNotification(order.id);
+ * ```
+ */
+export async function sendKitchenNotification(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },

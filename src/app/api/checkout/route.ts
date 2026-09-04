@@ -9,14 +9,59 @@ import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors'
 
 const formatCurrency = (n: number) => `Rp${n.toLocaleString('id-ID')}`
 
-function calculateSecureItemPrice(item: any, dbProduct: any) {
+/**
+ * Payload item produk yang diterima dari permintaan checkout online/SPMB.
+ */
+export interface RawCheckoutItem {
+    productId: string;
+    quantity: number;
+    size?: string;
+    iceLevel?: string;
+    sugarLevel?: string;
+    shot?: string;
+    addOnIds?: string[];
+    bundleSelections?: Array<{
+        groupId?: string;
+        productId?: string;
+    }>;
+    matchaLevel?: number;
+    hasTumbler?: boolean;
+    notes?: string;
+    [key: string]: unknown;
+}
+
+/**
+ * Data produk database yang digunakan untuk validasi integritas harga.
+ */
+export interface DbProductPriceInput {
+    id: string;
+    name: string;
+    price: number;
+    promoPrice?: number | null;
+    promoStart?: Date | null;
+    promoEnd?: Date | null;
+    modifiers?: string | null;
+    category?: { name: string } | null;
+    [key: string]: unknown;
+}
+
+/**
+ * Menghitung dan memvalidasi harga satuan produk secara aman di sisi server (zero tampering).
+ * Memeriksa promo aktif, pilihan bundle, ukuran cup (regular vs large/jumbo),
+ * topping add-on, dan ekstra shot espresso sesuai data resmi database.
+ *
+ * @param item - Objek item pesanan dari client
+ * @param dbProduct - Data produk master dari Prisma database
+ * @returns Harga satuan aman dalam Rupiah
+ */
+function calculateSecureItemPrice(item: RawCheckoutItem, dbProduct: DbProductPriceInput): number {
     let dbModifiers: any = {}
     if (dbProduct.modifiers) {
         try {
             dbModifiers = JSON.parse(dbProduct.modifiers)
         } catch {}
     }
-    const activePromo = getActivePromo(dbProduct);
+    const activePromo = getActivePromo(dbProduct as any);
     let secureItemPrice = activePromo ? activePromo.promoPrice : dbProduct.price;
 
     if (dbModifiers.isBundle && item.bundleSelections && Array.isArray(item.bundleSelections)) {
@@ -77,6 +122,15 @@ function calculateSecureItemPrice(item: any, dbProduct: any) {
     return secureItemPrice;
 }
 
+/**
+ * HTTP POST Handler untuk Endpoint Checkout Transaksi Pelanggan (SPMB & Online Delivery/Pickup).
+ * Memverifikasi autentikasi NextAuth, rate limiting, validasi integritas harga item server-side,
+ * kalkulasi voucher via discount-utils universal, pemotongan stok cup packaging, dan pembuatan sesi pembayaran
+ * (DOKU Checkout, DOKU Dynamic QRIS, atau Saldo Arum Seduh Wallet).
+ *
+ * @param req - Next.js Request
+ * @returns JSON NextResponse berisi data order dan payment redirect/QR payload
+ */
 export async function POST(req: Request) {
     try {
         const session = await auth()

@@ -5,7 +5,13 @@ import { cleanupUnconfirmedSpmbOrders, autoCancelExpiredQrisOrders } from '@/lib
 import { getNextQueueSequence } from '@/lib/rate-limit-redis'
 import { validateAndCalculateDiscount, applyVoucherUsage } from '@/lib/discount-utils'
 
-// Lightweight JSON endpoint for client-side polling (replaces router.refresh)
+/**
+ * Endpoint HTTP GET untuk sinkronisasi polling real-time aplikasi POS Kasir Arum Seduh.
+ * Melakukan auto-cleanup pesanan SPMB kedaluwarsa & auto-cancel QRIS yang habis masa aktifnya,
+ * lalu mengembalikan daftar pesanan aktif hari ini serta alarm lead time untuk pickup.
+ *
+ * @returns JSON NextResponse berisi daftar orders dan pickupAlarmLeadTime
+ */
 export async function GET() {
   try {
     const session = await auth();
@@ -105,6 +111,14 @@ export async function GET() {
 }
 
 
+/**
+ * Endpoint HTTP POST untuk pembuatan transaksi POS Kasir langsung tatap muka (Rule 4: Respon < 500ms).
+ * Mendukung pembayaran Tunai (Cash), QRIS Statis, QRIS Dinamis DOKU, serta konfirmasi QRIS SPMB.
+ * Seluruh pesanan yang baru lunas langsung masuk ke status 'PENDING' (Rule 6).
+ *
+ * @param req - Next.js Request
+ * @returns JSON NextResponse berisi data pesanan baru dan status berhasil
+ */
 export async function POST(req: Request) {
   try {
     const session = await auth()

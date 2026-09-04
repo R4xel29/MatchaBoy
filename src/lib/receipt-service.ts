@@ -1,6 +1,23 @@
 import { prisma } from './prisma';
+import { sendWhatsAppMessage } from './whatsapp-service';
 
-export async function sendDigitalReceipt(orderId: string) {
+/**
+ * Mengirimkan nota/struk digital pesanan kepada pelanggan melalui gateway WhatsApp secara asinkron.
+ *
+ * Sesuai aturan **AGENTS.md Bagian 4 & Bagian 8**:
+ * - Eksekusi pengiriman pesan dilakukan secara *fire-and-forget* tanpa memblokir respon kasir/checkout.
+ * - Memformat rincian belanja, diskon voucher, biaya pengiriman, dan perolehan poin secara transparan.
+ * - Tidak menggunakan emoji sistem operasi default pada teks pesan.
+ *
+ * @param {string} orderId - ID pesanan unik yang telah lunas / selesai
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await sendDigitalReceipt('order-abc-123');
+ * ```
+ */
+export async function sendDigitalReceipt(orderId: string): Promise<void> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -15,17 +32,17 @@ export async function sendDigitalReceipt(orderId: string) {
     });
 
     if (!order) {
-      console.warn(`[Receipt Service] Order ${orderId} not found.`);
+      console.warn(`[Receipt Service] Pesanan ${orderId} tidak ditemukan.`);
       return;
     }
 
     const phone = order.customerPhone || order.user?.phone;
     if (!phone) {
-      console.warn(`[Receipt Service] No phone number for order ${orderId}.`);
+      console.warn(`[Receipt Service] Tidak ada nomor telepon untuk pesanan ${orderId}.`);
       return;
     }
 
-    // Standardize phone number for WhatsApp
+    // Standarisasi nomor telepon untuk WhatsApp
     let stdPhone = phone.replace(/[^0-9]/g, '');
     if (stdPhone.startsWith('08')) {
       stdPhone = '62' + stdPhone.substring(1);
@@ -45,23 +62,22 @@ export async function sendDigitalReceipt(orderId: string) {
       if (item.modifiers) {
         try {
           const mods = JSON.parse(item.modifiers);
-          const parts = [];
+          const parts: string[] = [];
           if (mods.size && mods.size !== 'Normal') parts.push(`Size: ${mods.size}`);
           if (mods.iceLevel && mods.iceLevel !== 'Normal Ice') parts.push(mods.iceLevel);
           if (mods.sugarLevel && mods.sugarLevel !== 'Normal Sugar') parts.push(mods.sugarLevel);
-          if (mods.addOns && mods.addOns.length > 0) {
-            const addOnsNames = mods.addOns.map((a: any) => a.name).join(', ');
+          if (Array.isArray(mods.addOns) && mods.addOns.length > 0) {
+            const addOnsNames = mods.addOns.map((a: { name?: string }) => a.name).filter(Boolean).join(', ');
             parts.push(`Add-ons: ${addOnsNames}`);
           }
-          if (mods.bundleSelections && mods.bundleSelections.length > 0) {
-            const bundleNames = mods.bundleSelections.map((s: any) => s.productName).join(', ');
+          if (Array.isArray(mods.bundleSelections) && mods.bundleSelections.length > 0) {
+            const bundleNames = mods.bundleSelections.map((s: { productName?: string }) => s.productName).filter(Boolean).join(', ');
             parts.push(`Bundle: ${bundleNames}`);
           }
           if (parts.length > 0) {
             modDetails = `\n     _${parts.join(' | ')}_`;
           }
         } catch {
-          // Fallback if not JSON
           modDetails = `\n     _${item.modifiers}_`;
         }
       }
@@ -79,7 +95,7 @@ export async function sendDigitalReceipt(orderId: string) {
       }
     }
 
-    const receiptMessage = `🍵 *ARUM SEDUH* 🍵
+    const receiptMessage = `*ARUM SEDUH*
 ----------------------------------------
 No. Antrean: *${order.queueNumber || 'N/A'}*
 No. Pesanan: \`${shortId}\`
@@ -95,27 +111,11 @@ Metode Bayar: *${order.paymentMethod}*
 ----------------------------------------
 Poin Didapat: *+${order.pointsEarned} Poin*
 ----------------------------------------
-Terima kasih telah berbelanja di *Arum Seduh*! Nikmati matcha terbaikmu! 🍃💚`;
+Terima kasih telah berbelanja di *Arum Seduh*! Nikmati seduhan istimewa kami.`;
 
-    const waProviderUrl = process.env.WA_PROVIDER_URL || "http://localhost:3001/send";
-    const apiKey = process.env.WA_BOT_API_KEY || "";
-
-    const res = await fetch(waProviderUrl, {
-      method: "POST",
-      signal: AbortSignal.timeout(2500),
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey
-      },
-      body: JSON.stringify({ phone: stdPhone, message: receiptMessage }),
-    });
-
-    if (res.ok) {
-      console.log(`[Receipt Service] Digital receipt sent successfully to ${stdPhone} for order ${shortId}`);
-    } else {
-      console.error(`[Receipt Service] WhatsApp Bot returned error:`, await res.text());
-    }
+    // Gunakan whatsapp-service terpusat yang aman dengan timeout & error handling
+    await sendWhatsAppMessage(stdPhone, receiptMessage);
   } catch (error) {
-    console.error(`[Receipt Service] Failed to send digital receipt for order ${orderId}:`, error);
+    console.error(`[Receipt Service] Gagal mengirim nota digital untuk pesanan ${orderId}:`, error);
   }
 }

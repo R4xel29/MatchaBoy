@@ -1,9 +1,49 @@
 import { prisma } from './prisma';
 
 /**
- * Deducts stock for all items in an order based on their product recipes and packaging cups.
+ * Struktur parsed modifier item pesanan untuk inventaris.
  */
-export async function deductStockForOrder(orderId: string) {
+interface ParsedItemModifiers {
+  isBundle?: boolean;
+  bundleSelections?: Array<{
+    groupId?: string;
+    groupName?: string;
+    productId: string;
+    productName?: string;
+  }>;
+  addOns?: Array<{
+    id?: string;
+    name?: string;
+    price?: number;
+    ingredientId?: string;
+    ingredientQty?: number;
+  }>;
+  size?: string;
+}
+
+interface CustomJumboIngredient {
+  ingredientId: string;
+  quantity: number;
+}
+
+/**
+ * Mengurangi stok bahan baku dan kemasan berdasarkan resep produk untuk pesanan tertentu.
+ *
+ * Logika operasional:
+ * 1. Mengecek mutasi stok sebelumnya untuk mencegah *double deduction*.
+ * 2. Memotong stok cup kemasan (Regular vs Jumbo) jika pelanggan tidak membawa tumbler (`hasTumbler: false`).
+ * 3. Memotong stok topping/add-on jika memiliki mapping `ingredientId`.
+ * 4. Mendukung komposisi Bundle combo maupun resep dinamis (scaling ukuran Jumbo 1.25x atau resep khusus jumbo).
+ *
+ * @param {string} orderId - ID pesanan unik yang masuk proses masak/persiapan
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await deductStockForOrder(order.id);
+ * ```
+ */
+export async function deductStockForOrder(orderId: string): Promise<void> {
   try {
     // 1. Check if stock was already deducted for this order to prevent double deduction
     const existingMovement = await prisma.stockMovement.findFirst({
@@ -232,11 +272,23 @@ export async function deductStockForOrder(orderId: string) {
 }
 
 /**
- * Restores stock for an order if it was previously deducted.
+ * Memulihkan stok bahan baku dan kemasan suatu pesanan yang dibatalkan
+ * jika stok pesanan tersebut sebelumnya telah dipotong (status 'OUT').
+ *
+ * Menggunakan mekanisme pengecekan idempoten: Jika sudah pernah tercatat mutasi 'IN'
+ * dengan label 'Refund Order', maka proses pemulihan dilewati untuk mencegah *double refund*.
+ *
+ * @param {string} orderId - ID pesanan unik yang dibatalkan
+ * @returns {Promise<void>}
+ *
+ * @example
+ * ```typescript
+ * await restoreStockForOrder(order.id);
+ * ```
  */
-export async function restoreStockForOrder(orderId: string) {
+export async function restoreStockForOrder(orderId: string): Promise<void> {
   try {
-    // Find all 'OUT' movements for this order
+    // Cari seluruh mutasi stok 'OUT' yang berkaitan dengan orderId ini
     const movements = await prisma.stockMovement.findMany({
       where: {
         reason: {
@@ -247,11 +299,11 @@ export async function restoreStockForOrder(orderId: string) {
     });
 
     if (movements.length === 0) {
-      console.log(`No stock was deducted for order ${orderId}, skipping restoration.`);
+      console.log(`[Stok Restore] Tidak ada pemotongan stok tercatat untuk pesanan ${orderId}, lewati pemulihan.`);
       return;
     }
 
-    // Check if we already did a restoration to prevent double refund
+    // Pengecekan idempotensi: Cegah double refund stok
     const alreadyRestored = await prisma.stockMovement.findFirst({
       where: {
         reason: {
@@ -262,11 +314,11 @@ export async function restoreStockForOrder(orderId: string) {
     });
 
     if (alreadyRestored) {
-      console.log(`Stock already restored for order ${orderId}`);
+      console.log(`[Stok Restore] Stok untuk pesanan ${orderId} sudah pernah dipulihkan sebelumnya.`);
       return;
     }
 
-    // Process restoration
+    // Eksekusi pemulihan stok per bahan
     for (const move of movements) {
       const refundQty = Math.abs(move.quantity);
       if (refundQty <= 0) continue;
@@ -291,8 +343,8 @@ export async function restoreStockForOrder(orderId: string) {
       ]);
     }
 
-    console.log(`Successfully restored stock for order ${orderId}`);
+    console.log(`[Stok Restore] Berhasil memulihkan stok untuk pesanan ${orderId}`);
   } catch (error) {
-    console.error('Error in restoreStockForOrder:', error);
+    console.error('[Stok Restore Error] Terjadi kesalahan dalam restoreStockForOrder:', error);
   }
 }

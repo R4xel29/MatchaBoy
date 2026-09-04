@@ -30,25 +30,47 @@ const COMMON_PRINTER_SERVICES = [
 ];
 
 // Singleton active Bluetooth characteristic
-let activeCharacteristic: any = null;
-let activeDevice: any = null;
+let activeCharacteristic: BluetoothRemoteGATTCharacteristic | null = null;
+let activeDevice: BluetoothDevice | null = null;
 let connectionListeners: Array<(connected: boolean, deviceName: string | null) => void> = [];
 
+/**
+ * Memeriksa apakah browser saat ini mendukung API Web Bluetooth standar.
+ *
+ * @returns True jika browser mendukung Web Bluetooth (Chrome/Edge/Android WebView)
+ */
 export function isWebBluetoothSupported(): boolean {
   return typeof window !== 'undefined' && 'bluetooth' in navigator;
 }
 
+/**
+ * Memeriksa status konektivitas printer thermal Bluetooth aktif.
+ *
+ * @returns True jika ada perangkat Bluetooth yang terhubung dan siap menerima data ESC/POS
+ */
 export function isBluetoothPrinterConnected(): boolean {
   return activeDevice !== null && activeDevice.gatt?.connected === true && activeCharacteristic !== null;
 }
 
+/**
+ * Mengambil nama perangkat printer Bluetooth yang sedang terhubung.
+ *
+ * @returns Nama printer (contoh: "Algoo AT-5805" atau "POS-58") atau null jika terputus
+ */
 export function getConnectedBluetoothDeviceName(): string | null {
-  if (isBluetoothPrinterConnected()) {
+  if (isBluetoothPrinterConnected() && activeDevice) {
     return activeDevice.name || 'Algoo AT-5805';
   }
   return null;
 }
 
+/**
+ * Berlangganan (subscribe) terhadap perubahan status koneksi printer Bluetooth.
+ * Mengembalikan fungsi unsubscribe untuk pembersihan listener saat unmount komponen React.
+ *
+ * @param listener - Callback yang dipanggil setiap kali koneksi Bluetooth berubah
+ * @returns Fungsi unsubscribe
+ */
 export function subscribeBluetoothStatus(listener: (connected: boolean, deviceName: string | null) => void) {
   connectionListeners.push(listener);
   listener(isBluetoothPrinterConnected(), getConnectedBluetoothDeviceName());
@@ -64,7 +86,10 @@ function notifyStatusChange() {
 }
 
 /**
- * Connect to Algoo AT-5805 or any 58mm ESC/POS Bluetooth thermal printer
+ * Membuka dialog pemindaian Bluetooth perangkat keras dan menyambungkan
+ * koneksi GATT ke printer thermal ESC/POS 58mm/80mm (misalnya Algoo AT-5805).
+ *
+ * @returns Status keberhasilan koneksi beserta nama perangkat atau pesan error
  */
 export async function connectBluetoothPrinter(): Promise<{ success: boolean; deviceName?: string; error?: string }> {
   if (!isWebBluetoothSupported()) {
@@ -72,7 +97,7 @@ export async function connectBluetoothPrinter(): Promise<{ success: boolean; dev
   }
 
   try {
-    const navBluetooth = (navigator as any).bluetooth;
+    const navBluetooth = (navigator as unknown as { bluetooth: Bluetooth }).bluetooth;
 
     // Request Bluetooth device pairing dialog
     const device = await navBluetooth.requestDevice({
@@ -126,7 +151,10 @@ export async function connectBluetoothPrinter(): Promise<{ success: boolean; dev
   }
 }
 
-export function disconnectBluetoothPrinter() {
+/**
+ * Memutus koneksi GATT Web Bluetooth yang sedang aktif secara aman dan mereset status internal.
+ */
+export function disconnectBluetoothPrinter(): void {
   if (activeDevice && activeDevice.gatt?.connected) {
     activeDevice.gatt.disconnect();
   }
@@ -217,7 +245,13 @@ function wrapText(text: string, maxLen = 32): string[] {
 }
 
 /**
- * Build ESC/POS Byte Stream for Customer Receipt in True CGV Cinema Ticket Style
+ * Menyusun byte stream biner ESC/POS untuk struk pelanggan dengan tata letak tiket bioskop CGV (CGV Cinema Ticket Style).
+ * Dilengkapi border tabel rapi, rincian diskon transparan (Rule 8), format modifier konsisten (Rule 7),
+ * dan perintah feed/tear-off kertas.
+ *
+ * @param order - Objek data pesanan lengkap
+ * @param settings - Konfigurasi cetak kasir (nama outlet, kontak, lebar kertas 58mm/80mm)
+ * @returns Uint8Array berisi urutan command ESC/POS mentah yang siap dikirim ke printer
  */
 export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Array {
   const encoder = new TextEncoder();
@@ -433,7 +467,13 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
 }
 
 /**
- * Build ESC/POS Byte Stream for Kitchen / Bar Ticket in CGV Style
+ * Menyusun byte stream biner ESC/POS untuk tiket pesanan dapur/barista (CGV Barista Ticket).
+ * Berisi nomor meja/antrean berukuran besar, nama pelanggan, waktu masuk pesanan,
+ * dan daftar produk beserta modifier (es, gula, shot, topping) berukuran double-height.
+ *
+ * @param order - Objek data pesanan
+ * @param settings - Konfigurasi printer (opsional)
+ * @returns Uint8Array stream ESC/POS
  */
 export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array {
   const encoder = new TextEncoder();
@@ -520,7 +560,12 @@ export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array
 }
 
 /**
- * Print directly to connected Bluetooth Printer without browser dialog (Text Mode)
+ * Mencetak struk secara langsung ke printer Web Bluetooth tanpa memunculkan dialog cetak browser (ESC/POS Text Mode).
+ *
+ * @param order - Objek data pesanan
+ * @param settings - Konfigurasi cetak
+ * @param isKitchen - True jika mencetak tiket dapur barista
+ * @returns True jika pengiriman byte stream berhasil
  */
 export async function printDirectBluetooth(order: any, settings: any, isKitchen = false): Promise<boolean> {
   if (!isBluetoothPrinterConnected()) {
@@ -535,9 +580,13 @@ export async function printDirectBluetooth(order: any, settings: any, isKitchen 
 }
 
 /**
- * Render CGV Cinema Ticket directly to HTML5 Canvas (384px for 58mm, 576px for 80mm)
- * Guaranteed 100% visual fidelity matching the on-screen CGV preview with solid black ribbons,
- * 2-column table boxes, and clean typography.
+ * Merender struk gaya tiket bioskop CGV ke elemen HTML5 Canvas secara presisi (384px untuk 58mm, 576px untuk 80mm).
+ * Memberikan kesetiaan visual 100% dengan banner hitam solid, divider tebal, dan tipografi monospaced.
+ *
+ * @param order - Objek data pesanan
+ * @param settings - Konfigurasi tampilan struk
+ * @param isKitchen - True jika tiket dapur
+ * @returns HTMLCanvasElement hasil rendering grafik monokrom
  */
 export function renderCgvTicketCanvas(
   order: any,
@@ -1025,7 +1074,13 @@ export function renderCgvTicketCanvas(
 }
 
 /**
- * Print Canvas as Monochrome ESC/POS Raster Bitmap (GS v 0)
+ * Mencetak objek HTMLCanvasElement sebagai gambar bitmap raster monokrom ESC/POS (GS v 0).
+ * Menggunakan algoritma kuantisasi luminansi greyscale dengan slicing vertikal 64-dot
+ * untuk pengiriman data cepat tanpa meluapkan buffer RAM printer.
+ *
+ * @param canvas - Elemen kanvas yang akan dicetak
+ * @param paperWidth - Ukuran kertas ('58mm' atau '80mm')
+ * @returns True jika pencetakan berhasil
  */
 export async function printCanvasAsRasterBluetooth(
   canvas: HTMLCanvasElement,
@@ -1099,7 +1154,12 @@ export async function printCanvasAsRasterBluetooth(
 }
 
 /**
- * Print CGV Cinema Ticket directly to connected Bluetooth Printer as high-resolution Raster Graphic
+ * Merender struk gaya CGV Cinema ke Canvas lalu mencetaknya langsung ke printer Bluetooth sebagai grafis resolusi tinggi.
+ *
+ * @param order - Objek pesanan
+ * @param settings - Konfigurasi printer
+ * @param isKitchen - True jika tiket dapur
+ * @returns True jika cetak raster berhasil
  */
 export async function printCgvTicketRasterBluetooth(
   order: any,
@@ -1120,7 +1180,11 @@ export async function printCgvTicketRasterBluetooth(
 }
 
 /**
- * Print exact HTML DOM element as Monochrome ESC/POS Raster Bitmap (GS v 0)
+ * Mengonversi elemen HTML DOM (misal preview struk kasir) menjadi bitmap grafik raster dan mencetaknya via Web Bluetooth.
+ *
+ * @param element - Elemen DOM yang akan di-capture via html2canvas
+ * @param paperWidth - Ukuran kertas ('58mm' atau '80mm')
+ * @returns True jika pencetakan grafis DOM berhasil
  */
 export async function printElementAsRasterBluetooth(
   element: HTMLElement,

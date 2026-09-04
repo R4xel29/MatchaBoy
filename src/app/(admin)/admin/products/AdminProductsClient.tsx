@@ -457,16 +457,6 @@ export default function AdminProductsClient({
     <div className="space-y-6 text-left">
       {/* ── TOP HEADER & WORKSPACE ACTION BAR ── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold font-heading text-slate-900 flex items-center gap-2.5">
-            <Package className="w-6 h-6 text-orange-500" />
-            Katalog Produk & Varian
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Kelola menu, kustomisasi rasa, foto WebP, paket combo, dan kalkulasi HPP modal secara real-time.
-          </p>
-        </div>
-
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Quick View Switcher (Visual Bento vs Matriks Tabel) */}
           <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80 text-slate-600">

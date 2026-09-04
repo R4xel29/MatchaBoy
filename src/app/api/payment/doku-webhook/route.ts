@@ -5,7 +5,12 @@ import { expireOrder } from '@/lib/order-utils';
 import fs from 'fs';
 import path from 'path';
 
-function logWebhookEvent(info: any) {
+/**
+ * Mencatat log debug event webhook DOKU ke console dan file lokal (jika sistem berkas mengizinkan).
+ *
+ * @param info - Objek payload informasi debug
+ */
+function logWebhookEvent(info: Record<string, unknown>) {
   // Always log to stdout so it shows up in Vercel logs
   console.log('[DOKU WEBHOOK DEBUG]', JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -27,6 +32,16 @@ function logWebhookEvent(info: any) {
   }
 }
 
+/**
+ * Webhook Listener HTTP POST untuk notifikasi pembayaran DOKU Payment Gateway (Checkout & QRIS).
+ * - Melakukan verifikasi tanda tangan HMAC-SHA256 (DOKU Signature Verification).
+ * - Saat pembayaran berhasil (SUCCESS): Memperbarui status pembayaran menjadi 'PAID' dan status antrean menjadi 'PENDING' (Rule 6).
+ * - Mengirimkan notifikasi WhatsApp konfirmasi secara asinkron (Rule 4).
+ * - Saat kedaluwarsa/gagal (EXPIRED/FAILED): Memanggil `expireOrder` untuk membatalkan pesanan dan mengembalikan voucher (Rule 5).
+ *
+ * @param req - NextRequest dari server DOKU
+ * @returns JSON NextResponse konfirmasi status penerimaan webhook
+ */
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();

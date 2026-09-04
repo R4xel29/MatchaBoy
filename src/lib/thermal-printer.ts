@@ -2,6 +2,9 @@ import { formatRupiah } from './utils';
 import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary } from './receipt-modifiers';
 import { isBluetoothPrinterConnected, printDirectBluetooth } from './bluetooth-printer';
 
+/**
+ * Data pesanan untuk pencetakan struk termal kasir dan tiket dapur Arum Seduh.
+ */
 export interface ThermalPrintOrder {
   id: string;
   orderNumber?: string;
@@ -45,6 +48,9 @@ export interface ThermalPrintOrder {
   notes?: string;
 }
 
+/**
+ * Konfigurasi kustomisasi tampilan struk cetak (header, footer, sosial media, lebar kertas).
+ */
 export interface ThermalPrintSettings {
   storeName?: string;
   tagline?: string;
@@ -64,11 +70,20 @@ export interface ThermalPrintSettings {
   printKitchenTicket?: boolean;
 }
 
+/**
+ * Mencetak struk fisik kasir atau tiket pesanan dapur.
+ * Prioritas utama: Mengirim data biner ESC/POS langsung ke printer Web Bluetooth yang terhubung (zero dialog).
+ * Fallback: Jika tidak terhubung ke Bluetooth, membuat elemen iframe tersembunyi dan memicu dialog cetak browser (Ctrl+P).
+ *
+ * @param order - Objek data pesanan lengkap
+ * @param settings - Konfigurasi cetak kasir (nama toko, alamat, footer, wifi, dsb.)
+ * @param isKitchenTicket - Bernilai true jika mencetak tiket antrean dapur (tanpa rincian harga/pembayaran)
+ */
 export async function printThermalReceipt(
   order: ThermalPrintOrder,
   settings: ThermalPrintSettings = {},
   isKitchenTicket = false
-) {
+): Promise<void> {
   if (typeof window === 'undefined') return;
 
   // 1. Direct Web Bluetooth Print (Zero Dialogs, Instant Hardware Print)

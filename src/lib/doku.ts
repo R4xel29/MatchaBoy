@@ -20,15 +20,41 @@ interface CheckoutPayload {
 }
 
 /**
- * Generates the SHA256 base64 Digest of the minified JSON request body.
+ * Menghasilkan string SHA-256 Base64 Digest dari body JSON yang telah diminifikasi.
+ *
+ * @param {unknown} body - Objek body request HTTP
+ * @returns {string} Hash Base64 SHA-256
+ *
+ * @example
+ * ```typescript
+ * const digest = generateDigest({ order: { amount: 15000 } });
+ * ```
  */
-export function generateDigest(body: any): string {
+export function generateDigest(body: unknown): string {
   const minifiedBody = JSON.stringify(body);
   return crypto.createHash('sha256').update(minifiedBody).digest('base64');
 }
 
 /**
- * Generates the DOKU signature for API requests and webhook verification.
+ * Menghasilkan DOKU HMAC-SHA256 Signature untuk header otentikasi API request dan verifikasi webhook.
+ *
+ * Mengikuti komponen format resmi DOKU V1:
+ * ```
+ * Client-Id:{clientId}
+ * Request-Id:{requestId}
+ * Request-Timestamp:{timestamp}
+ * Request-Target:{requestTarget}
+ * Digest:{digest}
+ * ```
+ *
+ * @param {object} params - Parameter pembentuk signature
+ * @param {string} params.clientId - Client ID merchant DOKU
+ * @param {string} params.sharedKey - Secret Shared Key merchant DOKU
+ * @param {string} params.requestId - Unique identifier permintaan HTTP
+ * @param {string} params.timestamp - Waktu ISO 8601 UTC tanpa milidetik
+ * @param {string} params.requestTarget - Path target endpoint (contoh: '/checkout/v1/payment')
+ * @param {string} params.digest - Hash SHA-256 Base64 body request
+ * @returns {string} String signature dalam format `HMACSHA256={base64Hmac}`
  */
 export function generateSignature({
   clientId,
@@ -58,8 +84,23 @@ export function generateSignature({
 }
 
 /**
- * Requests a Hosted Checkout payment link from DOKU.
- * Returns the payment redirect URL.
+ * Meminta URL sesi pembayaran Hosted Checkout resmi dari gateway DOKU.
+ *
+ * @param {DokuCredentials} creds - Kredensial akun merchant DOKU (clientId, sharedKey, isSandbox)
+ * @param {CheckoutPayload} payload - Rincian tagihan pesanan dan data pelanggan
+ * @returns {Promise<{ url: string; error?: string }>} URL redirect pembayaran DOKU atau keterangan error
+ *
+ * @example
+ * ```typescript
+ * const session = await createDokuCheckoutSession(creds, {
+ *   invoiceNumber: 'INV-12345',
+ *   amount: 50000,
+ *   customerName: 'Budi Santoso',
+ *   customerPhone: '08123456789',
+ *   customerEmail: 'budi@example.com',
+ *   callbackUrl: 'https://arumseduh.vercel.app/orders/ord-1/payment'
+ * });
+ * ```
  */
 export async function createDokuCheckoutSession(
   creds: DokuCredentials,
@@ -73,7 +114,7 @@ export async function createDokuCheckoutSession(
   const requestId = `REQ-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
   const timestamp = new Date().toISOString().split('.')[0] + 'Z'; // UTC ISO 8601 string without milliseconds
 
-  // Standardize phone format for DOKU (remove non-digits, replace leading 0 with 62)
+  // Standarisasi format nomor telepon Indonesia untuk DOKU
   let cleanPhone = payload.customerPhone.replace(/\D/g, '');
   if (cleanPhone.startsWith('0')) {
     cleanPhone = '62' + cleanPhone.slice(1);
@@ -82,7 +123,24 @@ export async function createDokuCheckoutSession(
   }
 
   // DOKU Checkout V1 Body Schema
-  const requestBody: any = {
+  const requestBody: {
+    order: {
+      invoice_number: string;
+      amount: number;
+      callback_url: string;
+      auto_redirect: boolean;
+    };
+    payment: {
+      payment_due_date: number;
+      notification_url?: string[];
+      payment_methods?: string[];
+    };
+    customer: {
+      name: string;
+      phone: string;
+      email: string;
+    };
+  } = {
     order: {
       invoice_number: payload.invoiceNumber,
       amount: Math.round(payload.amount),
@@ -99,12 +157,12 @@ export async function createDokuCheckoutSession(
     },
   };
 
-  // Add notification URL for webhook callback
+  // Tambahkan webhook notification URL
   if (payload.notificationUrl) {
     requestBody.payment.notification_url = [payload.notificationUrl];
   }
 
-  // Pre-select payment method inside Doku hosted checkout if channel is selected
+  // Pre-select payment channel jika dipilih
   if (payload.paymentChannel) {
     requestBody.payment.payment_methods = [payload.paymentChannel];
   }
@@ -147,14 +205,31 @@ export async function createDokuCheckoutSession(
     }
 
     return { url: '', error: 'Payment URL not found in DOKU response' };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[DOKU EXCEPTION]', error);
-    return { url: '', error: error.message || 'DOKU Connection error' };
+    const errMsg = error instanceof Error ? error.message : 'DOKU Connection error';
+    return { url: '', error: errMsg };
   }
 }
 
 /**
- * Verifies the incoming webhook request signature from DOKU.
+ * Memverifikasi keabsahan signature HMAC-SHA256 pada webhook HTTP request yang masuk dari DOKU.
+ *
+ * Mendukung perbandingan yang aman terhadap *timing attacks* (`crypto.timingSafeEqual`)
+ * dan memverifikasi digest baik dari minified JSON maupun raw body string.
+ *
+ * @param {object} params - Parameter verifikasi signature webhook
+ * @param {string} params.clientId - Client ID merchant DOKU
+ * @param {string} params.sharedKey - Secret Shared Key merchant DOKU
+ * @param {Record<string, string | string[] | undefined>} params.headers - Header HTTP request webhook
+ * @param {string} params.rawBody - Raw string body request webhook
+ * @param {string} params.requestTarget - Request URI path webhook
+ * @returns {boolean} `true` jika signature valid dan terverifikasi berasal dari DOKU
+ *
+ * @example
+ * ```typescript
+ * const isValid = verifyDokuWebhookSignature({ clientId, sharedKey, headers, rawBody, requestTarget });
+ * ```
  */
 export function verifyDokuWebhookSignature({
   clientId,
@@ -255,17 +330,40 @@ export function verifyDokuWebhookSignature({
 }
 
 
+export interface DokuMcpQrisPayload {
+  invoiceNumber: string;
+  amount: number;
+  postalCode?: string;
+}
+
+export interface DokuMcpQrisResult {
+  qrContent?: string;
+  qrImageUrl?: string;
+  error?: string;
+}
+
+export interface DokuMcpStatusPayload {
+  invoiceNumber: string;
+}
+
+export interface DokuMcpStatusResult {
+  paid: boolean;
+  status?: string;
+  error?: string;
+}
+
 /**
- * Calls the Doku MCP Server to generate a dynamic QRIS string.
+ * Memanggil DOKU MCP (Model Context Protocol) Server via JSON-RPC 2.0
+ * untuk menghasilkan dynamic QRIS payload (string EMVCo QR & URL gambar).
+ *
+ * @param creds - Kredensial DOKU (clientId, sharedKey, isSandbox)
+ * @param payload - Data transaksi QRIS (invoiceNumber, amount, postalCode)
+ * @returns Object berisi qrContent, qrImageUrl, atau keterangan error
  */
 export async function createDokuMcpQrisPayment(
   creds: DokuCredentials,
-  payload: {
-    invoiceNumber: string;
-    amount: number;
-    postalCode?: string;
-  }
-): Promise<{ qrContent?: string; qrImageUrl?: string; error?: string }> {
+  payload: DokuMcpQrisPayload
+): Promise<DokuMcpQrisResult> {
   const { clientId, sharedKey, isSandbox } = creds;
   
   // Use MCP URL from env, or default to sandbox/production base URL + /doku-mcp-server/mcp
@@ -307,7 +405,7 @@ export async function createDokuMcpQrisPayment(
         'Accept': 'application/json, text/event-stream'
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(3500)
+      signal: AbortSignal.timeout(3000)
     });
 
     if (!response.ok) {
@@ -347,21 +445,24 @@ export async function createDokuMcpQrisPayment(
     }
 
     return { error: 'qrContent not found in Doku MCP response' };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : 'DOKU MCP Connection error';
     console.error('[DOKU MCP QRIS EXCEPTION]', error);
-    return { error: error.message || 'DOKU MCP Connection error' };
+    return { error: errMessage };
   }
 }
 
 /**
- * Calls the Doku MCP Server to check QRIS payment status.
+ * Memanggil DOKU MCP Server via JSON-RPC 2.0 untuk mengecek status pembayaran QRIS.
+ *
+ * @param creds - Kredensial DOKU (clientId, sharedKey, isSandbox)
+ * @param payload - Invoice number transaksi
+ * @returns Status verifikasi pembayaran ({ paid: boolean, status?: string, error?: string })
  */
 export async function checkDokuMcpQrisPaymentStatus(
   creds: DokuCredentials,
-  payload: {
-    invoiceNumber: string;
-  }
-): Promise<{ paid: boolean; status?: string; error?: string }> {
+  payload: DokuMcpStatusPayload
+): Promise<DokuMcpStatusResult> {
   const { clientId, sharedKey, isSandbox } = creds;
   
   const defaultMcpUrl = isSandbox 
@@ -395,6 +496,7 @@ export async function checkDokuMcpQrisPaymentStatus(
         'Accept': 'application/json, text/event-stream',
       },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(3000),
     });
 
     if (!response.ok) {
@@ -412,8 +514,9 @@ export async function checkDokuMcpQrisPaymentStatus(
     }
 
     return { paid: false };
-  } catch (error: any) {
-    return { paid: false, error: error.message };
+  } catch (error: unknown) {
+    const errMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { paid: false, error: errMessage };
   }
 }
 

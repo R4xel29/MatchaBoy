@@ -1,20 +1,51 @@
 import { formatRupiah } from './utils';
 
+/**
+ * Representasi hasil parsing modifier item produk untuk struk dan kartu pesanan.
+ */
 export interface ParsedItemModifier {
+  /** Apakah item teridentifikasi sebagai makanan/snack */
   isFood: boolean;
+  /** Level es (hanya berlaku untuk minuman) */
   iceLevel?: string;
+  /** Level gula (hanya berlaku untuk minuman) */
   sugarLevel?: string;
+  /** Level kepekatan matcha 1-10 (hanya berlaku untuk menu Matcha) */
   matchaLevel?: number;
+  /** Pilihan ukuran cup (misal: 'Large', 'Jumbo') */
   size?: string;
+  /** Pilihan shot espresso (hanya berlaku untuk menu Kopi) */
   shotName?: string;
+  /** Daftar topping tambahan */
   addOns: Array<{ name: string; price?: number }>;
+  /** Daftar pilihan menu pada paket bundle */
   bundleSelections: Array<{ groupName?: string; productName?: string }>;
+  /** Teks informasi diskon/promo per item */
   promoText?: string;
+  /** Harga kotor sebelum potongan promo */
   originalPrice?: number;
+  /** Nominal potongan promo per item */
   promoDiscount?: number;
+  /** Varian custom lainnya */
   otherVariants: string[];
 }
 
+/**
+ * Memeriksa apakah nama produk termasuk kategori makanan atau cemilan.
+ *
+ * Sesuai aturan **AGENTS.md Bagian 7**:
+ * Produk kategori makanan DILARANG memiliki modifier minuman seperti level es,
+ * level gula, kepekatan matcha, atau espresso shot.
+ *
+ * @param {string} name - Nama produk yang akan diuji
+ * @returns {boolean} `true` jika nama produk mengindikasikan makanan/snack
+ *
+ * @example
+ * ```typescript
+ * isFoodItem('Indomie Goreng'); // returns true
+ * isFoodItem('Matcha Signature'); // returns false
+ * ```
+ */
 export function isFoodItem(name: string): boolean {
   if (!name) return false;
   const n = name.toLowerCase();
@@ -28,7 +59,10 @@ export function isFoodItem(name: string): boolean {
   return foodKeywords.some((kw) => n.includes(kw));
 }
 
-export function parseItemModifiers(item: {
+/**
+ * Parameter item yang akan di-parse modifiernya.
+ */
+export interface RawModifierItemInput {
   name: string;
   iceLevel?: string;
   sugarLevel?: string;
@@ -41,7 +75,28 @@ export function parseItemModifiers(item: {
   originalPrice?: number;
   promoDiscount?: number;
   price?: number;
-}): ParsedItemModifier {
+}
+
+/**
+ * Mem-parsing string atau atribut modifier item menjadi objek terstruktur yang divalidasi.
+ *
+ * Menjamin kepatuhan aturan bisnis:
+ * 1. Makanan tidak boleh memiliki modifier es, gula, matcha, atau espresso.
+ * 2. Minuman kopi tidak boleh memiliki level matcha.
+ * 3. Minuman matcha murni tidak boleh memiliki opsi single shot otomatis.
+ *
+ * @param {RawModifierItemInput} item - Objek mentah item pesanan
+ * @returns {ParsedItemModifier} Objek modifier terstruktur yang telah divalidasi
+ *
+ * @example
+ * ```typescript
+ * const parsed = parseItemModifiers({
+ *   name: 'Latte Arus',
+ *   modifiersString: 'Normal Ice -> Biasa, Extra Cream'
+ * });
+ * ```
+ */
+export function parseItemModifiers(item: RawModifierItemInput): ParsedItemModifier {
   const isFood = isFoodItem(item.name);
   const nameLower = (item.name || '').toLowerCase();
 
@@ -175,6 +230,23 @@ export function parseItemModifiers(item: {
   };
 }
 
+/**
+ * Menghasilkan baris modifier yang diformat untuk dicetak pada struk thermal kasir.
+ *
+ * Sesuai aturan **AGENTS.md Bagian 7 & 8**:
+ * Pada struk cetak kasir (thermal printer), setiap modifier wajib dicetak per baris secara konsisten
+ * menggunakan tanda panah chevron '»' (contoh: '» ES: NORMAL ICE', '» GULA: BIASA', '» POTONGAN: -Rp 1.000').
+ *
+ * @param {ParsedItemModifier} parsed - Objek modifier terstruktur
+ * @param {boolean} [includePromo=true] - Apakah baris potongan promo diikutsertakan
+ * @returns {Array<{ label: string; value: string }>} Daftar baris modifier terformat
+ *
+ * @example
+ * ```typescript
+ * const lines = getReceiptModifierLines(parsedModifier);
+ * // returns [{ label: 'ES', value: 'NORMAL ICE' }, { label: 'GULA', value: 'BIASA' }]
+ * ```
+ */
 export function getReceiptModifierLines(
   parsed: ParsedItemModifier,
   includePromo: boolean = true
@@ -232,6 +304,23 @@ export function getReceiptModifierLines(
   return lines;
 }
 
+/**
+ * Menghasilkan tag badge modifier untuk tampilan antarmuka (UI) kartu pesanan atau SPMB.
+ *
+ * Sesuai aturan **AGENTS.md Bagian 7**:
+ * Pada antarmuka dan teks ringkasan pesanan SPMB, opsi es dan gula WAJIB dipisahkan
+ * oleh tanda panah '→' (contoh: "Normal Ice → Biasa"), bukan tanda koma.
+ *
+ * @param {string | null} [modifiersString] - String mentah modifier pesanan
+ * @param {string} [productName] - Nama produk untuk konteks validasi kategori makanan
+ * @returns {{ tags: string[]; promoText?: string }} Daftar tag ringkasan dan keterangan promo
+ *
+ * @example
+ * ```typescript
+ * const { tags } = formatOrderCardModifiers('Normal Ice, Biasa', 'Matcha Latte');
+ * // tags = ["Normal Ice → Biasa"]
+ * ```
+ */
 export function formatOrderCardModifiers(
   modifiersString?: string | null,
   productName?: string
@@ -315,8 +404,22 @@ export interface ReceiptPricingSummary {
 }
 
 /**
- * Universal calculator for receipt summaries ensuring mathematical transparency:
- * Gross Subtotal - Flash Sale - Voucher - Tumbler + Delivery = Final Total
+ * Kalkulator universal ringkasan harga struk untuk menjamin transparansi perhitungan:
+ * `Gross Subtotal - Diskon Flash Sale - Diskon Voucher - Diskon Tumbler + Ongkir = Total Akhir`.
+ *
+ * Sesuai aturan **AGENTS.md Bagian 8 (TRANSPARANSI POTONGAN HARGA)**:
+ * Pada struk cetak maupun rincian online, potongan harga WAJIB ditampilkan secara eksplisit
+ * dan transparan (harga semula, besaran potongan, dan harga akhir), bukan hanya harga bersih.
+ *
+ * @param {object} order - Data pesanan kotor beserta daftar item dan diskon
+ * @returns {ReceiptPricingSummary} Rincian kalkulasi harga transparan untuk struk kasir dan digital
+ *
+ * @example
+ * ```typescript
+ * const summary = calculateGrossReceiptSummary(orderData);
+ * console.log('Subtotal Kotor:', summary.grossSubtotal);
+ * console.log('Total Hemat:', summary.totalFlashSaleDiscount + summary.voucherDiscount);
+ * ```
  */
 export function calculateGrossReceiptSummary(order: {
   subtotal?: number;
@@ -327,13 +430,24 @@ export function calculateGrossReceiptSummary(order: {
   tumblerDiscount?: number;
   voucherCode?: string | null;
   voucherTitle?: string | null;
-  items?: any[];
+  items?: Array<{
+    name?: string;
+    qty?: number;
+    price?: number;
+    totalPrice?: number;
+    originalPrice?: number;
+    promoDiscount?: number;
+    modifiersString?: string;
+    modifiers?: string;
+    product?: { name?: string; price?: number };
+    [key: string]: unknown;
+  }>;
 }): ReceiptPricingSummary {
   const items = order.items || [];
   let calculatedGrossSubtotal = 0;
   let calculatedTotalFlashSale = 0;
 
-  const processedItems = items.map((item: any) => {
+  const processedItems = items.map((item) => {
     const qty = Number(item.qty) || 1;
     const finalUnitPrice = Number(item.totalPrice || item.price) || 0;
 
