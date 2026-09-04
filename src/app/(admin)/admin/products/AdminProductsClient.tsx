@@ -20,7 +20,6 @@ import {
   Loader2,
   Trash2,
   CheckSquare,
-  Sparkles,
   TrendingUp,
   CheckCircle2,
   RotateCcw,
@@ -459,15 +458,10 @@ export default function AdminProductsClient({
       {/* ── TOP HEADER & WORKSPACE ACTION BAR ── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold font-heading text-slate-900 flex items-center gap-2.5">
-              <Package className="w-6 h-6 text-orange-500" />
-              Katalog Produk & Varian
-            </h1>
-            <span className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-orange-100 text-orange-700 tracking-wide">
-              Arum Seduh Suite
-            </span>
-          </div>
+          <h1 className="text-xl sm:text-2xl font-bold font-heading text-slate-900 flex items-center gap-2.5">
+            <Package className="w-6 h-6 text-orange-500" />
+            Katalog Produk & Varian
+          </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
             Kelola menu, kustomisasi rasa, foto WebP, paket combo, dan kalkulasi HPP modal secara real-time.
           </p>
@@ -503,28 +497,6 @@ export default function AdminProductsClient({
               <span>Matriks Tabel</span>
             </button>
           </div>
-
-          {/* AI Menu Creator Button */}
-          <button
-            type="button"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(
-                  new CustomEvent('open-ai-assistant', {
-                    detail: {
-                      prompt:
-                        'Bikinin menu baru lengkap dengan foto studio AI 8K, varian modifier, komposisi takaran resep, dan kalkulasi HPP modalnya.',
-                    },
-                  })
-                );
-              }
-            }}
-            className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-            title="Rancang Menu Baru Otonom Menggunakan AI Studio"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-spin" />
-            <span className="hidden sm:inline">AI Studio</span>
-          </button>
 
           {/* Export CSV Button */}
           <button
