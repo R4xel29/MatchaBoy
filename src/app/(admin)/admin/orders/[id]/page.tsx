@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { formatRupiah } from '@/lib/utils';
 import { expireOrder } from '@/lib/order-utils';
 import Link from 'next/link';
-import { ArrowLeft, MapPin, Clock, Package, User, Phone, CreditCard, CheckCircle2, ImageIcon, MessageCircle } from 'lucide-react';
+import { ArrowLeft, MapPin, Clock, Package, User, Phone, CreditCard, CheckCircle2, ImageIcon, MessageCircle, XCircle } from 'lucide-react';
+import { OrderDetailPrintButton } from '@/components/admin/orders/OrderDetailPrintButton';
 
 export const revalidate = 0;
 
@@ -43,7 +44,7 @@ ${itemsText}
 
 *Total:* ${totalAmount}
 
-Jika ada pertanyaan atau perubahan, silakan kabari kami ya. Terima kasih! 🍵`;
+Jika ada pertanyaan atau perubahan, silakan kabari kami ya. Terima kasih!`;
 }
 
 export default async function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -64,32 +65,38 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href="/admin/orders" className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-border/40">
-          <ArrowLeft className="w-4 h-4" />
-        </Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-lg sm:text-xl font-bold font-heading">#{order.id.slice(0, 8).toUpperCase()}</h1>
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider
-              ${order.status === 'DELIVERED' ? 'bg-emerald-50 text-emerald-700' :
-                order.status === 'ON_DELIVERY' ? 'bg-blue-50 text-blue-700' :
-                order.status === 'ASSIGNED' ? 'bg-amber-50 text-amber-700' :
-                'bg-slate-100 text-slate-600'}`}>
-              {order.status.replace('_', ' ')}
-            </span>
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <Link href="/admin/orders" className="p-2 hover:bg-white rounded-xl transition-colors border border-transparent hover:border-border/40">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-bold font-heading">#{order.id.slice(0, 8).toUpperCase()}</h1>
+              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider
+                ${order.status === 'DELIVERED' ? 'bg-emerald-50 text-emerald-700' :
+                  order.status === 'ON_DELIVERY' ? 'bg-blue-50 text-blue-700' :
+                  order.status === 'ASSIGNED' ? 'bg-amber-50 text-amber-700' :
+                  'bg-slate-100 text-slate-600'}`}>
+                {order.status.replace('_', ' ')}
+              </span>
+            </div>
+            <p className="text-[12px] text-muted-foreground flex items-center gap-1 mt-0.5">
+              <Clock className="w-3 h-3" />
+              {new Date(order.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+            </p>
           </div>
-          <p className="text-[12px] text-muted-foreground flex items-center gap-1 mt-0.5">
-            <Clock className="w-3 h-3" />
-            {new Date(order.createdAt).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <OrderDetailPrintButton order={order} />
         </div>
       </div>
 
       {order.status === 'CANCELLED' && (
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-xs text-red-700 font-semibold space-y-1">
           <div className="flex items-center gap-1.5 font-bold uppercase">
-            🚫 Pesanan Dibatalkan
+            <XCircle className="w-4 h-4 text-red-600" /> Pesanan Dibatalkan
           </div>
           <p className="text-red-650">
             Alasan: {order.cancelReason || 'Tidak ada alasan khusus'}

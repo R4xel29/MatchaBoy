@@ -62,6 +62,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
     deliveryFee: o.deliveryFee,
     voucherCode: o.voucherCode,
     hasTumbler: o.hasTumbler,
+    queueNumber: o.queueNumber,
+    tableNumber: o.tableNumber,
+    pointsEarned: o.pointsEarned,
     status: o.status,
     notes: o.notes,
     pickupTime: o.pickupTime,
@@ -76,15 +79,16 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       product: {
         name: item.product.name,
         image: item.product.image,
+        price: item.product.price,
       },
     })),
   }));
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Orders</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Track and manage customer orders</p>
+        <h1 className="text-xl sm:text-2xl font-bold font-heading text-stone-900">Semua Pesanan</h1>
+        <p className="text-xs sm:text-sm text-stone-500 mt-0.5">Kelola seluruh alur transaksi pesanan, cetak struk kasir & tiket dapur, serta pantau status pelanggan</p>
       </div>
       <AdminOrdersClient 
         initialOrders={mappedOrders} 

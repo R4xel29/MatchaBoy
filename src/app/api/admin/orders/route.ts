@@ -36,6 +36,13 @@ export async function GET() {
       orderType: o.orderType,
       paymentMethod: o.paymentMethod,
       total: o.total,
+      subtotal: o.subtotal,
+      deliveryFee: o.deliveryFee,
+      voucherCode: o.voucherCode,
+      hasTumbler: o.hasTumbler,
+      queueNumber: o.queueNumber,
+      tableNumber: o.tableNumber,
+      pointsEarned: o.pointsEarned,
       status: o.status,
       cancelReason: o.cancelReason,
       notes: o.notes,
@@ -51,6 +58,7 @@ export async function GET() {
         product: {
           name: item.product.name,
           image: item.product.image,
+          price: item.product.price,
         },
       })),
     }));
