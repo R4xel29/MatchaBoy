@@ -95,5 +95,6 @@ export default async function AdminCashierOrdersPage() {
     storeLng={storeSettings?.storeLng || 106.8456}
     initialPickupAlarmLeadTime={storeSettings?.pickupAlarmLeadTime ?? 30}
     initialAlarmSoundUrl={storeSettings?.alarmSoundUrl || ''}
+    initialAlarmVolumeBoost={storeSettings?.alarmVolumeBoost ?? 350}
   />;
 }

@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Save, Loader2, Store, MapPin, LocateFixed, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Volume2, Play, Square, UploadCloud, RotateCcw, Check, Sparkles } from 'lucide-react';
+import { Clock, Save, Loader2, Store, MapPin, LocateFixed, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Volume2, Play, Square, UploadCloud, RotateCcw, Check, Sparkles, Flame } from 'lucide-react';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getAlarmSoundUrl } from '@/lib/alarm-utils';
+import { getAlarmSoundUrl, playBoostedAudio } from '@/lib/alarm-utils';
 
 export default function StoreSettingsPage() {
   const [openTime, setOpenTime] = useState('08:00');
@@ -15,6 +15,7 @@ export default function StoreSettingsPage() {
   const [cancellationTimeLimit, setCancellationTimeLimit] = useState(15);
   const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(30);
   const [alarmSoundUrl, setAlarmSoundUrl] = useState('');
+  const [alarmVolumeBoost, setAlarmVolumeBoost] = useState(350);
   const [isUploadingAlarm, setIsUploadingAlarm] = useState(false);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [uploadAlarmError, setUploadAlarmError] = useState<string | null>(null);
@@ -213,6 +214,7 @@ export default function StoreSettingsPage() {
         if (d.whatsappMessage !== undefined) setWhatsappMessage(d.whatsappMessage);
         if (d.pickupAlarmLeadTime !== undefined) setPickupAlarmLeadTime(d.pickupAlarmLeadTime);
         if (d.alarmSoundUrl !== undefined) setAlarmSoundUrl(d.alarmSoundUrl || '');
+        if (d.alarmVolumeBoost !== undefined) setAlarmVolumeBoost(d.alarmVolumeBoost);
         if (d.spmbStartTime) setSpmbStartTime(d.spmbStartTime);
         if (d.spmbEndTime) setSpmbEndTime(d.spmbEndTime);
         if (d.spmbCloseTime) setSpmbCloseTime(d.spmbCloseTime);
@@ -326,10 +328,11 @@ export default function StoreSettingsPage() {
     }
 
     const audio = new Audio(effectiveUrl);
+    audio.crossOrigin = 'anonymous';
     previewAudioRef.current = audio;
     setIsPlayingPreview(true);
 
-    audio.play().catch(() => {
+    playBoostedAudio(audio, alarmVolumeBoost).catch(() => {
       setIsPlayingPreview(false);
     });
 
@@ -368,14 +371,15 @@ export default function StoreSettingsPage() {
       setAlarmSoundUrl(data.url);
       setUploadAlarmSuccess('Audio alarm kustom berhasil diupload! Klik Simpan Pengaturan di bawah untuk menerapkan.');
 
-      // Auto preview
+      // Auto preview with booster
       if (previewAudioRef.current) {
         previewAudioRef.current.pause();
       }
       const audio = new Audio(data.url);
+      audio.crossOrigin = 'anonymous';
       previewAudioRef.current = audio;
       setIsPlayingPreview(true);
-      audio.play().catch(() => setIsPlayingPreview(false));
+      playBoostedAudio(audio, alarmVolumeBoost).catch(() => setIsPlayingPreview(false));
       audio.onended = () => setIsPlayingPreview(false);
     } catch (err: any) {
       setUploadAlarmError(err.message || 'Gagal mengupload audio alarm');
@@ -420,6 +424,7 @@ export default function StoreSettingsPage() {
           whatsappMessage,
           pickupAlarmLeadTime,
           alarmSoundUrl,
+          alarmVolumeBoost,
           spmbStartTime,
           spmbEndTime,
           spmbCloseTime,
@@ -878,6 +883,59 @@ export default function StoreSettingsPage() {
                   {uploadAlarmError}
                 </p>
               )}
+
+              {/* Volume Boost / Speaker Pecah Selector */}
+              <div className="pt-2 border-t border-orange-200/60 dark:border-orange-900/30">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="text-xs font-bold text-foreground">Intensitas Suara & Efek Booster</span>
+                  <span className="text-[11px] font-semibold text-orange-600 dark:text-orange-400">
+                    {alarmVolumeBoost >= 350
+                      ? 'Mode Speaker Pecah (Super Keras & Overdrive)'
+                      : alarmVolumeBoost >= 200
+                      ? 'Mode Keras (200%)'
+                      : 'Mode Normal (100%)'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAlarmVolumeBoost(100)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      alarmVolumeBoost === 100
+                        ? 'border-orange-500 bg-orange-500 text-white shadow-xs'
+                        : 'border-border bg-background hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    100% (Normal)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAlarmVolumeBoost(200)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      alarmVolumeBoost === 200
+                        ? 'border-orange-500 bg-orange-500 text-white shadow-xs'
+                        : 'border-border bg-background hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    200% (Keras)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAlarmVolumeBoost(350)}
+                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      alarmVolumeBoost >= 350
+                        ? 'border-orange-600 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-sm ring-2 ring-orange-400/30'
+                        : 'border-border bg-background hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    <Flame className="w-3.5 h-3.5" />
+                    350% (Speaker Pecah)
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
+                  Mode <b>350% (Speaker Pecah)</b> memanfaatkan Web Audio API Overdrive untuk melipatgandakan volume dan menghasilkan distorsi keras agar alarm tidak terlewat di kasir saat jam ramai.
+                </p>
+              </div>
 
               <p className="text-[11px] text-muted-foreground leading-relaxed">
                 Format yang didukung: MP3, WAV, OGG (maksimal 5MB). Suara ini akan diputar berulang saat pesanan baru masuk di kasir dan panel admin Arum Seduh.

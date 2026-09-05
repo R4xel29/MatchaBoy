@@ -34,7 +34,7 @@ import { UrlPagination } from '@/components/ui/UrlPagination';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
 import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 import { formatOrderCardModifiers } from '@/lib/receipt-modifiers';
-import { getAlarmSoundUrl } from '@/lib/alarm-utils';
+import { getAlarmSoundUrl, playOneShotBoostedAlarm } from '@/lib/alarm-utils';
 
 interface OrderItem {
   id: string;
@@ -44,7 +44,7 @@ interface OrderItem {
   product: {
     name: string;
     image: string | null;
-    price?: number;
+    price: number;
   };
 }
 
@@ -81,6 +81,7 @@ interface Props {
   pageSize?: number;
   isLoading?: boolean;
   alarmSoundUrl?: string;
+  alarmVolumeBoost?: number;
 }
 
 export default function AdminOrdersClient({
@@ -91,6 +92,7 @@ export default function AdminOrdersClient({
   pageSize = 15,
   isLoading = false,
   alarmSoundUrl = '',
+  alarmVolumeBoost = 350,
 }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -146,13 +148,12 @@ export default function AdminOrdersClient({
   }, []);
 
   useEffect(() => {
-    // Sound notification when new orders arrive
+    // Sound notification when new orders arrive (Speaker Pecah Overdrive Boost)
     if (orders.length > prevOrdersCount.current) {
-      const audio = new Audio(getAlarmSoundUrl(alarmSoundUrl));
-      audio.play().catch((e) => console.log('Audio play blocked by browser:', e));
+      playOneShotBoostedAlarm(getAlarmSoundUrl(alarmSoundUrl), alarmVolumeBoost);
     }
     prevOrdersCount.current = orders.length;
-  }, [orders.length, alarmSoundUrl]);
+  }, [orders.length, alarmSoundUrl, alarmVolumeBoost]);
 
   // Order Counts for Quick Filters
   const counts = useMemo(() => {

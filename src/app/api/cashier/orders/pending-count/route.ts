@@ -11,9 +11,13 @@ export async function GET() {
       },
     }),
     prisma.storeSettings.findFirst({
-      select: { alarmSoundUrl: true },
+      select: { alarmSoundUrl: true, alarmVolumeBoost: true },
     }),
   ]);
 
-  return NextResponse.json({ count, alarmSoundUrl: settings?.alarmSoundUrl ?? '' });
+  return NextResponse.json({
+    count,
+    alarmSoundUrl: settings?.alarmSoundUrl ?? '',
+    alarmVolumeBoost: settings?.alarmVolumeBoost ?? 350,
+  });
 }

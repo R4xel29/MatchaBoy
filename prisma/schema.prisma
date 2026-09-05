@@ -555,6 +555,7 @@ model StoreSettings {
   whatsappMessage     String   @default("Halo Matchaboy, saya ingin bertanya...")
   pickupAlarmLeadTime Int      @default(30)
   alarmSoundUrl       String?  @default("")
+  alarmVolumeBoost    Int      @default(350)
   spmbStartTime       String   @default("08:00")
   spmbEndTime         String   @default("13:00")
   spmbCloseTime       String   @default("16:00")

@@ -50,7 +50,7 @@ import { printThermalReceipt, ThermalPrintOrder } from '@/lib/thermal-printer';
 import { formatOrderCardModifiers } from '@/lib/receipt-modifiers';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAlarmSoundUrl } from '@/lib/alarm-utils';
+import { getAlarmSoundUrl, playBoostedAudio, setupSpeakerPecahBooster } from '@/lib/alarm-utils';
 
 interface OrderItem {
   id: string;
@@ -92,6 +92,7 @@ interface Props {
   storeLng: number;
   initialPickupAlarmLeadTime: number;
   initialAlarmSoundUrl?: string;
+  initialAlarmVolumeBoost?: number;
 }
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
@@ -163,7 +164,14 @@ const shouldTriggerAlarm = (order: OrderData, leadTimeMin: number) => {
   }
 };
 
-export default function CashierOrdersClient({ initialOrders, storeLat, storeLng, initialPickupAlarmLeadTime, initialAlarmSoundUrl = '' }: Props) {
+export default function CashierOrdersClient({
+  initialOrders,
+  storeLat,
+  storeLng,
+  initialPickupAlarmLeadTime,
+  initialAlarmSoundUrl = '',
+  initialAlarmVolumeBoost = 350,
+}: Props) {
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -175,6 +183,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   const [tableFilter, setTableFilter] = useState('ALL');
   const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(initialPickupAlarmLeadTime);
   const [alarmSoundUrl, setAlarmSoundUrl] = useState(initialAlarmSoundUrl);
+  const [alarmVolumeBoost, setAlarmVolumeBoost] = useState(initialAlarmVolumeBoost);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
@@ -305,7 +314,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
 
   const hasUnreadOrders = unreadPendingOrders.length > 0;
 
-  // Continuous Audio Alarm playback (Dynamic / Custom or Mixkit default ring)
+  // Continuous Audio Alarm playback (Dynamic / Custom with Speaker Pecah Overdrive Booster)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -314,13 +323,14 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
     if (hasUnreadOrders && !isAudioMuted) {
       if (!alarmAudioRef.current) {
         const audio = new Audio(soundUrl);
+        audio.crossOrigin = 'anonymous';
         audio.loop = true;
         alarmAudioRef.current = audio;
       } else if (alarmAudioRef.current.src !== soundUrl) {
         alarmAudioRef.current.src = soundUrl;
       }
 
-      alarmAudioRef.current.play()
+      playBoostedAudio(alarmAudioRef.current, alarmVolumeBoost)
         .then(() => setIsAudioBlocked(false))
         .catch((err) => {
           console.warn('Continuous alarm playback blocked by browser user-interaction policy:', err);
@@ -338,22 +348,23 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
         alarmAudioRef.current.pause();
       }
     };
-  }, [hasUnreadOrders, isAudioMuted, alarmSoundUrl]);
+  }, [hasUnreadOrders, isAudioMuted, alarmSoundUrl, alarmVolumeBoost]);
 
   // Unmute / enable audio user gesture
   const handleEnableAudio = () => {
     const soundUrl = getAlarmSoundUrl(alarmSoundUrl);
     if (!alarmAudioRef.current) {
       const audio = new Audio(soundUrl);
+      audio.crossOrigin = 'anonymous';
       audio.loop = true;
       alarmAudioRef.current = audio;
     } else if (alarmAudioRef.current.src !== soundUrl) {
       alarmAudioRef.current.src = soundUrl;
     }
-    alarmAudioRef.current.play()
+    playBoostedAudio(alarmAudioRef.current, alarmVolumeBoost)
       .then(() => {
         setIsAudioBlocked(false);
-        showToast('Suara alarm diaktifkan', 'success');
+        showToast('Suara alarm diaktifkan (Mode Keras)', 'success');
       })
       .catch(() => showToast('Gagal memutar audio di peramban ini', 'error'));
   };
@@ -382,6 +393,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
         const data = await res.json();
         if (data.alarmSoundUrl !== undefined) {
           setAlarmSoundUrl(data.alarmSoundUrl || '');
+        }
+        if (data.alarmVolumeBoost !== undefined) {
+          setAlarmVolumeBoost(data.alarmVolumeBoost);
         }
         if (data.orders) {
           const incomingOrders: OrderData[] = data.orders;

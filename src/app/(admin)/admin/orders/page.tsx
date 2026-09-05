@@ -46,7 +46,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       take: pageSize,
       include: { items: { include: { product: true } } },
     }),
-    prisma.storeSettings.findFirst({ select: { alarmSoundUrl: true } }),
+    prisma.storeSettings.findFirst({ select: { alarmSoundUrl: true, alarmVolumeBoost: true } }),
   ]);
 
   const totalPages = Math.ceil(totalOrders / pageSize) || 1;
@@ -98,6 +98,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
         totalOrders={totalOrders}
         pageSize={pageSize}
         alarmSoundUrl={storeSettings?.alarmSoundUrl || ''}
+        alarmVolumeBoost={storeSettings?.alarmVolumeBoost ?? 350}
       />
     </div>
   );

@@ -55,7 +55,7 @@ import {
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
-import { getAlarmSoundUrl } from '@/lib/alarm-utils';
+import { getAlarmSoundUrl, playOneShotBoostedAlarm } from '@/lib/alarm-utils';
 
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -593,17 +593,13 @@ export function AdminSidebar({
       const data = await res.json();
       const newCount = data.count || 0;
       const customAlarmUrl = data.alarmSoundUrl || '';
+      const boostLevel = data.alarmVolumeBoost ?? 350;
 
       // If new order arrived while NOT on the orders page, play alarm chime
       if (newCount > prevPendingCountRef.current && prevPendingCountRef.current !== 0 && pathname !== '/admin/cashier/orders') {
         try {
           const soundUrl = getAlarmSoundUrl(customAlarmUrl);
-          if (!globalAlarmAudioRef.current) {
-            globalAlarmAudioRef.current = new Audio(soundUrl);
-          } else if (globalAlarmAudioRef.current.src !== soundUrl) {
-            globalAlarmAudioRef.current.src = soundUrl;
-          }
-          globalAlarmAudioRef.current.play().catch(() => {});
+          playOneShotBoostedAlarm(soundUrl, boostLevel);
         } catch {}
       }
 

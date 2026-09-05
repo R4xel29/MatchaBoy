@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tier 1 Test Suite: Custom Incoming Order Alarm Audio Suite
  * Verifies:
  * 1. Default alarm sound URL configuration.
@@ -84,5 +84,51 @@ describe('Tier 1.8: Custom Incoming Order Alarm Audio Compliance', () => {
     );
     const adminAlarmContent = fs.readFileSync(adminAlarmPath, 'utf8');
     expect(adminAlarmContent.includes('getAlarmSoundUrl')).toBe(true);
+  });
+
+  it('T1.8.7: alarmVolumeBoost is present in schema.prisma and store-settings API route', () => {
+    const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
+    const schemaContent = fs.readFileSync(schemaPath, 'utf8');
+    expect(schemaContent.includes('alarmVolumeBoost')).toBe(true);
+
+    const routePath = path.join(process.cwd(), 'src', 'app', 'api', 'admin', 'store-settings', 'route.ts');
+    const routeContent = fs.readFileSync(routePath, 'utf8');
+    expect(routeContent.includes('alarmVolumeBoost')).toBe(true);
+  });
+
+  it('T1.8.8: Web Audio API booster utilities (setupSpeakerPecahBooster & playBoostedAudio) exist', () => {
+    const utilsPath = path.join(process.cwd(), 'src', 'lib', 'alarm-utils.ts');
+    const utilsContent = fs.readFileSync(utilsPath, 'utf8');
+    expect(utilsContent.includes('setupSpeakerPecahBooster')).toBe(true);
+    expect(utilsContent.includes('playBoostedAudio')).toBe(true);
+    expect(utilsContent.includes('playOneShotBoostedAlarm')).toBe(true);
+    expect(utilsContent.includes('makeDistortionCurve')).toBe(true);
+  });
+
+  it('T1.8.9: CashierOrdersClient and AdminIncomingOrderAlarm wire playBoostedAudio', () => {
+    const cashierPath = path.join(
+      process.cwd(),
+      'src',
+      'app',
+      '(admin)',
+      'admin',
+      'cashier',
+      'orders',
+      'CashierOrdersClient.tsx'
+    );
+    const cashierContent = fs.readFileSync(cashierPath, 'utf8');
+    expect(cashierContent.includes('playBoostedAudio')).toBe(true);
+    expect(cashierContent.includes('alarmVolumeBoost')).toBe(true);
+
+    const adminAlarmPath = path.join(
+      process.cwd(),
+      'src',
+      'components',
+      'admin',
+      'AdminIncomingOrderAlarm.tsx'
+    );
+    const adminAlarmContent = fs.readFileSync(adminAlarmPath, 'utf8');
+    expect(adminAlarmContent.includes('playBoostedAudio')).toBe(true);
+    expect(adminAlarmContent.includes('alarmVolumeBoost')).toBe(true);
   });
 });

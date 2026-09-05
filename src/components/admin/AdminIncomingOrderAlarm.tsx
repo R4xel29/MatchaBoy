@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { Bell, X } from 'lucide-react';
-import { getAlarmSoundUrl } from '@/lib/alarm-utils';
+import { getAlarmSoundUrl, playBoostedAudio } from '@/lib/alarm-utils';
 
 interface OrderData {
   id: string;
@@ -40,6 +40,7 @@ export function AdminIncomingOrderAlarm() {
   const pathname = usePathname();
   const [hasUnread, setHasUnread] = useState(false);
   const [alarmSoundUrl, setAlarmSoundUrl] = useState('');
+  const [alarmVolumeBoost, setAlarmVolumeBoost] = useState(350);
   const [isAudioBlocked, setIsAudioBlocked] = useState(false);
   const alarmAudioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -80,6 +81,9 @@ export function AdminIncomingOrderAlarm() {
         const leadTime = data.pickupAlarmLeadTime ?? 30;
         if (data.alarmSoundUrl !== undefined) {
           setAlarmSoundUrl(data.alarmSoundUrl || '');
+        }
+        if (data.alarmVolumeBoost !== undefined) {
+          setAlarmVolumeBoost(data.alarmVolumeBoost);
         }
         console.log('[BG ALARM] Total orders loaded:', activeOrders.length, 'leadTime:', leadTime);
 
@@ -133,14 +137,15 @@ export function AdminIncomingOrderAlarm() {
 
     if (!alarmAudioRef.current) {
       const audio = new Audio(soundUrl);
+      audio.crossOrigin = 'anonymous';
       audio.loop = true;
       alarmAudioRef.current = audio;
     } else if (alarmAudioRef.current.src !== soundUrl) {
       alarmAudioRef.current.src = soundUrl;
     }
 
-    console.log('[BG ALARM] Attempting to play looping alarm sound...');
-    alarmAudioRef.current.play()
+    console.log('[BG ALARM] Attempting to play looping alarm sound (Speaker Pecah Boost)...');
+    playBoostedAudio(alarmAudioRef.current, alarmVolumeBoost)
       .then(() => {
         console.log('[BG ALARM] Playback succeeded');
         setIsAudioBlocked(false);
@@ -155,7 +160,7 @@ export function AdminIncomingOrderAlarm() {
         alarmAudioRef.current.pause();
       }
     };
-  }, [hasUnread, isCashierPage, alarmSoundUrl]);
+  }, [hasUnread, isCashierPage, alarmSoundUrl, alarmVolumeBoost]);
 
   // If there are unread orders and audio is blocked, show a global notification badge/banner
   if (isCashierPage || !hasUnread) return null;

@@ -103,8 +103,9 @@ export async function GET() {
     const settings = await prisma.storeSettings.findFirst();
     const pickupAlarmLeadTime = settings?.pickupAlarmLeadTime ?? 30;
     const alarmSoundUrl = settings?.alarmSoundUrl ?? '';
+    const alarmVolumeBoost = settings?.alarmVolumeBoost ?? 350;
 
-    return NextResponse.json({ orders: mappedOrders, pickupAlarmLeadTime, alarmSoundUrl });
+    return NextResponse.json({ orders: mappedOrders, pickupAlarmLeadTime, alarmSoundUrl, alarmVolumeBoost });
   } catch (error) {
     console.error('Cashier orders polling error:', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
