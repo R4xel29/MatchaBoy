@@ -34,6 +34,7 @@ import { UrlPagination } from '@/components/ui/UrlPagination';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
 import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 import { formatOrderCardModifiers } from '@/lib/receipt-modifiers';
+import { getAlarmSoundUrl } from '@/lib/alarm-utils';
 
 interface OrderItem {
   id: string;
@@ -79,6 +80,7 @@ interface Props {
   totalOrders?: number;
   pageSize?: number;
   isLoading?: boolean;
+  alarmSoundUrl?: string;
 }
 
 export default function AdminOrdersClient({
@@ -88,6 +90,7 @@ export default function AdminOrdersClient({
   totalOrders = 0,
   pageSize = 15,
   isLoading = false,
+  alarmSoundUrl = '',
 }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -145,11 +148,11 @@ export default function AdminOrdersClient({
   useEffect(() => {
     // Sound notification when new orders arrive
     if (orders.length > prevOrdersCount.current) {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      const audio = new Audio(getAlarmSoundUrl(alarmSoundUrl));
       audio.play().catch((e) => console.log('Audio play blocked by browser:', e));
     }
     prevOrdersCount.current = orders.length;
-  }, [orders.length]);
+  }, [orders.length, alarmSoundUrl]);
 
   // Order Counts for Quick Filters
   const counts = useMemo(() => {

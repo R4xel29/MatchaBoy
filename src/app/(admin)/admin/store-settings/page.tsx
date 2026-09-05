@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Save, Loader2, Store, MapPin, LocateFixed, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { Clock, Save, Loader2, Store, MapPin, LocateFixed, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Volume2, Play, Square, UploadCloud, RotateCcw, Check, Sparkles } from 'lucide-react';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { getAlarmSoundUrl } from '@/lib/alarm-utils';
 
 export default function StoreSettingsPage() {
   const [openTime, setOpenTime] = useState('08:00');
@@ -13,6 +14,12 @@ export default function StoreSettingsPage() {
   const [pickupSlotInterval, setPickupSlotInterval] = useState(5);
   const [cancellationTimeLimit, setCancellationTimeLimit] = useState(15);
   const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(30);
+  const [alarmSoundUrl, setAlarmSoundUrl] = useState('');
+  const [isUploadingAlarm, setIsUploadingAlarm] = useState(false);
+  const [isPlayingPreview, setIsPlayingPreview] = useState(false);
+  const [uploadAlarmError, setUploadAlarmError] = useState<string | null>(null);
+  const [uploadAlarmSuccess, setUploadAlarmSuccess] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const [deliveryFeePerKm, setDeliveryFeePerKm] = useState(2000);
   const [maxDeliveryDistance, setMaxDeliveryDistance] = useState(10);
   const [storeName, setStoreName] = useState('Arus HQ');
@@ -205,6 +212,7 @@ export default function StoreSettingsPage() {
         if (d.whatsappNumber !== undefined) setWhatsappNumber(d.whatsappNumber);
         if (d.whatsappMessage !== undefined) setWhatsappMessage(d.whatsappMessage);
         if (d.pickupAlarmLeadTime !== undefined) setPickupAlarmLeadTime(d.pickupAlarmLeadTime);
+        if (d.alarmSoundUrl !== undefined) setAlarmSoundUrl(d.alarmSoundUrl || '');
         if (d.spmbStartTime) setSpmbStartTime(d.spmbStartTime);
         if (d.spmbEndTime) setSpmbEndTime(d.spmbEndTime);
         if (d.spmbCloseTime) setSpmbCloseTime(d.spmbCloseTime);
@@ -291,6 +299,103 @@ export default function StoreSettingsPage() {
     }
   };
 
+  // Audio preview cleanup
+  useEffect(() => {
+    return () => {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleTogglePreview = () => {
+    if (isPlayingPreview) {
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+        previewAudioRef.current.currentTime = 0;
+      }
+      setIsPlayingPreview(false);
+      return;
+    }
+
+    const effectiveUrl = getAlarmSoundUrl(alarmSoundUrl);
+
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
+
+    const audio = new Audio(effectiveUrl);
+    previewAudioRef.current = audio;
+    setIsPlayingPreview(true);
+
+    audio.play().catch(() => {
+      setIsPlayingPreview(false);
+    });
+
+    audio.onended = () => {
+      setIsPlayingPreview(false);
+    };
+  };
+
+  const handleAlarmUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadAlarmError(null);
+    setUploadAlarmSuccess(null);
+
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadAlarmError('Ukuran file maksimal 5MB!');
+      return;
+    }
+
+    setIsUploadingAlarm(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/admin/store-settings/upload-alarm', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal mengupload file audio');
+      }
+
+      setAlarmSoundUrl(data.url);
+      setUploadAlarmSuccess('Audio alarm kustom berhasil diupload! Klik Simpan Pengaturan di bawah untuk menerapkan.');
+
+      // Auto preview
+      if (previewAudioRef.current) {
+        previewAudioRef.current.pause();
+      }
+      const audio = new Audio(data.url);
+      previewAudioRef.current = audio;
+      setIsPlayingPreview(true);
+      audio.play().catch(() => setIsPlayingPreview(false));
+      audio.onended = () => setIsPlayingPreview(false);
+    } catch (err: any) {
+      setUploadAlarmError(err.message || 'Gagal mengupload audio alarm');
+    } finally {
+      setIsUploadingAlarm(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleResetAlarmToDefault = () => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current.currentTime = 0;
+    }
+    setIsPlayingPreview(false);
+    setAlarmSoundUrl('');
+    setUploadAlarmSuccess('Kembali ke nada alarm bawaan. Klik Simpan Pengaturan untuk menerapkan.');
+    setUploadAlarmError(null);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -314,6 +419,7 @@ export default function StoreSettingsPage() {
           whatsappNumber,
           whatsappMessage,
           pickupAlarmLeadTime,
+          alarmSoundUrl,
           spmbStartTime,
           spmbEndTime,
           spmbCloseTime,
@@ -668,6 +774,113 @@ export default function StoreSettingsPage() {
                 className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm font-medium focus:outline-none focus:border-brand-500" />
               <p className="text-xs text-muted-foreground mt-2">
                 Alarm suara akan berdering di dashboard kasir pada rentang waktu ini sebelum jadwal pengambilan pesanan oleh pelanggan.
+              </p>
+            </div>
+
+            {/* Suara Alarm Pesanan Masuk Kustom */}
+            <div className="p-4 rounded-2xl border border-orange-200/70 dark:border-orange-900/30 bg-gradient-to-br from-orange-50/60 via-amber-50/30 to-background dark:from-orange-950/20 dark:via-amber-950/10 dark:to-background space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-900/40 text-orange-600 flex items-center justify-center shrink-0">
+                    <Volume2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-foreground">Suara Alarm Pesanan Masuk</h4>
+                    <p className="text-xs text-muted-foreground">Pilih atau unggah file rekaman suara alarm kasir & admin</p>
+                  </div>
+                </div>
+                <div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                    alarmSoundUrl 
+                      ? 'bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border border-amber-300/50' 
+                      : 'bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300'
+                  }`}>
+                    {alarmSoundUrl ? (
+                      <>
+                        <Sparkles className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                        Suara Kustom Aktif
+                      </>
+                    ) : (
+                      'Suara Bawaan (Default)'
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              {/* Action buttons & preview */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {/* Tombol Preview Suara */}
+                <button
+                  type="button"
+                  onClick={handleTogglePreview}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold border border-orange-200 dark:border-orange-800/50 bg-white dark:bg-card hover:bg-orange-50 dark:hover:bg-orange-950/30 text-orange-700 dark:text-orange-400 transition-colors shadow-xs cursor-pointer"
+                >
+                  {isPlayingPreview ? (
+                    <>
+                      <Square className="w-3.5 h-3.5 fill-current text-orange-600" />
+                      Hentikan Suara
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-3.5 h-3.5 fill-current text-orange-600" />
+                      Dengarkan Suara ({alarmSoundUrl ? 'Kustom' : 'Bawaan'})
+                    </>
+                  )}
+                </button>
+
+                {/* Tombol Unggah Rekaman */}
+                <label className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-xs cursor-pointer transition-all ${
+                  isUploadingAlarm ? 'opacity-70 pointer-events-none' : ''
+                }`}>
+                  {isUploadingAlarm ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Mengunggah...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      Unggah Rekaman Suara (.mp3 / .wav)
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="audio/*,.mp3,.wav,.ogg,.m4a"
+                    className="hidden"
+                    onChange={handleAlarmUpload}
+                    disabled={isUploadingAlarm}
+                  />
+                </label>
+
+                {/* Tombol Reset ke Default */}
+                {alarmSoundUrl && (
+                  <button
+                    type="button"
+                    onClick={handleResetAlarmToDefault}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                    title="Kembalikan ke nada bawaan"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reset ke Default
+                  </button>
+                )}
+              </div>
+
+              {uploadAlarmSuccess && (
+                <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-400 font-medium bg-emerald-50 dark:bg-emerald-950/30 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-900/30">
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span>{uploadAlarmSuccess}</span>
+                </div>
+              )}
+
+              {uploadAlarmError && (
+                <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                  {uploadAlarmError}
+                </p>
+              )}
+
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                Format yang didukung: MP3, WAV, OGG (maksimal 5MB). Suara ini akan diputar berulang saat pesanan baru masuk di kasir dan panel admin Arum Seduh.
               </p>
             </div>
           </div>

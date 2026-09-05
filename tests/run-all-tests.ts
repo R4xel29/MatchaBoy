@@ -13,6 +13,7 @@ import './bundle-optimization.test';
 import './shimmer-skeleton.test';
 import './brand-integrity.test';
 import './receipt-modifiers.test';
+import './alarm-audio.test';
 import './tier2-boundary.test';
 import './tier3-integration.test';
 import './tier4-workflows.test';

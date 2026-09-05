@@ -37,7 +37,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
     ];
   }
 
-  const [totalOrders, orders] = await Promise.all([
+  const [totalOrders, orders, storeSettings] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
       where,
@@ -46,6 +46,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
       take: pageSize,
       include: { items: { include: { product: true } } },
     }),
+    prisma.storeSettings.findFirst({ select: { alarmSoundUrl: true } }),
   ]);
 
   const totalPages = Math.ceil(totalOrders / pageSize) || 1;
@@ -96,6 +97,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps) {
         totalPages={totalPages}
         totalOrders={totalOrders}
         pageSize={pageSize}
+        alarmSoundUrl={storeSettings?.alarmSoundUrl || ''}
       />
     </div>
   );

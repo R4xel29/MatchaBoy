@@ -50,6 +50,7 @@ import { printThermalReceipt, ThermalPrintOrder } from '@/lib/thermal-printer';
 import { formatOrderCardModifiers } from '@/lib/receipt-modifiers';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getAlarmSoundUrl } from '@/lib/alarm-utils';
 
 interface OrderItem {
   id: string;
@@ -90,6 +91,7 @@ interface Props {
   storeLat: number;
   storeLng: number;
   initialPickupAlarmLeadTime: number;
+  initialAlarmSoundUrl?: string;
 }
 
 const ORDER_TYPE_LABELS: Record<string, string> = {
@@ -161,7 +163,7 @@ const shouldTriggerAlarm = (order: OrderData, leadTimeMin: number) => {
   }
 };
 
-export default function CashierOrdersClient({ initialOrders, storeLat, storeLng, initialPickupAlarmLeadTime }: Props) {
+export default function CashierOrdersClient({ initialOrders, storeLat, storeLng, initialPickupAlarmLeadTime, initialAlarmSoundUrl = '' }: Props) {
   const router = useRouter();
   const { showToast } = useToast();
 
@@ -172,6 +174,7 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
   const [sourceFilter, setSourceFilter] = useState('ALL');
   const [tableFilter, setTableFilter] = useState('ALL');
   const [pickupAlarmLeadTime, setPickupAlarmLeadTime] = useState(initialPickupAlarmLeadTime);
+  const [alarmSoundUrl, setAlarmSoundUrl] = useState(initialAlarmSoundUrl);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUpdating, setIsUpdating] = useState<string | null>(null);
 
@@ -302,15 +305,19 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
 
   const hasUnreadOrders = unreadPendingOrders.length > 0;
 
-  // Continuous Audio Alarm playback (Mixkit continuous ring)
+  // Continuous Audio Alarm playback (Dynamic / Custom or Mixkit default ring)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    const soundUrl = getAlarmSoundUrl(alarmSoundUrl);
+
     if (hasUnreadOrders && !isAudioMuted) {
       if (!alarmAudioRef.current) {
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        const audio = new Audio(soundUrl);
         audio.loop = true;
         alarmAudioRef.current = audio;
+      } else if (alarmAudioRef.current.src !== soundUrl) {
+        alarmAudioRef.current.src = soundUrl;
       }
 
       alarmAudioRef.current.play()
@@ -331,14 +338,17 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
         alarmAudioRef.current.pause();
       }
     };
-  }, [hasUnreadOrders, isAudioMuted]);
+  }, [hasUnreadOrders, isAudioMuted, alarmSoundUrl]);
 
   // Unmute / enable audio user gesture
   const handleEnableAudio = () => {
+    const soundUrl = getAlarmSoundUrl(alarmSoundUrl);
     if (!alarmAudioRef.current) {
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+      const audio = new Audio(soundUrl);
       audio.loop = true;
       alarmAudioRef.current = audio;
+    } else if (alarmAudioRef.current.src !== soundUrl) {
+      alarmAudioRef.current.src = soundUrl;
     }
     alarmAudioRef.current.play()
       .then(() => {
@@ -370,6 +380,9 @@ export default function CashierOrdersClient({ initialOrders, storeLat, storeLng,
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.alarmSoundUrl !== undefined) {
+          setAlarmSoundUrl(data.alarmSoundUrl || '');
+        }
         if (data.orders) {
           const incomingOrders: OrderData[] = data.orders;
           setOrders(incomingOrders);

@@ -55,6 +55,7 @@ import {
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
+import { getAlarmSoundUrl } from '@/lib/alarm-utils';
 
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -591,12 +592,16 @@ export function AdminSidebar({
       const res = await fetch('/api/cashier/orders/pending-count');
       const data = await res.json();
       const newCount = data.count || 0;
+      const customAlarmUrl = data.alarmSoundUrl || '';
 
       // If new order arrived while NOT on the orders page, play alarm chime
       if (newCount > prevPendingCountRef.current && prevPendingCountRef.current !== 0 && pathname !== '/admin/cashier/orders') {
         try {
+          const soundUrl = getAlarmSoundUrl(customAlarmUrl);
           if (!globalAlarmAudioRef.current) {
-            globalAlarmAudioRef.current = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            globalAlarmAudioRef.current = new Audio(soundUrl);
+          } else if (globalAlarmAudioRef.current.src !== soundUrl) {
+            globalAlarmAudioRef.current.src = soundUrl;
           }
           globalAlarmAudioRef.current.play().catch(() => {});
         } catch {}
