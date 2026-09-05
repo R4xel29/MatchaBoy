@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import {
   X,
   Pin,
@@ -8,17 +8,23 @@ import {
   Copy,
   ChefHat,
   TrendingUp,
-  Percent,
   Coins,
   Package,
-  CheckCircle2,
   AlertTriangle,
   Flame,
-  ArrowRight,
-  ExternalLink,
+  RefreshCw,
+  Clock,
+  ArrowUpRight,
+  ArrowDownRight,
+  Sparkles,
 } from 'lucide-react';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
-import type { ProductItem, IngredientItem, ModifiersData } from './types';
+import type {
+  ProductItem,
+  IngredientItem,
+  ModifiersData,
+  ProductRealtimeStats,
+} from './types';
 
 interface ProductInspectorDrawerProps {
   product: ProductItem;
@@ -33,6 +39,21 @@ interface ProductInspectorDrawerProps {
   onToggleAvailability: (product: ProductItem) => void;
 }
 
+function formatTimeAgo(isoString: string): string {
+  try {
+    const diffMs = Date.now() - new Date(isoString).getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) return 'Baru saja';
+    if (diffMinutes < 60) return `${diffMinutes} mnt lalu`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours} jam lalu`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} hari lalu`;
+  } catch {
+    return 'Baru saja';
+  }
+}
+
 export function ProductInspectorDrawer({
   product,
   ingredients,
@@ -45,6 +66,57 @@ export function ProductInspectorDrawer({
   onDuplicate,
   onToggleAvailability,
 }: ProductInspectorDrawerProps) {
+  // Realtime Stats State
+  const [stats, setStats] = useState<ProductRealtimeStats | null>(null);
+  const [loadingStats, setLoadingStats] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [lastFetchTime, setLastFetchTime] = useState<string>('');
+
+  // Fetch realtime statistics from backend
+  const fetchStats = useCallback(
+    async (showRefreshing = false) => {
+      if (!product?.id) return;
+      if (showRefreshing) setIsRefreshing(true);
+      try {
+        const res = await fetch(`/api/admin/products/${product.id}/stats`, {
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const data: ProductRealtimeStats = await res.json();
+          setStats(data);
+          const d = new Date(data.updatedAt);
+          setLastFetchTime(
+            d.toLocaleTimeString('id-ID', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
+            })
+          );
+        }
+      } catch (err) {
+        console.error('Error fetching realtime stats for inspector:', err);
+      } finally {
+        setLoadingStats(false);
+        setIsRefreshing(false);
+      }
+    },
+    [product?.id]
+  );
+
+  // Fetch on product change
+  useEffect(() => {
+    setLoadingStats(true);
+    fetchStats(false);
+  }, [fetchStats]);
+
+  // Periodic polling for realtime updates (every 15s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchStats(false);
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchStats]);
+
   // Parse modifiers
   const modifiers: ModifiersData = useMemo(() => {
     if (!product.modifiers) return {};
@@ -107,39 +179,48 @@ export function ProductInspectorDrawer({
   const isSoldOut = product.badge === 'sold-out';
   const isArchived = product.badge === 'archived';
 
-  // Deterministic simulated sales data based on product name/id length
-  const sparklineBars = useMemo(() => {
-    const seed = (product.name.charCodeAt(0) || 10) + (product.price % 7);
-    const days = [
-      { label: 'Sen', val: 35 + (seed * 3) % 25, height: 'h-6' },
-      { label: 'Sel', val: 42 + (seed * 4) % 20, height: 'h-7' },
-      { label: 'Rab', val: 38 + (seed * 2) % 30, height: 'h-6' },
-      { label: 'Kam', val: 55 + (seed * 5) % 25, height: 'h-9' },
-      { label: 'Jum', val: 68 + (seed * 3) % 20, height: 'h-11' },
-      { label: 'Sab', val: 78 + (seed * 4) % 22, height: 'h-12' },
-      { label: 'Min', val: 64 + (seed * 2) % 25, height: 'h-10' },
-    ];
-    const totalVolume = days.reduce((acc, d) => acc + d.val, 0);
-    const totalEstimatedSales = totalVolume * currentPrice;
-    return { days, totalVolume, totalEstimatedSales };
-  }, [product, currentPrice]);
+  // Realtime 7-day sparkline bar scaling
+  const maxDayQty = useMemo(() => {
+    if (!stats?.last7Days?.days) return 1;
+    return Math.max(...stats.last7Days.days.map((d) => d.qty), 1);
+  }, [stats]);
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-elevated p-5 sm:p-6 space-y-5 relative overflow-hidden text-left transition-all">
-      {/* Header */}
+      {/* Header with Live Realtime Status */}
       <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
-            Quick Inspector Terpilih
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500" />
           </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+              Quick Inspector
+            </span>
+            <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-orange-100 text-orange-800 tracking-wider">
+              REALTIME
+            </span>
+          </div>
         </div>
+
         <div className="flex items-center gap-1">
+          {/* Manual Refresh Button */}
+          <button
+            type="button"
+            onClick={() => fetchStats(true)}
+            disabled={isRefreshing}
+            className="p-1.5 rounded-xl text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-50 cursor-pointer"
+            title={lastFetchTime ? `Diperbarui: ${lastFetchTime}. Klik untuk segarkan` : 'Segarkan Data'}
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-orange-500' : ''}`} />
+          </button>
+
           {onTogglePin && (
             <button
               type="button"
               onClick={onTogglePin}
-              className={`p-1.5 rounded-xl transition-colors ${
+              className={`p-1.5 rounded-xl transition-colors cursor-pointer ${
                 isPinned
                   ? 'bg-orange-100 text-orange-700'
                   : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'
@@ -149,10 +230,11 @@ export function ProductInspectorDrawer({
               <Pin className="w-4 h-4" />
             </button>
           )}
+
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
             title="Tutup Inspector"
           >
             <X className="w-4 h-4" />
@@ -203,7 +285,7 @@ export function ProductInspectorDrawer({
         <button
           type="button"
           onClick={() => onEdit(product)}
-          className="p-2.5 rounded-xl bg-slate-900 text-white hover:bg-orange-500 transition-colors shadow-xs"
+          className="p-2.5 rounded-xl bg-slate-900 text-white hover:bg-orange-500 transition-colors shadow-xs cursor-pointer"
           title="Edit Penuh Produk"
         >
           <Edit2 className="w-4 h-4" />
@@ -233,8 +315,11 @@ export function ProductInspectorDrawer({
 
         <button
           type="button"
-          onClick={() => onToggleAvailability(product)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500/20 ${
+          onClick={async () => {
+            await onToggleAvailability(product);
+            setTimeout(() => fetchStats(false), 500);
+          }}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500/20 cursor-pointer ${
             !isSoldOut && !isArchived ? 'bg-emerald-500' : 'bg-slate-300'
           }`}
           title={!isSoldOut ? 'Ubah ke Habis' : 'Ubah ke Tersedia'}
@@ -247,42 +332,161 @@ export function ProductInspectorDrawer({
         </button>
       </div>
 
-      {/* Mini Sales Sparkline (7 Hari Terakhir) */}
-      <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-200/60 space-y-2">
+      {/* Realtime Sales & Performance (7 Hari Terakhir & Hari Ini) */}
+      <div className="bg-slate-50/90 rounded-2xl p-4 border border-slate-200/60 space-y-3">
         <div className="flex items-center justify-between text-xs">
-          <span className="font-bold text-slate-700 flex items-center gap-1.5">
+          <span className="font-bold text-slate-800 flex items-center gap-1.5">
             <TrendingUp className="w-3.5 h-3.5 text-orange-500" />
-            Performa 7 Hari Terakhir
+            Penjualan 7 Hari Terakhir
           </span>
-          <span className="font-extrabold text-emerald-600">+14.8% volume</span>
+
+          {loadingStats && !stats ? (
+            <span className="w-16 h-4 rounded bg-slate-200 animate-pulse" />
+          ) : stats && stats.last7Days.growthPercent !== null ? (
+            <span
+              className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                stats.last7Days.growthPercent > 0
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : stats.last7Days.growthPercent < 0
+                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                  : 'bg-slate-100 text-slate-700 border-slate-200'
+              }`}
+            >
+              {stats.last7Days.growthPercent > 0 ? (
+                <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+              ) : stats.last7Days.growthPercent < 0 ? (
+                <ArrowDownRight className="w-3 h-3 text-rose-600" />
+              ) : null}
+              {stats.last7Days.growthPercent > 0
+                ? `+${stats.last7Days.growthPercent}%`
+                : `${stats.last7Days.growthPercent}%`}{' '}
+              volume
+            </span>
+          ) : (
+            <span className="text-[10px] text-slate-400 font-semibold">Realtime</span>
+          )}
         </div>
+
         <div className="flex items-baseline justify-between">
           <span className="text-xl font-black text-slate-900">
-            {sparklineBars.totalVolume} Porsi Terjual
+            {loadingStats && !stats
+              ? '...'
+              : `${stats?.last7Days.totalQty ?? 0} Porsi Terjual`}
           </span>
           <span className="text-[11px] text-slate-500 font-semibold">
-            Est. {formatRupiah(sparklineBars.totalEstimatedSales)}
+            {loadingStats && !stats
+              ? 'Memuat...'
+              : `Omset ${formatRupiah(stats?.last7Days.totalRevenue ?? 0)}`}
           </span>
         </div>
 
-        {/* Sparkline Bar Chart */}
-        <div className="flex items-end gap-1.5 h-12 pt-2">
-          {sparklineBars.days.map((d, i) => (
-            <div
-              key={i}
-              className={`flex-1 ${d.height} rounded-t transition-all ${
-                i >= 4 ? 'bg-orange-500 hover:bg-orange-600' : 'bg-orange-200 hover:bg-orange-400'
-              }`}
-              title={`${d.label}: ~${d.val} porsi`}
-            />
+        {/* Realtime Sparkline Bar Chart */}
+        <div className="flex items-end gap-1.5 h-14 pt-2">
+          {loadingStats && !stats
+            ? Array.from({ length: 7 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex-1 bg-slate-200 rounded-t animate-pulse"
+                  style={{ height: `${20 + i * 10}%` }}
+                />
+              ))
+            : stats?.last7Days.days.map((d, i) => {
+                const heightPercent =
+                  d.qty === 0
+                    ? 14
+                    : Math.max(18, Math.min(100, Math.round((d.qty / maxDayQty) * 100)));
+                return (
+                  <div
+                    key={i}
+                    className={`flex-1 rounded-t transition-all relative group cursor-pointer ${
+                      d.isToday
+                        ? 'bg-gradient-to-t from-orange-500 to-amber-400 shadow-xs'
+                        : d.qty > 0
+                        ? 'bg-orange-300 hover:bg-orange-400'
+                        : 'bg-slate-200 hover:bg-slate-300'
+                    }`}
+                    style={{ height: `${heightPercent}%` }}
+                    title={`${d.dayLabel} (${d.date}): ${d.qty} porsi — ${formatRupiah(
+                      d.revenue
+                    )}${d.isToday ? ' (Hari Ini)' : ''}`}
+                  />
+                );
+              })}
+        </div>
+
+        <div className="flex justify-between text-[9px] text-slate-400 font-bold uppercase pt-0.5">
+          {(stats?.last7Days.days || [
+            { dayLabel: 'Sen' },
+            { dayLabel: 'Sel' },
+            { dayLabel: 'Rab' },
+            { dayLabel: 'Kam' },
+            { dayLabel: 'Jum' },
+            { dayLabel: 'Sab' },
+            { dayLabel: 'Min' },
+          ]).map((d, i) => (
+            <span key={i} className={(d as any).isToday ? 'text-orange-600 font-extrabold' : ''}>
+              {d.dayLabel}
+            </span>
           ))}
         </div>
-        <div className="flex justify-between text-[9px] text-slate-400 font-bold uppercase pt-1">
-          {sparklineBars.days.map((d, i) => (
-            <span key={i}>{d.label}</span>
-          ))}
+
+        {/* Realtime Today's Pulse */}
+        <div className="flex items-center justify-between text-[11px] pt-2 border-t border-slate-200/60 font-medium">
+          <span className="text-slate-500 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-orange-500" />
+            Hari ini:
+          </span>
+          <span className="font-bold text-slate-800">
+            {stats ? `${stats.today.qty} porsi (${formatRupiah(stats.today.revenue)})` : '...'}
+          </span>
         </div>
       </div>
+
+      {/* Realtime Inventory Portion Capacity (Kapasitas Sisa Porsi dari Bahan Baku) */}
+      {stats?.inventory.hasRecipe && (
+        <div
+          className={`p-3.5 rounded-2xl border ${
+            (stats.inventory.maxPortions ?? 0) === 0
+              ? 'bg-rose-50/90 border-rose-200 text-rose-950'
+              : (stats.inventory.maxPortions ?? 0) < 10
+              ? 'bg-amber-50/90 border-amber-200 text-amber-950'
+              : 'bg-orange-50/70 border-orange-200/70 text-orange-950'
+          } space-y-1.5 transition-all`}
+        >
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold flex items-center gap-1.5 text-slate-800">
+              <Package className="w-3.5 h-3.5 text-orange-600" />
+              Estimasi Kapasitas Saji
+            </span>
+            <span
+              className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                (stats.inventory.maxPortions ?? 0) === 0
+                  ? 'bg-rose-100 text-rose-800'
+                  : (stats.inventory.maxPortions ?? 0) < 10
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}
+            >
+              {(stats.inventory.maxPortions ?? 0) === 0
+                ? 'Stok Kosong'
+                : (stats.inventory.maxPortions ?? 0) < 10
+                ? 'Stok Menipis'
+                : 'Stok Cukup'}
+            </span>
+          </div>
+
+          <div className="flex items-baseline justify-between">
+            <span className="text-lg font-black tracking-tight text-slate-900">
+              ~{stats.inventory.maxPortions ?? 0} Porsi
+            </span>
+            {stats.inventory.bottleneck && (
+              <span className="text-[11px] text-slate-600">
+                Pembatas: <strong className="text-slate-800">{stats.inventory.bottleneck.name}</strong> ({stats.inventory.bottleneck.stock} {stats.inventory.bottleneck.unit})
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Live Cost Margin & Structure */}
       <div className="space-y-2.5">
@@ -355,11 +559,11 @@ export function ProductInspectorDrawer({
         </div>
       </div>
 
-      {/* Breakdown Komposisi Resep Bahan */}
+      {/* Breakdown Komposisi Resep Bahan & Realtime Ingredient Stock */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-            Resep Bahan Baku
+            Resep & Stok Bahan Baku
           </span>
           <button
             type="button"
@@ -372,22 +576,49 @@ export function ProductInspectorDrawer({
         </div>
 
         {product.productIngredients && product.productIngredients.length > 0 ? (
-          <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
             {product.productIngredients.map((r, idx) => {
               const ing = r.ingredient || ingredients.find((i) => i.id === r.ingredientId);
+              const realIng = stats?.inventory.ingredients.find((item) => item.id === r.ingredientId);
+              const stock = realIng ? realIng.stock : ing?.stock ?? 0;
+              const unit = ing?.unit || 'unit';
+              const possiblePortions = realIng?.possiblePortions;
+
               return (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 text-xs"
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2 h-2 rounded-full bg-orange-400 shrink-0" />
-                    <span className="font-semibold text-slate-700 truncate">
-                      {ing?.name || 'Bahan Baku'}
-                    </span>
+                  <div className="min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          realIng?.isEmpty
+                            ? 'bg-rose-500'
+                            : realIng?.isLow
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        }`}
+                      />
+                      <span className="font-bold text-slate-800 truncate">
+                        {ing?.name || 'Bahan Baku'}
+                      </span>
+                      {ing?.isPackaging && (
+                        <span className="text-[9px] font-semibold bg-slate-200 text-slate-600 px-1 rounded">
+                          Kemasan
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2">
+                      <span>Stok riil: <strong className="text-slate-700">{stock} {unit}</strong></span>
+                      {possiblePortions !== undefined && (
+                        <span>(~{possiblePortions} porsi)</span>
+                      )}
+                    </div>
                   </div>
-                  <span className="text-slate-500 font-mono text-[11px] shrink-0 font-bold">
-                    {r.quantity} {ing?.unit || 'unit'} / porsi
+
+                  <span className="text-slate-700 font-mono text-[11px] shrink-0 font-bold bg-white px-2 py-1 rounded-lg border border-slate-200/60 shadow-2xs">
+                    {r.quantity} {unit}
                   </span>
                 </div>
               );
@@ -398,8 +629,84 @@ export function ProductInspectorDrawer({
             <AlertTriangle className="w-5 h-5 text-amber-500 mx-auto" />
             <p className="text-xs font-bold text-amber-800">Resep Belum Dikonfigurasi</p>
             <p className="text-[11px] text-amber-600">
-              Hubungkan bahan baku untuk menghitung HPP otomatis saat transaksi kasir.
+              Hubungkan bahan baku untuk memantau stok dan menghitung HPP otomatis saat transaksi kasir.
             </p>
+          </div>
+        )}
+      </div>
+
+      {/* Realtime Recent Orders History */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-orange-500" />
+            Pesanan Terkini
+          </span>
+          {stats?.recentOrders && stats.recentOrders.length > 0 && (
+            <span className="text-[10px] font-semibold text-slate-400">
+              {stats.recentOrders.length} Transaksi Terakhir
+            </span>
+          )}
+        </div>
+
+        {loadingStats && !stats ? (
+          <div className="space-y-1.5">
+            <div className="h-10 rounded-xl bg-slate-100 animate-pulse" />
+            <div className="h-10 rounded-xl bg-slate-100 animate-pulse" />
+          </div>
+        ) : stats?.recentOrders && stats.recentOrders.length > 0 ? (
+          <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+            {stats.recentOrders.map((order, idx) => (
+              <div
+                key={order.orderId || idx}
+                className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs hover:bg-orange-50/40 transition-colors"
+              >
+                <div className="min-w-0 flex-1 pr-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-extrabold text-slate-900 truncate">
+                      {order.customerName || 'Pelanggan Kasir'}
+                    </span>
+                    {order.queueNumber && (
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-orange-100 text-orange-800">
+                        #{order.queueNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-slate-400 mt-0.5">
+                    <span>{formatTimeAgo(order.createdAt)}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-slate-500 uppercase">{order.source}</span>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="font-black text-slate-900 block">
+                    {order.qty} cup
+                  </span>
+                  <span
+                    className={`text-[9px] font-extrabold uppercase ${
+                      order.status === 'COMPLETED'
+                        ? 'text-emerald-600'
+                        : order.status === 'PREPARING'
+                        ? 'text-amber-600'
+                        : 'text-orange-600'
+                    }`}
+                  >
+                    {order.status === 'COMPLETED'
+                      ? 'Selesai'
+                      : order.status === 'PREPARING'
+                      ? 'Dimasak'
+                      : order.status === 'READY'
+                      ? 'Siap'
+                      : order.status}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 text-center text-xs text-slate-400">
+            Belum ada pesanan masuk untuk menu ini.
           </div>
         )}
       </div>

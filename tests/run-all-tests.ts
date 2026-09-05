@@ -19,6 +19,7 @@ import './tier3-integration.test';
 import './tier4-workflows.test';
 import './challenger-concurrency-stress';
 import './store-hours.test';
+import './quick-inspector.test';
 
 async function main() {
   console.log('\x1b[33m============================================================\x1b[0m');

@@ -9,6 +9,7 @@ export interface IngredientItem {
   name: string;
   unit: string;
   costPerUnit: number;
+  stock?: number;
   isPackaging?: boolean;
 }
 
@@ -87,4 +88,71 @@ export interface ProductItem {
     quantity: number;
     ingredient?: IngredientItem;
   }[];
+}
+
+export interface DaySalesStat {
+  date: string;
+  dayLabel: string;
+  qty: number;
+  revenue: number;
+  isToday: boolean;
+}
+
+export interface IngredientRealtimeStatus {
+  id: string;
+  name: string;
+  unit: string;
+  stock: number;
+  needed: number;
+  costPerUnit: number;
+  isPackaging: boolean;
+  possiblePortions: number;
+  isLow: boolean;
+  isEmpty: boolean;
+}
+
+export interface RecentOrderItem {
+  orderId: string;
+  queueNumber: string | null;
+  customerName: string;
+  qty: number;
+  price: number;
+  source: string;
+  orderType: string;
+  status: string;
+  createdAt: string;
+}
+
+export interface ProductRealtimeStats {
+  productId: string;
+  today: {
+    qty: number;
+    revenue: number;
+    orderCount: number;
+  };
+  last7Days: {
+    days: DaySalesStat[];
+    totalQty: number;
+    totalRevenue: number;
+    growthPercent: number | null;
+    prev7DayQty: number;
+  };
+  allTime: {
+    totalQty: number;
+    orderCount: number;
+  };
+  inventory: {
+    hasRecipe: boolean;
+    maxPortions: number | null;
+    bottleneck: {
+      name: string;
+      stock: number;
+      unit: string;
+      needed: number;
+      possiblePortions: number;
+    } | null;
+    ingredients: IngredientRealtimeStatus[];
+  };
+  recentOrders: RecentOrderItem[];
+  updatedAt: string;
 }

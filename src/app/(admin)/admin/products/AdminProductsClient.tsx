@@ -84,6 +84,16 @@ export default function AdminProductsClient({
   // Live Inspector Drawer State
   const [inspectedProduct, setInspectedProduct] = useState<ProductItem | null>(null);
   const [isInspectorPinned, setIsInspectorPinned] = useState(false);
+  const inspectorRef = useRef<HTMLDivElement>(null);
+
+  // Smooth scroll to inspector on smaller screens when product is selected
+  useEffect(() => {
+    if (inspectedProduct && typeof window !== 'undefined' && window.innerWidth < 1280) {
+      setTimeout(() => {
+        inspectorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 60);
+    }
+  }, [inspectedProduct?.id]);
 
   // Modals Controller State
   const [showTypePicker, setShowTypePicker] = useState(false);
@@ -368,8 +378,11 @@ export default function AdminProductsClient({
 
   // Toggle Availability
   const handleToggleAvailability = async (product: ProductItem) => {
+    const nextBadge = product.badge === 'sold-out' ? null : 'sold-out';
+    if (inspectedProduct?.id === product.id) {
+      setInspectedProduct((prev) => (prev ? { ...prev, badge: nextBadge } : prev));
+    }
     try {
-      const nextBadge = product.badge === 'sold-out' ? null : 'sold-out';
       await fetch(`/api/admin/products/${product.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -384,17 +397,24 @@ export default function AdminProductsClient({
       router.refresh();
     } catch {
       showToast('Gagal memperbarui status ketersediaan', 'error');
+      if (inspectedProduct?.id === product.id) {
+        setInspectedProduct(product);
+      }
     }
   };
 
   // Toggle Archive
   const handleToggleArchive = async (product: ProductItem) => {
+    const isArchived = product.badge === 'archived';
+    const nextBadge = isArchived ? null : 'archived';
+    if (inspectedProduct?.id === product.id) {
+      setInspectedProduct((prev) => (prev ? { ...prev, badge: nextBadge } : prev));
+    }
     try {
-      const isArchived = product.badge === 'archived';
       await fetch(`/api/admin/products/${product.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ badge: isArchived ? null : 'archived' }),
+        body: JSON.stringify({ badge: nextBadge }),
       });
       showToast(
         isArchived
@@ -405,6 +425,9 @@ export default function AdminProductsClient({
       router.refresh();
     } catch {
       showToast('Gagal mengarsipkan produk', 'error');
+      if (inspectedProduct?.id === product.id) {
+        setInspectedProduct(product);
+      }
     }
   };
 
@@ -903,7 +926,7 @@ export default function AdminProductsClient({
 
             {/* Right Workspace Column: Sticky Live Product Inspector Drawer */}
             {inspectedProduct && (
-              <div className="xl:col-span-4 sticky top-24">
+              <div ref={inspectorRef} className="xl:col-span-4 sticky top-24">
                 <ProductInspectorDrawer
                   product={inspectedProduct}
                   ingredients={ingredients}
