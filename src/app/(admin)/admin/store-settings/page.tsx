@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Clock, Save, Loader2, Store, MapPin, LocateFixed, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Volume2, Play, Square, UploadCloud, RotateCcw, Check, Sparkles, Flame } from 'lucide-react';
+import { Clock, Save, Loader2, Store, MapPin, LocateFixed, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Volume2, Play, Square, UploadCloud, RotateCcw, Check, Sparkles, Flame, Zap } from 'lucide-react';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import type L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -339,6 +339,13 @@ export default function StoreSettingsPage() {
     audio.onended = () => {
       setIsPlayingPreview(false);
     };
+  };
+
+  const handleBoostChange = (newBoost: number) => {
+    setAlarmVolumeBoost(newBoost);
+    if (previewAudioRef.current && isPlayingPreview) {
+      playBoostedAudio(previewAudioRef.current, newBoost).catch(() => {});
+    }
   };
 
   const handleAlarmUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -885,55 +892,121 @@ export default function StoreSettingsPage() {
               )}
 
               {/* Volume Boost / Speaker Pecah Selector */}
-              <div className="pt-2 border-t border-orange-200/60 dark:border-orange-900/30">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-xs font-bold text-foreground">Intensitas Suara & Efek Booster</span>
-                  <span className="text-[11px] font-semibold text-orange-600 dark:text-orange-400">
-                    {alarmVolumeBoost >= 350
-                      ? 'Mode Speaker Pecah (Super Keras & Overdrive)'
+              <div className="pt-3 border-t border-orange-200/60 dark:border-orange-900/30 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Volume2 className="w-4 h-4 text-orange-500" />
+                    <span className="text-xs font-bold text-foreground">Intensitas Suara & Efek Booster</span>
+                  </div>
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400">
+                    {alarmVolumeBoost >= 700
+                      ? `Mode Ekstrem Maksimal (${alarmVolumeBoost}%)`
+                      : alarmVolumeBoost >= 500
+                      ? `Mode Super Pecah (${alarmVolumeBoost}%)`
+                      : alarmVolumeBoost >= 350
+                      ? `Mode Speaker Pecah (${alarmVolumeBoost}%)`
                       : alarmVolumeBoost >= 200
-                      ? 'Mode Keras (200%)'
-                      : 'Mode Normal (100%)'}
+                      ? `Mode Keras (${alarmVolumeBoost}%)`
+                      : `Mode Normal (${alarmVolumeBoost}%)`}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+
+                {/* Preset Buttons */}
+                <div className="grid grid-cols-5 gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setAlarmVolumeBoost(100)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    onClick={() => handleBoostChange(100)}
+                    className={`px-2 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
                       alarmVolumeBoost === 100
                         ? 'border-orange-500 bg-orange-500 text-white shadow-xs'
                         : 'border-border bg-background hover:bg-muted/50 text-foreground'
                     }`}
                   >
-                    100% (Normal)
+                    100%
+                    <span className="block text-[10px] font-normal opacity-80">Normal</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAlarmVolumeBoost(200)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                    onClick={() => handleBoostChange(200)}
+                    className={`px-2 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
                       alarmVolumeBoost === 200
                         ? 'border-orange-500 bg-orange-500 text-white shadow-xs'
                         : 'border-border bg-background hover:bg-muted/50 text-foreground'
                     }`}
                   >
-                    200% (Keras)
+                    200%
+                    <span className="block text-[10px] font-normal opacity-80">Keras</span>
                   </button>
                   <button
                     type="button"
-                    onClick={() => setAlarmVolumeBoost(350)}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                      alarmVolumeBoost >= 350
-                        ? 'border-orange-600 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-sm ring-2 ring-orange-400/30'
+                    onClick={() => handleBoostChange(350)}
+                    className={`px-2 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center flex flex-col items-center justify-center ${
+                      alarmVolumeBoost === 350
+                        ? 'border-orange-600 bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-sm ring-2 ring-orange-400/30'
                         : 'border-border bg-background hover:bg-muted/50 text-foreground'
                     }`}
                   >
-                    <Flame className="w-3.5 h-3.5" />
-                    350% (Speaker Pecah)
+                    <span className="flex items-center gap-0.5">
+                      <Flame className="w-3 h-3" />
+                      350%
+                    </span>
+                    <span className="block text-[10px] font-normal opacity-80">Pecah</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBoostChange(500)}
+                    className={`px-2 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center flex flex-col items-center justify-center ${
+                      alarmVolumeBoost === 500
+                        ? 'border-red-600 bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-sm ring-2 ring-red-400/30'
+                        : 'border-border bg-background hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    <span className="flex items-center gap-0.5">
+                      <Zap className="w-3 h-3" />
+                      500%
+                    </span>
+                    <span className="block text-[10px] font-normal opacity-80">Super</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBoostChange(700)}
+                    className={`px-2 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center flex flex-col items-center justify-center ${
+                      alarmVolumeBoost === 700
+                        ? 'border-red-700 bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 text-white shadow-md ring-2 ring-red-500/40 animate-pulse'
+                        : 'border-border bg-background hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    <span className="flex items-center gap-0.5">
+                      <Zap className="w-3 h-3" />
+                      700%
+                    </span>
+                    <span className="block text-[10px] font-normal opacity-80">Ekstrem</span>
                   </button>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1.5 leading-relaxed">
-                  Mode <b>350% (Speaker Pecah)</b> memanfaatkan Web Audio API Overdrive untuk melipatgandakan volume dan menghasilkan distorsi keras agar alarm tidak terlewat di kasir saat jam ramai.
+
+                {/* Range Slider for granular control */}
+                <div className="bg-muted/40 p-2.5 rounded-xl border border-border/60">
+                  <div className="flex items-center justify-between text-[11px] mb-1.5 font-medium text-muted-foreground">
+                    <span>Slider Penyetel Intensitas Booster</span>
+                    <span className="font-mono font-bold text-orange-600 dark:text-orange-400">{alarmVolumeBoost}%</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-mono text-muted-foreground">100%</span>
+                    <input
+                      type="range"
+                      min="100"
+                      max="700"
+                      step="25"
+                      value={alarmVolumeBoost}
+                      onChange={(e) => handleBoostChange(Number(e.target.value))}
+                      className="w-full h-2 bg-orange-200/60 dark:bg-orange-950/80 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                    />
+                    <span className="text-[10px] font-mono text-muted-foreground">700%</span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Web Audio API Overdrive melipatgandakan amplitudo suara melampaui batas standar browser hingga <b>500% (5x)</b> atau <b>700% (7x)</b> lengkap dengan saturasi distorsi analog tingkat tinggi agar alarm terdengar sangat kencang dan mustahil terlewat saat outlet Arum Seduh sangat ramai.
                 </p>
               </div>
 

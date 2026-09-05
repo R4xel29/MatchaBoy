@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Utilities for incoming order alarm audio in Arum Seduh.
  * Includes Web Audio API overdrive / "speaker pecah" volume booster.
  */
@@ -35,6 +35,7 @@ function makeDistortionCurve(amount: number = 25): Float32Array {
 interface AudioGraph {
   ctx: AudioContext;
   gain: GainNode;
+  filterBass?: BiquadFilterNode;
   filterMid?: BiquadFilterNode;
   distortion?: WaveShaperNode;
 }
@@ -70,7 +71,7 @@ if (typeof window !== 'undefined') {
 
 /**
  * Attaches the Web Audio API booster to an HTMLAudioElement.
- * Boosts volume beyond 100% up to 400%+ with overdrive distortion ("speaker pecah").
+ * Boosts volume beyond 100% up to 500%, 700%+, with overdrive distortion ("speaker pecah").
  */
 export function setupSpeakerPecahBooster(
   audio: HTMLAudioElement,
@@ -89,6 +90,30 @@ export function setupSpeakerPecahBooster(
 
     const gainMultiplier = Math.max(1, (boostPercent || 350) / 100);
 
+    // Dynamic overdrive factors scaling with volume boost level:
+    // 100%: clean
+    // 200%: k=15, mid=4dB, bass=3dB
+    // 350%: k=30, mid=6dB, bass=5dB
+    // 500%: k=55, mid=8dB, bass=7dB (Super Pecah)
+    // 700%+: k=85, mid=11dB, bass=9dB (Ekstrem Speaker Hancur)
+    const distortionAmount =
+      gainMultiplier >= 6.5 ? 85 :
+      gainMultiplier >= 4.5 ? 55 :
+      gainMultiplier >= 3.0 ? 30 :
+      gainMultiplier > 1.5 ? 15 : 0;
+
+    const midGain =
+      gainMultiplier >= 6.5 ? 11 :
+      gainMultiplier >= 4.5 ? 8 :
+      gainMultiplier >= 3.0 ? 6 :
+      gainMultiplier > 1.5 ? 3 : 0;
+
+    const bassGain =
+      gainMultiplier >= 6.5 ? 9 :
+      gainMultiplier >= 4.5 ? 7 :
+      gainMultiplier >= 3.0 ? 5 :
+      gainMultiplier > 1.5 ? 3 : 0;
+
     let graph = audioGraphMap.get(audio);
     if (!graph) {
       const source = ctx.createMediaElementSource(audio);
@@ -100,18 +125,18 @@ export function setupSpeakerPecahBooster(
       filterMid.type = 'peaking';
       filterMid.frequency.value = 2400;
       filterMid.Q.value = 1.2;
-      filterMid.gain.value = gainMultiplier > 1.5 ? 6 : 0;
+      filterMid.gain.value = midGain;
 
       // Bass boost to rattle the speaker
       const filterBass = ctx.createBiquadFilter();
       filterBass.type = 'lowshelf';
       filterBass.frequency.value = 150;
-      filterBass.gain.value = gainMultiplier > 1.5 ? 5 : 0;
+      filterBass.gain.value = bassGain;
 
       // Overdrive wave shaper for crunchy "speaker pecah" distortion
       const distortion = ctx.createWaveShaper();
-      if (gainMultiplier > 1.5) {
-        distortion.curve = makeDistortionCurve(30);
+      if (distortionAmount > 0) {
+        distortion.curve = makeDistortionCurve(distortionAmount);
         distortion.oversample = '2x';
       }
 
@@ -122,15 +147,18 @@ export function setupSpeakerPecahBooster(
       distortion.connect(gain);
       gain.connect(ctx.destination);
 
-      graph = { ctx, gain, filterMid, distortion };
+      graph = { ctx, gain, filterBass, filterMid, distortion };
       audioGraphMap.set(audio, graph);
     } else {
       graph.gain.gain.value = gainMultiplier;
       if (graph.filterMid) {
-        graph.filterMid.gain.value = gainMultiplier > 1.5 ? 6 : 0;
+        graph.filterMid.gain.value = midGain;
+      }
+      if (graph.filterBass) {
+        graph.filterBass.gain.value = bassGain;
       }
       if (graph.distortion) {
-        graph.distortion.curve = gainMultiplier > 1.5 ? makeDistortionCurve(30) : null;
+        graph.distortion.curve = distortionAmount > 0 ? makeDistortionCurve(distortionAmount) : null;
       }
     }
 

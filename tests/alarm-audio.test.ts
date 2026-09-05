@@ -131,4 +131,26 @@ describe('Tier 1.8: Custom Incoming Order Alarm Audio Compliance', () => {
     expect(adminAlarmContent.includes('playBoostedAudio')).toBe(true);
     expect(adminAlarmContent.includes('alarmVolumeBoost')).toBe(true);
   });
+
+  it('T1.8.10: Web Audio booster & settings support extreme 500% and 700% overdrive levels', () => {
+    const utilsPath = path.join(process.cwd(), 'src', 'lib', 'alarm-utils.ts');
+    const utilsContent = fs.readFileSync(utilsPath, 'utf8');
+    expect(utilsContent.includes('500%')).toBe(true);
+    expect(utilsContent.includes('700%')).toBe(true);
+    expect(utilsContent.includes('distortionAmount')).toBe(true);
+
+    const settingsPath = path.join(
+      process.cwd(),
+      'src',
+      'app',
+      '(admin)',
+      'admin',
+      'store-settings',
+      'page.tsx'
+    );
+    const settingsContent = fs.readFileSync(settingsPath, 'utf8');
+    expect(settingsContent.includes('500%')).toBe(true);
+    expect(settingsContent.includes('700%')).toBe(true);
+    expect(settingsContent.includes('handleBoostChange')).toBe(true);
+  });
 });
