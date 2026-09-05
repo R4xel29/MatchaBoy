@@ -86,12 +86,14 @@ export default async function SpmbPage() {
       <SpmbClient
         categories={mappedCategories}
         products={mappedProducts}
-        botNumber={(storeSettings as any)?.botNumber || storeSettings?.adminWaNumbers || ''}
+        openTime={storeSettings?.openTime || '08:00'}
+        closeTime={storeSettings?.closeTime || '21:00'}
         spmbStartTime={(storeSettings as any)?.spmbStartTime || storeSettings?.openTime || '08:00'}
         spmbEndTime={(storeSettings as any)?.spmbEndTime || storeSettings?.closeTime || '22:00'}
         spmbCloseTime={(storeSettings as any)?.spmbCloseTime || storeSettings?.closeTime || '21:30'}
-        operationalDays={(storeSettings as any)?.operationalDays || 'ALL'}
-        disabledDates={(storeSettings as any)?.disabledDates || ''}
+        operationalDays={storeSettings?.operationalDays || '[0,1,2,3,4,5,6]'}
+        disabledDates={storeSettings?.disabledDates || '[]'}
+        customHours={storeSettings?.customHours || '{}'}
         initialTables={tables.map((t: any) => ({
           id: t.id,
           number: t.number.toString(),

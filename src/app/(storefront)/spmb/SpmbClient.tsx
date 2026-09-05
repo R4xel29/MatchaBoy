@@ -22,16 +22,20 @@ import {
   FloorElementVisual,
   type FloorElementData 
 } from '@/app/(admin)/admin/tables/AdminTablesClient';
+import { checkStoreOperationalStatus, type StoreOperationalStatus } from '@/lib/store-hours';
 
 interface SpmbClientProps {
   categories: Category[];
   products: Product[];
-  botNumber: string;
-  spmbStartTime: string;
-  spmbEndTime: string;
-  spmbCloseTime: string;
-  operationalDays: string;
-  disabledDates: string;
+  botNumber?: string;
+  openTime?: string;
+  closeTime?: string;
+  spmbStartTime?: string;
+  spmbEndTime?: string;
+  spmbCloseTime?: string;
+  operationalDays?: string;
+  disabledDates?: string;
+  customHours?: string;
   initialTables?: Array<{ id: string; number: string; capacity?: number; shape?: string; x?: number; y?: number; rotation?: number; status?: string; chairsJson?: string | null }>;
   initialFloorElements?: FloorElementData[];
   packagingStock?: { cupRegular: number; cupJumbo: number };
@@ -41,11 +45,14 @@ export default function SpmbClient({
   categories, 
   products, 
   botNumber,
+  openTime,
+  closeTime,
   spmbStartTime,
   spmbEndTime,
   spmbCloseTime,
   operationalDays,
   disabledDates,
+  customHours,
   initialTables,
   initialFloorElements,
   packagingStock
@@ -80,6 +87,35 @@ export default function SpmbClient({
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
+
+  // Store Operational Hours Status
+  const [isMounted, setIsMounted] = useState(false);
+  const [storeStatus, setStoreStatus] = useState<StoreOperationalStatus | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const evaluateStatus = () => {
+      setStoreStatus(
+        checkStoreOperationalStatus(
+          {
+            openTime,
+            closeTime,
+            spmbStartTime,
+            spmbEndTime,
+            spmbCloseTime,
+            operationalDays,
+            disabledDates,
+            customHours
+          },
+          { isSpmb: true }
+        )
+      );
+    };
+
+    evaluateStatus();
+    const timer = setInterval(evaluateStatus, 30000);
+    return () => clearInterval(timer);
+  }, [openTime, closeTime, spmbStartTime, spmbEndTime, spmbCloseTime, operationalDays, disabledDates, customHours]);
 
   // Form State - Clean 2 payment methods, no phone required for SPMB
   const [name, setName] = useState('');
@@ -353,6 +389,10 @@ export default function SpmbClient({
 
   const handlePreSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (storeStatus && !storeStatus.isOpen) {
+      setErrorMsg(storeStatus.message || 'Kedai Arum Seduh saat ini sedang tutup.');
+      return;
+    }
     if (!validateForm()) return;
     if (cartItems.length === 0) {
       setErrorMsg('Keranjang belanja Anda masih kosong.');
@@ -379,6 +419,10 @@ export default function SpmbClient({
 
   const executeCheckout = async () => {
     setShowConfirmModal(false);
+    if (storeStatus && !storeStatus.isOpen) {
+      setErrorMsg(storeStatus.message || 'Kedai Arum Seduh saat ini sedang tutup.');
+      return;
+    }
     setIsSubmitting(true);
     setErrorMsg('');
 
@@ -518,9 +562,21 @@ export default function SpmbClient({
         <header className="mb-6 bg-white/90 backdrop-blur-md rounded-3xl p-6 sm:p-8 border border-stone-200/80 shadow-[0_4px_24px_rgba(0,0,0,0.03)] text-left">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
             <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 border border-orange-200/80 text-orange-700 text-[11px] font-bold tracking-wide">
-                <UtensilsCrossed className="w-3.5 h-3.5 text-orange-600" />
-                <span>Self-Service Dine-In</span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-50 border border-orange-200/80 text-orange-700 text-[11px] font-bold tracking-wide">
+                  <UtensilsCrossed className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Self-Service Dine-In</span>
+                </div>
+                {isMounted && storeStatus && (
+                  <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border tracking-wide ${
+                    storeStatus.isOpen
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                      : 'bg-amber-50 border-amber-200 text-amber-800'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${storeStatus.isOpen ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    <span>{storeStatus.isOpen ? `Buka • Tutup ${storeStatus.closeTime} WIB` : 'Kedai Tutup'}</span>
+                  </div>
+                )}
               </div>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight text-stone-900 flex items-center gap-2">
                 Arum Seduh
@@ -605,6 +661,30 @@ export default function SpmbClient({
             </div>
           </div>
         </header>
+
+        {/* Store Operational Status Announcement */}
+        {isMounted && storeStatus && !storeStatus.isOpen && (
+          <div className="mb-6 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 rounded-3xl p-5 sm:p-6 flex items-start gap-4 shadow-sm text-stone-800 text-left">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0 shadow-inner">
+              <Clock className="w-6 h-6" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="font-serif font-bold text-base sm:text-lg text-stone-900">Kedai Sedang Tutup</h2>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-200 text-amber-900 uppercase tracking-wider">
+                  Di Luar Jam Operasional
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-stone-600 mt-1 leading-relaxed">
+                {storeStatus.message}
+              </p>
+              <p className="text-[11px] text-amber-800 font-medium mt-2 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                Anda tetap dapat melihat daftar menu. Pemesanan mandiri akan dibuka kembali pada jadwal operasional kedai.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Realtime Active Order Status Card */}
         {activeOrderStatus && (
@@ -1400,15 +1480,32 @@ export default function SpmbClient({
                     </div>
                   )}
 
+                  {isMounted && storeStatus && !storeStatus.isOpen && (
+                    <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-xs text-amber-950 flex items-start gap-2.5 text-left">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-amber-900">Kedai Sedang Tutup</p>
+                        <p className="text-[11px] text-stone-600 mt-0.5 leading-relaxed">
+                          {storeStatus.message}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <motion.button
                     type="submit"
                     whileTap={{ scale: 0.98 }}
-                    disabled={isSubmitting}
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-stone-950 font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
+                    disabled={isSubmitting || (isMounted && storeStatus !== null && !storeStatus.isOpen)}
+                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-orange-500 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-stone-950 font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-orange-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin text-stone-950" /> Memproses Pesanan...
+                      </>
+                    ) : isMounted && storeStatus && !storeStatus.isOpen ? (
+                      <>
+                        <Clock className="w-4 h-4 text-stone-950" />
+                        <span>Kedai Sedang Tutup</span>
                       </>
                     ) : (
                       <>

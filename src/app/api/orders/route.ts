@@ -4,6 +4,7 @@ import { getActivePromo } from '@/lib/utils';
 import { ValidationError, getSafeErrorResponse, logError } from '@/lib/errors';
 import { getNextQueueSequence } from '@/lib/rate-limit-redis';
 import { validateAndCalculateDiscount, applyVoucherUsage } from '@/lib/discount-utils';
+import { checkStoreOperationalStatus } from '@/lib/store-hours';
 
 function generateOrderId(): string {
   const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -115,9 +116,9 @@ export async function POST(req: Request) {
       throw new ValidationError('Metode pembayaran tidak valid');
     }
 
-    // 2. Parallel product lookup & payment settings query
+    // 2. Parallel product lookup, payment settings & store settings query
     const productIds = body.items.map((item: any) => item.productId);
-    const [dbProducts, paymentSettings, packagingIngredients] = await Promise.all([
+    const [dbProducts, paymentSettings, packagingIngredients, storeSettings] = await Promise.all([
       prisma.product.findMany({
         where: { id: { in: productIds } }
       }),
@@ -125,7 +126,16 @@ export async function POST(req: Request) {
       prisma.ingredient.findMany({
         where: { isPackaging: true },
       }),
+      prisma.storeSettings.findFirst(),
     ]);
+
+    // Validate Store Operational Hours for SPMB
+    if (storeSettings) {
+      const operationalStatus = checkStoreOperationalStatus(storeSettings, { isSpmb: true });
+      if (!operationalStatus.isOpen) {
+        throw new ValidationError(operationalStatus.message);
+      }
+    }
 
     let cupRegularStock = 999;
     let cupJumboStock = 999;
