@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { parseItemModifiers, getReceiptModifierLines } from './receipt-modifiers';
 
 /**
  * Menstandarisasi nomor telepon lokal Indonesia atau JID WhatsApp ke format internasional resmi (62...).
@@ -502,7 +503,13 @@ export async function sendAdminNewOrderNotification(orderId: string): Promise<vo
     }
 
     const itemsStr = order.items.map(item => {
-      const modStr = item.modifiers ? ` (${item.modifiers})` : '';
+      const parsed = parseItemModifiers({
+        name: item.product?.name || 'Item',
+        price: item.price,
+        modifiersString: item.modifiers || undefined,
+      });
+      const modLines = getReceiptModifierLines(parsed, true);
+      const modStr = modLines.length > 0 ? '\n' + modLines.map((l) => `    » ${l.label}: ${l.value}`).join('\n') : '';
       return `- ${item.product.name} ${item.qty}x @ Rp ${item.price.toLocaleString('id-ID')}${modStr}`;
     }).join('\n');
 
@@ -724,7 +731,13 @@ export async function sendKitchenNotification(orderId: string): Promise<void> {
       : (order.source === 'SPMB' ? `*SPMB (${order.address || 'Gedung Sekolah'})*` : `*-*`);
 
     const itemsStr = order.items.map(item => {
-      const modStr = item.modifiers ? `\n   └ _${item.modifiers}_` : '';
+      const parsed = parseItemModifiers({
+        name: item.product?.name || 'Item',
+        price: item.price,
+        modifiersString: item.modifiers || undefined,
+      });
+      const modLines = getReceiptModifierLines(parsed, false);
+      const modStr = modLines.length > 0 ? '\n' + modLines.map((l) => `     » ${l.label}: ${l.value}`).join('\n') : '';
       return `• *${item.qty}x ${item.product.name}*${modStr}`;
     }).join('\n');
 

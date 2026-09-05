@@ -143,31 +143,56 @@ export function parseItemModifiers(item: RawModifierItemInput): ParsedItemModifi
         if (!isFood) {
           const parts = token.split(/→|->/).map((p) => p.trim());
           if (parts.length >= 2) {
-            if (!iceLevel) iceLevel = parts[0];
-            if (!sugarLevel) sugarLevel = parts[1];
+            if (!iceLevel) iceLevel = parts[0].replace(/^(?:ice|es)\s*[:=]\s*/i, '').trim();
+            if (!sugarLevel) sugarLevel = parts[1].replace(/^(?:kemanisan|sugar\s*level|level\s*gula|gula|sugar)\s*[:=]\s*/i, '').trim();
           }
         }
         continue;
       }
 
       // Check for Ice
-      if (lower.includes('ice') || lower.includes('dingin') || lower.includes('panas') || lower.includes('hot') || lower.includes('hangat')) {
+      if (
+        lower.includes('ice') ||
+        lower.includes('dingin') ||
+        lower.includes('panas') ||
+        lower.includes('hot') ||
+        lower.includes('hangat') ||
+        lower.startsWith('es ') ||
+        lower === 'es' ||
+        lower.startsWith('ice:') ||
+        lower.startsWith('es:')
+      ) {
         if (!isFood && !iceLevel) {
-          iceLevel = token;
+          iceLevel = token.replace(/^(?:ice|es)\s*[:=]\s*/i, '').trim();
         }
         continue;
       }
 
-      // Check for Sugar
-      if (lower.includes('gula') || lower.includes('sugar') || lower === 'biasa' || lower === 'sedikit' || lower.includes('tanpa gula') || lower.includes('normal (100%)')) {
+      // Check for Sugar / Sweetness / Kemanisan
+      if (
+        lower.includes('gula') ||
+        lower.includes('sugar') ||
+        lower.includes('sweet') ||
+        lower.includes('manis') ||
+        lower === 'biasa' ||
+        lower === 'normal' ||
+        lower === 'sedikit' ||
+        lower === 'lumayan' ||
+        lower === 'less' ||
+        lower.startsWith('less ') ||
+        lower.startsWith('kemanisan') ||
+        lower.startsWith('sugar level') ||
+        lower.startsWith('level gula') ||
+        /\b(?:0|30|50|70|100|120)%\b/.test(lower)
+      ) {
         if (!isFood && !sugarLevel) {
-          sugarLevel = token;
+          sugarLevel = token.replace(/^(?:kemanisan|sugar\s*level|level\s*gula|gula|sugar)\s*[:=]\s*/i, '').trim();
         }
         continue;
       }
 
       // Check for Matcha Level
-      const matchaMatch = lower.match(/(?:matcha\s*)?level\s*(\d+)/i);
+      const matchaMatch = lower.match(/(?:matcha\s*)?(?:level|lvl)\s*[:=]?\s*(\d+)/i);
       if (matchaMatch) {
         if (!isFood && !isCoffeeDrink && (matchaLevel === undefined || matchaLevel === 0)) {
           matchaLevel = parseInt(matchaMatch[1], 10);
@@ -178,32 +203,37 @@ export function parseItemModifiers(item: RawModifierItemInput): ParsedItemModifi
       // Check for Espresso Shot
       if (lower.includes('shot') || lower.includes('espresso')) {
         if (!isFood && !isPureMatcha && !shotName) {
-          shotName = token;
+          shotName = token.replace(/^(?:shot|espresso)\s*[:=]\s*/i, '').trim();
         }
         continue;
       }
 
       // Check for Size
-      if (lower === 'regular' || lower === 'large' || lower === 'medium' || lower === 'small' || lower.includes('upsize')) {
-        if (!size) size = token;
+      if (
+        lower.startsWith('size') ||
+        lower.startsWith('ukuran') ||
+        lower === 'regular' ||
+        lower === 'large' ||
+        lower === 'medium' ||
+        lower === 'small' ||
+        lower.includes('upsize') ||
+        lower.includes('jumbo')
+      ) {
+        if (!size) {
+          size = token.replace(/^(?:size|ukuran)\s*[:=]\s*/i, '').trim();
+        }
         continue;
       }
 
       // Check for Add-on
       if (token.startsWith('+')) {
-        addOns.push({ name: token.replace(/^\+\s*/, '') });
+        addOns.push({ name: token.replace(/^\+\s*/, '').trim() });
         continue;
       }
 
-      // Skip redundant "Level" or defaults if already matched
-      if (isFood) {
-        if (!otherVariants.includes(token)) {
-          otherVariants.push(token);
-        }
-      } else {
-        if (!otherVariants.includes(token)) {
-          otherVariants.push(token);
-        }
+      // Other variants
+      if (!otherVariants.includes(token)) {
+        otherVariants.push(token);
       }
     }
   }
@@ -253,11 +283,11 @@ export function getReceiptModifierLines(
 ): Array<{ label: string; value: string }> {
   const lines: Array<{ label: string; value: string }> = [];
 
-  if (parsed.sugarLevel) {
-    lines.push({ label: 'GULA', value: parsed.sugarLevel.toUpperCase() });
-  }
   if (parsed.iceLevel) {
     lines.push({ label: 'ES', value: parsed.iceLevel.toUpperCase() });
+  }
+  if (parsed.sugarLevel) {
+    lines.push({ label: 'GULA', value: parsed.sugarLevel.toUpperCase() });
   }
   if (parsed.matchaLevel !== undefined && parsed.matchaLevel > 0) {
     lines.push({ label: 'MATCHA', value: `LEVEL ${parsed.matchaLevel}` });
@@ -285,9 +315,14 @@ export function getReceiptModifierLines(
     });
   }
   if (parsed.otherVariants && parsed.otherVariants.length > 0) {
-    lines.push({
-      label: 'VARIAN',
-      value: parsed.otherVariants.join(', ').toUpperCase(),
+    parsed.otherVariants.forEach((v) => {
+      const subTokens = v.split(/,\s*/).map((s) => s.trim()).filter(Boolean);
+      subTokens.forEach((st) => {
+        lines.push({
+          label: 'VARIAN',
+          value: st.toUpperCase(),
+        });
+      });
     });
   }
   if (includePromo && parsed.promoText) {

@@ -1,5 +1,6 @@
 import { prisma } from './prisma';
 import { sendWhatsAppMessage } from './whatsapp-service';
+import { parseItemModifiers, getReceiptModifierLines } from './receipt-modifiers';
 
 /**
  * Mengirimkan nota/struk digital pesanan kepada pelanggan melalui gateway WhatsApp secara asinkron.
@@ -60,25 +61,14 @@ export async function sendDigitalReceipt(orderId: string): Promise<void> {
     order.items.forEach((item) => {
       let modDetails = '';
       if (item.modifiers) {
-        try {
-          const mods = JSON.parse(item.modifiers);
-          const parts: string[] = [];
-          if (mods.size && mods.size !== 'Normal') parts.push(`Size: ${mods.size}`);
-          if (mods.iceLevel && mods.iceLevel !== 'Normal Ice') parts.push(mods.iceLevel);
-          if (mods.sugarLevel && mods.sugarLevel !== 'Normal Sugar') parts.push(mods.sugarLevel);
-          if (Array.isArray(mods.addOns) && mods.addOns.length > 0) {
-            const addOnsNames = mods.addOns.map((a: { name?: string }) => a.name).filter(Boolean).join(', ');
-            parts.push(`Add-ons: ${addOnsNames}`);
-          }
-          if (Array.isArray(mods.bundleSelections) && mods.bundleSelections.length > 0) {
-            const bundleNames = mods.bundleSelections.map((s: { productName?: string }) => s.productName).filter(Boolean).join(', ');
-            parts.push(`Bundle: ${bundleNames}`);
-          }
-          if (parts.length > 0) {
-            modDetails = `\n     _${parts.join(' | ')}_`;
-          }
-        } catch {
-          modDetails = `\n     _${item.modifiers}_`;
+        const parsed = parseItemModifiers({
+          name: item.product?.name || 'Item',
+          price: item.price,
+          modifiersString: item.modifiers,
+        });
+        const modLines = getReceiptModifierLines(parsed, true);
+        if (modLines.length > 0) {
+          modDetails = '\n' + modLines.map((l) => `     » ${l.label}: ${l.value}`).join('\n');
         }
       }
 

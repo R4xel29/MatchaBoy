@@ -1293,11 +1293,18 @@ export default function CheckoutPage() {
             totalPrice: item.totalPrice,
             size: item.size || 'Normal',
             sizePrice: item.sizePrice || 0,
-            matchaLevel: item.matchaLevel,
             modsString: item.isBundle && item.bundleSelections
-              ? item.bundleSelections.map((s: any) => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(', ')})` : ''}`).join(' | ')
-              : `${item.size || 'Normal'}, ${item.iceLevel}, ${item.sugarLevel}${matchaString}${item.addOns ? (item.addOns.length > 0 ? ', +' + item.addOns.map((a: any) => a.name).join(', +') : '') : ''}`,
-            addOnIds: item.isBundle ? [] : (item.addOns ? item.addOns.map((a: any) => a.id) : []),
+              ? item.bundleSelections.map((s: any) => `${s.groupName}: ${s.productName}${s.iceLevel || s.sugarLevel ? ` (${[s.iceLevel, s.sugarLevel].filter(Boolean).join(' → ')})` : ''}`).join(' | ')
+              : (() => {
+                  const p: string[] = [];
+                  if (item.matchaLevel !== undefined && item.matchaLevel !== null) p.push(`Matcha Lvl: ${item.matchaLevel}`);
+                  if (item.size && item.size !== 'Normal' && item.size !== 'Regular') p.push(`Size: ${item.size}`);
+                  if (item.iceLevel && item.sugarLevel) p.push(`${item.iceLevel} → ${item.sugarLevel}`);
+                  else if (item.iceLevel) p.push(item.iceLevel);
+                  else if (item.sugarLevel) p.push(item.sugarLevel);
+                  if (item.addOns && item.addOns.length > 0) p.push('+' + item.addOns.map((a: any) => a.name).join(', +'));
+                  return p.length > 0 ? p.join(', ') : null;
+                })(),
             isBundle: item.isBundle || false,
             bundleSelections: item.isBundle ? item.bundleSelections : undefined
           };

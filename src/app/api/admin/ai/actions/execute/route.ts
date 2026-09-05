@@ -999,9 +999,7 @@ export async function POST(req: Request) {
 
           const itemQty = Number(reqItem.quantity) || 1;
           const itemPrice = matchedProd.price;
-          calculatedSubtotal += itemPrice * itemQty;
-
-          const modsString = `${reqItem.matchaLevel !== undefined ? `Matcha Lvl: ${reqItem.matchaLevel}, ` : ""}${reqItem.iceLevel || "Normal Ice"}, ${reqItem.sugarLevel || "Biasa"}${reqItem.shotName && reqItem.shotName !== "Single Shot" ? `, +${reqItem.shotName}` : ""}`;
+          const modsString = `${reqItem.matchaLevel !== undefined ? `Matcha Lvl: ${reqItem.matchaLevel}, ` : ""}${reqItem.iceLevel || "Normal Ice"} → ${reqItem.sugarLevel || "Biasa"}${reqItem.shotName && reqItem.shotName !== "Single Shot" ? `, +${reqItem.shotName}` : ""}`;
 
           orderItemsToCreate.push({
             productId: matchedProd.id,

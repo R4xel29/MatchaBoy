@@ -401,8 +401,17 @@ export default function CashierPOSClient({ products, categories, packagingStock,
           items: cart.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
-            basePrice: item.quantity > 0 ? (item.totalPrice / item.quantity) : item.basePrice,
-            modsString: `${item.matchaLevel !== undefined ? `Matcha Lvl: ${item.matchaLevel}, ` : ''}${item.iceLevel}, ${item.sugarLevel}${item.addOns.length > 0 ? ', +' + item.addOns.map((a) => a.name).join(', +') : ''}`,
+            modsString: (() => {
+              const p: string[] = [];
+              if (item.matchaLevel !== undefined && item.matchaLevel !== null) p.push(`Matcha Lvl: ${item.matchaLevel}`);
+              if (item.shotName) p.push(`Shot: ${item.shotName}`);
+              if (item.size && item.size !== 'Normal' && item.size !== 'Regular') p.push(`Size: ${item.size}`);
+              if (item.iceLevel && item.sugarLevel) p.push(`${item.iceLevel} → ${item.sugarLevel}`);
+              else if (item.iceLevel) p.push(item.iceLevel);
+              else if (item.sugarLevel) p.push(item.sugarLevel);
+              if (item.addOns && item.addOns.length > 0) p.push('+' + item.addOns.map((a) => a.name).join(', +'));
+              return p.length > 0 ? p.join(', ') : null;
+            })(),
           })),
         }),
       })
