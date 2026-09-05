@@ -153,4 +153,26 @@ describe('Tier 1.8: Custom Incoming Order Alarm Audio Compliance', () => {
     expect(settingsContent.includes('700%')).toBe(true);
     expect(settingsContent.includes('handleBoostChange')).toBe(true);
   });
+
+  it('T1.8.11: Web Audio booster supports ultimate 1000% overdrive with DynamicsCompressorNode', () => {
+    const utilsPath = path.join(process.cwd(), 'src', 'lib', 'alarm-utils.ts');
+    const utilsContent = fs.readFileSync(utilsPath, 'utf8');
+    expect(utilsContent.includes('1000%')).toBe(true);
+    expect(utilsContent.includes('DynamicsCompressorNode')).toBe(true);
+    expect(utilsContent.includes('compressorThreshold')).toBe(true);
+    expect(utilsContent.includes('compressorRatio')).toBe(true);
+
+    const settingsPath = path.join(
+      process.cwd(),
+      'src',
+      'app',
+      '(admin)',
+      'admin',
+      'store-settings',
+      'page.tsx'
+    );
+    const settingsContent = fs.readFileSync(settingsPath, 'utf8');
+    expect(settingsContent.includes('1000%')).toBe(true);
+    expect(settingsContent.includes('max="1000"')).toBe(true);
+  });
 });

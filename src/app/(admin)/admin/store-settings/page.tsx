@@ -899,8 +899,10 @@ export default function StoreSettingsPage() {
                     <span className="text-xs font-bold text-foreground">Intensitas Suara & Efek Booster</span>
                   </div>
                   <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400">
-                    {alarmVolumeBoost >= 700
-                      ? `Mode Ekstrem Maksimal (${alarmVolumeBoost}%)`
+                    {alarmVolumeBoost >= 1000
+                      ? `Mode Sirene Maksimal (${alarmVolumeBoost}% - 10x Lipat)`
+                      : alarmVolumeBoost >= 700
+                      ? `Mode Ekstrem (${alarmVolumeBoost}% - Speaker Hancur)`
                       : alarmVolumeBoost >= 500
                       ? `Mode Super Pecah (${alarmVolumeBoost}%)`
                       : alarmVolumeBoost >= 350
@@ -912,7 +914,7 @@ export default function StoreSettingsPage() {
                 </div>
 
                 {/* Preset Buttons */}
-                <div className="grid grid-cols-5 gap-1.5">
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                   <button
                     type="button"
                     onClick={() => handleBoostChange(100)}
@@ -972,7 +974,7 @@ export default function StoreSettingsPage() {
                     onClick={() => handleBoostChange(700)}
                     className={`px-2 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center flex flex-col items-center justify-center ${
                       alarmVolumeBoost === 700
-                        ? 'border-red-700 bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 text-white shadow-md ring-2 ring-red-500/40 animate-pulse'
+                        ? 'border-red-700 bg-gradient-to-r from-red-600 via-orange-600 to-amber-500 text-white shadow-md ring-2 ring-red-500/40'
                         : 'border-border bg-background hover:bg-muted/50 text-foreground'
                     }`}
                   >
@@ -981,6 +983,21 @@ export default function StoreSettingsPage() {
                       700%
                     </span>
                     <span className="block text-[10px] font-normal opacity-80">Ekstrem</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleBoostChange(1000)}
+                    className={`px-2 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center flex flex-col items-center justify-center ${
+                      alarmVolumeBoost >= 1000
+                        ? 'border-red-800 bg-gradient-to-r from-purple-700 via-red-600 to-amber-500 text-white shadow-lg ring-2 ring-red-500/50 animate-pulse'
+                        : 'border-border bg-background hover:bg-muted/50 text-foreground'
+                    }`}
+                  >
+                    <span className="flex items-center gap-0.5">
+                      <Flame className="w-3 h-3" />
+                      1000%
+                    </span>
+                    <span className="block text-[10px] font-normal opacity-80">Sirene 10x</span>
                   </button>
                 </div>
 
@@ -995,18 +1012,18 @@ export default function StoreSettingsPage() {
                     <input
                       type="range"
                       min="100"
-                      max="700"
+                      max="1000"
                       step="25"
                       value={alarmVolumeBoost}
                       onChange={(e) => handleBoostChange(Number(e.target.value))}
                       className="w-full h-2 bg-orange-200/60 dark:bg-orange-950/80 rounded-lg appearance-none cursor-pointer accent-orange-500"
                     />
-                    <span className="text-[10px] font-mono text-muted-foreground">700%</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">1000%</span>
                   </div>
                 </div>
 
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  Web Audio API Overdrive melipatgandakan amplitudo suara melampaui batas standar browser hingga <b>500% (5x)</b> atau <b>700% (7x)</b> lengkap dengan saturasi distorsi analog tingkat tinggi agar alarm terdengar sangat kencang dan mustahil terlewat saat outlet Arum Seduh sangat ramai.
+                  Web Audio API Overdrive melipatgandakan amplitudo suara hingga <b>700% (7x)</b> atau <b>1000% (10x lipat)</b> lengkap dengan saturasi distorsi analog dan <i>DynamicsCompressor Brickwall</i> agar suara alarm terdengar seperti sirene darurat / megafon yang mustahil terlewat saat outlet Arum Seduh sangat ramai.
                 </p>
               </div>
 

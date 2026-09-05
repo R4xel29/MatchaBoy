@@ -38,6 +38,7 @@ interface AudioGraph {
   filterBass?: BiquadFilterNode;
   filterMid?: BiquadFilterNode;
   distortion?: WaveShaperNode;
+  compressor?: DynamicsCompressorNode;
 }
 
 const audioGraphMap = new WeakMap<HTMLAudioElement, AudioGraph>();
@@ -71,7 +72,7 @@ if (typeof window !== 'undefined') {
 
 /**
  * Attaches the Web Audio API booster to an HTMLAudioElement.
- * Boosts volume beyond 100% up to 500%, 700%+, with overdrive distortion ("speaker pecah").
+ * Boosts volume beyond 100% up to 500%, 700%, 1000%+ with overdrive distortion & brickwall compression.
  */
 export function setupSpeakerPecahBooster(
   audio: HTMLAudioElement,
@@ -95,24 +96,38 @@ export function setupSpeakerPecahBooster(
     // 200%: k=15, mid=4dB, bass=3dB
     // 350%: k=30, mid=6dB, bass=5dB
     // 500%: k=55, mid=8dB, bass=7dB (Super Pecah)
-    // 700%+: k=85, mid=11dB, bass=9dB (Ekstrem Speaker Hancur)
+    // 700%: k=85, mid=11dB, bass=9dB (Ekstrem Speaker Hancur)
+    // 1000%+: k=120, mid=14dB, bass=12dB (Maksimal Sirene Overdrive 10x)
     const distortionAmount =
+      gainMultiplier >= 9.0 ? 120 :
       gainMultiplier >= 6.5 ? 85 :
       gainMultiplier >= 4.5 ? 55 :
       gainMultiplier >= 3.0 ? 30 :
       gainMultiplier > 1.5 ? 15 : 0;
 
     const midGain =
+      gainMultiplier >= 9.0 ? 14 :
       gainMultiplier >= 6.5 ? 11 :
       gainMultiplier >= 4.5 ? 8 :
       gainMultiplier >= 3.0 ? 6 :
       gainMultiplier > 1.5 ? 3 : 0;
 
     const bassGain =
+      gainMultiplier >= 9.0 ? 12 :
       gainMultiplier >= 6.5 ? 9 :
       gainMultiplier >= 4.5 ? 7 :
       gainMultiplier >= 3.0 ? 5 :
       gainMultiplier > 1.5 ? 3 : 0;
+
+    const compressorThreshold =
+      gainMultiplier >= 9.0 ? -32 :
+      gainMultiplier >= 5.0 ? -24 :
+      gainMultiplier > 1.5 ? -16 : 0;
+
+    const compressorRatio =
+      gainMultiplier >= 9.0 ? 20 :
+      gainMultiplier >= 5.0 ? 14 :
+      gainMultiplier > 1.5 ? 8 : 1;
 
     let graph = audioGraphMap.get(audio);
     if (!graph) {
@@ -140,14 +155,23 @@ export function setupSpeakerPecahBooster(
         distortion.oversample = '2x';
       }
 
-      // Chain: source -> filterBass -> filterMid -> distortion -> gain -> destination
+      // Dynamic compressor to squash dynamic range and maximize RMS perceived loudness
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = compressorThreshold;
+      compressor.knee.value = 4;
+      compressor.ratio.value = compressorRatio;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.15;
+
+      // Chain: source -> filterBass -> filterMid -> distortion -> compressor -> gain -> destination
       source.connect(filterBass);
       filterBass.connect(filterMid);
       filterMid.connect(distortion);
-      distortion.connect(gain);
+      distortion.connect(compressor);
+      compressor.connect(gain);
       gain.connect(ctx.destination);
 
-      graph = { ctx, gain, filterBass, filterMid, distortion };
+      graph = { ctx, gain, filterBass, filterMid, distortion, compressor };
       audioGraphMap.set(audio, graph);
     } else {
       graph.gain.gain.value = gainMultiplier;
@@ -159,6 +183,10 @@ export function setupSpeakerPecahBooster(
       }
       if (graph.distortion) {
         graph.distortion.curve = distortionAmount > 0 ? makeDistortionCurve(distortionAmount) : null;
+      }
+      if (graph.compressor) {
+        graph.compressor.threshold.value = compressorThreshold;
+        graph.compressor.ratio.value = compressorRatio;
       }
     }
 
