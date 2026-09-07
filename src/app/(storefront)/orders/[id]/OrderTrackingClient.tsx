@@ -934,14 +934,15 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 </span>
               </div>
 
-              <div className="relative w-56 h-56 mx-auto bg-white rounded-2xl p-2 border border-stone-200 shadow-inner flex items-center justify-center">
+              <div className="relative w-56 h-56 mx-auto bg-white rounded-2xl p-2.5 border border-stone-200 shadow-sm flex items-center justify-center">
                 <QRCodeCanvas
                   id={`tracking-qris-${order.id}`}
                   value={order.paymentQrContent}
                   size={200}
                   level="M"
-                  includeMargin={false}
-                  className="w-full h-full object-contain rounded-xl"
+                  includeMargin={true}
+                  marginSize={3}
+                  className="max-w-full max-h-full block"
                 />
               </div>
 

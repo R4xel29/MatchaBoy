@@ -1794,15 +1794,23 @@ export default function SpmbClient({
                 </div>
               ) : (
                 <>
-                  <div className="relative w-64 h-64 bg-white rounded-2xl p-2 border border-stone-200 shadow-inner flex items-center justify-center">
-                    <QRCodeCanvas
-                      id="spmb-qris-canvas"
-                      value={qrisQrContent}
-                      size={240}
-                      level="M"
-                      includeMargin={false}
-                      className="w-full h-full object-contain rounded-xl"
-                    />
+                  <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-stone-200 shadow-sm flex items-center justify-center">
+                    {qrisQrContent ? (
+                      <QRCodeCanvas
+                        id="spmb-qris-canvas"
+                        value={qrisQrContent}
+                        size={232}
+                        level="M"
+                        includeMargin={true}
+                        marginSize={3}
+                        className="max-w-full max-h-full block"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-2.5 text-stone-500">
+                        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+                        <span className="text-xs font-semibold">Menyiapkan QRIS Dinamis...</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="mt-3 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-100 w-full text-center">

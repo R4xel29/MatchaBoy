@@ -123,16 +123,15 @@ export default function QrisClient({ order }: { order: any }) {
           </div>
 
           {/* QR Code Canvas Frame */}
-          <div className="relative w-72 h-72 bg-white rounded-3xl p-3 border border-gray-100 flex items-center justify-center shadow-inner group">
-            <div className="absolute inset-0 bg-gradient-to-tr from-[#B48A5E]/5 to-transparent rounded-3xl pointer-events-none" />
-            
+          <div className="relative w-72 h-72 bg-white rounded-3xl p-4 border border-gray-200 flex items-center justify-center shadow-sm group">
             <QRCodeCanvas
               id="qris-canvas"
               value={order.paymentQrContent}
-              size={260}
+              size={256}
               level="M"
-              includeMargin={false}
-              className="object-contain"
+              includeMargin={true}
+              marginSize={3}
+              className="max-w-full max-h-full block"
             />
           </div>
 

@@ -563,7 +563,7 @@ export function TopUpOverlay({
                       </div>
 
                       {/* QR Code Canvas Frame */}
-                      <div className="relative w-44 h-44 bg-white rounded-2xl p-2 border border-gray-100 flex items-center justify-center shadow-inner group">
+                      <div className="relative w-48 h-48 bg-white rounded-2xl p-2 border border-gray-200 flex items-center justify-center shadow-sm group">
                         <QRCodeCanvas
                           id="topup-qris-canvas"
                           value={
@@ -572,10 +572,11 @@ export function TopUpOverlay({
                               activeTransaction?.paymentCode || 'TOPUP'
                             }0303UME5204581153033605802ID5910ARUM SEDUH6007JAKARTA61051212362070703A016304ABCD`
                           }
-                          size={160}
+                          size={176}
                           level="M"
-                          includeMargin={false}
-                          className="object-contain"
+                          includeMargin={true}
+                          marginSize={3}
+                          className="max-w-full max-h-full block"
                         />
                       </div>
 

@@ -520,6 +520,31 @@ export async function checkDokuMcpQrisPaymentStatus(
   }
 }
 
+/**
+ * Menghitung CRC16-CCITT (polynomial 0x1021, initial 0xFFFF) untuk checksum EMVCo QRIS.
+ */
+export function calculateCrc16(str: string): string {
+  let crc = 0xFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= (str.charCodeAt(i) << 8);
+    for (let j = 0; j < 8; j++) {
+      if ((crc & 0x8000) !== 0) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
+      }
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
 
-
-
+/**
+ * Membentuk string dinamis QRIS EMVCo valid dengan Tag 54 dan Tag 63 CRC16 terhitung.
+ */
+export function buildFallbackQrisString(amount: number): string {
+  const cleanAmount = Math.max(1, Math.round(amount)).toString();
+  const amountTag = `54${String(cleanAmount.length).padStart(2, '0')}${cleanAmount}`;
+  const basePayload = `00020101021226670016ID.CO.ARUMSEDUH.WWW0118936009143000000000520458125303360${amountTag}5802ID5910ARUM SEDUH6007JAKARTA62070703A016304`;
+  const checksum = calculateCrc16(basePayload);
+  return `${basePayload}${checksum}`;
+}

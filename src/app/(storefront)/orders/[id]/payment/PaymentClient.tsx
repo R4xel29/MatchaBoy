@@ -443,13 +443,14 @@ export default function PaymentClient({
               </div>
 
               {/* QR Image */}
-              <div className="relative w-64 h-64 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-inner flex items-center justify-center">
+              <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-gray-200 shadow-sm flex items-center justify-center">
                 <QRCodeSVG
                   value={order.paymentQrContent}
-                  size={250}
+                  size={232}
                   level="M"
-                  includeMargin={false}
-                  className="w-full h-full object-contain rounded-xl"
+                  includeMargin={true}
+                  marginSize={3}
+                  className="max-w-full max-h-full block"
                 />
               </div>
 
@@ -596,13 +597,14 @@ export default function PaymentClient({
                 {order.paymentQrContent ? (
                   <>
                     {/* Render QRIS Dinamis dari DOKU secara lokal */}
-                    <div className="relative w-64 h-64 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-inner flex items-center justify-center">
+                    <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-gray-200 shadow-sm flex items-center justify-center">
                       <QRCodeSVG
                         value={order.paymentQrContent}
-                        size={250}
+                        size={232}
                         level="M"
-                        includeMargin={false}
-                        className="w-full h-full object-contain rounded-xl"
+                        includeMargin={true}
+                        marginSize={3}
+                        className="max-w-full max-h-full block"
                       />
                     </div>
                     
@@ -839,14 +841,15 @@ export default function PaymentClient({
               </div>
 
               {/* QR Canvas */}
-              <div className="relative w-64 h-64 bg-white rounded-3xl p-3 border border-gray-100 flex items-center justify-center shadow-inner mx-auto">
+              <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-gray-200 flex items-center justify-center shadow-sm mx-auto">
                 <QRCodeCanvas
                   id="qris-modal-canvas"
                   value={order.paymentQrContent}
-                  size={236}
+                  size={232}
                   level="M"
-                  includeMargin={false}
-                  className="object-contain"
+                  includeMargin={true}
+                  marginSize={3}
+                  className="max-w-full max-h-full block"
                 />
               </div>
 

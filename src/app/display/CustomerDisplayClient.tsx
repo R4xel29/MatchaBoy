@@ -547,8 +547,10 @@ export default function CustomerDisplayClient() {
                       <QRCodeSVG
                         value={spmbUrl || 'https://arumseduh.app/spmb'}
                         size={210}
-                        level="H"
+                        level="M"
                         includeMargin={true}
+                        marginSize={3}
+                        className="max-w-full max-h-full block"
                       />
                     </div>
 
@@ -679,18 +681,20 @@ export default function CustomerDisplayClient() {
 
                 {/* QR Code Frame */}
                 <div className="p-4 bg-white rounded-2xl shadow-xl inline-block border-4 border-orange-400 mx-auto relative group min-w-[280px] min-h-[280px]">
-                  {displayState?.dokuQrImageUrl ? (
+                  {displayState?.dokuQrContent ? (
+                    <QRCodeSVG
+                      value={displayState.dokuQrContent}
+                      size={248}
+                      level="M"
+                      includeMargin={true}
+                      marginSize={3}
+                      className="max-w-full max-h-full block"
+                    />
+                  ) : displayState?.dokuQrImageUrl ? (
                     <img
                       src={displayState.dokuQrImageUrl}
                       alt="DOKU Dynamic QRIS"
                       className="w-64 h-64 object-contain rounded-lg"
-                    />
-                  ) : displayState?.dokuQrContent ? (
-                    <QRCodeSVG
-                      value={displayState.dokuQrContent}
-                      size={240}
-                      level="H"
-                      includeMargin={true}
                     />
                   ) : (
                     <div className="w-64 h-64 flex flex-col items-center justify-center text-slate-900 gap-3">

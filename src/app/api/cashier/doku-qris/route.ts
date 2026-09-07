@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { createDokuMcpQrisPayment } from '@/lib/doku';
+import { createDokuMcpQrisPayment, buildFallbackQrisString } from '@/lib/doku';
 
 export async function POST(req: Request) {
   try {
@@ -93,7 +93,7 @@ export async function POST(req: Request) {
     }
 
     // Fallback: Dynamic QRIS String for amount if DOKU API is not configured or in fallback mode
-    const fallbackQrContent = `00020101021226670016ID.CO.ARUMSEDUH.WWW0118936009143000000000520458125303360540${amount}5802ID5910ARUM SEDUH6007JAKARTA62070703A016304`;
+    const fallbackQrContent = buildFallbackQrisString(amount);
 
     return NextResponse.json({
       success: true,
