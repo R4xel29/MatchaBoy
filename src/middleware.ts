@@ -114,6 +114,13 @@ export default auth((req) => {
         }
     }
 
+    // Direct default route / to /spmb (preserves query params like ?table=...)
+    if (pathname === '/') {
+        const url = req.nextUrl.clone()
+        url.pathname = '/spmb'
+        return NextResponse.redirect(url)
+    }
+
     return NextResponse.next()
 })
 

@@ -16,7 +16,7 @@ export function BottomNav() {
   const isMenuOpen = !!searchOpen || searchParams.get('openMenu') === 'true';
 
   const navigateTo = (href: string) => {
-    if (href === '/') {
+    if (href === '/spmb' || href === '/') {
       setSearchOpen?.(false);
       router.push(href);
     } else if (pathname?.startsWith('/profile') && href.startsWith('/profile')) {
@@ -29,7 +29,7 @@ export function BottomNav() {
   };
 
   useEffect(() => {
-    router.prefetch('/');
+    router.prefetch('/spmb');
     router.prefetch('/profile');
     router.prefetch('/profile?section=loyalty&tab=vouchers');
   }, [router]);
@@ -38,14 +38,14 @@ export function BottomNav() {
     {
       label: 'Beranda',
       icon: Home,
-      href: '/',
-      active: pathname === '/' && !isMenuOpen,
+      href: '/spmb',
+      active: (pathname === '/' || pathname === '/spmb') && !isMenuOpen,
     },
     {
       label: 'Menu',
       icon: BookOpen,
-      onClick: pathname === '/' ? openSearch : undefined,
-      href: pathname === '/' ? undefined : '/?openMenu=true',
+      onClick: (pathname === '/' || pathname === '/spmb') ? openSearch : undefined,
+      href: (pathname === '/' || pathname === '/spmb') ? undefined : '/spmb?openMenu=true',
       active: isMenuOpen,
     },
     {
