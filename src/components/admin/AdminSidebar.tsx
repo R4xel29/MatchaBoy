@@ -124,14 +124,14 @@ const COLLABORATION_ITEMS = [
 ];
 
 const CASHIER_ITEMS = [
-  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
+  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone, hasBadge: true },
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
   { label: 'Pengaturan Struk', href: '/admin/receipt-settings', icon: Printer },
   { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
 ];
 
 const STAFF_ITEMS = [
-  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
+  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone, hasBadge: true },
   { label: 'Pengecekan & SOP Outlet', href: '/admin/inspections', icon: ClipboardCheck },
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
@@ -173,14 +173,17 @@ function NavItem({
         <div className="relative flex items-center justify-center">
           <item.icon className={`w-[20px] h-[20px] transition-transform duration-200 ${isActive ? 'text-orange-600 scale-105' : 'text-slate-500 group-hover:scale-110'}`} />
           {item.hasBadge && pendingCount > 0 && (
-            <span className="absolute -top-1.5 -right-1.5 z-20 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white">
+            <span className="absolute -top-1.5 -right-1.5 z-20 w-4 h-4 rounded-full bg-red-500 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white animate-pulse">
               {pendingCount > 9 ? '9+' : pendingCount}
             </span>
           )}
         </div>
         {/* Tooltip flyout on hover */}
-        <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50 shadow-xl">
-          {item.label}
+        <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs font-medium rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50 shadow-xl flex items-center gap-1.5">
+          <span>{item.label}</span>
+          {item.hasBadge && pendingCount > 0 && (
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          )}
         </div>
       </Link>
     );
@@ -201,7 +204,7 @@ function NavItem({
         }
         ${isSubItem ? (isCollapsed ? 'px-3 py-2 text-xs' : 'ml-6') : ''}`}
     >
-      <div className="relative">
+      <div className="relative flex items-center justify-center">
         <item.icon className={`w-[18px] h-[18px] transition-transform duration-200
           ${isActive 
             ? isSubItem 
@@ -210,16 +213,23 @@ function NavItem({
             : 'text-slate-500 group-hover:scale-105 group-hover:text-slate-700'}`} 
         />
         {item.hasBadge && pendingCount > 0 && (
-          <span className={`absolute -top-1.5 -right-1.5 z-20 w-4 h-4 rounded-full text-[8px] font-bold flex items-center justify-center border-2 shadow-sm
+          <span className={`absolute -top-1 -right-1 z-20 w-2.5 h-2.5 rounded-full border-2 animate-pulse
             ${isActive && isSubItem 
-              ? 'bg-white text-orange-600 border-orange-500' 
-              : 'bg-red-500 text-white border-white'}`}
-          >
-            {pendingCount > 9 ? '9+' : pendingCount}
-          </span>
+              ? 'bg-white border-orange-500' 
+              : 'bg-red-500 border-white'}`}
+          />
         )}
       </div>
       <span className="flex-1 truncate">{item.label}</span>
+      {item.hasBadge && pendingCount > 0 && (
+        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold flex items-center justify-center min-w-[18px] h-4 shadow-sm animate-pulse
+          ${isActive && isSubItem 
+            ? 'bg-white text-orange-600 font-black' 
+            : 'bg-red-500 text-white'}`}
+        >
+          {pendingCount > 9 ? '9+' : pendingCount}
+        </span>
+      )}
       {isActive && !isSubItem && (
         <ChevronRight className="w-3.5 h-3.5 text-orange-600" />
       )}
@@ -248,6 +258,9 @@ function CollapsibleSection({
     return pathname === item.href || (item.href !== '/admin' && item.href !== '/admin/cashier' && pathname.startsWith(item.href));
   });
 
+  const sectionHasBadge = items.some(item => item.hasBadge);
+  const showRedDot = sectionHasBadge && pendingCount > 0;
+
   const [isOpen, setIsOpen] = useState(hasActiveItem);
 
   useEffect(() => {
@@ -263,16 +276,26 @@ function CollapsibleSection({
           className={`p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center relative
             ${hasActiveItem ? 'bg-orange-50 text-orange-600 font-semibold shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'}`}
         >
-          <Icon className={`w-[20px] h-[20px] ${hasActiveItem ? 'text-orange-600' : 'text-slate-500 group-hover:scale-110'}`} />
-          {hasActiveItem && (
+          <div className="relative flex items-center justify-center">
+            <Icon className={`w-[20px] h-[20px] ${hasActiveItem ? 'text-orange-600' : 'text-slate-500 group-hover:scale-110'}`} />
+            {showRedDot && (
+              <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white animate-pulse" />
+            )}
+          </div>
+          {hasActiveItem && !showRedDot && (
             <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-orange-500" />
           )}
         </button>
 
         {/* Hover Flyout Dropdown Menu */}
         <div className="absolute left-full top-0 ml-3 hidden group-hover:block w-52 bg-white rounded-2xl p-2 shadow-xl border border-slate-100 z-50 transition-all duration-200">
-          <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">
-            {title}
+          <div className="px-3 py-1.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1 flex items-center justify-between">
+            <span>{title}</span>
+            {showRedDot && (
+              <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold animate-pulse">
+                {pendingCount > 9 ? '9+' : pendingCount}
+              </span>
+            )}
           </div>
           <div className="space-y-0.5">
             {items.map((item) => (
@@ -300,12 +323,30 @@ function CollapsibleSection({
           ${hasActiveItem ? 'text-slate-900 font-semibold' : 'text-slate-700'}`}
       >
         <div className="flex items-center gap-3">
-          <Icon className="w-[18px] h-[18px] text-slate-500 group-hover:text-slate-700" />
-          <span>{title}</span>
+          <div className="relative flex items-center justify-center">
+            <Icon className="w-[18px] h-[18px] text-slate-500 group-hover:text-slate-700" />
+            {showRedDot && (
+              <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white animate-pulse" />
+            )}
+          </div>
+          <span className="flex items-center gap-2">
+            <span>{title}</span>
+            {showRedDot && (
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
+            )}
+          </span>
         </div>
-        <ChevronRight 
-          className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
-        />
+        
+        <div className="flex items-center gap-2">
+          {showRedDot && (
+            <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center min-w-[18px] h-4 shadow-sm animate-pulse">
+              {pendingCount > 9 ? '9+' : pendingCount}
+            </span>
+          )}
+          <ChevronRight 
+            className={`w-3 h-3 text-slate-400 group-hover:text-slate-600 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
+          />
+        </div>
       </button>
       
       <AnimatePresence initial={false}>
