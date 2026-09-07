@@ -273,6 +273,16 @@ ATURAN FORMATTING TEKS CHAT (WAJIB DIPATUHI):
    - Poin-poin: gunakan bullet point "• " atau penomoran "1.", "2."
    - Gunakan format teks yang jelas dan rapi.
 
+ATURAN MUTLAK ANALISA DOKUMEN / GAMBAR / PDF / STRUK (CLOSED-WORLD STRICT GROUNDING & ANTI-HALUSINASI):
+1. JIKA PENGGUNA MELAMPIRKAN GAMBAR, DOKUMEN PDF, ATAU STRUK (baik untuk menjawab pertanyaan, merangkum, mengekstrak data, atau membuat pertanyaan/kuis/evaluasi):
+   - SUMBER KEBENARAN SATU-SATUNYA (Single Source of Truth) adalah informasi yang TERTULIS SECARA EKSPLISIT di dalam gambar/dokumen tersebut.
+   - ASUMSI DUNIA TERTUTUP (Closed-World Assumption): Anggap kamu TIDAK MEMILIKI PENGETAHUAN DUNIA LUAR selain apa yang tertera di dokumen/gambar.
+   - DILARANG KERAS mempertanyakan, menanyakan kembali, atau menyimpulkan hal-hal di luar konteks dokumen!
+   - CONTOH LARANGAN NYATA (NEGATIVE CONSTRAINT): Jika di dalam gambar/PDF tertulis tentang seseorang/tokoh (misalnya: "Soekarno"), tetapi TIDAK TERCANTUM kapan atau di mana beliau lahir, KAMU DILARANG KERAS membuat pertanyaan seputar tanggal/tempat kelahirannya ataupun memunculkan informasi tersebut!
+   - Setiap pertanyaan yang diajukan atau analisa yang diberikan WAJIB memiliki bukti teks/visual langsung (verbatim quote) yang dapat ditunjuk secara persis pada gambar/PDF.
+   - Jika pengguna meminta membuat pertanyaan atau kuis dari gambar/dokumen: Buatlah pertanyaan yang jawabannya 100% ada dan tertulis di dalam dokumen. Dilarang menanyakan pengetahuan umum yang tidak tertulis!
+   - Jika suatu informasi tidak tertera di gambar/dokumen, nyatakan secara jujur dan tegas bahwa informasi tersebut tidak ada dalam dokumen.
+
 FITUR EKSEKUTIF & PROPOSAL AKSI (ACTION PROPOSALS):
 Jika pengguna meminta aksi nyata (ubah jam buka, ganti/lengkapi caption menu, ubah harga, buat menu baru, scan struk supplier, flash sale, restock, atau buat pesanan), kamu HARUS memberikan penjelasan/analisa ramah terlebih dahulu, lalu di akhir jawaban cantumkan SATU blok JSON Action Proposal dengan format persis:
 
@@ -354,15 +364,16 @@ ${JSON.stringify(storeContext, null, 2)}`;
       conversationPrompt = recentHistory
         .map((h: any) => `${h.role === "user" ? "Bos" : "Asisten"}: ${h.content}`)
         .join("\n\n");
-      conversationPrompt += `\n\nBos: ${message || "Tolong analisa gambar/struk terlampir."}\nAsisten:`;
+      conversationPrompt += `\n\nBos: ${message || (image ? "Tolong analisa lampiran dokumen/gambar ini strictly grounded sesuai konteks dokumen saja." : "Halo")}\nAsisten:`;
     } else {
-      conversationPrompt = `Bos: ${message || "Tolong analisa gambar/struk terlampir."}\nAsisten:`;
+      conversationPrompt = `Bos: ${message || (image ? "Tolong analisa lampiran dokumen/gambar ini strictly grounded sesuai konteks dokumen saja." : "Halo")}\nAsisten:`;
     }
 
     const responseStream = await generateStoreAIStream({
       systemInstruction,
       prompt: conversationPrompt,
       image: image ? { mimeType: image.mimeType || "image/jpeg", data: image.data } : undefined,
+      temperature: image ? 0.1 : 0.7,
     });
 
     const encoder = new TextEncoder();

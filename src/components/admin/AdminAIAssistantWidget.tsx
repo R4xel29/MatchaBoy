@@ -19,6 +19,7 @@ import {
   PackagePlus,
   Coins,
   FileCheck,
+  FileText,
   Mic,
   MicOff,
   Volume2,
@@ -65,11 +66,12 @@ interface Message {
 }
 
 const QUICK_PROMPTS = [
-  { label: "✨ Buat Menu Baru AI", prompt: "Bikinin menu baru 'Matcha Mango Cloud Float' harga 32rb lengkap dengan foto studio AI, takaran resep, dan kalkulasi HPP." },
+  { label: "📄 Tanya Dokumen/PDF", prompt: "Tolong pelajari gambar/PDF terlampir. Buatkan pertanyaan atau analisa hanya berdasarkan fakta yang tertulis secara eksplisit, tanpa menanyakan hal di luar konteks dokumen." },
+  { label: "✨ Buat Menu Baru AI", prompt: "Bikinin menu baru 'Arum Seduh Mango Cloud' harga 32rb lengkap dengan foto studio AI, takaran resep, dan kalkulasi HPP." },
   { label: "⚠️ Analisa Burn-Rate Stok", prompt: "Bahan baku apa yang diprediksi habis dalam beberapa hari ke depan berdasarkan rata-rata penjualan?" },
   { label: "🏷️ Pasang Flash Sale", prompt: "Apakah ada jam sepi hari ini yang cocok dipasang Flash Sale untuk mendongkrak omset?" },
-  { label: "🛍️ Tambah Pesanan", prompt: "Tolong pesankan 2 Matcha Latte meja 3 atas nama Budi." },
-  { label: "🎟️ Buat Voucher Promo", prompt: "Bikinin voucher diskon 20% kode MATCHAWEEKEND minimal belanja 40rb kuota 30 orang buat weekend ini." },
+  { label: "🛍️ Tambah Pesanan", prompt: "Tolong pesankan 2 Arum Seduh Latte meja 3 atas nama Budi." },
+  { label: "🎟️ Buat Voucher Promo", prompt: "Bikinin voucher diskon 20% kode ARUMWEEKEND minimal belanja 40rb kuota 30 orang buat weekend ini." },
   { label: "💰 Analisa HPP & Resep", prompt: "Tolong tampilkan rincian HPP, modal bahan baku per cup, takaran resep, dan margin keuntungan dari menu-menu kita." },
 ];
 
@@ -100,7 +102,7 @@ export function AdminAIAssistantWidget() {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<{ data: string; mimeType: string; preview: string } | null>(null);
+  const [selectedImage, setSelectedImage] = useState<{ data: string; mimeType: string; preview: string; fileName?: string } | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
   
@@ -277,10 +279,13 @@ export function AdminAIAssistantWidget() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      alert("Ukuran gambar maksimal 5MB");
+    if (file.size > 10 * 1024 * 1024) {
+      alert("Ukuran berkas maksimal 10MB");
       return;
     }
+
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+    const mimeType = isPdf ? "application/pdf" : (file.type || "image/jpeg");
 
     const reader = new FileReader();
     reader.onloadend = () => {
@@ -288,8 +293,9 @@ export function AdminAIAssistantWidget() {
       const base64Data = result.split(",")[1];
       setSelectedImage({
         data: base64Data,
-        mimeType: file.type || "image/jpeg",
-        preview: result,
+        mimeType: mimeType,
+        preview: isPdf ? "pdf-preview" : result,
+        fileName: file.name,
       });
     };
     reader.readAsDataURL(file);
@@ -310,7 +316,13 @@ export function AdminAIAssistantWidget() {
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: text || (currentImage ? "Tolong analisa foto struk belanja terlampir ini." : ""),
+      content:
+        text ||
+        (currentImage
+          ? currentImage.mimeType === "application/pdf"
+            ? `Tolong pelajari dokumen PDF terlampir (${currentImage.fileName || "dokumen.pdf"}). Buatkan pertanyaan atau analisa hanya berdasarkan isi yang tertulis di dalam dokumen.`
+            : "Tolong analisa gambar/struk terlampir ini hanya berdasarkan isi yang tertulis."
+          : ""),
       timestamp: currentTimestamp,
       imageUrl: currentImage?.preview,
     };
@@ -569,12 +581,12 @@ export function AdminAIAssistantWidget() {
 
   return (
     <>
-      {/* Hidden File Input for Image/Receipt Upload */}
+      {/* Hidden File Input for Image/Receipt/PDF Upload */}
       <input
         type="file"
         ref={fileInputRef}
         onChange={handleImagePick}
-        accept="image/*"
+        accept="image/*,application/pdf"
         className="hidden"
       />
 
@@ -672,11 +684,21 @@ export function AdminAIAssistantWidget() {
                         : "bg-white text-slate-800 border border-slate-200/70 rounded-tl-none font-normal"
                     }`}
                   >
-                    {/* Uploaded image thumbnail if any */}
+                    {/* Uploaded image or PDF thumbnail if any */}
                     {msg.imageUrl && (
-                      <div className="rounded-xl overflow-hidden border border-white/20 shadow-sm max-w-[200px]">
-                        <img src={msg.imageUrl} alt="Lampiran Struk" className="w-full h-auto object-cover max-h-[140px]" />
-                      </div>
+                      msg.imageUrl === "pdf-preview" || msg.imageUrl.startsWith("data:application/pdf") ? (
+                        <div className="p-2.5 rounded-xl bg-white/20 border border-white/30 flex items-center gap-2 text-xs font-bold text-slate-800 shadow-sm backdrop-blur-xs">
+                          <FileText className="w-5 h-5 text-rose-500 shrink-0" />
+                          <div className="flex flex-col">
+                            <span>Dokumen PDF Terlampir</span>
+                            <span className="text-[10px] font-normal opacity-80">Strict Context Grounding Aktif</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl overflow-hidden border border-white/20 shadow-sm max-w-[200px]">
+                          <img src={msg.imageUrl} alt="Lampiran" className="w-full h-auto object-cover max-h-[140px]" />
+                        </div>
+                      )
                     )}
 
                     {/* Message Body */}
@@ -872,14 +894,25 @@ export function AdminAIAssistantWidget() {
             {/* Image Preview Chip if selected */}
             {selectedImage && (
               <div className="px-3 py-1.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <img src={selectedImage.preview} alt="Preview" className="w-7 h-7 rounded-lg object-cover border border-slate-300" />
-                  <span className="text-[11px] font-bold text-slate-700">Foto Struk / Gambar Terlampir</span>
+                <div className="flex items-center gap-2 overflow-hidden">
+                  {selectedImage.mimeType === "application/pdf" ? (
+                    <div className="w-7 h-7 rounded-lg bg-rose-500 text-white flex items-center justify-center font-bold text-[9px] shadow-sm shrink-0">
+                      PDF
+                    </div>
+                  ) : (
+                    <img src={selectedImage.preview} alt="Preview" className="w-7 h-7 rounded-lg object-cover border border-slate-300 shrink-0" />
+                  )}
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[11px] font-bold text-slate-700 truncate max-w-[220px]">
+                      {selectedImage.fileName || (selectedImage.mimeType === "application/pdf" ? "Dokumen PDF Terlampir" : "Foto Struk / Gambar Terlampir")}
+                    </span>
+                    <span className="text-[9px] text-emerald-600 font-semibold">Strict Grounding: Hanya info di dokumen</span>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedImage(null)}
-                  className="p-1 hover:bg-slate-200 rounded-full text-slate-500 transition-colors"
+                  className="p-1 hover:bg-slate-200 rounded-full text-slate-500 transition-colors shrink-0"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -893,7 +926,7 @@ export function AdminAIAssistantWidget() {
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isLoading || isListening}
-                title="Unggah Foto Struk / Nota Belanja"
+                title="Unggah Foto Struk / Gambar / Dokumen PDF"
                 className="p-2.5 rounded-xl bg-slate-100 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-300 transition-all active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
               >
                 <Paperclip className="w-4 h-4" />

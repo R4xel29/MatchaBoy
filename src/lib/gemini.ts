@@ -17,13 +17,15 @@ interface GenAIOptions {
   prompt: string;
   image?: { mimeType: string; data: string };
   model?: string;
+  temperature?: number;
 }
 
 function normalizeArgs(
   firstArg: string | GenAIOptions,
   systemInstruction?: string,
   image?: { mimeType: string; data: string },
-  model?: string
+  model?: string,
+  temperature?: number
 ): GenAIOptions {
   if (typeof firstArg === 'object' && firstArg !== null) {
     return {
@@ -31,6 +33,7 @@ function normalizeArgs(
       systemInstruction: firstArg.systemInstruction,
       image: firstArg.image,
       model: firstArg.model || ACTIVE_MODELS[0],
+      temperature: firstArg.temperature,
     };
   }
 
@@ -39,6 +42,7 @@ function normalizeArgs(
     systemInstruction,
     image,
     model: model || ACTIVE_MODELS[0],
+    temperature,
   };
 }
 
@@ -56,7 +60,10 @@ export async function generateStoreAIResponse(
     throw new Error('GEMINI_API_KEY is not configured in .env');
   }
 
-  const { prompt, systemInstruction, image, model } = normalizeArgs(optionsOrPrompt, sysInst, img, mdl);
+  const { prompt, systemInstruction, image, model, temperature } = normalizeArgs(optionsOrPrompt, sysInst, img, mdl);
+
+  // When image/PDF is provided, default to strict low temperature (0.15) to prevent hallucination/leakage outside document context
+  const effectiveTemperature = temperature !== undefined ? temperature : (image?.data ? 0.15 : 0.7);
 
   const cleanPrompt = (prompt && prompt.trim()) ? prompt.trim() : 'Halo, tolong berikan analisa data toko Arum Seduh.';
   const contentsPayload: any = image?.data
@@ -78,10 +85,10 @@ export async function generateStoreAIResponse(
         config: systemInstruction
           ? {
               systemInstruction,
-              temperature: 0.7,
+              temperature: effectiveTemperature,
             }
           : {
-              temperature: 0.7,
+              temperature: effectiveTemperature,
             },
       });
 
@@ -112,7 +119,10 @@ export async function generateStoreAIStream(
     throw new Error('GEMINI_API_KEY is not configured in .env');
   }
 
-  const { prompt, systemInstruction, image, model } = normalizeArgs(optionsOrPrompt, sysInst, img, mdl);
+  const { prompt, systemInstruction, image, model, temperature } = normalizeArgs(optionsOrPrompt, sysInst, img, mdl);
+
+  // When image/PDF is provided, default to strict low temperature (0.15) to prevent hallucination/leakage outside document context
+  const effectiveTemperature = temperature !== undefined ? temperature : (image?.data ? 0.15 : 0.7);
 
   const cleanPrompt = (prompt && prompt.trim()) ? prompt.trim() : 'Halo, tolong berikan analisa data toko Arum Seduh.';
   const contentsPayload: any = image?.data
@@ -134,10 +144,10 @@ export async function generateStoreAIStream(
         config: systemInstruction
           ? {
               systemInstruction,
-              temperature: 0.7,
+              temperature: effectiveTemperature,
             }
           : {
-              temperature: 0.7,
+              temperature: effectiveTemperature,
             },
       });
 
