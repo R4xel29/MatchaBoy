@@ -568,7 +568,7 @@ export default function CashierOrdersClient({
 
   // Metrics
   const totalAntreanCount = antrianOrders.length;
-  const preparingCount = antrianOrders.filter(o => o.status === 'PREPARING').length;
+  const preparingCount = antrianOrders.filter(o => o.status === 'PREPARING' || o.status === 'PENDING' || o.status === 'PENDING_PAYMENT').length;
   const readyCount = antrianOrders.filter(o => o.status === 'READY').length;
   const selesaiTodayCount = selesaiOrders.filter(o => o.status === 'COMPLETED' || o.status === 'DELIVERED').length;
 
@@ -654,7 +654,7 @@ export default function CashierOrdersClient({
             <p className="font-serif text-2xl font-bold text-stone-900 mt-1">{totalAntreanCount}</p>
           </div>
           <div className="bg-amber-50/60 p-4 rounded-2xl border border-amber-200">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Sedang Dimasak</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Sedang Diproses</p>
             <p className="font-serif text-2xl font-bold text-amber-900 mt-1">{preparingCount}</p>
           </div>
           <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-200">
@@ -869,6 +869,13 @@ export default function CashierOrdersClient({
                         {order.source}
                       </span>
                     )}
+
+                    {isReady && (
+                      <span className="text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 border border-blue-200 animate-pulse flex items-center gap-1">
+                        <CheckCircle2 className="w-2.5 h-2.5" />
+                        Siap Saji
+                      </span>
+                    )}
                   </div>
 
                   <h3 className="font-serif font-bold text-base text-stone-900 leading-tight">
@@ -947,44 +954,46 @@ export default function CashierOrdersClient({
                   </span>
                 </div>
 
-                {/* 1-Tap Quick Action Stepper */}
+                {/* 1-Tap Progressive Action: Siap Saji -> Selesai */}
                 {!isCompleted && !isCancelled && (
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      onClick={() => handleUpdateStatus(order.id, 'PREPARING')}
-                      disabled={isUpdating === order.id}
-                      className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
-                        isPending
-                          ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
-                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
-                      Masak
-                    </button>
-
-                    <button
-                      onClick={() => handleUpdateStatus(order.id, 'READY')}
-                      disabled={isUpdating === order.id}
-                      className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
-                        isPreparing
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
-                      Siap Saji
-                    </button>
-
-                    <button
-                      onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
-                      disabled={isUpdating === order.id}
-                      className={`py-2 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
-                        isReady
-                          ? 'bg-emerald-600 text-white shadow-sm'
-                          : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-100'
-                      }`}
-                    >
-                      Selesai
-                    </button>
+                  <div>
+                    {isReady ? (
+                      <button
+                        onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
+                        disabled={isUpdating === order.id}
+                        className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white shadow-sm hover:shadow flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isUpdating === order.id ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyelesaikan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="w-4 h-4" />
+                            <span>Selesai</span>
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleUpdateStatus(order.id, 'READY')}
+                        disabled={isUpdating === order.id}
+                        className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.99] text-white shadow-sm hover:shadow flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {isUpdating === order.id ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Memproses...</span>
+                          </>
+                        ) : (
+                          <>
+                            <UtensilsCrossed className="w-4 h-4" />
+                            <span>Siap Saji</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
 

@@ -136,8 +136,8 @@ export async function PATCH(
             });
         }
 
-        // Potong stok jika status PREPARING
-        if (status === 'PREPARING') {
+        // Potong stok jika status PREPARING, READY, atau COMPLETED langsung
+        if (status === 'PREPARING' || status === 'READY' || status === 'COMPLETED') {
             // Non-blocking
             deductStockForOrder(id).catch(err => console.error('Stock deduction error:', err));
         }

@@ -151,8 +151,8 @@ export async function PATCH(
       });
     }
 
-    // Stock deduction when order starts being prepared
-    if (status === 'PREPARING') {
+    // Stock deduction when order starts being prepared or moves directly to READY / COMPLETED
+    if (status === 'PREPARING' || status === 'READY' || status === 'COMPLETED') {
       deductStockForOrder(id).catch(err =>
         console.error('Stock deduction error (non-blocking):', err)
       )
