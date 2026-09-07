@@ -37,6 +37,7 @@ export default auth((req) => {
                         '/api/admin/inventory',
                         '/api/admin/expenses',
                         '/api/admin/receipt-settings',
+                        '/api/admin/inspections',
                     ]
                     const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
                     if (!isAllowed) {
@@ -103,6 +104,7 @@ export default auth((req) => {
                     '/admin/inventory',
                     '/admin/expenses',
                     '/admin/receipt-settings',
+                    '/admin/inspections',
                 ]
                 const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
                 if (!isAllowed) {

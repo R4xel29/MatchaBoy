@@ -51,7 +51,8 @@ import {
   TrendingUp,
   Layers,
   Coins,
-  Printer
+  Printer,
+  ClipboardCheck
 } from 'lucide-react';
 import { signOut, useSession } from 'next-auth/react';
 import Image from 'next/image';
@@ -59,6 +60,7 @@ import { getAlarmSoundUrl, playOneShotBoostedAlarm } from '@/lib/alarm-utils';
 
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { label: 'Audit & Pengecekan Toko', href: '/admin/inspections', icon: ClipboardCheck },
   { label: 'Buku Kas & Keuangan', href: '/admin/finances', icon: Coins },
   { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
@@ -130,6 +132,7 @@ const CASHIER_ITEMS = [
 
 const STAFF_ITEMS = [
   { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
+  { label: 'Pengecekan & SOP Outlet', href: '/admin/inspections', icon: ClipboardCheck },
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
   { label: 'Stok & Bahan Baku', href: '/admin/inventory', icon: Archive },
