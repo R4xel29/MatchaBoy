@@ -128,6 +128,16 @@ const CASHIER_ITEMS = [
   { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
 ];
 
+const STAFF_ITEMS = [
+  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
+  { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
+  { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
+  { label: 'Stok & Bahan Baku', href: '/admin/inventory', icon: Archive },
+  { label: 'Pengeluaran Kas Kecil', href: '/admin/expenses', icon: Coins },
+  { label: 'Pengaturan Struk', href: '/admin/receipt-settings', icon: Printer },
+  { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
+];
+
 function NavItem({ 
   item, 
   pathname, 
@@ -394,41 +404,40 @@ function SidebarContent({
 
       {/* Navigation */}
       <nav className={`flex-1 py-5 space-y-2.5 overflow-y-auto scrollbar-hide ${isCollapsed ? 'px-2' : 'px-3'}`}>
-        {/* Standalone Dashboard Item */}
-        <NavItem
-          item={MAIN_ITEMS[0]}
-          pathname={pathname}
-          onNavigate={onNavigate}
-          isSubItem={false}
-          pendingCount={pendingCount}
-          isCollapsed={isCollapsed}
-        />
-
-        {/* Laporan & Transaksi Group */}
-        <CollapsibleSection
-          title="Laporan & Transaksi"
-          icon={TrendingUp}
-          items={MAIN_ITEMS.slice(1)}
-          pathname={pathname}
-          onNavigate={onNavigate}
-          pendingCount={pendingCount}
-          isCollapsed={isCollapsed}
-        />
-
-        {/* Kasir (POS) Group */}
-        <CollapsibleSection
-          title="Kasir (POS)"
-          icon={MonitorSmartphone}
-          items={CASHIER_ITEMS}
-          pathname={pathname}
-          onNavigate={onNavigate}
-          pendingCount={pendingCount}
-          isCollapsed={isCollapsed}
-        />
-
-        {/* Admin-only sections */}
-        {isAdmin && (
+        {isAdmin ? (
           <>
+            {/* Standalone Dashboard Item */}
+            <NavItem
+              item={MAIN_ITEMS[0]}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              isSubItem={false}
+              pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
+            />
+
+            {/* Laporan & Transaksi Group */}
+            <CollapsibleSection
+              title="Laporan & Transaksi"
+              icon={TrendingUp}
+              items={MAIN_ITEMS.slice(1)}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
+            />
+
+            {/* Kasir (POS) Group */}
+            <CollapsibleSection
+              title="Kasir (POS)"
+              icon={MonitorSmartphone}
+              items={CASHIER_ITEMS}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              pendingCount={pendingCount}
+              isCollapsed={isCollapsed}
+            />
+
             {/* Manajemen Produk Section */}
             <CollapsibleSection
               title="Manajemen Produk"
@@ -450,7 +459,6 @@ function SidebarContent({
               pendingCount={pendingCount}
               isCollapsed={isCollapsed}
             />
-
 
             {/* Fitur Pelanggan Section */}
             <CollapsibleSection
@@ -507,6 +515,25 @@ function SidebarContent({
               isCollapsed={isCollapsed}
             />
           </>
+        ) : (
+          <div className="space-y-1">
+            {!isCollapsed && (
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider px-3 pb-1.5">
+                Menu Operasional
+              </div>
+            )}
+            {STAFF_ITEMS.map((item) => (
+              <NavItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                onNavigate={onNavigate}
+                isSubItem={false}
+                pendingCount={item.hasBadge ? pendingCount : 0}
+                isCollapsed={isCollapsed}
+              />
+            ))}
+          </div>
         )}
       </nav>
 
@@ -520,7 +547,7 @@ function SidebarContent({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-slate-800 truncate">{userName}</p>
-                <p className="text-[10px] text-slate-500 truncate">{userRole === 'CASHIER' ? 'Kasir' : 'Administrator'}</p>
+                <p className="text-[10px] text-slate-500 truncate">{userRole === 'CASHIER' ? 'Staf Kasir & Barista' : 'Administrator'}</p>
               </div>
             </div>
             <button
@@ -534,7 +561,7 @@ function SidebarContent({
         ) : (
           <>
             <div 
-              title={`${userName} (${userRole === 'CASHIER' ? 'Kasir' : 'Administrator'})`}
+              title={`${userName} (${userRole === 'CASHIER' ? 'Staf Kasir & Barista' : 'Administrator'})`}
               className="w-8 h-8 rounded-lg bg-orange-500 text-white text-xs font-bold flex items-center justify-center shadow-sm"
             >
               {userName.charAt(0).toUpperCase()}

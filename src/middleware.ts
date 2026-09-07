@@ -30,7 +30,14 @@ export default auth((req) => {
                     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
                 }
                 if (role === 'CASHIER') {
-                    const cashierAllowed = ['/api/admin/reports', '/api/admin/bank-accounts', '/api/admin/store-settings']
+                    const cashierAllowed = [
+                        '/api/admin/reports', 
+                        '/api/admin/bank-accounts', 
+                        '/api/admin/store-settings',
+                        '/api/admin/inventory',
+                        '/api/admin/expenses',
+                        '/api/admin/receipt-settings',
+                    ]
                     const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
                     if (!isAllowed) {
                         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -85,10 +92,19 @@ export default auth((req) => {
                 return NextResponse.rewrite(new URL('/404', req.url))
             }
 
-            // Cashier can only access specific pages
+            // Cashier can only access specific operational pages
             if (role === 'CASHIER') {
-                const cashierAllowed = ['/admin/cashier', '/admin/orders']
-                const isAllowed = cashierAllowed.some(route => pathname.startsWith(route)) || pathname === '/admin'
+                if (pathname === '/admin') {
+                    return NextResponse.redirect(new URL('/admin/cashier', req.url))
+                }
+                const cashierAllowed = [
+                    '/admin/cashier', 
+                    '/admin/orders',
+                    '/admin/inventory',
+                    '/admin/expenses',
+                    '/admin/receipt-settings',
+                ]
+                const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
                 if (!isAllowed) {
                     return NextResponse.rewrite(new URL('/404', req.url))
                 }

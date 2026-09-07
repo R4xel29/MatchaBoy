@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { ShieldAlert } from 'lucide-react';
 import RoleSelect from './role-select';
 import ImpersonateButton from './impersonate-button';
+import CreateStaffModal from './CreateStaffModal';
 
 export const revalidate = 0;
 
@@ -13,9 +14,12 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Pengelolaan Admin & Staf</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{users.length} admin/staf terdaftar</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Pengelolaan Admin & Staf</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{users.length} staf & admin terdaftar di sistem Arum Seduh</p>
+        </div>
+        <CreateStaffModal />
       </div>
 
       {/* Desktop Table */}

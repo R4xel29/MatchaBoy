@@ -5,6 +5,103 @@ import { auth, signIn } from '@/auth'
 import { revalidatePath } from 'next/cache'
 import { logAdminAction } from '@/lib/admin-logger'
 import crypto from 'crypto'
+import bcrypt from 'bcryptjs'
+
+export async function createStaffUserAction(formData: {
+  name: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  role?: string;
+}) {
+  const session = await auth();
+  
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return { success: false, error: 'Hanya Admin Utama yang berhak menambahkan staf baru' };
+  }
+
+  const name = formData.name?.trim();
+  const rawEmail = formData.email?.trim()?.toLowerCase() || '';
+  const rawPhone = formData.phone?.trim() || '';
+  const password = formData.password?.trim() || '';
+  const role = formData.role || 'CASHIER';
+
+  if (!name) {
+    return { success: false, error: 'Nama karyawan wajib diisi' };
+  }
+
+  if (!rawEmail && !rawPhone) {
+    return { success: false, error: 'Email atau Nomor WhatsApp wajib diisi minimal salah satu' };
+  }
+
+  if (!password || password.length < 6) {
+    return { success: false, error: 'Password / PIN awal minimal 6 karakter' };
+  }
+
+  let cleanEmail: string | null = null;
+  if (rawEmail) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(rawEmail)) {
+      return { success: false, error: 'Format email tidak valid' };
+    }
+    const existingByEmail = await prisma.user.findUnique({
+      where: { email: rawEmail },
+    });
+    if (existingByEmail) {
+      return { success: false, error: 'Email tersebut sudah digunakan oleh akun lain' };
+    }
+    cleanEmail = rawEmail;
+  }
+
+  let cleanPhone: string | null = null;
+  if (rawPhone) {
+    let standardized = rawPhone.replace(/[^0-9]/g, '');
+    if (standardized.startsWith('08')) {
+      standardized = '62' + standardized.substring(1);
+    } else if (standardized.startsWith('8')) {
+      standardized = '62' + standardized;
+    }
+    if (standardized.length < 10) {
+      return { success: false, error: 'Nomor WhatsApp / HP tidak valid' };
+    }
+    const existingByPhone = await prisma.user.findUnique({
+      where: { phone: standardized },
+    });
+    if (existingByPhone) {
+      return { success: false, error: 'Nomor WhatsApp / HP sudah terdaftar' };
+    }
+    cleanPhone = standardized;
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        name,
+        email: cleanEmail,
+        phone: cleanPhone,
+        phoneVerified: !!cleanPhone,
+        password: hashedPassword,
+        role: role === 'ADMIN' ? 'ADMIN' : 'CASHIER',
+      },
+    });
+
+    await logAdminAction({
+      userId: session.user.id,
+      action: 'CREATE',
+      entity: 'USER',
+      entityId: newUser.id,
+      details: `Menambahkan staf baru: ${newUser.name} (${newUser.role === 'ADMIN' ? 'Admin Utama' : 'Staf Operasional Kasir & Barista'})`
+    });
+
+    revalidatePath('/admin/users');
+    return { success: true, user: { id: newUser.id, name: newUser.name, email: newUser.email, phone: newUser.phone, role: newUser.role } };
+  } catch (error: any) {
+    console.error('Failed to create staff user:', error);
+    return { success: false, error: error?.message || 'Gagal menambahkan staf baru' };
+  }
+}
 
 export async function updateUserRole(userId: string, newRole: string) {
   const session = await auth()

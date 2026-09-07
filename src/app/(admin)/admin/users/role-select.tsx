@@ -30,11 +30,11 @@ export default function RoleSelect({ userId, currentRole }: { userId: string, cu
         value={role} 
         onChange={handleRoleChange} 
         disabled={loading}
-        className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-[#B48A5E] focus:border-[#B48A5E] disabled:opacity-50"
+        className="w-full text-xs font-medium border-slate-200 bg-slate-50 rounded-lg shadow-sm focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50 text-slate-700 py-1.5"
       >
-        <option value="CUSTOMER">Customer</option>
-        <option value="CASHIER">Cashier</option>
-        <option value="ADMIN">Admin</option>
+        <option value="CASHIER">Staf Operasional (Kasir & Barista)</option>
+        <option value="ADMIN">Admin Utama (Owner)</option>
+        <option value="CUSTOMER">Pelanggan (Customer)</option>
       </select>
       {error && <span className="text-xs text-red-500">{error}</span>}
       {loading && <span className="text-xs text-gray-500">Updating...</span>}

@@ -5,7 +5,7 @@ import { auth } from '@/auth';
 export async function GET() {
   try {
     const session = await auth();
-    if (session?.user?.role !== 'ADMIN') {
+    if (session?.user?.role !== 'ADMIN' && session?.user?.role !== 'CASHIER') {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
@@ -23,7 +23,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const session = await auth();
-    if (session?.user?.role !== 'ADMIN') {
+    if (session?.user?.role !== 'ADMIN' && session?.user?.role !== 'CASHIER') {
       return new NextResponse('Unauthorized', { status: 401 });
     }
 
@@ -34,13 +34,20 @@ export async function POST(request: Request) {
       ? parseInt(amount.replace(/[^0-9]/g, '')) || 0
       : parseInt(amount) || 0;
 
+    const isCashier = session?.user?.role === 'CASHIER';
+    let finalNotes = notes;
+    if (isCashier) {
+      const cashierTag = `[Dicatat oleh Staf: ${session?.user?.name || 'Kasir'}]`;
+      finalNotes = notes ? `${notes} ${cashierTag}` : cashierTag;
+    }
+
     const expense = await prisma.expense.create({
       data: {
         name,
         amount: parsedAmount,
-        category,
+        category: category || 'DAILY_OPS',
         date: date ? new Date(date) : new Date(),
-        notes,
+        notes: finalNotes,
       },
     });
 
