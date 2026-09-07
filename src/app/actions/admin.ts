@@ -139,6 +139,147 @@ export async function updateUserRole(userId: string, newRole: string) {
   }
 }
 
+export async function updateStaffDetailsAction(data: {
+  userId: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  role?: string;
+}) {
+  const session = await auth();
+
+  if (!session?.user || session.user.role !== 'ADMIN') {
+    return { success: false, error: 'Hanya Admin Utama yang berhak mengubah data staf' };
+  }
+
+  const { userId, name, email, phone, password, role } = data;
+
+  if (!userId) {
+    return { success: false, error: 'User ID tidak valid' };
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { id: userId },
+  });
+
+  if (!existingUser) {
+    return { success: false, error: 'Pengguna tidak ditemukan' };
+  }
+
+  const trimmedName = name?.trim();
+  if (!trimmedName) {
+    return { success: false, error: 'Nama karyawan wajib diisi' };
+  }
+
+  const updatePayload: any = {
+    name: trimmedName,
+  };
+
+  // Email update
+  if (email !== undefined) {
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        return { success: false, error: 'Format email tidak valid' };
+      }
+      if (cleanEmail !== existingUser.email) {
+        const emailConflict = await prisma.user.findUnique({
+          where: { email: cleanEmail },
+        });
+        if (emailConflict && emailConflict.id !== userId) {
+          return { success: false, error: 'Email tersebut sudah digunakan oleh akun lain' };
+        }
+      }
+      updatePayload.email = cleanEmail;
+    } else {
+      updatePayload.email = null;
+    }
+  }
+
+  // Phone update
+  if (phone !== undefined) {
+    const rawPhone = phone.trim();
+    if (rawPhone) {
+      let stdPhone = rawPhone.replace(/[^0-9]/g, '');
+      if (stdPhone.startsWith('08')) {
+        stdPhone = '62' + stdPhone.substring(1);
+      } else if (stdPhone.startsWith('8')) {
+        stdPhone = '62' + stdPhone;
+      }
+      if (stdPhone.length < 10) {
+        return { success: false, error: 'Nomor WhatsApp / HP tidak valid' };
+      }
+      if (stdPhone !== existingUser.phone) {
+        const phoneConflict = await prisma.user.findUnique({
+          where: { phone: stdPhone },
+        });
+        if (phoneConflict && phoneConflict.id !== userId) {
+          return { success: false, error: 'Nomor WhatsApp / HP sudah terdaftar' };
+        }
+      }
+      updatePayload.phone = stdPhone;
+      updatePayload.phoneVerified = true;
+    } else {
+      updatePayload.phone = null;
+      updatePayload.phoneVerified = false;
+    }
+  }
+
+  // Role update
+  if (role) {
+    if (userId === session.user.id && role !== 'ADMIN') {
+      return { success: false, error: 'Anda tidak dapat menurunkan peran akun Anda sendiri' };
+    }
+    updatePayload.role = role;
+  }
+
+  // Password update
+  let passwordChanged = false;
+  if (password && password.trim()) {
+    const cleanPassword = password.trim();
+    if (cleanPassword.length < 6) {
+      return { success: false, error: 'Password baru minimal 6 karakter' };
+    }
+    updatePayload.password = await bcrypt.hash(cleanPassword, 10);
+    passwordChanged = true;
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updatePayload,
+    });
+
+    await logAdminAction({
+      userId: session.user.id,
+      action: 'UPDATE',
+      entity: 'USER',
+      entityId: userId,
+      details: `Mengubah data staf ${updated.name}: ${passwordChanged ? 'Password di-reset, ' : ''}Role: ${updated.role}, Email: ${updated.email || '-'}`,
+    });
+
+    revalidatePath('/admin/users');
+    revalidatePath(`/admin/users/${userId}`);
+
+    return {
+      success: true,
+      message: 'Data staf berhasil diperbarui',
+      user: {
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        phone: updated.phone,
+        role: updated.role,
+      },
+    };
+  } catch (error: any) {
+    console.error('Failed to update staff details:', error);
+    return { success: false, error: error?.message || 'Gagal memperbarui data staf' };
+  }
+}
+
 export async function impersonateUserAction(targetUserId: string) {
   const session = await auth()
   

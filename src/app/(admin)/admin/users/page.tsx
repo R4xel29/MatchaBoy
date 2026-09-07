@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { ShieldAlert } from 'lucide-react';
+import Link from 'next/link';
+import { ShieldAlert, Pencil } from 'lucide-react';
 import RoleSelect from './role-select';
 import ImpersonateButton from './impersonate-button';
 import CreateStaffModal from './CreateStaffModal';
@@ -44,16 +45,23 @@ export default async function AdminUsersPage() {
               users.map((user: any) => (
                 <tr key={user.id} className="group hover:bg-muted/20 transition-colors">
                   <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-xs shadow-sm overflow-hidden">
+                    <Link href={`/admin/users/${user.id}`} className="flex items-center gap-3 group/user">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white font-bold text-xs shadow-sm overflow-hidden shrink-0">
                         {user.image ? (
                           <img src={user.image} alt={user.name || ''} className="w-full h-full object-cover" />
                         ) : (
                           (user.name || 'U')[0].toUpperCase()
                         )}
                       </div>
-                      <span className="font-medium text-foreground text-[13px]">{user.name || 'Unknown'}</span>
-                    </div>
+                      <div>
+                        <span className="font-semibold text-foreground text-[13px] group-hover/user:text-orange-600 transition-colors">
+                          {user.name || 'Unknown'}
+                        </span>
+                        <p className="text-[10px] text-muted-foreground group-hover/user:text-orange-500 transition-colors">
+                          Lihat Detail & Edit →
+                        </p>
+                      </div>
+                    </Link>
                   </td>
                   <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{user.email || '-'}</td>
                   <td className="px-5 py-3.5 text-[13px] text-muted-foreground">{user.phone || '-'}</td>
@@ -61,7 +69,15 @@ export default async function AdminUsersPage() {
                     <RoleSelect userId={user.id} currentRole={user.role} />
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity items-center">
+                      <Link
+                        href={`/admin/users/${user.id}`}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-orange-600 bg-orange-50 hover:bg-orange-100 rounded-lg border border-orange-200 transition-colors"
+                        title="Edit Profil & Password"
+                      >
+                        <Pencil className="w-3 h-3" />
+                        <span>Detail & Edit</span>
+                      </Link>
                       <ImpersonateButton userId={user.id} userName={user.name || 'User'} />
                     </div>
                   </td>
@@ -84,8 +100,8 @@ export default async function AdminUsersPage() {
         ) : (
           users.map((user: any) => (
             <div key={user.id} className="bg-white rounded-2xl border border-border/40 p-4 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-white font-bold text-sm shadow-sm overflow-hidden">
+              <Link href={`/admin/users/${user.id}`} className="flex items-center gap-3 mb-3 group">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white font-bold text-sm shadow-sm overflow-hidden shrink-0">
                   {user.image ? (
                     <img src={user.image} alt={user.name || ''} className="w-full h-full object-cover" />
                   ) : (
@@ -93,14 +109,26 @@ export default async function AdminUsersPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-foreground text-[13px] truncate">{user.name || 'Unknown'}</p>
+                  <p className="font-semibold text-foreground text-[13px] truncate group-hover:text-orange-600 transition-colors">
+                    {user.name || 'Unknown'}
+                  </p>
                   <p className="text-[11px] text-muted-foreground truncate">{user.email || '-'}</p>
+                  <p className="text-[10px] text-orange-500 font-medium">Lihat Detail & Edit Profil →</p>
                 </div>
-              </div>
+              </Link>
               
-              <div className="pt-2 border-t border-border/30 mb-2 flex items-center justify-between">
+              <div className="pt-2 border-t border-border/30 mb-2 flex items-center justify-between gap-2">
                 <RoleSelect userId={user.id} currentRole={user.role} />
-                <ImpersonateButton userId={user.id} userName={user.name || 'User'} />
+                <div className="flex items-center gap-1.5">
+                  <Link
+                    href={`/admin/users/${user.id}`}
+                    className="p-1.5 rounded-lg bg-orange-50 text-orange-600 border border-orange-200"
+                    title="Detail & Edit"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </Link>
+                  <ImpersonateButton userId={user.id} userName={user.name || 'User'} />
+                </div>
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-2 border-t border-border/30 bg-gray-50 -mx-4 -mb-4 p-3 rounded-b-2xl">
