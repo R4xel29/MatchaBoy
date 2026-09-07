@@ -691,6 +691,7 @@ export default function AdminProductsClient({
           onClick={() => {
             setActiveTab('toppings');
             setSelectedIds([]);
+            setInspectedProduct(null);
           }}
           className={`py-3 px-5 text-xs font-bold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${
             activeTab === 'toppings'
@@ -928,6 +929,7 @@ export default function AdminProductsClient({
             {inspectedProduct && (
               <div ref={inspectorRef} className="xl:col-span-4 sticky top-24">
                 <ProductInspectorDrawer
+                  key={inspectedProduct.id}
                   product={inspectedProduct}
                   ingredients={ingredients}
                   isPinned={isInspectorPinned}

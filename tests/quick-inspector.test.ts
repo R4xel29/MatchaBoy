@@ -59,4 +59,24 @@ describe('Tier 1.9: Realtime Quick Inspector Compliance', () => {
     expect(content.includes('stock?: number')).toBeTruthy();
     expect(content.includes('export interface ProductRealtimeStats')).toBeTruthy();
   });
+
+  it('T1.9.5: ProductInspectorDrawer mounts with key={inspectedProduct.id} in AdminProductsClient', () => {
+    const clientPath = path.resolve(process.cwd(), 'src/app/(admin)/admin/products/AdminProductsClient.tsx');
+    expect(fs.existsSync(clientPath)).toBeTruthy();
+
+    const content = fs.readFileSync(clientPath, 'utf8');
+    expect(content.includes('<ProductInspectorDrawer')).toBeTruthy();
+    expect(content.includes('key={inspectedProduct.id}')).toBeTruthy();
+  });
+
+  it('T1.9.6: ProductInspectorDrawer resets state and verifies current product id on inspector navigation', () => {
+    const drawerPath = path.resolve(process.cwd(), 'src/components/admin/products/ProductInspectorDrawer.tsx');
+    const content = fs.readFileSync(drawerPath, 'utf8');
+
+    // State reset on product change
+    expect(content.includes('setStats(null)')).toBeTruthy();
+    expect(content.includes('AbortController')).toBeTruthy();
+    expect(content.includes('data.productId === product.id')).toBeTruthy();
+    expect(content.includes('currentStats')).toBeTruthy();
+  });
 });

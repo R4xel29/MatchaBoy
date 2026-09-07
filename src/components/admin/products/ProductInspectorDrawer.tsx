@@ -72,50 +72,73 @@ export function ProductInspectorDrawer({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastFetchTime, setLastFetchTime] = useState<string>('');
 
-  // Fetch realtime statistics from backend
+  // Primary data fetcher with AbortController and strict productId match
   const fetchStats = useCallback(
-    async (showRefreshing = false) => {
+    async (showRefreshing = false, signal?: AbortSignal) => {
       if (!product?.id) return;
       if (showRefreshing) setIsRefreshing(true);
       try {
         const res = await fetch(`/api/admin/products/${product.id}/stats`, {
           cache: 'no-store',
+          signal,
         });
         if (res.ok) {
           const data: ProductRealtimeStats = await res.json();
-          setStats(data);
-          const d = new Date(data.updatedAt);
-          setLastFetchTime(
-            d.toLocaleTimeString('id-ID', {
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })
-          );
+          // Verify stats belongs to the current product to avoid race conditions
+          if (data.productId === product.id) {
+            setStats(data);
+            const d = new Date(data.updatedAt);
+            setLastFetchTime(
+              d.toLocaleTimeString('id-ID', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+              })
+            );
+          }
+        } else {
+          setStats(null);
         }
-      } catch (err) {
-        console.error('Error fetching realtime stats for inspector:', err);
+      } catch (err: any) {
+        if (err?.name !== 'AbortError') {
+          console.error('Error fetching realtime stats for inspector:', err);
+          setStats(null);
+        }
       } finally {
-        setLoadingStats(false);
-        setIsRefreshing(false);
+        if (!signal?.aborted) {
+          setLoadingStats(false);
+          setIsRefreshing(false);
+        }
       }
     },
     [product?.id]
   );
 
-  // Fetch on product change
+  // Reset state and fetch whenever product.id changes
   useEffect(() => {
+    setStats(null);
     setLoadingStats(true);
-    fetchStats(false);
+    setLastFetchTime('');
+    setIsRefreshing(false);
+
+    const controller = new AbortController();
+    fetchStats(false, controller.signal);
+
+    // Periodic polling for realtime updates (every 15s)
+    const interval = setInterval(() => {
+      fetchStats(false, controller.signal);
+    }, 15000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [fetchStats]);
 
-  // Periodic polling for realtime updates (every 15s)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchStats(false);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [fetchStats]);
+  // Derived currentStats: guaranteed to only match current product id
+  const currentStats = useMemo(() => {
+    return stats && stats.productId === product.id ? stats : null;
+  }, [stats, product.id]);
 
   // Parse modifiers
   const modifiers: ModifiersData = useMemo(() => {
@@ -181,9 +204,9 @@ export function ProductInspectorDrawer({
 
   // Realtime 7-day sparkline bar scaling
   const maxDayQty = useMemo(() => {
-    if (!stats?.last7Days?.days) return 1;
-    return Math.max(...stats.last7Days.days.map((d) => d.qty), 1);
-  }, [stats]);
+    if (!currentStats?.last7Days?.days) return 1;
+    return Math.max(...currentStats.last7Days.days.map((d) => d.qty), 1);
+  }, [currentStats]);
 
   return (
     <div className="bg-white rounded-3xl border border-slate-200/80 shadow-elevated p-5 sm:p-6 space-y-5 relative overflow-hidden text-left transition-all">
@@ -340,26 +363,26 @@ export function ProductInspectorDrawer({
             Penjualan 7 Hari Terakhir
           </span>
 
-          {loadingStats && !stats ? (
+          {loadingStats && !currentStats ? (
             <span className="w-16 h-4 rounded bg-slate-200 animate-pulse" />
-          ) : stats && stats.last7Days.growthPercent !== null ? (
+          ) : currentStats && currentStats.last7Days.growthPercent !== null ? (
             <span
               className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
-                stats.last7Days.growthPercent > 0
+                currentStats.last7Days.growthPercent > 0
                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  : stats.last7Days.growthPercent < 0
+                  : currentStats.last7Days.growthPercent < 0
                   ? 'bg-rose-50 text-rose-700 border-rose-200'
                   : 'bg-slate-100 text-slate-700 border-slate-200'
               }`}
             >
-              {stats.last7Days.growthPercent > 0 ? (
+              {currentStats.last7Days.growthPercent > 0 ? (
                 <ArrowUpRight className="w-3 h-3 text-emerald-600" />
-              ) : stats.last7Days.growthPercent < 0 ? (
+              ) : currentStats.last7Days.growthPercent < 0 ? (
                 <ArrowDownRight className="w-3 h-3 text-rose-600" />
               ) : null}
-              {stats.last7Days.growthPercent > 0
-                ? `+${stats.last7Days.growthPercent}%`
-                : `${stats.last7Days.growthPercent}%`}{' '}
+              {currentStats.last7Days.growthPercent > 0
+                ? `+${currentStats.last7Days.growthPercent}%`
+                : `${currentStats.last7Days.growthPercent}%`}{' '}
               volume
             </span>
           ) : (
@@ -369,20 +392,20 @@ export function ProductInspectorDrawer({
 
         <div className="flex items-baseline justify-between">
           <span className="text-xl font-black text-slate-900">
-            {loadingStats && !stats
+            {loadingStats && !currentStats
               ? '...'
-              : `${stats?.last7Days.totalQty ?? 0} Porsi Terjual`}
+              : `${currentStats?.last7Days.totalQty ?? 0} Porsi Terjual`}
           </span>
           <span className="text-[11px] text-slate-500 font-semibold">
-            {loadingStats && !stats
+            {loadingStats && !currentStats
               ? 'Memuat...'
-              : `Omset ${formatRupiah(stats?.last7Days.totalRevenue ?? 0)}`}
+              : `Omset ${formatRupiah(currentStats?.last7Days.totalRevenue ?? 0)}`}
           </span>
         </div>
 
         {/* Realtime Sparkline Bar Chart */}
         <div className="flex items-end gap-1.5 h-14 pt-2">
-          {loadingStats && !stats
+          {loadingStats && !currentStats
             ? Array.from({ length: 7 }).map((_, i) => (
                 <div
                   key={i}
@@ -390,7 +413,7 @@ export function ProductInspectorDrawer({
                   style={{ height: `${20 + i * 10}%` }}
                 />
               ))
-            : stats?.last7Days.days.map((d, i) => {
+            : currentStats?.last7Days.days.map((d, i) => {
                 const heightPercent =
                   d.qty === 0
                     ? 14
@@ -415,7 +438,7 @@ export function ProductInspectorDrawer({
         </div>
 
         <div className="flex justify-between text-[9px] text-slate-400 font-bold uppercase pt-0.5">
-          {(stats?.last7Days.days || [
+          {(currentStats?.last7Days.days || [
             { dayLabel: 'Sen' },
             { dayLabel: 'Sel' },
             { dayLabel: 'Rab' },
@@ -437,18 +460,18 @@ export function ProductInspectorDrawer({
             Hari ini:
           </span>
           <span className="font-bold text-slate-800">
-            {stats ? `${stats.today.qty} porsi (${formatRupiah(stats.today.revenue)})` : '...'}
+            {currentStats ? `${currentStats.today.qty} porsi (${formatRupiah(currentStats.today.revenue)})` : '...'}
           </span>
         </div>
       </div>
 
       {/* Realtime Inventory Portion Capacity (Kapasitas Sisa Porsi dari Bahan Baku) */}
-      {stats?.inventory.hasRecipe && (
+      {currentStats?.inventory.hasRecipe && (
         <div
           className={`p-3.5 rounded-2xl border ${
-            (stats.inventory.maxPortions ?? 0) === 0
+            (currentStats.inventory.maxPortions ?? 0) === 0
               ? 'bg-rose-50/90 border-rose-200 text-rose-950'
-              : (stats.inventory.maxPortions ?? 0) < 10
+              : (currentStats.inventory.maxPortions ?? 0) < 10
               ? 'bg-amber-50/90 border-amber-200 text-amber-950'
               : 'bg-orange-50/70 border-orange-200/70 text-orange-950'
           } space-y-1.5 transition-all`}
@@ -460,16 +483,16 @@ export function ProductInspectorDrawer({
             </span>
             <span
               className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                (stats.inventory.maxPortions ?? 0) === 0
+                (currentStats.inventory.maxPortions ?? 0) === 0
                   ? 'bg-rose-100 text-rose-800'
-                  : (stats.inventory.maxPortions ?? 0) < 10
+                  : (currentStats.inventory.maxPortions ?? 0) < 10
                   ? 'bg-amber-100 text-amber-800'
                   : 'bg-emerald-100 text-emerald-800'
               }`}
             >
-              {(stats.inventory.maxPortions ?? 0) === 0
+              {(currentStats.inventory.maxPortions ?? 0) === 0
                 ? 'Stok Kosong'
-                : (stats.inventory.maxPortions ?? 0) < 10
+                : (currentStats.inventory.maxPortions ?? 0) < 10
                 ? 'Stok Menipis'
                 : 'Stok Cukup'}
             </span>
@@ -477,11 +500,11 @@ export function ProductInspectorDrawer({
 
           <div className="flex items-baseline justify-between">
             <span className="text-lg font-black tracking-tight text-slate-900">
-              ~{stats.inventory.maxPortions ?? 0} Porsi
+              ~{currentStats.inventory.maxPortions ?? 0} Porsi
             </span>
-            {stats.inventory.bottleneck && (
+            {currentStats.inventory.bottleneck && (
               <span className="text-[11px] text-slate-600">
-                Pembatas: <strong className="text-slate-800">{stats.inventory.bottleneck.name}</strong> ({stats.inventory.bottleneck.stock} {stats.inventory.bottleneck.unit})
+                Pembatas: <strong className="text-slate-800">{currentStats.inventory.bottleneck.name}</strong> ({currentStats.inventory.bottleneck.stock} {currentStats.inventory.bottleneck.unit})
               </span>
             )}
           </div>
@@ -579,7 +602,7 @@ export function ProductInspectorDrawer({
           <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
             {product.productIngredients.map((r, idx) => {
               const ing = r.ingredient || ingredients.find((i) => i.id === r.ingredientId);
-              const realIng = stats?.inventory.ingredients.find((item) => item.id === r.ingredientId);
+              const realIng = currentStats?.inventory.ingredients.find((item) => item.id === r.ingredientId);
               const stock = realIng ? realIng.stock : ing?.stock ?? 0;
               const unit = ing?.unit || 'unit';
               const possiblePortions = realIng?.possiblePortions;
@@ -642,21 +665,21 @@ export function ProductInspectorDrawer({
             <Clock className="w-3.5 h-3.5 text-orange-500" />
             Pesanan Terkini
           </span>
-          {stats?.recentOrders && stats.recentOrders.length > 0 && (
+          {currentStats?.recentOrders && currentStats.recentOrders.length > 0 && (
             <span className="text-[10px] font-semibold text-slate-400">
-              {stats.recentOrders.length} Transaksi Terakhir
+              {currentStats.recentOrders.length} Transaksi Terakhir
             </span>
           )}
         </div>
 
-        {loadingStats && !stats ? (
+        {loadingStats && !currentStats ? (
           <div className="space-y-1.5">
             <div className="h-10 rounded-xl bg-slate-100 animate-pulse" />
             <div className="h-10 rounded-xl bg-slate-100 animate-pulse" />
           </div>
-        ) : stats?.recentOrders && stats.recentOrders.length > 0 ? (
+        ) : currentStats?.recentOrders && currentStats.recentOrders.length > 0 ? (
           <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-            {stats.recentOrders.map((order, idx) => (
+            {currentStats.recentOrders.map((order, idx) => (
               <div
                 key={order.orderId || idx}
                 className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between text-xs hover:bg-orange-50/40 transition-colors"
