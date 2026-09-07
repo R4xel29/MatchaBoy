@@ -84,20 +84,20 @@ export default function AdminArusLoginClient() {
           transition={{ duration: 0.6, ease: "easeOut" }}
           className="max-w-md w-full"
         >
-          <div className="bg-white/80 backdrop-blur-xl border border-gray-100/80 shadow-xl rounded-3xl p-8 sm:p-10 relative overflow-hidden">
+          <div className="bg-white/90 backdrop-blur-xl border border-orange-100/80 shadow-xl rounded-3xl p-8 sm:p-10 relative overflow-hidden">
             {/* Elegant Top Highlight Line */}
-            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-[#2E5A44] via-[#B48A5E] to-[#2E5A44]" />
+            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-500" />
 
             {/* Portal Branding */}
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#2E5A44]/10 text-[#2E5A44] mb-4 shadow-inner">
-                <ShieldCheck className="w-8 h-8" />
+              <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 text-orange-600 mb-4 shadow-sm">
+                <ShieldCheck className="w-8 h-8 text-orange-600" />
               </div>
-              <h1 className="font-serif text-3xl text-gray-800 tracking-wide mb-2">
-                Arum Seduh Admin
+              <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-slate-800 tracking-tight mb-1.5">
+                Arum Seduh Portal
               </h1>
-              <p className="text-sm text-gray-500 font-medium">
-                Administrative & Cashier Secure Portal
+              <p className="text-xs sm:text-sm text-slate-500 font-medium">
+                Portal Akses Staf Kasir & Admin Toko
               </p>
             </div>
 
@@ -122,22 +122,22 @@ export default function AdminArusLoginClient() {
 
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Email Input */}
+              {/* Email or Phone Input */}
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">
-                  Email Kantor
+                <label className="text-xs font-bold text-slate-600 uppercase tracking-wider pl-1">
+                  Email atau Nomor WhatsApp
                 </label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-[#2E5A44] transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-orange-500 transition-colors">
                     <Mail className="w-5 h-5" />
                   </div>
                   <input
-                    type="email"
+                    type="text"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="nama@arumseduh.com"
-                    className="w-full pl-11 pr-4 py-4 bg-gray-50/50 focus:bg-white border border-gray-200/80 rounded-2xl outline-none focus:ring-2 focus:ring-[#2E5A44]/15 focus:border-[#2E5A44] transition-all font-medium text-gray-800 placeholder:text-gray-400 placeholder:font-normal text-sm"
+                    placeholder="nama@arumseduh.com atau 0812..."
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50/70 focus:bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-800 placeholder:text-slate-400 text-sm"
                   />
                 </div>
               </div>
@@ -145,12 +145,12 @@ export default function AdminArusLoginClient() {
               {/* Password Input */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center px-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Sandi Keamanan
+                  <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    Password / PIN Kasir
                   </label>
                 </div>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-[#2E5A44] transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-orange-500 transition-colors">
                     <Lock className="w-5 h-5" />
                   </div>
                   <input
@@ -159,12 +159,12 @@ export default function AdminArusLoginClient() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-11 pr-12 py-4 bg-gray-50/50 focus:bg-white border border-gray-200/80 rounded-2xl outline-none focus:ring-2 focus:ring-[#2E5A44]/15 focus:border-[#2E5A44] transition-all font-medium text-gray-800 placeholder:text-gray-400 text-sm"
+                    className="w-full pl-11 pr-12 py-3.5 bg-slate-50/70 focus:bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all font-medium text-slate-800 placeholder:text-slate-400 text-sm"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-[#2E5A44] transition-colors"
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-orange-600 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -175,15 +175,15 @@ export default function AdminArusLoginClient() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-6 py-4 bg-[#2E5A44] text-white rounded-2xl font-bold shadow-lg shadow-[#2E5A44]/25 hover:bg-[#203f2f] hover:shadow-xl active:scale-[0.98] transition-all disabled:opacity-75 disabled:pointer-events-none flex justify-center items-center gap-2.5 text-[15px]"
+                className="w-full mt-6 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl font-bold shadow-md shadow-orange-500/20 hover:shadow-lg active:scale-[0.98] transition-all disabled:opacity-75 disabled:pointer-events-none flex justify-center items-center gap-2.5 text-sm"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                     Memverifikasi Akses...
                   </>
                 ) : (
-                  "Masuk ke Dashboard"
+                  "Masuk ke Portal Outlet"
                 )}
               </button>
             </form>

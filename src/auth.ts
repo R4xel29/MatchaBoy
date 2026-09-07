@@ -68,8 +68,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             async authorize(credentials) {
                 if (!credentials?.email || !credentials?.password) return null
 
-                const user = await prisma.user.findUnique({
-                    where: { email: credentials.email as string }
+                const identifier = (credentials.email as string).trim().toLowerCase();
+                let stdPhone = identifier.replace(/[^0-9]/g, '');
+                if (stdPhone.startsWith('08')) {
+                    stdPhone = '62' + stdPhone.substring(1);
+                } else if (stdPhone.startsWith('8')) {
+                    stdPhone = '62' + stdPhone;
+                }
+
+                const user = await prisma.user.findFirst({
+                    where: {
+                        OR: [
+                            { email: identifier },
+                            ...(stdPhone.length >= 10 ? [{ phone: stdPhone }] : []),
+                        ],
+                    },
                 })
 
                 if (!user || !user.password) return null
