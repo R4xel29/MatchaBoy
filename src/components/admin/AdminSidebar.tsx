@@ -124,14 +124,14 @@ const COLLABORATION_ITEMS = [
 ];
 
 const CASHIER_ITEMS = [
-  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone, hasBadge: true },
+  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
   { label: 'Pengaturan Struk', href: '/admin/receipt-settings', icon: Printer },
   { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
 ];
 
 const STAFF_ITEMS = [
-  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone, hasBadge: true },
+  { label: 'Kasir (POS)', href: '/admin/cashier', icon: MonitorSmartphone },
   { label: 'Pengecekan & SOP Outlet', href: '/admin/inspections', icon: ClipboardCheck },
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
@@ -329,12 +329,7 @@ function CollapsibleSection({
               <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-white animate-pulse" />
             )}
           </div>
-          <span className="flex items-center gap-2">
-            <span>{title}</span>
-            {showRedDot && (
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
-            )}
-          </span>
+          <span>{title}</span>
         </div>
         
         <div className="flex items-center gap-2">
