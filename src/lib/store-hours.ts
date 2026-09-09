@@ -78,18 +78,9 @@ export function getEffectiveStoreHours(
   dayOfWeek: number,
   options: { isSpmb?: boolean } = { isSpmb: true }
 ): { openTime: string; closeTime: string } {
-  // Base hours
-  let baseOpen = config.openTime || (options.isSpmb ? config.spmbStartTime : null) || '08:00';
-  let baseClose = config.closeTime || (options.isSpmb ? config.spmbCloseTime : null) || '21:00';
-
-  // If SPMB has a specific closing cutoff that is earlier, respect it
-  if (options.isSpmb && config.spmbCloseTime) {
-    const spmbCloseMinutes = timeStringToMinutes(config.spmbCloseTime);
-    const baseCloseMinutes = timeStringToMinutes(baseClose);
-    if (spmbCloseMinutes > 0 && spmbCloseMinutes < baseCloseMinutes) {
-      baseClose = config.spmbCloseTime;
-    }
-  }
+  // Base hours - Jam operasional tunggal dan terpadu untuk Toko dan SPMB
+  let baseOpen = config.openTime || config.spmbStartTime || '08:00';
+  let baseClose = config.closeTime || config.spmbCloseTime || '21:00';
 
   // Check customHours overrides
   try {

@@ -88,9 +88,9 @@ export default async function SpmbPage() {
         products={mappedProducts}
         openTime={storeSettings?.openTime || '08:00'}
         closeTime={storeSettings?.closeTime || '21:00'}
-        spmbStartTime={(storeSettings as any)?.spmbStartTime || storeSettings?.openTime || '08:00'}
-        spmbEndTime={(storeSettings as any)?.spmbEndTime || storeSettings?.closeTime || '22:00'}
-        spmbCloseTime={(storeSettings as any)?.spmbCloseTime || storeSettings?.closeTime || '21:30'}
+        spmbStartTime={storeSettings?.openTime || '08:00'}
+        spmbEndTime={storeSettings?.closeTime || '21:00'}
+        spmbCloseTime={storeSettings?.closeTime || '21:00'}
         operationalDays={storeSettings?.operationalDays || '[0,1,2,3,4,5,6]'}
         disabledDates={storeSettings?.disabledDates || '[]'}
         customHours={storeSettings?.customHours || '{}'}

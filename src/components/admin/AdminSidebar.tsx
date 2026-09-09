@@ -86,7 +86,6 @@ const USER_ITEMS = [
 
 const SETTING_ITEMS = [
   { label: 'Pengaturan Toko', href: '/admin/store-settings', icon: Store },
-  { label: 'Pengaturan Struk', href: '/admin/receipt-settings', icon: Printer },
   { label: 'Layout Meja (Dine-in)', href: '/admin/tables', icon: Layers },
   { label: 'Metode Pembayaran', href: '/admin/payment-settings', icon: CreditCard },
   { label: 'Notifikasi', href: '/admin/notifications', icon: Bell },

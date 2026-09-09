@@ -138,9 +138,9 @@ export async function POST(req: Request) {
     }
 
     const storeSettings = await prisma.storeSettings.findFirst();
-    const spmbStartTime = storeSettings?.spmbStartTime || "08:00";
-    const spmbEndTime = storeSettings?.spmbEndTime || "13:00";
-    const spmbCloseTime = storeSettings?.spmbCloseTime || "16:00";
+    const spmbStartTime = storeSettings?.openTime || storeSettings?.spmbStartTime || "08:00";
+    const spmbEndTime = storeSettings?.closeTime || storeSettings?.spmbEndTime || "21:00";
+    const spmbCloseTime = storeSettings?.closeTime || storeSettings?.spmbCloseTime || "21:00";
 
     const [closeH, closeM] = spmbCloseTime.split(':').map(Number);
     const [startH, startM] = spmbStartTime.split(':').map(Number);
