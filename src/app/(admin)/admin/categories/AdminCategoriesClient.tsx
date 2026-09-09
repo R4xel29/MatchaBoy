@@ -27,6 +27,9 @@ import {
   Sparkles,
   Info,
   FolderPlus,
+  PackagePlus,
+  ArrowRight,
+  Filter,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { formatRupiah, cn } from '@/lib/utils';
@@ -49,14 +52,37 @@ export interface CategoryWithCount {
   products?: ProductPreview[];
 }
 
-interface Props {
-  initialCategories: CategoryWithCount[];
+export interface MasterProductItem {
+  id: string;
+  name: string;
+  price: number;
+  image?: string | null;
+  badge?: string | null;
+  categoryId: string;
+  category?: {
+    id: string;
+    name: string;
+  };
 }
 
-export default function AdminCategoriesClient({ initialCategories }: Props) {
+interface Props {
+  initialCategories: CategoryWithCount[];
+  allProducts?: MasterProductItem[];
+}
+
+export default function AdminCategoriesClient({ initialCategories, allProducts = [] }: Props) {
   const { showToast } = useToast();
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Products local cache
+  const [productsList, setProductsList] = useState<MasterProductItem[]>(allProducts);
+
+  useEffect(() => {
+    if (allProducts && allProducts.length > 0) {
+      setProductsList(allProducts);
+    }
+  }, [allProducts]);
 
   // View Mode: 'grid' (Visual Bento) vs 'table' (Matriks Tabel)
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
@@ -71,11 +97,18 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
 
-  // Add / Edit Modal State
+  // Add / Edit Category Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryWithCount | null>(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Assign Products to Category Modal State
+  const [assignCategoryTarget, setAssignCategoryTarget] = useState<CategoryWithCount | null>(null);
+  const [assignSelectedProductIds, setAssignSelectedProductIds] = useState<string[]>([]);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignFilter, setAssignFilter] = useState<'all' | 'unassigned' | 'assigned'>('all');
+  const [isAssigning, setIsAssigning] = useState(false);
 
   // Delete Target Modal State
   const [deleteTarget, setDeleteTarget] = useState<CategoryWithCount | null>(null);
@@ -190,6 +223,103 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
     setShowModal(false);
     setEditingCategory(null);
     setName('');
+  };
+
+  // Assign Modal open & close
+  const openAssignModal = (cat: CategoryWithCount) => {
+    setAssignCategoryTarget(cat);
+    const existingIds = productsList
+      .filter((p) => p.categoryId === cat.id)
+      .map((p) => p.id);
+    setAssignSelectedProductIds(existingIds);
+    setAssignSearch('');
+    setAssignFilter('all');
+  };
+
+  const closeAssignModal = () => {
+    setAssignCategoryTarget(null);
+    setAssignSelectedProductIds([]);
+    setAssignSearch('');
+  };
+
+  // Toggle product selection inside Assign Modal
+  const toggleAssignProduct = (productId: string) => {
+    setAssignSelectedProductIds((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+    );
+  };
+
+  // Filtered products inside Assign Modal
+  const filteredAssignProducts = useMemo(() => {
+    if (!assignCategoryTarget) return [];
+    return productsList.filter((p) => {
+      // Search
+      if (assignSearch.trim()) {
+        const q = assignSearch.toLowerCase();
+        const matchName = p.name.toLowerCase().includes(q);
+        const matchCat = p.category?.name?.toLowerCase().includes(q);
+        if (!matchName && !matchCat) return false;
+      }
+
+      // Filter: all vs unassigned vs assigned
+      const isAlreadyInThisCategory = p.categoryId === assignCategoryTarget.id;
+      if (assignFilter === 'unassigned') {
+        return !isAlreadyInThisCategory;
+      }
+      if (assignFilter === 'assigned') {
+        return isAlreadyInThisCategory;
+      }
+
+      return true;
+    });
+  }, [productsList, assignCategoryTarget, assignSearch, assignFilter]);
+
+  // Bulk Assign Handler: submit selected products to this category
+  const handleSaveAssignedProducts = async () => {
+    if (!assignCategoryTarget) return;
+    setIsAssigning(true);
+    try {
+      if (assignSelectedProductIds.length === 0) {
+        showToast('Pilih setidaknya 1 menu untuk dimasukkan ke kategori ini', 'error');
+        setIsAssigning(false);
+        return;
+      }
+
+      const res = await fetch('/api/admin/products/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: assignSelectedProductIds,
+          action: 'category',
+          value: assignCategoryTarget.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Gagal memperbarui kategori menu');
+      }
+
+      // Update local state
+      setProductsList((prev) =>
+        prev.map((p) =>
+          assignSelectedProductIds.includes(p.id)
+            ? { ...p, categoryId: assignCategoryTarget.id, category: { id: assignCategoryTarget.id, name: assignCategoryTarget.name } }
+            : p
+        )
+      );
+
+      showToast(
+        `Berhasil menetapkan ${assignSelectedProductIds.length} menu ke kategori "${assignCategoryTarget.name}"!`,
+        'success'
+      );
+      closeAssignModal();
+      router.refresh();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menetapkan produk ke kategori', 'error');
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   // Save Category Handler
@@ -664,7 +794,7 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
         )}
       </div>
 
-      {/* ── BULK ACTION TOOLBAR (Multi-Select) ── */}
+      {/* ── BULK ACTION TOOLBAR (Multi-Select Categories) ── */}
       {selectedIds.length > 0 && (
         <div className="bg-orange-500 text-white rounded-2xl p-3.5 shadow-lg shadow-orange-500/20 flex items-center justify-between flex-wrap gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex items-center gap-3">
@@ -865,6 +995,16 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
                       {/* Quick Actions */}
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end gap-1">
+                          {/* Kelola & Masukkan Menu Masal */}
+                          <button
+                            type="button"
+                            title="Kelola & Masukkan Menu ke Kategori Ini"
+                            onClick={() => openAssignModal(cat)}
+                            className="p-1.5 rounded-lg text-orange-600 hover:text-orange-700 hover:bg-orange-50 transition-colors cursor-pointer"
+                          >
+                            <PackagePlus className="w-4 h-4" />
+                          </button>
+
                           {/* View Products */}
                           <button
                             type="button"
@@ -962,6 +1102,14 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
                     <div className="flex items-center gap-0.5 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button
                         type="button"
+                        onClick={() => openAssignModal(cat)}
+                        title="Kelola & Masukkan Menu ke Kategori Ini"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors cursor-pointer"
+                      >
+                        <PackagePlus className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => openModal(cat)}
                         title="Edit Kategori"
                         className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
@@ -1009,16 +1157,26 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
                         )}
                       </div>
                     ) : (
-                      <div className="text-[11px] text-amber-700/80 italic flex items-center gap-1 py-0.5">
-                        <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
-                        <span>Kategori masih kosong, belum ada menu.</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-amber-800 bg-amber-50/70 p-2 rounded-xl border border-amber-200/60">
+                        <div className="flex items-center gap-1">
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Belum ada menu di kategori ini</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openAssignModal(cat)}
+                          className="px-2 py-1 rounded-lg bg-orange-500 text-white font-bold text-[10px] hover:bg-orange-600 transition-colors shadow-2xs flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <PackagePlus className="w-3 h-3" />
+                          <span>+ Masukkan Menu</span>
+                        </button>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Bottom Footer: Product count & direct catalog link */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-1">
+                {/* Bottom Footer: Product count, Assign Button & direct catalog link */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-1 gap-2">
                   <div className="flex items-center gap-1.5 text-xs text-slate-500">
                     <Package className="w-3.5 h-3.5 text-slate-400" />
                     <span className="font-semibold">
@@ -1026,16 +1184,29 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
                     </span>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(`/admin/products?category=${cat.id}`)
-                    }
-                    className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 hover:underline cursor-pointer"
-                  >
-                    <span>Lihat Produk</span>
-                    <span className="text-[13px]">→</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openAssignModal(cat)}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 hover:underline cursor-pointer bg-orange-50 px-2 py-1 rounded-lg border border-orange-200/60"
+                      title="Pilih dan masukkan menu sekaligus ke kategori ini"
+                    >
+                      <PackagePlus className="w-3.5 h-3.5" />
+                      <span>Kelola Menu</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/admin/products?category=${cat.id}`)
+                      }
+                      className="text-xs font-bold text-slate-500 hover:text-slate-800 flex items-center gap-0.5 hover:underline cursor-pointer"
+                      title="Lihat daftar produk di katalog menu"
+                    >
+                      <span>Lihat</span>
+                      <span className="text-[13px]">→</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -1155,6 +1326,273 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
         </div>
       )}
 
+      {/* ── MODAL: KELOLA & MASUKKAN MENU KE KATEGORI MASAL ── */}
+      {assignCategoryTarget && (
+        <div
+          className="fixed inset-0 z-[65] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+          onClick={closeAssignModal}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 border-b border-slate-100 bg-slate-50/60 flex items-start justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-orange-50 border border-orange-200/80 text-orange-600 flex items-center justify-center shrink-0">
+                  <PackagePlus className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-extrabold text-slate-900 font-heading">
+                      Kelola Menu Kategori
+                    </h3>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-orange-100 text-orange-800">
+                      {assignCategoryTarget.name}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Pilih makanan atau minuman dari katalog untuk dimasukkan ke kategori ini secara serentak
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeAssignModal}
+                className="p-1.5 hover:bg-slate-200/60 rounded-xl text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Search & Filter Bar */}
+            <div className="p-4 sm:px-6 border-b border-slate-100 bg-white space-y-3 shrink-0">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                {/* Search Input */}
+                <div className="relative flex-1">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={assignSearch}
+                    onChange={(e) => setAssignSearch(e.target.value)}
+                    placeholder="Cari nama menu makanan / minuman..."
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 hover:bg-slate-100/80 focus:bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500 transition-all"
+                  />
+                  {assignSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setAssignSearch('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Filter Pills */}
+                <div className="flex items-center gap-1 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setAssignFilter('all')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl transition-all cursor-pointer',
+                      assignFilter === 'all'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    )}
+                  >
+                    Semua ({productsList.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignFilter('unassigned')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl transition-all cursor-pointer',
+                      assignFilter === 'unassigned'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    )}
+                  >
+                    Belum Masuk ({productsList.filter((p) => p.categoryId !== assignCategoryTarget.id).length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignFilter('assigned')}
+                    className={cn(
+                      'px-3 py-1.5 rounded-xl transition-all cursor-pointer',
+                      assignFilter === 'assigned'
+                        ? 'bg-slate-900 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    )}
+                  >
+                    Di Kategori Ini ({productsList.filter((p) => p.categoryId === assignCategoryTarget.id).length})
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Multi-select helpers */}
+              <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                <span>
+                  Menampilkan <strong>{filteredAssignProducts.length}</strong> menu
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const visibleIds = filteredAssignProducts.map((p) => p.id);
+                      setAssignSelectedProductIds((prev) => {
+                        const next = [...prev];
+                        visibleIds.forEach((id) => {
+                          if (!next.includes(id)) next.push(id);
+                        });
+                        return next;
+                      });
+                    }}
+                    className="text-[11px] font-bold text-orange-600 hover:underline cursor-pointer"
+                  >
+                    Pilih Semua yang Tampil
+                  </button>
+                  <span className="text-slate-300">•</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const visibleIds = filteredAssignProducts.map((p) => p.id);
+                      setAssignSelectedProductIds((prev) =>
+                        prev.filter((id) => !visibleIds.includes(id))
+                      );
+                    }}
+                    className="text-[11px] font-bold text-slate-400 hover:text-slate-700 cursor-pointer"
+                  >
+                    Bersihkan Pilihan Tampil
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Products List */}
+            <div className="p-4 sm:px-6 overflow-y-auto flex-1 space-y-2">
+              {filteredAssignProducts.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">
+                  <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-xs font-bold">Tidak ada menu yang sesuai dengan filter/pencarian</p>
+                </div>
+              ) : (
+                filteredAssignProducts.map((product) => {
+                  const isChecked = assignSelectedProductIds.includes(product.id);
+                  const isCurrentCategory = product.categoryId === assignCategoryTarget.id;
+
+                  return (
+                    <div
+                      key={product.id}
+                      onClick={() => toggleAssignProduct(product.id)}
+                      className={cn(
+                        'p-3 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 group',
+                        isChecked
+                          ? 'border-orange-400 bg-orange-50/30 ring-1 ring-orange-500/20'
+                          : 'border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/60'
+                      )}
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {/* Checkbox */}
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          className="w-4 h-4 rounded border-slate-300 text-orange-500 focus:ring-orange-400 cursor-pointer shrink-0"
+                        />
+
+                        {/* Thumbnail Image */}
+                        <div className="w-11 h-11 rounded-xl bg-slate-100 overflow-hidden border border-slate-200 shrink-0 flex items-center justify-center">
+                          {product.image ? (
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Package className="w-5 h-5 text-slate-400" />
+                          )}
+                        </div>
+
+                        {/* Details */}
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-bold text-xs sm:text-sm text-slate-900 truncate group-hover:text-orange-600 transition-colors">
+                            {product.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap text-[11px]">
+                            <span className="font-extrabold text-slate-800">
+                              {formatRupiah(product.price)}
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-slate-400 font-mono text-[10px]">
+                              SKU: {product.id.slice(0, 6).toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Current Category Status Tag */}
+                      <div className="shrink-0 text-right">
+                        {isCurrentCategory ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <Check className="w-3 h-3" />
+                            <span>Di Kategori Ini</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            <span>Kategori: {product.category?.name || 'Lainnya'}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+              <div className="text-xs">
+                <span className="font-bold text-slate-700">
+                  {assignSelectedProductIds.length} menu dipilih
+                </span>
+                <span className="text-slate-400 ml-1.5">
+                  untuk kategori &quot;{assignCategoryTarget.name}&quot;
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={closeAssignModal}
+                  className="px-4 py-2 text-xs font-bold rounded-xl text-slate-600 hover:bg-slate-200/60 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAssignedProducts}
+                  disabled={isAssigning}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold text-xs shadow-glow-orange flex items-center gap-2 disabled:opacity-50 transition-all cursor-pointer active:scale-95"
+                >
+                  {isAssigning ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>
+                    {isAssigning
+                      ? 'Menerapkan...'
+                      : `Terapkan (${assignSelectedProductIds.length} Menu)`}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── SINGLE DELETE CONFIRMATION MODAL ── */}
       {deleteTarget && (
         <div
@@ -1193,14 +1631,14 @@ export default function AdminCategoriesClient({ initialCategories }: Props) {
                   <button
                     type="button"
                     onClick={() => {
-                      const catId = deleteTarget.id;
+                      const cat = deleteTarget;
                       setDeleteTarget(null);
-                      router.push(`/admin/products?category=${catId}`);
+                      openAssignModal(cat);
                     }}
                     className="w-full px-4 py-2.5 text-xs font-bold rounded-xl bg-orange-500 hover:bg-orange-600 text-white transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    <span>Lihat Produk di Katalog ({deleteTarget._count.products})</span>
+                    <PackagePlus className="w-3.5 h-3.5" />
+                    <span>Pindahkan / Kelola Menu ({deleteTarget._count.products})</span>
                   </button>
                   <button
                     type="button"

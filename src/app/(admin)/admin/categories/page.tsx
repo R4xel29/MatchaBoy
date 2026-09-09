@@ -22,9 +22,33 @@ export default async function AdminCategoriesPage() {
     },
   });
 
+  const allProducts = await prisma.product.findMany({
+    where: {
+      badge: { not: 'archived' },
+    },
+    select: {
+      id: true,
+      name: true,
+      price: true,
+      image: true,
+      badge: true,
+      categoryId: true,
+      category: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+    orderBy: [{ category: { name: 'asc' } }, { name: 'asc' }],
+  });
+
   return (
     <div className="space-y-6">
-      <AdminCategoriesClient initialCategories={categories as any} />
+      <AdminCategoriesClient
+        initialCategories={categories as any}
+        allProducts={allProducts as any}
+      />
     </div>
   );
 }
