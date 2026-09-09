@@ -1,33 +1,35 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Bell, Send, FileText, Plus, Trash2, Loader2, Users, User, ToggleLeft, ToggleRight, Save } from 'lucide-react';
+import { Bell, Send, FileText } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useToast } from '@/components/ui/Toast';
+import { cn } from '@/lib/utils';
 
-type Tab = 'send' | 'templates';
-type Template = { id: string; trigger: string; title: string; message: string; isActive: boolean };
-
-const TRIGGER_OPTIONS = [
-  { value: 'ORDER_COMPLETED', label: 'Order Selesai' },
-  { value: 'POINTS_EARNED', label: 'Poin Bertambah' },
-  { value: 'WELCOME', label: 'Welcome (User Baru)' },
-  { value: 'PICKUP_REMINDER', label: 'Pengingat Pickup' },
-  { value: 'CUSTOM', label: 'Custom' },
-];
+import {
+  NotificationTab,
+  NotificationTarget,
+  NotificationTemplate,
+} from './_components/types';
+import { NotificationSenderCard } from './_components/NotificationSenderCard';
+import { NotificationTemplatesTable } from './_components/NotificationTemplatesTable';
+import { NotificationTemplateModal } from './_components/NotificationTemplateModal';
 
 export default function AdminNotificationsPage() {
-  const [tab, setTab] = useState<Tab>('send');
+  const { showToast } = useToast();
+  const [tab, setTab] = useState<NotificationTab>('send');
+
+  // Manual Send State
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
-  const [target, setTarget] = useState<'all' | 'specific'>('all');
+  const [target, setTarget] = useState<NotificationTarget>('all');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
 
-  // Templates
-  const [templates, setTemplates] = useState<Template[]>([]);
+  // Templates State
+  const [templates, setTemplates] = useState<NotificationTemplate[]>([]);
   const [loadingTpl, setLoadingTpl] = useState(false);
-  const [editTpl, setEditTpl] = useState<Partial<Template> | null>(null);
+  const [editTpl, setEditTpl] = useState<Partial<NotificationTemplate> | null>(null);
   const [savingTpl, setSavingTpl] = useState(false);
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -42,15 +44,24 @@ export default function AdminNotificationsPage() {
     onConfirm: () => {},
   });
 
-  useEffect(() => { if (tab === 'templates') fetchTemplates(); }, [tab]);
+  useEffect(() => {
+    if (tab === 'templates') {
+      fetchTemplates();
+    }
+  }, [tab]);
 
   const fetchTemplates = async () => {
     setLoadingTpl(true);
     try {
       const res = await fetch('/api/admin/notifications/templates');
-      if (res.ok) setTemplates(await res.json());
-    } catch {}
-    finally { setLoadingTpl(false); }
+      if (res.ok) {
+        setTemplates(await res.json());
+      }
+    } catch {
+      showToast('Gagal memuat template notifikasi', 'error');
+    } finally {
+      setLoadingTpl(false);
+    }
   };
 
   const handleSend = async () => {
@@ -66,192 +77,148 @@ export default function AdminNotificationsPage() {
         setSent(true);
         setTitle('');
         setMessage('');
+        showToast('Notifikasi berhasil dikirim!', 'success');
         setTimeout(() => setSent(false), 3000);
+      } else {
+        showToast('Gagal mengirim notifikasi', 'error');
       }
-    } catch {}
-    finally { setSending(false); }
+    } catch {
+      showToast('Terjadi kesalahan saat mengirim notifikasi', 'error');
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSaveTemplate = async () => {
     if (!editTpl?.trigger || !editTpl?.title || !editTpl?.message) return;
     setSavingTpl(true);
     try {
-      await fetch('/api/admin/notifications/templates', {
+      const res = await fetch('/api/admin/notifications/templates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editTpl),
       });
-      setEditTpl(null);
-      fetchTemplates();
-    } catch {}
-    finally { setSavingTpl(false); }
+      if (res.ok) {
+        showToast('Template notifikasi berhasil disimpan', 'success');
+        setEditTpl(null);
+        fetchTemplates();
+      } else {
+        showToast('Gagal menyimpan template', 'error');
+      }
+    } catch {
+      showToast('Terjadi kesalahan jaringan', 'error');
+    } finally {
+      setSavingTpl(false);
+    }
   };
 
-  const handleDeleteTemplate = async (id: string) => {
+  const handleDeleteTemplate = (id: string) => {
     setConfirmModal({
       isOpen: true,
       title: 'Hapus Template',
-      message: 'Apakah Anda yakin ingin menghapus template notifikasi ini?',
+      message: 'Apakah Anda yakin ingin menghapus template notifikasi ini secara permanen?',
       isDestructive: true,
       onConfirm: async () => {
-        setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        await fetch(`/api/admin/notifications/templates?id=${id}`, { method: 'DELETE' });
-        fetchTemplates();
-      }
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/admin/notifications/templates?id=${id}`, {
+            method: 'DELETE',
+          });
+          if (res.ok) {
+            showToast('Template berhasil dihapus', 'success');
+            fetchTemplates();
+          } else {
+            showToast('Gagal menghapus template', 'error');
+          }
+        } catch {
+          showToast('Terjadi kesalahan saat menghapus', 'error');
+        }
+      },
     });
   };
 
   return (
-    <div className="p-4 lg:p-8 max-w-4xl">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground flex items-center gap-3">
-          <Bell className="w-6 h-6 text-brand-600" /> Notifikasi
-        </h1>
-        <p className="text-sm text-muted-foreground mt-1">Kirim notifikasi dan kelola template pesan otomatis</p>
+    <div className="p-4 lg:p-8 max-w-4xl space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black font-heading text-slate-900 flex items-center gap-3">
+            <Bell className="w-6 h-6 text-orange-600" />
+            <span>Notifikasi Pelanggan</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Kirim pengumuman manual dan kelola template pesan otomatis Arum Seduh
+          </p>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-muted/50 p-1 rounded-xl w-fit">
+      {/* Segmented Tabs */}
+      <div className="flex gap-1.5 bg-slate-100 p-1.5 rounded-2xl w-fit">
         {[
-          { id: 'send' as Tab, label: 'Kirim Manual', icon: Send },
-          { id: 'templates' as Tab, label: 'Template Otomatis', icon: FileText },
+          { id: 'send' as NotificationTab, label: 'Kirim Manual', icon: Send },
+          { id: 'templates' as NotificationTab, label: 'Template Otomatis', icon: FileText },
         ].map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
-              ${tab === t.id ? 'bg-white shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-            <t.icon className="w-4 h-4" /> {t.label}
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer',
+              tab === t.id
+                ? 'bg-white shadow-xs text-orange-700'
+                : 'text-slate-500 hover:text-slate-800'
+            )}
+          >
+            <t.icon className="w-4 h-4" />
+            <span>{t.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Send Manual */}
+      {/* Tab: Kirim Manual */}
       {tab === 'send' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
-          <div className="bg-card rounded-2xl border border-border p-6 space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Target</label>
-              <div className="flex gap-2">
-                <button onClick={() => setTarget('all')}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all
-                    ${target === 'all' ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-border bg-card text-muted-foreground'}`}>
-                  <Users className="w-4 h-4" /> Semua Customer
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Judul</label>
-              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Judul notifikasi..."
-                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-brand-500" />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Pesan</label>
-              <textarea value={message} onChange={e => setMessage(e.target.value)} rows={4} placeholder="Isi pesan notifikasi..."
-                className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:border-brand-500" />
-            </div>
-            <button onClick={handleSend} disabled={sending || !title || !message}
-              className="flex items-center gap-2 px-6 py-3 rounded-xl gradient-brand text-white font-semibold text-sm disabled:opacity-50 hover:opacity-90 transition-all">
-              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {sending ? 'Mengirim...' : 'Kirim Notifikasi'}
-            </button>
-            {sent && (
-              <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-sm text-green-600 font-medium">
-                ✓ Notifikasi berhasil dikirim!
-              </motion.p>
-            )}
-          </div>
-        </motion.div>
+        <NotificationSenderCard
+          title={title}
+          setTitle={setTitle}
+          message={message}
+          setMessage={setMessage}
+          target={target}
+          setTarget={setTarget}
+          sending={sending}
+          sent={sent}
+          handleSend={handleSend}
+        />
       )}
 
-      {/* Templates */}
+      {/* Tab: Template Otomatis */}
       {tab === 'templates' && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-5">
-          <button onClick={() => setEditTpl({ trigger: '', title: '', message: '', isActive: true })}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-dashed border-brand-300 text-brand-700 font-medium text-sm hover:bg-brand-50 transition-colors">
-            <Plus className="w-4 h-4" /> Tambah Template Baru
-          </button>
+        <div className="space-y-5">
+          <NotificationTemplateModal
+            editTpl={editTpl}
+            setEditTpl={setEditTpl}
+            savingTpl={savingTpl}
+            onSave={handleSaveTemplate}
+            onCancel={() => setEditTpl(null)}
+          />
 
-          {/* Edit form */}
-          {editTpl && (
-            <div className="bg-card rounded-2xl border border-brand-200 p-6 space-y-4">
-              <h3 className="font-bold text-foreground">
-                {editTpl.id ? 'Edit Template' : 'Template Baru'}
-              </h3>
-              <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Trigger</label>
-                <select value={editTpl.trigger || ''} onChange={e => setEditTpl({ ...editTpl, trigger: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-brand-500">
-                  <option value="">Pilih trigger...</option>
-                  {TRIGGER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">Judul</label>
-                <input value={editTpl.title || ''} onChange={e => setEditTpl({ ...editTpl, title: e.target.value })}
-                  placeholder="e.g. Pesanan Selesai! 🎉" className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm focus:outline-none focus:border-brand-500" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-                  Pesan <span className="text-muted-foreground/60 normal-case">(placeholder: {'{{name}}'}, {'{{points}}'}, {'{{orderNo}}'})</span>
-                </label>
-                <textarea value={editTpl.message || ''} onChange={e => setEditTpl({ ...editTpl, message: e.target.value })} rows={3}
-                  placeholder="Halo {{name}}! Pesanan {{orderNo}} sudah selesai. Kamu dapat {{points}} poin!"
-                  className="w-full px-4 py-3 rounded-xl border border-border bg-background text-sm resize-none focus:outline-none focus:border-brand-500" />
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleSaveTemplate} disabled={savingTpl}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl gradient-brand text-white font-semibold text-sm disabled:opacity-50">
-                  {savingTpl ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Simpan
-                </button>
-                <button onClick={() => setEditTpl(null)} className="px-5 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground">Batal</button>
-              </div>
-            </div>
-          )}
-
-          {/* Template list */}
-          {loadingTpl ? (
-            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-brand-600" /></div>
-          ) : templates.length === 0 ? (
-            <div className="text-center py-12 bg-card rounded-2xl border border-border">
-              <FileText className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">Belum ada template. Buat template pertama!</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {templates.map((tpl) => (
-                <div key={tpl.id} className="bg-card rounded-2xl border border-border p-5 flex items-start gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-bold uppercase tracking-wider">{tpl.trigger}</span>
-                      {tpl.isActive ? (
-                        <span className="text-[10px] text-green-600 font-bold">● Aktif</span>
-                      ) : (
-                        <span className="text-[10px] text-gray-400 font-bold">○ Nonaktif</span>
-                      )}
-                    </div>
-                    <h4 className="font-bold text-foreground text-sm">{tpl.title}</h4>
-                    <p className="text-xs text-muted-foreground mt-1">{tpl.message}</p>
-                  </div>
-                  <div className="flex gap-1">
-                    <button onClick={() => setEditTpl(tpl)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                      <FileText className="w-4 h-4" />
-                    </button>
-                    <button onClick={() => handleDeleteTemplate(tpl.id)} className="p-2 rounded-lg hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </motion.div>
+          <NotificationTemplatesTable
+            templates={templates}
+            loadingTpl={loadingTpl}
+            onAddNew={() =>
+              setEditTpl({ trigger: '', title: '', message: '', isActive: true })
+            }
+            onEdit={(tpl) => setEditTpl(tpl)}
+            onDelete={handleDeleteTemplate}
+          />
+        </div>
       )}
+
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
         isDestructive={confirmModal.isDestructive}
         onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

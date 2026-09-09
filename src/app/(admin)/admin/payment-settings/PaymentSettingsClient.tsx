@@ -1,67 +1,44 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import {
-  CreditCard, QrCode, Banknote, MessageCircle, Wallet,
-
-  Save, Loader2, CheckCircle2, Plus, Trash2, Upload,
-  ToggleLeft, ToggleRight, Building2, Image as ImageIcon,
+  CreditCard,
+  QrCode,
+  Banknote,
+  Wallet,
+  Save,
+  Loader2,
+  CheckCircle2,
+  Layers,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { cn } from '@/lib/utils';
 
-interface PaymentConfig {
-  id: string;
-  codEnabled: boolean;
-  codWhatsApp: string;
-  qrisEnabled: boolean;
-  qrisImage: string | null;
-  qrisLogo: string | null;
-  qrisLabel: string;
-  qrisAutoGenerate: boolean;
-  qrisNmid: string;
-  transferEnabled: boolean;
-  dokuEnabled: boolean;
-  dokuClientId: string;
-  dokuSharedKey: string;
-  dokuSandbox: boolean;
-  walletTopUpEnabled: boolean;
-  walletMinTopUp: number;
-  walletBonusMinAmount: number;
-  walletBonusPercent: number;
-  walletBonusMode: string;
-  walletFirstTimePromoEnabled: boolean;
-  walletFirstTimePromoPackages: string;
-}
-
-interface BankAccount {
-  id: string;
-  bankName: string;
-  bankLogo: string | null;
-  accountNumber: string;
-  accountName: string;
-  isActive: boolean;
-  order: number;
-}
+import { PaymentConfig, BankAccount, PromoPackage, PaymentTab } from './_components/types';
+import { CashAndBankSettingsTab } from './_components/CashAndBankSettingsTab';
+import { DokuSettingsTab } from './_components/DokuSettingsTab';
+import { MidtransSettingsTab } from './_components/MidtransSettingsTab';
 
 export default function PaymentSettingsClient() {
   const { showToast } = useToast();
+  const [activeTab, setActiveTab] = useState<PaymentTab>('all');
   const [settings, setSettings] = useState<PaymentConfig | null>(null);
   const [banks, setBanks] = useState<BankAccount[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
-  
-  // New bank form
+
+  // New bank form state
   const [showNewBank, setShowNewBank] = useState(false);
   const [newBank, setNewBank] = useState({ bankName: '', accountNumber: '', accountName: '', bankLogo: '' });
 
   // First-time promo package inputs
   const [newPromoAmount, setNewPromoAmount] = useState('');
   const [newPromoBonus, setNewPromoBonus] = useState('');
-  
+
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -76,7 +53,7 @@ export default function PaymentSettingsClient() {
   });
 
   // Helper to get parsed promo packages from settings
-  const getPromoPackages = (): Array<{ amount: number; bonus: number }> => {
+  const getPromoPackages = (): PromoPackage[] => {
     try {
       if (settings?.walletFirstTimePromoPackages) {
         return JSON.parse(settings.walletFirstTimePromoPackages);
@@ -88,7 +65,7 @@ export default function PaymentSettingsClient() {
   };
 
   // Helper to update promo packages list
-  const updatePromoPackages = (packages: Array<{ amount: number; bonus: number }>) => {
+  const updatePromoPackages = (packages: PromoPackage[]) => {
     update('walletFirstTimePromoPackages', JSON.stringify(packages));
   };
 
@@ -100,7 +77,7 @@ export default function PaymentSettingsClient() {
       return;
     }
     const current = getPromoPackages();
-    if (current.some(pkg => pkg.amount === amountVal)) {
+    if (current.some((pkg) => pkg.amount === amountVal)) {
       showToast('Paket nominal ini sudah terdaftar', 'error');
       return;
     }
@@ -113,7 +90,7 @@ export default function PaymentSettingsClient() {
 
   const removePromoPackage = (amountVal: number) => {
     const current = getPromoPackages();
-    const updated = current.filter(pkg => pkg.amount !== amountVal);
+    const updated = current.filter((pkg) => pkg.amount !== amountVal);
     updatePromoPackages(updated);
     showToast('Paket promo berhasil dihapus', 'success');
   };
@@ -130,6 +107,7 @@ export default function PaymentSettingsClient() {
       setBanks(data.banks || []);
     } catch (err) {
       console.error(err);
+      showToast('Gagal memuat pengaturan pembayaran', 'error');
     } finally {
       setLoading(false);
     }
@@ -139,16 +117,23 @@ export default function PaymentSettingsClient() {
     if (!settings) return;
     setSaving(true);
     try {
-      await fetch('/api/admin/payment-settings', {
+      const res = await fetch('/api/admin/payment-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings),
       });
-      setSaved(true);
-      showToast('Pengaturan pembayaran berhasil disimpan', 'success');
-      setTimeout(() => setSaved(false), 2000);
-    } catch { showToast('Gagal menyimpan pengaturan', 'error'); }
-    finally { setSaving(false); }
+      if (res.ok) {
+        setSaved(true);
+        showToast('Pengaturan pembayaran berhasil disimpan', 'success');
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        throw new Error();
+      }
+    } catch {
+      showToast('Gagal menyimpan pengaturan', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const addBank = async () => {
@@ -163,503 +148,157 @@ export default function PaymentSettingsClient() {
       setNewBank({ bankName: '', accountNumber: '', accountName: '', bankLogo: '' });
       setShowNewBank(false);
       showToast('Rekening bank berhasil ditambahkan', 'success');
-    } catch { showToast('Gagal menambah bank', 'error'); }
-  };
-
-  const deleteBank = async (id: string) => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Hapus Rekening',
-      message: 'Apakah Anda yakin ingin menghapus rekening bank ini?',
-      isDestructive: true,
-      onConfirm: async () => {
-        setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        try {
-          await fetch(`/api/admin/bank-accounts?id=${id}`, { method: 'DELETE' });
-          setBanks(banks.filter(b => b.id !== id));
-          showToast('Rekening bank berhasil dihapus', 'success');
-        } catch { showToast('Gagal menghapus rekening', 'error'); }
-      }
-    });
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'qrisImage' | 'qrisLogo') => {
-    const file = e.target.files?.[0];
-    if (!file || !settings) return;
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('type', field);
-
-    try {
-      const res = await fetch('/api/admin/upload', { method: 'POST', body: formData });
-      if (res.ok) {
-        const data = await res.json();
-        setSettings({ ...settings, [field]: data.url });
-      }
-    } catch { 
-      // Fallback: use data URL
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setSettings({ ...settings, [field]: ev.target?.result as string });
-      };
-      reader.readAsDataURL(file);
+    } catch {
+      showToast('Gagal menambah bank', 'error');
     }
   };
 
+  const deleteBank = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Rekening',
+      message: 'Apakah Anda yakin ingin menghapus rekening bank ini secara permanen?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          await fetch(`/api/admin/bank-accounts?id=${id}`, { method: 'DELETE' });
+          setBanks(banks.filter((b) => b.id !== id));
+          showToast('Rekening bank berhasil dihapus', 'success');
+        } catch {
+          showToast('Gagal menghapus rekening', 'error');
+        }
+      },
+    });
+  };
+
   const update = (key: keyof PaymentConfig, value: any) => {
-    if (settings) setSettings({ ...settings, [key]: value });
+    if (settings) {
+      setSettings({ ...settings, [key]: value });
+    }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500 mb-2" />
+        <p className="text-xs font-semibold">Memuat data pengaturan pembayaran...</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 text-left max-w-5xl mx-auto pb-12">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-3xl border border-slate-200/80 shadow-xs">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground flex items-center gap-2">
-            <CreditCard className="w-6 h-6 text-blue-600" />
-            Pengaturan Pembayaran
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight font-heading text-slate-900 flex items-center gap-2.5">
+            <CreditCard className="w-6 h-6 text-orange-600" />
+            <span>Pengaturan Pembayaran</span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Atur metode pembayaran yang tersedia untuk pelanggan
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            Konfigurasi gerbang pembayaran otomatis DOKU, QRIS, Dompet Arus Pay, dan rekening bank transfer
           </p>
         </div>
-        <button onClick={handleSave} disabled={saving}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white shadow-sm transition-all ${
-            saved ? 'bg-emerald-500' : 'bg-blue-600 hover:bg-blue-700'
-          } disabled:opacity-50`}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className={cn(
+            'flex items-center gap-2 px-5 py-2.5 rounded-2xl text-xs font-bold text-white shadow-glow-orange transition-all cursor-pointer active:scale-95 disabled:opacity-50 self-start sm:self-auto',
+            saved
+              ? 'bg-emerald-500 hover:bg-emerald-600'
+              : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600'
+          )}
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle2 className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          {saving ? 'Menyimpan...' : saved ? 'Tersimpan!' : 'Simpan'}
+          {saving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : saved ? (
+            <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            <Save className="w-4 h-4" />
+          )}
+          <span>{saving ? 'Menyimpan...' : saved ? 'Tersimpan!' : 'Simpan Pengaturan'}</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* COD Settings */}
-        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-green-50 text-green-600">
-                <Banknote className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground">COD (Bayar di Tempat)</h3>
-                <p className="text-[10px] text-muted-foreground">Verifikasi via WhatsApp</p>
-              </div>
-            </div>
-            <button onClick={() => update('codEnabled', !settings?.codEnabled)}>
-              {settings?.codEnabled
-                ? <ToggleRight className="w-7 h-7 text-emerald-500" />
-                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
-              }
-            </button>
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-              Nomor WhatsApp Admin
-            </label>
-            <div className="relative">
-              <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/50" />
-              <input
-                type="tel"
-                value={settings?.codWhatsApp || ''}
-                onChange={(e) => update('codWhatsApp', e.target.value)}
-                placeholder="628123456789"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500/20"
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">
-              💡 Format: 628xxx (tanpa + atau spasi)
-            </p>
-          </div>
-        </div>
-
-        {/* Arus Pay & Unified Top Up Settings (Opsi B) */}
-        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] space-y-4">
-          <div className="flex items-center justify-between border-b border-border/20 pb-3">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-                <Wallet className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground">Arus Pay (Dompet Digital)</h3>
-                <p className="text-[10px] text-muted-foreground">Kelola pengisian saldo dan skema bonus loyalitas</p>
-              </div>
-            </div>
-            <button onClick={() => update('walletTopUpEnabled', !settings?.walletTopUpEnabled)}>
-              {settings?.walletTopUpEnabled
-                ? <ToggleRight className="w-7 h-7 text-emerald-500 animate-in fade-in" />
-                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
-              }
-            </button>
-          </div>
-
-          {settings?.walletTopUpEnabled && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-              {/* General Top-Up Configuration */}
-              <div>
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                  Minimal Pengisian Saldo (Rp)
-                </label>
-                <input
-                  type="number"
-                  value={settings?.walletMinTopUp ?? 10000}
-                  onChange={(e) => update('walletMinTopUp', Number(e.target.value))}
-                  placeholder="Contoh: 10000"
-                  className="w-full sm:w-1/2 px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                />
-              </div>
-
-              {/* Bonus Scheme Selector */}
-              <div className="border-t border-border/30 pt-3.5 space-y-2">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Skema Bonus Top-Up
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {[
-                    { id: 'NONE', title: '🚫 Tanpa Bonus', desc: 'Saldo bertambah persis nominal top-up' },
-                    { id: 'REGULAR', title: '📈 Hanya Bonus Reguler', desc: 'Bonus persentase berlaku untuk semua transaksi' },
-                    { id: 'FIRST_TIME', title: '🎁 Hanya Promo Pertama', desc: 'Bonus paket khusus untuk pengisian pertama saja' },
-                    { id: 'BOTH', title: '✨ Gunakan Keduanya', desc: 'Paket untuk top-up pertama, persentase untuk selanjutnya' }
-                  ].map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      onClick={() => update('walletBonusMode', mode.id)}
-                      className={`p-3 text-left border rounded-xl transition-all cursor-pointer flex flex-col gap-0.5 ${
-                        (settings?.walletBonusMode ?? 'BOTH') === mode.id
-                          ? 'border-blue-500 bg-blue-50/20 text-blue-700 shadow-sm ring-1 ring-blue-500/25'
-                          : 'border-border/40 hover:border-gray-300 bg-white text-muted-foreground'
-                      }`}
-                    >
-                      <span className="text-[11.5px] font-extrabold text-foreground">{mode.title}</span>
-                      <span className="text-[9.5px] leading-tight text-muted-foreground">{mode.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* standard regular bonus panel */}
-              {((settings?.walletBonusMode ?? 'BOTH') === 'REGULAR' || (settings?.walletBonusMode ?? 'BOTH') === 'BOTH') && (
-                <div className="border-t border-border/30 pt-3.5 space-y-3.5 animate-in fade-in duration-200">
-                  <h4 className="text-[11px] font-bold text-foreground uppercase tracking-wider">📈 Pengaturan Bonus Persentase Reguler</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                        Persentase Bonus (%)
-                      </label>
-                      <input
-                        type="number"
-                        value={settings?.walletBonusPercent ?? 10}
-                        onChange={(e) => update('walletBonusPercent', Number(e.target.value))}
-                        placeholder="Contoh: 10 untuk 10%"
-                        className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9.5px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                        Minimal Pengisian Untuk Bonus (Rp)
-                      </label>
-                      <input
-                        type="number"
-                        value={settings?.walletBonusMinAmount ?? 100000}
-                        onChange={(e) => update('walletBonusMinAmount', Number(e.target.value))}
-                        placeholder="Contoh: 100000"
-                        className="w-full px-3 py-2.5 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* First-Time Promo packages panel */}
-              {((settings?.walletBonusMode ?? 'BOTH') === 'FIRST_TIME' || (settings?.walletBonusMode ?? 'BOTH') === 'BOTH') && (
-                <div className="border-t border-border/30 pt-3.5 space-y-4 animate-in fade-in duration-200">
-                  <h4 className="text-[11px] font-bold text-foreground uppercase tracking-wider">🎁 Pengaturan Promo Pengisian Pertama Kali</h4>
-                  
-                  {/* Packages List */}
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">
-                      Daftar Paket Promo Pertama Kali
-                    </span>
-                    {getPromoPackages().length === 0 ? (
-                      <div className="py-4 bg-gray-50 border border-dashed border-border/40 rounded-xl text-center text-xs text-muted-foreground italic font-semibold">
-                        Belum ada paket promo. Tambahkan paket di bawah.
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {getPromoPackages().map((pkg, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-3.5 bg-gray-50 border border-border/40 rounded-2xl shadow-sm relative overflow-hidden">
-                            <div className="space-y-0.5">
-                              <span className="text-[10px] text-muted-foreground font-bold block">Top Up Nominal</span>
-                              <span className="text-[13px] font-extrabold text-foreground">Rp{pkg.amount.toLocaleString('id-ID')}</span>
-                            </div>
-                            <div className="text-right flex items-center gap-3">
-                              <div className="space-y-0.5 pr-2.5 border-r border-border/40 text-right">
-                                <span className="text-[10px] text-rose-500 font-bold block">Ekstra Bonus</span>
-                                <span className="text-[13px] font-extrabold text-rose-600">+{pkg.bonus.toLocaleString('id-ID')}</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => removePromoPackage(pkg.amount)}
-                                className="p-1.5 hover:bg-rose-50 border border-transparent hover:border-rose-100 rounded-xl text-rose-600 transition-all cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Add New Package Form */}
-                  <div className="border-t border-border/30 pt-3.5 space-y-3">
-                    <h5 className="text-[10.5px] font-bold text-foreground">✨ Tambah Paket Promo Baru</h5>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                          Nominal Top-Up (Rp)
-                        </label>
-                        <input
-                          type="number"
-                          value={newPromoAmount}
-                          onChange={(e) => setNewPromoAmount(e.target.value)}
-                          placeholder="Contoh: 50000"
-                          className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                          Nominal Bonus Saldo (Rp)
-                        </label>
-                        <input
-                          type="number"
-                          value={newPromoBonus}
-                          onChange={(e) => setNewPromoBonus(e.target.value)}
-                          placeholder="Contoh: 5000"
-                          className="w-full px-3 py-2 text-xs bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 font-bold"
-                        />
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={addPromoPackage}
-                      disabled={!newPromoAmount || !newPromoBonus}
-                      className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-100 disabled:text-gray-400 border border-gray-900 disabled:border-transparent text-white text-[10px] font-bold uppercase tracking-wider rounded-xl shadow-sm transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Tambah Paket Promo
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* QRIS Settings */}
-        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 rounded-xl bg-purple-50 text-purple-600">
-                <QrCode className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground">QRIS</h3>
-                <p className="text-[10px] text-muted-foreground">Scan QR untuk pembayaran</p>
-              </div>
-            </div>
-            <button onClick={() => update('qrisEnabled', !settings?.qrisEnabled)}>
-              {settings?.qrisEnabled
-                ? <ToggleRight className="w-7 h-7 text-emerald-500" />
-                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
-              }
-            </button>
-          </div>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Label Tampilan</label>
-              <input type="text" value={settings?.qrisLabel || ''} onChange={(e) => update('qrisLabel', e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500/20" />
-            </div>
-
-            {/* Info Mode QRIS Dinamis */}
-            <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 text-[11px] leading-relaxed text-emerald-700 font-medium">
-              💡 <strong>Metode QRIS Dinamis Aktif</strong><br />
-              Sistem secara otomatis membuat QRIS dinamis via DOKU payment gateway untuk setiap pesanan baru. Pelanggan tidak perlu memasukkan nominal secara manual atau mengunggah bukti pembayaran struk/transfer.
-            </div>
-          </div>
-        </div>
-
-        {/* DOKU Settings — AKTIF */}
-        <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] lg:col-span-2 relative">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1 rounded-xl bg-white border border-gray-200 flex items-center justify-center shrink-0 w-10 h-10 shadow-sm overflow-hidden">
-                <img src="https://www.doku.com/wp-content/themes/doku/assets/images/logo.png" alt="DOKU" className="object-contain max-h-full max-w-full" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-foreground">DOKU Payment Gateway</h3>
-                <p className="text-[10px] text-muted-foreground">E-Wallet, QRIS, Virtual Account, & Kartu Kredit otomatis</p>
-              </div>
-            </div>
-            <button onClick={() => update('dokuEnabled', !settings?.dokuEnabled)}>
-              {settings?.dokuEnabled
-                ? <ToggleRight className="w-7 h-7 text-emerald-500" />
-                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
-              }
-            </button>
-          </div>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                  Client ID / API Key
-                </label>
-                <input
-                  type="text"
-                  value={settings?.dokuClientId || ''}
-                  onChange={(e) => update('dokuClientId', e.target.value)}
-                  placeholder="doku_key_sandbox_..."
-                  className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
-                  Shared Key (Secret Key)
-                </label>
-                <input
-                  type="password"
-                  value={settings?.dokuSharedKey || ''}
-                  onChange={(e) => update('dokuSharedKey', e.target.value)}
-                  placeholder="SK-..."
-                  className="w-full px-3 py-2.5 text-sm bg-gray-50 border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-gray-200">
-              <input
-                type="checkbox"
-                id="dokuSandbox"
-                checked={settings?.dokuSandbox ?? true}
-                onChange={(e) => update('dokuSandbox', e.target.checked)}
-                className="w-4 h-4 text-indigo-650 border-gray-300 rounded focus:ring-indigo-500"
-              />
-              <label htmlFor="dokuSandbox" className="text-xs font-semibold text-gray-700 cursor-pointer select-none">
-                Gunakan Mode Sandbox (Uji Coba / Development)
-              </label>
-            </div>
-          </div>
-        </div>
+      {/* Segmented Tab Filter */}
+      <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1 scrollbar-none text-xs font-bold">
+        {[
+          { id: 'all' as PaymentTab, label: 'Semua Metode', icon: Layers },
+          { id: 'digital-qris' as PaymentTab, label: 'QRIS & Dompet Digital', icon: QrCode },
+          { id: 'doku' as PaymentTab, label: 'DOKU Gateway', icon: CreditCard },
+          { id: 'cash-bank' as PaymentTab, label: 'COD & Transfer Bank', icon: Banknote },
+        ].map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setActiveTab(t.id)}
+            className={cn(
+              'py-3 px-4 border-b-2 flex items-center gap-2 transition-all whitespace-nowrap cursor-pointer',
+              activeTab === t.id
+                ? 'border-orange-500 text-orange-600 font-extrabold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            )}
+          >
+            <t.icon className="w-4 h-4" />
+            <span>{t.label}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Bank Transfer Settings */}
-      <div className="bg-white rounded-2xl border border-border/40 p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
-              <Building2 className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Transfer Bank</h3>
-              <p className="text-[10px] text-muted-foreground">Kelola rekening bank untuk transfer</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowNewBank(true)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors">
-              <Plus className="w-3.5 h-3.5" /> Tambah Bank
-            </button>
-            <button onClick={() => update('transferEnabled', !settings?.transferEnabled)}>
-              {settings?.transferEnabled
-                ? <ToggleRight className="w-7 h-7 text-emerald-500" />
-                : <ToggleLeft className="w-7 h-7 text-muted-foreground/40" />
-              }
-            </button>
-          </div>
-        </div>
+      {/* Content Rendering based on Tab */}
+      {(activeTab === 'all' || activeTab === 'digital-qris') && (
+        <MidtransSettingsTab
+          settings={settings}
+          update={update}
+          getPromoPackages={getPromoPackages}
+          addPromoPackage={addPromoPackage}
+          removePromoPackage={removePromoPackage}
+          newPromoAmount={newPromoAmount}
+          setNewPromoAmount={setNewPromoAmount}
+          newPromoBonus={newPromoBonus}
+          setNewPromoBonus={setNewPromoBonus}
+        />
+      )}
 
-        {/* Bank List */}
-        <div className="space-y-2">
-          {banks.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground/50">
-              <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-              <p className="text-xs">Belum ada rekening bank</p>
-            </div>
-          ) : (
-            banks.map((bank) => (
-              <div key={bank.id} className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 border border-border/30">
-                <div className="w-10 h-10 rounded-lg bg-white border border-border/40 flex items-center justify-center overflow-hidden">
-                  {bank.bankLogo ? (
-                    <img src={bank.bankLogo} alt={bank.bankName} className="w-8 h-8 object-contain" />
-                  ) : (
-                    <Building2 className="w-5 h-5 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <p className="text-[13px] font-bold text-foreground">{bank.bankName}</p>
-                  <p className="text-[11px] text-muted-foreground">{bank.accountNumber} · {bank.accountName}</p>
-                </div>
-                <button onClick={() => deleteBank(bank.id)}
-                  className="p-2 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
+      {(activeTab === 'all' || activeTab === 'doku') && (
+        <DokuSettingsTab settings={settings} update={update} />
+      )}
 
-        {/* New Bank Form */}
-        {showNewBank && (
-          <div className="mt-4 p-4 rounded-xl bg-blue-50/50 border border-blue-200 space-y-3">
-            <h4 className="text-xs font-bold text-blue-800 uppercase tracking-wider">Tambah Rekening Baru</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <input type="text" placeholder="Nama Bank" value={newBank.bankName} onChange={(e) => setNewBank({ ...newBank, bankName: e.target.value })}
-                className="px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-              <input type="text" placeholder="No. Rekening" value={newBank.accountNumber} onChange={(e) => setNewBank({ ...newBank, accountNumber: e.target.value })}
-                className="px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-              <input type="text" placeholder="Atas Nama" value={newBank.accountName} onChange={(e) => setNewBank({ ...newBank, accountName: e.target.value })}
-                className="px-3 py-2 text-sm bg-white border border-blue-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={addBank} disabled={!newBank.bankName || !newBank.accountNumber || !newBank.accountName}
-                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                Simpan
-              </button>
-              <button onClick={() => setShowNewBank(false)}
-                className="px-4 py-2 rounded-xl bg-white border border-border text-xs font-medium text-muted-foreground hover:bg-gray-50 transition-colors">
-                Batal
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {(activeTab === 'all' || activeTab === 'cash-bank') && (
+        <CashAndBankSettingsTab
+          settings={settings}
+          update={update}
+          banks={banks}
+          showNewBank={showNewBank}
+          setShowNewBank={setShowNewBank}
+          newBank={newBank}
+          setNewBank={setNewBank}
+          addBank={addBank}
+          deleteBank={deleteBank}
+        />
+      )}
+
       <ConfirmModal
         isOpen={confirmModal.isOpen}
         title={confirmModal.title}
         message={confirmModal.message}
         isDestructive={confirmModal.isDestructive}
         onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
       />
+
       {/* Saving Loader Overlay Screen */}
       <AnimatePresence>
         {saving && (
-          <LoadingScreen 
+          <LoadingScreen
             fullScreen={true}
             customMessages={[
-              "Menyimpan pengaturan pembayaran...",
-              "Memperbarui kredensial gerbang pembayaran...",
-              "Menyelaraskan data bank...",
-              "Mohon tunggu sebentar..."
+              'Menyimpan pengaturan pembayaran...',
+              'Memperbarui kredensial gerbang pembayaran...',
+              'Menyelaraskan data rekening bank Arum Seduh...',
+              'Mohon tunggu sebentar...',
             ]}
           />
         )}
