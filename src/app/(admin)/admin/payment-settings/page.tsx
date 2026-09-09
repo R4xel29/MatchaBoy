@@ -1,7 +1,5 @@
-import PaymentSettingsClient from './PaymentSettingsClient';
+import { redirect } from 'next/navigation';
 
-export const revalidate = 0;
-
-export default function PaymentSettingsPage() {
-  return <PaymentSettingsClient />;
+export default function LegacyPaymentSettingsPage() {
+  redirect('/admin/settings/payment-settings');
 }

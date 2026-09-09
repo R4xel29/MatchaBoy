@@ -1037,7 +1037,7 @@ export default function AdminDashboardClient({ initialData }: Props) {
                 Ada {alerts.openTicketsCount} pesan kendala/pertanyaan dari pelanggan yang butuh respons.
               </p>
               <Link
-                href="/admin/tickets"
+                href="/admin/settings/tickets"
                 className="text-[11px] font-bold text-orange-800 underline flex items-center gap-1"
               >
                 Respons tiket sekarang <ArrowUpRight className="w-3 h-3" />
