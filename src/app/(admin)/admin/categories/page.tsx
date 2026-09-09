@@ -6,16 +6,25 @@ export const revalidate = 0;
 export default async function AdminCategoriesPage() {
   const categories = await prisma.category.findMany({
     orderBy: { name: 'asc' },
-    include: { _count: { select: { products: true } } },
+    include: {
+      _count: { select: { products: true } },
+      products: {
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          image: true,
+          badge: true,
+        },
+        take: 4,
+        orderBy: { name: 'asc' },
+      },
+    },
   });
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Categories</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Organize your menu categories</p>
-      </div>
-      <AdminCategoriesClient initialCategories={categories} />
+    <div className="space-y-6">
+      <AdminCategoriesClient initialCategories={categories as any} />
     </div>
   );
 }
