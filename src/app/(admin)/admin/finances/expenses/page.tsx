@@ -19,7 +19,6 @@ export default async function AdminExpensesPage({ searchParams }: PageProps) {
     allCompletedOrders,
     allExpensesList,
     allCapitalInjections,
-    activeCashierShifts,
   ] = await Promise.all([
     prisma.expense.count(),
     prisma.expense.aggregate({ _sum: { amount: true } }),
@@ -39,10 +38,6 @@ export default async function AdminExpensesPage({ searchParams }: PageProps) {
       select: { amount: true, notes: true },
     }),
     prisma.capitalInjection.findMany(),
-    prisma.cashierShift.findMany({
-      where: { closedAt: null },
-      select: { openingCash: true },
-    }),
   ]);
 
   // Balance calculations (Dynamic Cash & QRIS from Database)

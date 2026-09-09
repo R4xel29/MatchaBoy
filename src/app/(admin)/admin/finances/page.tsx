@@ -1,8 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import FinancesClient, {
-  LedgerTransaction,
-  FinanceSummary,
-} from './FinancesClient';
+import FinancesClient from './FinancesClient';
+import { LedgerTransaction, FinanceSummary } from './_components/types';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;

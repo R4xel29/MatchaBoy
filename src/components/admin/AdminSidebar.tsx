@@ -62,10 +62,10 @@ const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { label: 'Audit & Pengecekan Toko', href: '/admin/inspections', icon: ClipboardCheck },
   { label: 'Buku Kas & Keuangan', href: '/admin/finances', icon: Coins },
-  { label: 'Analisis & KPI', href: '/admin/analytics', icon: TrendingUp },
+  { label: 'Analisis & KPI', href: '/admin/finances/analytics', icon: TrendingUp },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
-  { label: 'Penjualan', href: '/admin/reports', icon: BarChart3 },
-  { label: 'Pengeluaran (Expenses)', href: '/admin/expenses', icon: Receipt },
+  { label: 'Penjualan', href: '/admin/finances/reports', icon: BarChart3 },
+  { label: 'Pengeluaran (Expenses)', href: '/admin/finances/expenses', icon: Receipt },
 ];
 
 const PRODUCT_ITEMS = [
@@ -135,7 +135,7 @@ const STAFF_ITEMS = [
   { label: 'Pesanan Hari Ini', href: '/admin/cashier/orders', icon: Receipt, hasBadge: true },
   { label: 'Semua Pesanan', href: '/admin/orders', icon: ClipboardList },
   { label: 'Stok & Bahan Baku', href: '/admin/inventory', icon: Archive },
-  { label: 'Pengeluaran Kas Kecil', href: '/admin/expenses', icon: Coins },
+  { label: 'Pengeluaran Kas Kecil', href: '/admin/finances/expenses', icon: Coins },
   { label: 'Pengaturan Struk', href: '/admin/receipt-settings', icon: Printer },
   { label: 'Tambah Poin', href: '/admin/cashier/add-points', icon: Gift },
 ];

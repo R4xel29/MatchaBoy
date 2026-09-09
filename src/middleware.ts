@@ -102,7 +102,7 @@ export default auth((req) => {
                     '/admin/cashier', 
                     '/admin/orders',
                     '/admin/inventory',
-                    '/admin/expenses',
+                    '/admin/finances/expenses',
                     '/admin/receipt-settings',
                     '/admin/inspections',
                 ]
