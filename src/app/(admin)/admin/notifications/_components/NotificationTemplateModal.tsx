@@ -84,6 +84,22 @@ export function NotificationTemplateModal({
           />
         </div>
 
+        <div className="flex items-center gap-2 pt-1 pb-1">
+          <input
+            type="checkbox"
+            id="is-active-tpl"
+            checked={editTpl.isActive ?? true}
+            onChange={(e) => setEditTpl({ ...editTpl, isActive: e.target.checked })}
+            className="rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer accent-orange-500 w-4 h-4"
+          />
+          <label
+            htmlFor="is-active-tpl"
+            className="font-bold text-slate-800 cursor-pointer select-none text-xs"
+          >
+            Aktifkan Template (Kirim Otomatis ke Pelanggan)
+          </label>
+        </div>
+
         <div className="flex items-center gap-2 pt-2">
           <button
             type="button"

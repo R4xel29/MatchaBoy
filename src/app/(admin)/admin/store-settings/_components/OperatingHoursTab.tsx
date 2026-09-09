@@ -317,7 +317,10 @@ export function OperatingHoursTab({
                     key={dStr}
                     className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-rose-50 text-rose-700 border border-rose-100 text-[10px] font-bold"
                   >
-                    {new Date(dStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
+                    {new Date(`${dStr}T00:00:00`).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
                     <button
                       type="button"
                       onClick={() => toggleDisabledDate(dStr)}

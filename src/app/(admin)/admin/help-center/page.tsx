@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { HelpCircle, Plus, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 
 import { HelpArticle, HelpArticleFormData } from './_components/types';
 import { HelpCategoryTabs } from './_components/HelpCategoryTabs';
@@ -14,6 +15,20 @@ export default function AdminHelpCenterPage() {
   const [articles, setArticles] = useState<HelpArticle[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+
+  // Confirm Modal State
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   // Editor Modal States
   const [isOpen, setIsOpen] = useState(false);
@@ -112,21 +127,29 @@ export default function AdminHelpCenterPage() {
     }
   };
 
-  const handleDelete = async (artId: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus artikel FAQ ini secara permanen?')) return;
-    try {
-      const res = await fetch(`/api/admin/help-articles?id=${artId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        showToast('Artikel berhasil dihapus', 'success');
-        fetchArticles();
-      } else {
-        showToast('Gagal menghapus artikel', 'error');
-      }
-    } catch {
-      showToast('Kesalahan jaringan', 'error');
-    }
+  const handleDelete = (artId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Hapus Artikel Bantuan',
+      message: 'Apakah Anda yakin ingin menghapus artikel FAQ ini secara permanen?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`/api/admin/help-articles?id=${artId}`, {
+            method: 'DELETE',
+          });
+          if (res.ok) {
+            showToast('Artikel berhasil dihapus', 'success');
+            fetchArticles();
+          } else {
+            showToast('Gagal menghapus artikel', 'error');
+          }
+        } catch {
+          showToast('Kesalahan jaringan', 'error');
+        }
+      },
+    });
   };
 
   // Extract unique categories
@@ -229,6 +252,15 @@ export default function AdminHelpCenterPage() {
         setFormData={setFormData}
         saving={saving}
         onSave={handleSave}
+      />
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
       />
     </div>
   );

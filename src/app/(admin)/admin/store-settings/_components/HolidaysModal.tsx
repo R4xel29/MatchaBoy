@@ -41,7 +41,12 @@ export function HolidaysModal({
             <div>
               <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2 font-heading">
                 <CalendarIcon className="w-4 h-4 text-orange-600" />
-                Atur Tanggal: {new Date(selectedCalDateStr).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                Atur Tanggal:{' '}
+                {new Date(`${selectedCalDateStr}T00:00:00`).toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
               </h3>
               <p className="text-[11px] text-slate-400 mt-1">Pilih status operasional kedai pada tanggal ini</p>
             </div>

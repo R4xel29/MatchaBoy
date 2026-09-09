@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, Check } from 'lucide-react';
 
 interface StickySaveBarProps {
   saved: boolean;
@@ -24,8 +24,9 @@ export function StickySaveBar({ saved, saving, handleSave }: StickySaveBarProps)
 
       <div className="flex items-center gap-2.5">
         {saved && (
-          <span className="text-xs font-bold text-emerald-600">
-            ✓ Berhasil Disimpan!
+          <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+            <Check className="w-3.5 h-3.5" />
+            <span>Berhasil Disimpan!</span>
           </span>
         )}
         <button

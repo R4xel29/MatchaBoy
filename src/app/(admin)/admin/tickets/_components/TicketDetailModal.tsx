@@ -16,6 +16,16 @@ interface TicketDetailModalProps {
   onUpdate: () => void;
 }
 
+function formatWhatsAppNumber(phone: string): string {
+  let cleaned = phone.replace(/[^0-9]/g, '');
+  if (cleaned.startsWith('08')) {
+    cleaned = '62' + cleaned.substring(1);
+  } else if (cleaned.startsWith('8')) {
+    cleaned = '62' + cleaned;
+  }
+  return cleaned;
+}
+
 export function TicketDetailModal({
   ticket,
   onClose,
@@ -26,6 +36,11 @@ export function TicketDetailModal({
   updating,
   onUpdate,
 }: TicketDetailModalProps) {
+  const waLink = ticket?.phone
+    ? `https://wa.me/${formatWhatsAppNumber(ticket.phone)}?text=${encodeURIComponent(
+        `Halo Kak ${ticket.name}, kami dari tim layanan Arum Seduh menindaklanjuti laporan tiket #${ticket.id}: "${ticket.title}".`
+      )}`
+    : '';
   return (
     <AnimatePresence>
       {ticket && (
@@ -130,10 +145,10 @@ export function TicketDetailModal({
                   </label>
                   {ticket.phone ? (
                     <a
-                      href={`https://wa.me/${ticket.phone.replace(/[^0-9]/g, '')}`}
+                      href={waLink}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex w-full items-center justify-center gap-2 px-3.5 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition-all text-center"
+                      className="inline-flex w-full items-center justify-center gap-2 px-3.5 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold transition-all text-center cursor-pointer shadow-2xs"
                     >
                       <MessageSquare className="w-3.5 h-3.5" />
                       <span>Hubungi via WhatsApp</span>
