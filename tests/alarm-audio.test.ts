@@ -145,6 +145,7 @@ describe('Tier 1.8: Custom Incoming Order Alarm Audio Compliance', () => {
       'app',
       '(admin)',
       'admin',
+      'settings',
       'store-settings',
       'page.tsx'
     );
@@ -168,6 +169,7 @@ describe('Tier 1.8: Custom Incoming Order Alarm Audio Compliance', () => {
       'app',
       '(admin)',
       'admin',
+      'settings',
       'store-settings',
       'page.tsx'
     );
