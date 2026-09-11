@@ -22,6 +22,7 @@ import './store-hours.test';
 import './quick-inspector.test';
 import './recipe-modifiers-doses.test';
 import './inventory-ui.test';
+import './espresso-shot-pricing.test';
 
 async function main() {
   console.log('\x1b[33m============================================================\x1b[0m');

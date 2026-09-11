@@ -71,8 +71,15 @@ function calculateSecureItemPrice(item: any, dbProduct: any) {
 
     // Shot adjustment for Americano / Coffee
     let shotAdjustment = 0;
-    if (item.shot === 'Double Shot' || item.shot === 'Double') {
-      shotAdjustment = 5000;
+    if (dbModifiers.espressoShots && Array.isArray(dbModifiers.espressoShots)) {
+      const matchedShot = dbModifiers.espressoShots.find((s: any) => s.name === item.shot);
+      if (matchedShot && typeof matchedShot.price === 'number') {
+        shotAdjustment = matchedShot.price;
+      }
+    } else if (item.shot === 'Triple Shot' || item.shot === 'Triple') {
+      shotAdjustment = 6000;
+    } else if (item.shot === 'Double Shot' || item.shot === 'Double') {
+      shotAdjustment = 3000;
     }
 
     // Matcha level customization is FREE (+Rp 0)

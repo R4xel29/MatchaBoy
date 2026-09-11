@@ -362,8 +362,8 @@ export function ProductModal({
     }
     return [
       { name: 'Single Shot', price: 0, label: 'Single Shot (Standar)', shots: 1 },
-      { name: 'Double Shot', price: 5000, label: 'Double Shot (+Rp 5.000)', shots: 2 },
-      { name: 'Triple Shot', price: 10000, label: 'Triple Shot (+Rp 10.000)', shots: 3 }
+      { name: 'Double Shot', price: 3000, label: 'Double Shot (+Rp 3.000)', shots: 2 },
+      { name: 'Triple Shot', price: 6000, label: 'Triple Shot (+Rp 6.000)', shots: 3 }
     ];
   }, [product]);
 

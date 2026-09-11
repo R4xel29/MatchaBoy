@@ -73,10 +73,10 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
         name: 'Kopi Susu Arum',
         qty: 1,
         price: 22000,
-        totalPrice: 27000,
+        totalPrice: 25000,
         sugarLevel: 'Less Sugar (50%)',
         iceLevel: 'Normal Ice',
-        shotName: 'Double Shot (+5.000)',
+        shotName: 'Double Shot (+3.000)',
       },
       {
         name: 'Roti Bakar Butter',
@@ -85,9 +85,9 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
         totalPrice: 18000,
       },
     ],
-    subtotal: 45000,
-    tumblerDiscount: 4500,
-    total: 40500,
+    subtotal: 43000,
+    tumblerDiscount: 4300,
+    total: 38700,
     pointsEarned: 4,
     totalPoints: 34,
     notes: 'Kopi jangan terlalu manis, roti bakar garing.',
@@ -592,14 +592,14 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
                           [ 1x ] KOPI SUSU ARUM
                         </span>
                         <span className="font-black text-xs shrink-0">
-                          27.000
+                          25.000
                         </span>
                       </div>
                       {/* Clear & Bold Modifiers */}
                       <div className="border-l-2 border-black pl-2 space-y-0.5 text-[9.5px] font-bold text-black mt-1">
                         <div>» <span className="font-black">GULA:</span> <span className="underline font-black">LESS SUGAR (50%)</span></div>
                         <div>» <span className="font-black">ES:</span> <span className="underline font-black">NORMAL ICE</span></div>
-                        <div>» <span className="font-black">SHOT:</span> <span className="underline font-black">DOUBLE SHOT (+5.000)</span></div>
+                        <div>» <span className="font-black">SHOT:</span> <span className="underline font-black">DOUBLE SHOT (+3.000)</span></div>
                       </div>
                     </div>
 
@@ -628,17 +628,17 @@ export default function ReceiptSettingsClient({ initialSettings }: Props) {
                   <div className="space-y-1 text-[9.5px]">
                     <div className="flex justify-between">
                       <span className="text-slate-700">Subtotal:</span>
-                      <span className="font-bold">45.000</span>
+                      <span className="font-bold">43.000</span>
                     </div>
                     <div className="flex justify-between text-slate-800">
                       <span>Diskon / Promo:</span>
-                      <span className="font-bold">-4.500</span>
+                      <span className="font-bold">-4.300</span>
                     </div>
 
                     {/* Total Inverted Banner */}
                     <div className="bg-black text-white px-2 py-1 flex justify-between font-black text-xs tracking-wide my-1">
                       <span>TOTAL</span>
-                      <span>Rp 40.500</span>
+                      <span>Rp 38.700</span>
                     </div>
 
                     <div className="flex justify-between text-[9.5px]">

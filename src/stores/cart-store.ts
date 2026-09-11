@@ -134,7 +134,9 @@ function calcItemTotal(item: CalcItemTotalInput): number {
     }
     const addOnTotal = item.addOns ? item.addOns.reduce((sum, a) => sum + a.price, 0) : 0;
     const sizeAdj = item.sizePrice || 0;
-    const shotAdj = item.shotPrice !== undefined ? item.shotPrice : (item.shot === 'Double Shot' || item.shot === 'Double' ? 5000 : 0);
+    const shotAdj = item.shotPrice !== undefined
+        ? item.shotPrice
+        : (item.shot === 'Triple Shot' || item.shot === 'Triple' ? 6000 : (item.shot === 'Double Shot' || item.shot === 'Double' ? 3000 : 0));
     const matchaAdj = 0; // Standardized: all matcha levels are Free (+Rp 0)
     return (item.basePrice + sizeAdj + addOnTotal + shotAdj + matchaAdj) * item.quantity;
 }

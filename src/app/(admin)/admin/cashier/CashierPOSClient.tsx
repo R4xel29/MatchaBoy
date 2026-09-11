@@ -56,8 +56,8 @@ const DEFAULT_DRINK_SIZES = [
 
 const DEFAULT_ESPRESSO_SHOTS = [
   { name: 'Single Shot', shots: 1, price: 0 },
-  { name: 'Double Shot', shots: 2, price: 5000 },
-  { name: 'Triple Shot', shots: 3, price: 10000 },
+  { name: 'Double Shot', shots: 2, price: 3000 },
+  { name: 'Triple Shot', shots: 3, price: 6000 },
 ];
 
 function getEffectiveSizes(productMods: POSProduct['modifiers']) {

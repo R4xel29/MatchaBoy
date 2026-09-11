@@ -52,7 +52,8 @@ const PHONETIC_MAP: Array<{ pattern: RegExp; replacement: string }> = [
   // Topping & Modifier terms
   { pattern: /\b(ekstra shot|extra sot|ekstra sot)\b/gi, replacement: "Extra Shot" },
   { pattern: /\b(singel shot|single sot)\b/gi, replacement: "Single Shot" },
-  { pattern: /\b(dobel shot|double sot|doble shot)\b/gi, replacement: "Double Shot" },
+  { pattern: /\b(dobel shot|double sot|doble shot|double shoot|dobel shoot)\b/gi, replacement: "Double Shot" },
+  { pattern: /\b(tripel shot|triple sot|tripel sot|triple shoot|tripel shoot)\b/gi, replacement: "Triple Shot" },
   { pattern: /\b(puding|pudin)\b/gi, replacement: "Pudding" },
   { pattern: /\b(jeli|zeli|jelly)\b/gi, replacement: "Jelly" },
   { pattern: /\b(karamel|caramel)\b/gi, replacement: "Caramel" },
