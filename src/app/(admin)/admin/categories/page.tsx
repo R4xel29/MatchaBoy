@@ -24,7 +24,10 @@ export default async function AdminCategoriesPage() {
 
   const allProducts = await prisma.product.findMany({
     where: {
-      badge: { not: 'archived' },
+      OR: [
+        { badge: null },
+        { badge: { not: 'archived' } },
+      ],
     },
     select: {
       id: true,

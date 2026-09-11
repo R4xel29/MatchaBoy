@@ -430,20 +430,6 @@ export default function AdminCategoriesClient({ initialCategories, allProducts =
     <div className="space-y-6 text-left">
       {/* ── TOP HEADER & WORKSPACE ACTION BAR ── */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 font-heading">
-              Kategori Menu
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-orange-50 text-orange-700 border border-orange-200/80">
-              {initialCategories.length} Kategori
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Kelola dan organisir pengelompokan menu minuman, makanan, dan promo Arum Seduh
-          </p>
-        </div>
-
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Quick View Switcher (Visual Bento vs Matriks Tabel) */}
           <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200/80 text-slate-600">
