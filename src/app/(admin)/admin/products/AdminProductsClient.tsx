@@ -28,6 +28,7 @@ import {
   PieChart,
   ShieldCheck,
   Store,
+  Printer,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { ProductGridTable } from '@/components/admin/products/ProductGridTable';
@@ -36,6 +37,7 @@ import { ProductFormModal } from '@/components/admin/products/ProductFormModal';
 import { ProductTypePickerModal } from '@/components/admin/products/ProductTypePickerModal';
 import { ProductQuickPriceModal } from '@/components/admin/products/ProductQuickPriceModal';
 import { RecipeHppModal } from '@/components/admin/products/RecipeHppModal';
+import { RecipePrintModal } from '@/components/admin/products/RecipePrintModal';
 import { MasterToppingsTab } from '@/components/admin/products/MasterToppingsTab';
 import { formatRupiah, getActivePromo } from '@/lib/utils';
 import type {
@@ -106,6 +108,9 @@ export default function AdminProductsClient({
 
   // Recipe Modal
   const [recipeProduct, setRecipeProduct] = useState<ProductItem | null>(null);
+
+  // Recipe Print Sheet Modal (A4 12 Recipes/Page)
+  const [showRecipePrintModal, setShowRecipePrintModal] = useState(false);
 
   // Master Toppings State
   const [masterToppings, setMasterToppings] = useState<ToppingItem[]>([]);
@@ -520,6 +525,17 @@ export default function AdminProductsClient({
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
             <span className="hidden sm:inline">Export CSV</span>
+          </button>
+
+          {/* Cetak Resep Barista (A4) Button */}
+          <button
+            type="button"
+            onClick={() => setShowRecipePrintModal(true)}
+            className="px-3.5 py-2 rounded-2xl border border-amber-200/80 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+            title="Cetak Panduan Resep & Takaran Barista A4 (12 Resep per Lembar)"
+          >
+            <Printer className="w-3.5 h-3.5 text-amber-600" />
+            <span className="hidden sm:inline">Cetak Resep Barista (A4)</span>
           </button>
 
           {/* Add Product Button */}
@@ -1038,6 +1054,15 @@ export default function AdminProductsClient({
         onSuccess={() => {
           router.refresh();
         }}
+      />
+
+      {/* 5. Recipe Print Sheet Modal (A4 12 Recipes/Sheet) */}
+      <RecipePrintModal
+        isOpen={showRecipePrintModal}
+        onClose={() => setShowRecipePrintModal(false)}
+        products={initialProducts}
+        categories={categories}
+        ingredients={ingredients}
       />
     </div>
   );
