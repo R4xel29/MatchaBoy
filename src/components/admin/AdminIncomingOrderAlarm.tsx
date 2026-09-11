@@ -111,7 +111,7 @@ export function AdminIncomingOrderAlarm() {
       }
     };
 
-    // Run immediately on mount/pathname change
+    // Run immediately on mount or cashier page toggle
     checkPendingOrders();
 
     // Poll every 10 seconds
@@ -120,7 +120,7 @@ export function AdminIncomingOrderAlarm() {
     return () => {
       clearInterval(interval);
     };
-  }, [isCashierPage, pathname]);
+  }, [isCashierPage]);
 
   // Audio playback effect
   useEffect(() => {

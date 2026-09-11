@@ -9,8 +9,8 @@ interface PageProps {
 }
 
 export default async function AdminOrdersPage({ searchParams }: PageProps) {
-  // Clean up old unconfirmed SPMB orders
-  await cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err));
+  // Clean up old unconfirmed SPMB orders in background (non-blocking)
+  cleanupUnconfirmedSpmbOrders().catch(err => console.error('[Background Cleanup Error]', err));
 
   const params = await searchParams;
   const page = Math.max(1, Number(params?.page) || 1);

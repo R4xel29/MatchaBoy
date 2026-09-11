@@ -650,7 +650,10 @@ export function AdminSidebar({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const prevPendingCountRef = useRef(0);
-  const globalAlarmAudioRef = useRef<HTMLAudioElement | null>(null);
+  const pathnameRef = useRef(pathname);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
 
   const fetchPendingCount = useCallback(async () => {
     try {
@@ -661,7 +664,7 @@ export function AdminSidebar({
       const boostLevel = data.alarmVolumeBoost ?? 350;
 
       // If new order arrived while NOT on the orders page, play alarm chime
-      if (newCount > prevPendingCountRef.current && prevPendingCountRef.current !== 0 && pathname !== '/admin/cashier/orders') {
+      if (newCount > prevPendingCountRef.current && prevPendingCountRef.current !== 0 && pathnameRef.current !== '/admin/cashier/orders') {
         try {
           const soundUrl = getAlarmSoundUrl(customAlarmUrl);
           playOneShotBoostedAlarm(soundUrl, boostLevel);
@@ -671,7 +674,7 @@ export function AdminSidebar({
       prevPendingCountRef.current = newCount;
       setPendingCount(newCount);
     } catch {}
-  }, [pathname]);
+  }, []);
 
   useEffect(() => {
     fetchPendingCount();

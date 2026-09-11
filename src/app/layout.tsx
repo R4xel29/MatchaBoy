@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display, Outfit } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
@@ -6,6 +7,7 @@ import { PermissionPrompt } from "@/components/ui/PermissionPrompt";
 import { SplashProvider } from "@/components/providers/SplashProvider";
 import { prisma } from "@/lib/prisma";
 import { AutoUpdateProvider } from "@/components/providers/AutoUpdateProvider";
+import { TopProgressBar } from "@/components/ui/TopProgressBar";
 import "./globals.css";
 
 const inter = Inter({
@@ -102,6 +104,9 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${playfair.variable} ${outfit.variable} antialiased`}
       >
+        <Suspense fallback={null}>
+          <TopProgressBar />
+        </Suspense>
         <AuthProvider>
           <ToastProvider>
             <SplashProvider>

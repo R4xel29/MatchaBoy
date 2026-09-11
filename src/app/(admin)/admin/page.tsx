@@ -21,7 +21,7 @@ export default async function AdminDashboardPage() {
 
   const [
     orders,
-    allCompletedOrders,
+    allCompletedOrdersSummary,
     periodExpensesList,
     periodExpensesAggregate,
     allTimeExpensesList,
@@ -33,7 +33,6 @@ export default async function AdminDashboardPage() {
     activeCashierShifts,
     onlineDrivers,
     diningTables,
-    criticalIngredients,
     soldOutProductsList,
     openTicketsCount,
     pendingTopupsCount,
@@ -55,14 +54,13 @@ export default async function AdminDashboardPage() {
       },
       orderBy: { createdAt: 'asc' },
     }),
-    prisma.order.findMany({
+    prisma.order.groupBy({
+      by: ['paymentMethod'],
+      _sum: { total: true },
+      _count: { id: true },
       where: {
         ...nonSpmbPendingFilter,
         status: { in: ['COMPLETED', 'DELIVERED'] },
-      },
-      select: {
-        total: true,
-        paymentMethod: true,
       },
     }),
     prisma.expense.findMany({
@@ -76,7 +74,9 @@ export default async function AdminDashboardPage() {
     prisma.expense.findMany({
       select: { id: true, amount: true, notes: true },
     }),
-    prisma.capitalInjection.findMany(),
+    prisma.capitalInjection.findMany({
+      select: { amount: true, paymentMethod: true },
+    }),
     prisma.ingredient.findMany({
       select: { id: true, name: true, stock: true, unit: true, costPerUnit: true },
     }),
@@ -98,12 +98,6 @@ export default async function AdminDashboardPage() {
     }),
     prisma.diningTable.findMany({
       select: { id: true, number: true, status: true, capacity: true, occupiedSeats: true },
-    }),
-    prisma.ingredient.findMany({
-      where: { stock: { lte: 5 } },
-      select: { id: true, name: true, stock: true, unit: true },
-      orderBy: { stock: 'asc' },
-      take: 5,
     }),
     prisma.product.findMany({
       where: { badge: 'sold-out' },
@@ -176,6 +170,12 @@ export default async function AdminDashboardPage() {
     if (ing.stock <= 5) lowStockIngredientsCount++;
   });
 
+  const criticalIngredients = allIngredients
+    .filter((ing) => ing.stock <= 5)
+    .sort((a, b) => a.stock - b.stock)
+    .slice(0, 5)
+    .map((ing) => ({ id: ing.id, name: ing.name, stock: ing.stock, unit: ing.unit }));
+
   const stockAssetValuation = {
     totalValue: totalStockAssetValue,
     totalIngredientsCount: allIngredients.length,
@@ -240,14 +240,16 @@ export default async function AdminDashboardPage() {
   let allTimeQris = 0;
   let allTimeQrisCount = 0;
 
-  allCompletedOrders.forEach((o) => {
+  allCompletedOrdersSummary.forEach((o) => {
     const pm = (o.paymentMethod || '').toUpperCase();
+    const sum = o._sum.total || 0;
+    const count = o._count.id || 0;
     if (pm === 'CASH' || pm === 'TUNAI' || pm === 'COD') {
-      allTimeCash += o.total;
-      allTimeCashCount++;
+      allTimeCash += sum;
+      allTimeCashCount += count;
     } else if (pm.includes('QRIS')) {
-      allTimeQris += o.total;
-      allTimeQrisCount++;
+      allTimeQris += sum;
+      allTimeQrisCount += count;
     }
   });
 
