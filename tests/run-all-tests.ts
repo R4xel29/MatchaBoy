@@ -21,6 +21,7 @@ import './challenger-concurrency-stress';
 import './store-hours.test';
 import './quick-inspector.test';
 import './recipe-modifiers-doses.test';
+import './inventory-ui.test';
 
 async function main() {
   console.log('\x1b[33m============================================================\x1b[0m');

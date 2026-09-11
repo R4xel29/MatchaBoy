@@ -4,17 +4,33 @@ import InventoryClient from './InventoryClient';
 export const revalidate = 0;
 
 export default async function AdminInventoryPage() {
-  const ingredients = await prisma.ingredient.findMany({
-    orderBy: { name: 'asc' },
-  });
+  const [ingredients, recentMovements] = await Promise.all([
+    prisma.ingredient.findMany({
+      orderBy: { name: 'asc' },
+    }),
+    prisma.stockMovement.findMany({
+      take: 40,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        ingredient: {
+          select: {
+            id: true,
+            name: true,
+            unit: true,
+            isPackaging: true,
+          },
+        },
+      },
+    }),
+  ]);
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold font-heading text-foreground">Inventory</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Manage raw materials, packaging, and stock levels</p>
-      </div>
-      <InventoryClient initialIngredients={ingredients} />
+    <div className="space-y-6">
+      <InventoryClient
+        initialIngredients={ingredients}
+        initialMovements={recentMovements}
+      />
     </div>
   );
 }
+
