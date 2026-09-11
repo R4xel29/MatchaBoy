@@ -24,6 +24,7 @@ import {
   Coffee,
   X
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 interface InspectionsClientProps {
   userRole: string;
@@ -64,6 +65,7 @@ export default function InspectionsClient({
   initialLogs,
   initialTodayChecklists,
 }: InspectionsClientProps) {
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'shifts' | 'stock' | 'checklist' | 'logs'>('shifts');
 
   // --- STATE SHIFTS ---
@@ -1169,7 +1171,7 @@ export default function InspectionsClient({
                   onClick={() => {
                     const text = `*REKAP KAS SHIFT ARUM SEDUH*\nKasir: ${selectedShiftModal.cashier?.name || 'Kasir'}\nBuka: ${new Date(selectedShiftModal.openedAt).toLocaleString('id-ID')}\nTutup: ${selectedShiftModal.closedAt ? new Date(selectedShiftModal.closedAt).toLocaleString('id-ID') : 'Aktif'}\nModal Awal: Rp ${selectedShiftModal.openingCash.toLocaleString('id-ID')}\nTunai: Rp ${(selectedShiftModal.cashIn || 0).toLocaleString('id-ID')}\nQRIS: Rp ${(selectedShiftModal.qrisIn || 0).toLocaleString('id-ID')}\nKas Kecil: -Rp ${(selectedShiftModal.cashOut || 0).toLocaleString('id-ID')}\nFisik: Rp ${(selectedShiftModal.actualCash || 0).toLocaleString('id-ID')}\nSelisih: Rp ${(selectedShiftModal.variance || 0).toLocaleString('id-ID')}`;
                     navigator.clipboard.writeText(text);
-                    alert('Teks rekap shift berhasil disalin ke clipboard!');
+                    showToast('Teks rekap shift berhasil disalin ke clipboard!', 'success');
                   }}
                   className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5"
                 >

@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { normalizeVoiceTranscript } from "@/lib/voice-dictionary";
+import { useToast } from "@/components/ui/Toast";
 
 interface ActionProposal {
   id: string;
@@ -99,6 +100,7 @@ function parseProposalFromText(text: string): { cleanText: string; proposal: Act
 }
 
 export function AdminAIAssistantWidget() {
+  const { showToast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -186,7 +188,7 @@ export function AdminAIAssistantWidget() {
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("Browser Anda belum mendukung Web Speech Recognition. Gunakan Google Chrome/Edge.");
+      showToast("Browser Anda belum mendukung Web Speech Recognition. Gunakan Google Chrome/Edge.", "error");
       return;
     }
 
@@ -280,7 +282,7 @@ export function AdminAIAssistantWidget() {
     if (!file) return;
 
     if (file.size > 10 * 1024 * 1024) {
-      alert("Ukuran berkas maksimal 10MB");
+      showToast("Ukuran berkas maksimal 10MB", "warning");
       return;
     }
 
@@ -454,7 +456,7 @@ export function AdminAIAssistantWidget() {
           )
         );
       } else {
-        alert(data.error || "Gagal mengeksekusi aksi.");
+        showToast(data.error || "Gagal mengeksekusi aksi.", "error");
         setMessages((prev) =>
           prev.map((m) =>
             m.id === msgId && m.proposal ? { ...m, proposal: { ...m.proposal, status: "PENDING" } } : m
@@ -462,7 +464,7 @@ export function AdminAIAssistantWidget() {
         );
       }
     } catch (err) {
-      alert("Terjadi kesalahan koneksi saat mengeksekusi aksi.");
+      showToast("Terjadi kesalahan koneksi saat mengeksekusi aksi.", "error");
       setMessages((prev) =>
         prev.map((m) =>
           m.id === msgId && m.proposal ? { ...m, proposal: { ...m.proposal, status: "PENDING" } } : m

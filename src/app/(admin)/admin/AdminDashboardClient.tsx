@@ -42,6 +42,7 @@ import {
   Send,
   Bot
 } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 import { InjectCapitalModal } from '@/components/admin/finances/InjectCapitalModal';
 
 type Range = 'today' | 'week' | 'month' | 'all';
@@ -161,6 +162,7 @@ interface Props {
 }
 
 export default function AdminDashboardClient({ initialData }: Props) {
+  const { showToast } = useToast();
   const [range, setRange] = useState<Range>('today');
   const [data, setData] = useState<DashboardData>(initialData);
   const [loading, setLoading] = useState(false);
@@ -178,12 +180,13 @@ export default function AdminDashboardClient({ initialData }: Props) {
       const result = await res.json();
       if (res.ok && result.success) {
         setReportSuccess('Rekap penjualan berhasil dikirim ke WhatsApp!');
+        showToast('Rekap penjualan berhasil dikirim ke WhatsApp!', 'success');
         setTimeout(() => setReportSuccess(null), 5000);
       } else {
-        alert(result.error || 'Gagal mengirim rekap harian.');
+        showToast(result.error || 'Gagal mengirim rekap harian.', 'error');
       }
     } catch (err: any) {
-      alert('Terjadi kesalahan saat memproses rekap harian.');
+      showToast('Terjadi kesalahan saat memproses rekap harian.', 'error');
     } finally {
       setSendingReport(false);
     }
