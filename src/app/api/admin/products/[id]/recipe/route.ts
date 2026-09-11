@@ -24,16 +24,15 @@ async function handleSaveRecipe(
         quantity: parseFloat(ing.quantity),
       }));
 
-    // Handle jumbo specific recipe if provided
-    if (body.jumboItems !== undefined || body.jumboRecipe !== undefined) {
-      const rawJumbo = body.jumboItems || body.jumboRecipe || [];
-      const validJumbo = rawJumbo
-        .filter((ing: any) => ing.ingredientId && parseFloat(ing.quantity) > 0)
-        .map((ing: any) => ({
-          ingredientId: ing.ingredientId,
-          quantity: parseFloat(ing.quantity),
-        }));
+    // Handle modifiers-based configs (jumboRecipe, sugarDoses, matchaDoses, shotDoses)
+    const hasModifierUpdates =
+      body.jumboItems !== undefined ||
+      body.jumboRecipe !== undefined ||
+      body.sugarDoses !== undefined ||
+      body.matchaDoses !== undefined ||
+      body.shotDoses !== undefined;
 
+    if (hasModifierUpdates) {
       const currentProduct = await prisma.product.findUnique({
         where: { id },
         select: { modifiers: true },
@@ -46,7 +45,26 @@ async function handleSaveRecipe(
         } catch {}
       }
 
-      mods.jumboRecipe = validJumbo;
+      if (body.jumboItems !== undefined || body.jumboRecipe !== undefined) {
+        const rawJumbo = body.jumboItems || body.jumboRecipe || [];
+        const validJumbo = rawJumbo
+          .filter((ing: any) => ing.ingredientId && parseFloat(ing.quantity) > 0)
+          .map((ing: any) => ({
+            ingredientId: ing.ingredientId,
+            quantity: parseFloat(ing.quantity),
+          }));
+        mods.jumboRecipe = validJumbo;
+      }
+
+      if (body.sugarDoses !== undefined) {
+        mods.sugarDoses = body.sugarDoses;
+      }
+      if (body.matchaDoses !== undefined) {
+        mods.matchaDoses = body.matchaDoses;
+      }
+      if (body.shotDoses !== undefined) {
+        mods.shotDoses = body.shotDoses;
+      }
 
       await prisma.product.update({
         where: { id },
@@ -82,12 +100,19 @@ async function handleSaveRecipe(
     ]);
 
     let jumboRecipe: any[] = [];
+    let sugarDoses = null;
+    let matchaDoses = null;
+    let shotDoses = null;
+
     if (updatedProduct?.modifiers) {
       try {
         const parsed = JSON.parse(updatedProduct.modifiers);
         if (Array.isArray(parsed.jumboRecipe)) {
           jumboRecipe = parsed.jumboRecipe;
         }
+        sugarDoses = parsed.sugarDoses || null;
+        matchaDoses = parsed.matchaDoses || null;
+        shotDoses = parsed.shotDoses || null;
       } catch {}
     }
 
@@ -95,6 +120,9 @@ async function handleSaveRecipe(
       success: true,
       recipe: updatedRecipe,
       jumboRecipe,
+      sugarDoses,
+      matchaDoses,
+      shotDoses,
     });
   } catch (error) {
     console.error('Error updating product recipe:', error);
@@ -125,18 +153,28 @@ export async function GET(
     ]);
 
     let jumboRecipe: any[] = [];
+    let sugarDoses = null;
+    let matchaDoses = null;
+    let shotDoses = null;
+
     if (product?.modifiers) {
       try {
         const parsed = JSON.parse(product.modifiers);
         if (Array.isArray(parsed.jumboRecipe)) {
           jumboRecipe = parsed.jumboRecipe;
         }
+        sugarDoses = parsed.sugarDoses || null;
+        matchaDoses = parsed.matchaDoses || null;
+        shotDoses = parsed.shotDoses || null;
       } catch {}
     }
 
     return NextResponse.json({
       recipe,
       jumboRecipe,
+      sugarDoses,
+      matchaDoses,
+      shotDoses,
     });
   } catch (error) {
     console.error('Error fetching product recipe:', error);

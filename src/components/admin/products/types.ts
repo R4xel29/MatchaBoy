@@ -50,6 +50,28 @@ export interface BundleGroup {
   options: BundleOption[];
 }
 
+export interface SugarDosesConfig {
+  ingredientId: string;
+  less: number;
+  lumayan: number;
+  manisSekali: number;
+}
+
+export interface MatchaDosesConfig {
+  ingredientId: string;
+  light: number;
+  medium: number;
+  bold: number;
+  extraBold: number;
+}
+
+export interface ShotDosesConfig {
+  ingredientId: string;
+  single: number;
+  double: number;
+  triple: number;
+}
+
 export interface ModifiersData {
   productType?: 'minuman' | 'makanan';
   iceLevel?: string[];
@@ -70,6 +92,10 @@ export interface ModifiersData {
   defaultSugar?: string;
   defaultIce?: string;
   sizes?: { name: string; price: number }[];
+  jumboRecipe?: { ingredientId: string; quantity: number }[];
+  sugarDoses?: SugarDosesConfig | null;
+  matchaDoses?: MatchaDosesConfig | null;
+  shotDoses?: ShotDosesConfig | null;
 }
 
 export interface ProductItem {

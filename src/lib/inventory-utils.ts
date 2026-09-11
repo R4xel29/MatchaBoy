@@ -1,4 +1,5 @@
 import { prisma } from './prisma';
+import { parseItemModifiers } from './receipt-modifiers';
 
 /**
  * Struktur parsed modifier item pesanan untuk inventaris.
@@ -208,6 +209,25 @@ export async function deductStockForOrder(orderId: string): Promise<void> {
         const recipe = item.product.productIngredients;
         if (!recipe || recipe.length === 0) continue;
 
+        // Parse modifiers comprehensively for sweetness, matcha levels, and espresso shots
+        const parsedMod = parseItemModifiers({
+          name: item.product.name,
+          modifiersString: item.modifiers || undefined,
+        });
+
+        let sugarDoses: any = null;
+        let matchaDoses: any = null;
+        let shotDoses: any = null;
+
+        if (item.product.modifiers) {
+          try {
+            const mods = JSON.parse(item.product.modifiers);
+            if (mods.sugarDoses) sugarDoses = mods.sugarDoses;
+            if (mods.matchaDoses) matchaDoses = mods.matchaDoses;
+            if (mods.shotDoses) shotDoses = mods.shotDoses;
+          } catch {}
+        }
+
         // Scale recipe or use custom jumboRecipe if Large / Jumbo
         const isLarge = itemSize.toLowerCase().includes('large') || itemSize.toLowerCase().includes('jumbo');
         const sizeMultiplier = isLarge ? 1.25 : 1.0;
@@ -228,39 +248,124 @@ export async function deductStockForOrder(orderId: string): Promise<void> {
           if (cupJumbo && recipeItem.ingredientId === cupJumbo.id) continue;
 
           let perItemQty = recipeItem.quantity;
+
+          // 1. Sugar Doses override if this ingredient is the configured sweetener
+          if (sugarDoses && recipeItem.ingredientId === sugarDoses.ingredientId) {
+            const sLevel = (parsedMod.sugarLevel || '').toLowerCase();
+            if (sLevel.includes('no') || sLevel.includes('tanpa') || sLevel === '0%') {
+              perItemQty = 0;
+            } else if (sLevel.includes('less') || sLevel.includes('sedikit')) {
+              perItemQty = sugarDoses.less > 0 ? sugarDoses.less : recipeItem.quantity * 0.5;
+            } else if (sLevel.includes('manis sekali') || sLevel.includes('extra')) {
+              perItemQty = sugarDoses.manisSekali > 0 ? sugarDoses.manisSekali : recipeItem.quantity * 1.5;
+            } else if (sLevel.includes('lumayan') || sLevel.includes('biasa') || sLevel.includes('normal')) {
+              perItemQty = sugarDoses.lumayan > 0 ? sugarDoses.lumayan : recipeItem.quantity;
+            }
+          }
+
+          // 2. Matcha Doses override if this ingredient is the configured matcha powder
+          if (matchaDoses && recipeItem.ingredientId === matchaDoses.ingredientId) {
+            const mLvl = parsedMod.matchaLevel;
+            if (typeof mLvl === 'number' && mLvl > 0) {
+              if (mLvl <= 3) {
+                perItemQty = matchaDoses.light > 0 ? matchaDoses.light : recipeItem.quantity * 0.7;
+              } else if (mLvl <= 6) {
+                perItemQty = matchaDoses.medium > 0 ? matchaDoses.medium : recipeItem.quantity;
+              } else if (mLvl <= 8) {
+                perItemQty = matchaDoses.bold > 0 ? matchaDoses.bold : recipeItem.quantity * 1.3;
+              } else {
+                perItemQty = matchaDoses.extraBold > 0 ? matchaDoses.extraBold : recipeItem.quantity * 1.6;
+              }
+            }
+          }
+
+          // 3. Espresso Shot Doses override if this ingredient is the coffee/espresso
+          if (shotDoses && recipeItem.ingredientId === shotDoses.ingredientId) {
+            const sName = (parsedMod.shotName || '').toLowerCase();
+            if (sName.includes('triple') || sName.includes('3')) {
+              perItemQty = shotDoses.triple > 0 ? shotDoses.triple : recipeItem.quantity * 3;
+            } else if (sName.includes('double') || sName.includes('2')) {
+              perItemQty = shotDoses.double > 0 ? shotDoses.double : recipeItem.quantity * 2;
+            } else if (sName.includes('single') || sName.includes('1')) {
+              perItemQty = shotDoses.single > 0 ? shotDoses.single : recipeItem.quantity;
+            }
+          }
+
           if (isLarge) {
             if (customJumboRecipe) {
               const customMatch = customJumboRecipe.find((j: any) => j.ingredientId === recipeItem.ingredientId);
               if (customMatch && customMatch.quantity > 0) {
                 perItemQty = customMatch.quantity;
               } else {
-                perItemQty = recipeItem.quantity * sizeMultiplier;
+                perItemQty = perItemQty * sizeMultiplier;
               }
             } else {
-              perItemQty = recipeItem.quantity * sizeMultiplier;
+              perItemQty = perItemQty * sizeMultiplier;
             }
           }
 
           const totalQtyToDeduct = Math.round(perItemQty * item.qty * 100) / 100;
 
-          await prisma.$transaction([
-            prisma.ingredient.update({
-              where: { id: recipeItem.ingredientId },
-              data: {
-                stock: {
-                  decrement: totalQtyToDeduct,
+          if (totalQtyToDeduct > 0) {
+            await prisma.$transaction([
+              prisma.ingredient.update({
+                where: { id: recipeItem.ingredientId },
+                data: {
+                  stock: {
+                    decrement: totalQtyToDeduct,
+                  },
                 },
-              },
-            }),
-            prisma.stockMovement.create({
-              data: {
-                ingredientId: recipeItem.ingredientId,
-                quantity: -totalQtyToDeduct,
-                type: 'OUT',
-                reason: `Order #${orderId.slice(-6).toUpperCase()} - ${item.product.name} [Size ${itemSize}] (Qty: ${item.qty})`,
-              },
-            }),
-          ]);
+              }),
+              prisma.stockMovement.create({
+                data: {
+                  ingredientId: recipeItem.ingredientId,
+                  quantity: -totalQtyToDeduct,
+                  type: 'OUT',
+                  reason: `Order #${orderId.slice(-6).toUpperCase()} - ${item.product.name} [Size ${itemSize}] (Qty: ${item.qty})`,
+                },
+              }),
+            ]);
+          }
+        }
+
+        // 4. If extra espresso shot was selected on a beverage that doesn't have coffee in base recipe
+        if (
+          shotDoses &&
+          shotDoses.ingredientId &&
+          parsedMod.shotName &&
+          !recipe.some((r) => r.ingredientId === shotDoses.ingredientId)
+        ) {
+          const sName = (parsedMod.shotName || '').toLowerCase();
+          let shotQty = 0;
+          if (sName.includes('triple') || sName.includes('3')) {
+            shotQty = shotDoses.triple > 0 ? shotDoses.triple : 45;
+          } else if (sName.includes('double') || sName.includes('2')) {
+            shotQty = shotDoses.double > 0 ? shotDoses.double : 30;
+          } else if (sName.includes('single') || sName.includes('1')) {
+            shotQty = shotDoses.single > 0 ? shotDoses.single : 15;
+          }
+
+          if (shotQty > 0) {
+            const totalShotQty = Math.round(shotQty * item.qty * 100) / 100;
+            await prisma.$transaction([
+              prisma.ingredient.update({
+                where: { id: shotDoses.ingredientId },
+                data: {
+                  stock: {
+                    decrement: totalShotQty,
+                  },
+                },
+              }),
+              prisma.stockMovement.create({
+                data: {
+                  ingredientId: shotDoses.ingredientId,
+                  quantity: -totalShotQty,
+                  type: 'OUT',
+                  reason: `Order #${orderId.slice(-6).toUpperCase()} - Extra ${parsedMod.shotName} (${item.product.name}) (Qty: ${item.qty})`,
+                },
+              }),
+            ]);
+          }
         }
       }
     }
