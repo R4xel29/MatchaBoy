@@ -156,6 +156,38 @@ export function ProductInspectorDrawer({
   const activePromo = useMemo(() => getActivePromo(product), [product]);
   const currentPrice = activePromo ? activePromo.promoPrice : product.price;
 
+  // Food detection (Food items are served on plates with zero packaging cup costs)
+  const isFood = useMemo(() => {
+    if (!product) return false;
+    let isF = false;
+    if (product.modifiers) {
+      try {
+        const pMods = typeof product.modifiers === 'string' ? JSON.parse(product.modifiers) : product.modifiers;
+        if (pMods.productType === 'makanan') isF = true;
+      } catch {}
+    }
+    const catName = (product.category?.name || '').toLowerCase();
+    const prodName = (product.name || '').toLowerCase();
+    if (
+      catName.includes('makanan') ||
+      catName.includes('food') ||
+      catName.includes('snack') ||
+      catName.includes('toast') ||
+      catName.includes('roti') ||
+      catName.includes('mie') ||
+      catName.includes('indomie') ||
+      catName.includes('kentang') ||
+      prodName.includes('indomie') ||
+      prodName.includes('roti') ||
+      prodName.includes('toast') ||
+      prodName.includes('kentang') ||
+      prodName.includes('croissant')
+    ) {
+      isF = true;
+    }
+    return isF;
+  }, [product]);
+
   // HPP and Margin calculations
   const hppInfo = useMemo(() => {
     const recipes = product.productIngredients || [];
@@ -185,6 +217,11 @@ export function ProductInspectorDrawer({
       }
     });
 
+    // Zero packaging cost for food (served on plate)
+    if (isFood) {
+      packagingCost = 0;
+    }
+
     const totalHpp = Math.round(ingredientCost + packagingCost);
     const grossProfit = Math.max(0, currentPrice - totalHpp);
     const marginPercent = currentPrice > 0 ? Math.round((grossProfit / currentPrice) * 100) : 0;
@@ -197,7 +234,7 @@ export function ProductInspectorDrawer({
       grossProfit,
       marginPercent,
     };
-  }, [product, ingredients, currentPrice]);
+  }, [product, ingredients, currentPrice, isFood]);
 
   const isSoldOut = product.badge === 'sold-out';
   const isArchived = product.badge === 'archived';
@@ -562,17 +599,28 @@ export function ProductInspectorDrawer({
             </span>
           </div>
 
-          {hppInfo.packagingCost > 0 && (
+          {isFood ? (
             <div className="flex justify-between items-center py-1 border-b border-slate-100">
-              <span className="text-slate-500">Biaya Kemasan & Cup</span>
-              <span className="font-bold text-rose-600">
-                - {formatRupiah(hppInfo.packagingCost)}
+              <span className="text-slate-500">Penyajian</span>
+              <span className="font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg text-[10px]">
+                Piring Dine-in (Bebas Biaya Kemasan)
               </span>
             </div>
+          ) : (
+            hppInfo.packagingCost > 0 && (
+              <div className="flex justify-between items-center py-1 border-b border-slate-100">
+                <span className="text-slate-500">Biaya Kemasan & Cup</span>
+                <span className="font-bold text-rose-600">
+                  - {formatRupiah(hppInfo.packagingCost)}
+                </span>
+              </div>
+            )
           )}
 
           <div className="flex justify-between items-center py-2 font-bold bg-orange-50/70 px-3 rounded-xl">
-            <span className="text-orange-950 font-semibold">Keuntungan Kotor / Cup</span>
+            <span className="text-orange-950 font-semibold">
+              {isFood ? 'Keuntungan Kotor / Porsi' : 'Keuntungan Kotor / Cup'}
+            </span>
             <span className="text-emerald-700 font-black text-xs sm:text-sm">
               {hppInfo.hasRecipe
                 ? `${formatRupiah(hppInfo.grossProfit)} (${hppInfo.marginPercent}%)`

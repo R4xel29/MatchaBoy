@@ -69,6 +69,7 @@ export async function deductStockForOrder(orderId: string): Promise<void> {
           include: {
             product: {
               include: {
+                category: true,
                 productIngredients: true,
               },
             },
@@ -116,8 +117,36 @@ export async function deductStockForOrder(orderId: string): Promise<void> {
         }
       }
 
-      // Deduct Cup Packaging if customer did NOT bring a tumbler
-      if (!order.hasTumbler) {
+      // Check if product is food (food is served on plates with zero packaging cup deduction)
+      let isFood = false;
+      if (item.product.modifiers) {
+        try {
+          const pMods = JSON.parse(item.product.modifiers);
+          if (pMods.productType === 'makanan') isFood = true;
+        } catch {}
+      }
+      const catName = (item.product.category?.name || '').toLowerCase();
+      const prodName = (item.product.name || '').toLowerCase();
+      if (
+        catName.includes('makanan') ||
+        catName.includes('food') ||
+        catName.includes('snack') ||
+        catName.includes('toast') ||
+        catName.includes('roti') ||
+        catName.includes('mie') ||
+        catName.includes('indomie') ||
+        catName.includes('kentang') ||
+        prodName.includes('indomie') ||
+        prodName.includes('roti') ||
+        prodName.includes('toast') ||
+        prodName.includes('kentang') ||
+        prodName.includes('croissant')
+      ) {
+        isFood = true;
+      }
+
+      // Deduct Cup Packaging ONLY for drinks if customer did NOT bring a tumbler
+      if (!isFood && !order.hasTumbler) {
         const isLarge = itemSize.toLowerCase().includes('large') || itemSize.toLowerCase().includes('jumbo');
         const targetCup = isLarge ? (cupJumbo || cupRegular) : cupRegular;
 

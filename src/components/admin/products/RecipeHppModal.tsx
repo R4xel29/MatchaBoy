@@ -26,6 +26,7 @@ import {
   Check,
   ChevronDown,
   Flame,
+  Utensils,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
@@ -249,6 +250,29 @@ export function RecipeHppModal({
     }
   }, [product?.modifiers]);
 
+  // Food detection (Food items are served on plates with zero packaging cup costs)
+  const isFood = useMemo(() => {
+    if (!product) return false;
+    if (parsedModifiers?.productType === 'makanan') return true;
+    const catName = (product.category?.name || '').toLowerCase();
+    const prodName = (product.name || '').toLowerCase();
+    return (
+      catName.includes('makanan') ||
+      catName.includes('food') ||
+      catName.includes('snack') ||
+      catName.includes('toast') ||
+      catName.includes('roti') ||
+      catName.includes('mie') ||
+      catName.includes('indomie') ||
+      catName.includes('kentang') ||
+      prodName.includes('indomie') ||
+      prodName.includes('roti') ||
+      prodName.includes('toast') ||
+      prodName.includes('kentang') ||
+      prodName.includes('croissant')
+    );
+  }, [product, parsedModifiers]);
+
   const largeExtraPrice = useMemo(() => {
     if (!parsedModifiers?.sizes || parsedModifiers.sizes.length === 0) return 3000;
     const largeSize = parsedModifiers.sizes.find(
@@ -327,6 +351,9 @@ export function RecipeHppModal({
   // Fetch current recipe when modal opens
   useEffect(() => {
     if (!product || !isOpen) return;
+    if (isFood) {
+      setActiveTab('REGULAR');
+    }
     setLoading(true);
     fetch(`/api/admin/products/${product.id}/recipe`)
       .then((r) => (r.ok ? r.json() : {}))
@@ -509,7 +536,7 @@ export function RecipeHppModal({
       }
     });
 
-    const cupCost = cupRegularCost;
+    const cupCost = isFood ? 0 : cupRegularCost;
     const totalHpp = rawHpp + cupCost;
     const sellingPrice = product.price;
     const grossProfit = sellingPrice - totalHpp;
@@ -523,7 +550,7 @@ export function RecipeHppModal({
       grossProfit,
       marginPercent: Math.round(marginPercent * 10) / 10,
     };
-  }, [product, regularItems, ingredients, cupRegularCost]);
+  }, [product, regularItems, ingredients, cupRegularCost, isFood]);
 
   const jumboCalc = useMemo(() => {
     if (!product)
@@ -537,7 +564,7 @@ export function RecipeHppModal({
       }
     });
 
-    const cupCost = cupJumboCost;
+    const cupCost = isFood ? 0 : cupJumboCost;
     const totalHpp = rawHpp + cupCost;
     const sellingPrice = product.price + largeExtraPrice;
     const grossProfit = sellingPrice - totalHpp;
@@ -551,7 +578,7 @@ export function RecipeHppModal({
       grossProfit,
       marginPercent: Math.round(marginPercent * 10) / 10,
     };
-  }, [product, jumboItems, ingredients, cupJumboCost, largeExtraPrice]);
+  }, [product, jumboItems, ingredients, cupJumboCost, largeExtraPrice, isFood]);
 
   const tumblerCalc = useMemo(() => {
     if (!product)
@@ -730,63 +757,75 @@ export function RecipeHppModal({
 
           {/* Segmented Navigation Tab Bar */}
           <div className="px-6 pt-3 pb-3 bg-white border-b border-stone-100 flex items-center justify-between gap-2 overflow-x-auto">
-            <div className="flex items-center p-1 bg-stone-100/80 rounded-2xl border border-stone-200/60 w-full sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setActiveTab('REGULAR')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'REGULAR'
-                    ? 'bg-white text-orange-600 shadow-xs border border-orange-200/60'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Regular (16 oz)
-              </button>
+            {isFood ? (
+              <div className="flex items-center p-1 bg-amber-50 rounded-2xl border border-amber-200/60">
+                <div className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-white text-amber-950 shadow-xs border border-amber-200/60 flex items-center gap-2">
+                  <Utensils className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Porsi Standar (Piring Dine-In)</span>
+                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">
+                    Bebas Biaya Kemasan (Rp 0)
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center p-1 bg-stone-100/80 rounded-2xl border border-stone-200/60 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('REGULAR')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'REGULAR'
+                      ? 'bg-white text-orange-600 shadow-xs border border-orange-200/60'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Regular (16 oz)
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('JUMBO')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'JUMBO'
-                    ? 'bg-white text-orange-600 shadow-xs border border-orange-200/60'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                <Scale className="w-3.5 h-3.5" />
-                Jumbo (22 oz)
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('JUMBO')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'JUMBO'
+                      ? 'bg-white text-orange-600 shadow-xs border border-orange-200/60'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  Jumbo (22 oz)
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('TUMBLER')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  activeTab === 'TUMBLER'
-                    ? 'bg-white text-orange-600 shadow-xs border border-orange-200/60'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                Tumbler
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('TUMBLER')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'TUMBLER'
+                      ? 'bg-white text-orange-600 shadow-xs border border-orange-200/60'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  Tumbler
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setActiveTab('MODIFIERS')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer relative ${
-                  activeTab === 'MODIFIERS'
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
-                    : 'text-stone-700 hover:text-orange-600'
-                }`}
-              >
-                <Sliders className="w-3.5 h-3.5" />
-                Takaran Modifikasi
-                {(enableSugarDoses || enableMatchaDoses || enableShotDoses) && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                )}
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('MODIFIERS')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer relative ${
+                    activeTab === 'MODIFIERS'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs'
+                      : 'text-stone-700 hover:text-orange-600'
+                  }`}
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                  Takaran Modifikasi
+                  {(enableSugarDoses || enableMatchaDoses || enableShotDoses) && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  )}
+                </button>
+              </div>
+            )}
 
-            {activeTab === 'JUMBO' && (
+            {!isFood && activeTab === 'JUMBO' && (
               <button
                 type="button"
                 onClick={syncJumboFromRegular}
@@ -807,7 +846,7 @@ export function RecipeHppModal({
                 <div className="p-3 bg-white rounded-2xl border border-stone-200/70 shadow-xs">
                   <div className="flex items-center justify-between text-stone-400 mb-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
-                      Total HPP ({activeTab})
+                      Total HPP {isFood ? '(Porsi Piring)' : `(${activeTab})`}
                     </span>
                     <Coins className="w-3.5 h-3.5 text-amber-500" />
                   </div>
@@ -816,7 +855,11 @@ export function RecipeHppModal({
                   </p>
                   <p className="text-[10px] text-stone-400 mt-0.5 truncate">
                     Bahan: {formatRupiah(activeCalc.rawHpp)}
-                    {activeTab !== 'TUMBLER' && ` + Cup: ${formatRupiah(activeCalc.cupCost)}`}
+                    {isFood ? (
+                      <span className="text-emerald-600 font-semibold"> + Kemasan: Rp 0 (Piring)</span>
+                    ) : (
+                      activeTab !== 'TUMBLER' && ` + Cup: ${formatRupiah(activeCalc.cupCost)}`
+                    )}
                   </p>
                 </div>
 
@@ -877,26 +920,43 @@ export function RecipeHppModal({
               </div>
 
               {/* Informative Hint Banner */}
-              <div className="px-6 py-2 bg-orange-50/50 border-b border-orange-100 flex items-center gap-2 text-left">
-                <Info className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-                <p className="text-[11px] text-orange-900">
-                  {activeTab === 'JUMBO' ? (
-                    <>
-                      Takaran khusus <strong>Gelas Jumbo (22 oz)</strong>. Biaya Cup Jumbo (
-                      {formatRupiah(cupJumboCost)}) ditambahkan otomatis.
-                    </>
-                  ) : activeTab === 'TUMBLER' ? (
-                    <>
-                      Simulasi <strong>Bawa Tumbler Sendiri</strong>. Bebas biaya kemasan cup plastik (
-                      <strong>Rp 0</strong>).
-                    </>
-                  ) : (
-                    <>
-                      Takaran dasar <strong>Gelas Regular (16 oz)</strong>. Biaya Cup Regular (
-                      {formatRupiah(cupRegularCost)}) ditambahkan otomatis.
-                    </>
-                  )}
-                </p>
+              <div
+                className={`px-6 py-2 border-b flex items-center gap-2 text-left ${
+                  isFood
+                    ? 'bg-amber-50/60 border-amber-200/60'
+                    : 'bg-orange-50/50 border-orange-100'
+                }`}
+              >
+                {isFood ? (
+                  <>
+                    <Utensils className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <p className="text-[11px] text-amber-900 font-medium">
+                      Penyajian Makanan: <strong>Piring Dine-in</strong>. Bebas biaya kemasan cup plastik atau bungkus (<strong>Rp 0</strong>).
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Info className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+                    <p className="text-[11px] text-orange-900">
+                      {activeTab === 'JUMBO' ? (
+                        <>
+                          Takaran khusus <strong>Gelas Jumbo (22 oz)</strong>. Biaya Cup Jumbo (
+                          {formatRupiah(cupJumboCost)}) ditambahkan otomatis.
+                        </>
+                      ) : activeTab === 'TUMBLER' ? (
+                        <>
+                          Simulasi <strong>Bawa Tumbler Sendiri</strong>. Bebas biaya kemasan cup plastik (
+                          <strong>Rp 0</strong>).
+                        </>
+                      ) : (
+                        <>
+                          Takaran dasar <strong>Gelas Regular (16 oz)</strong>. Biaya Cup Regular (
+                          {formatRupiah(cupRegularCost)}) ditambahkan otomatis.
+                        </>
+                      )}
+                    </p>
+                  </>
+                )}
               </div>
 
               {/* Recipe Items Table */}
@@ -904,10 +964,12 @@ export function RecipeHppModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
-                      Bahan Baku Racikan ({activeTab === 'JUMBO' ? 'Porsi Jumbo' : 'Porsi Regular'})
+                      Bahan Baku Racikan ({isFood ? 'Porsi Piring' : activeTab === 'JUMBO' ? 'Porsi Jumbo' : 'Porsi Regular'})
                     </h4>
                     <p className="text-[11px] text-stone-500">
-                      {activeTab === 'JUMBO'
+                      {isFood
+                        ? 'Tentukan jumlah gram/satuan bahan yang dibutuhkan untuk 1 porsi piring.'
+                        : activeTab === 'JUMBO'
                         ? 'Tentukan jumlah gram/ml bahan yang dibutuhkan khusus untuk porsi Jumbo 22 oz.'
                         : 'Tentukan jumlah gram/ml bahan yang dibutuhkan untuk porsi Regular 16 oz.'}
                     </p>
@@ -978,7 +1040,7 @@ export function RecipeHppModal({
                               </div>
                             )}
 
-                            {isCup && (
+                            {isCup && !isFood && (
                               <span className="inline-flex items-center gap-1 text-[9px] font-bold text-blue-700 mt-1">
                                 📦 Kemasan Otomatis (Dipotong dinamis per order)
                               </span>
