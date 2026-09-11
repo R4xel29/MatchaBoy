@@ -2,14 +2,32 @@
 
 import { Loader2, Package } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import { Pagination } from '@/components/ui/Pagination';
 import { OrderReport } from './types';
 
 interface Props {
   orders: OrderReport[];
   loading: boolean;
+  currentPage?: number;
+  pageSize?: number;
+  pageSizeOptions?: number[];
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
 }
 
-export function SalesOrderTable({ orders, loading }: Props) {
+export function SalesOrderTable({
+  orders,
+  loading,
+  currentPage = 1,
+  pageSize = 20,
+  pageSizeOptions,
+  onPageChange,
+  onPageSizeChange,
+}: Props) {
+  const totalPages = Math.ceil(orders.length / pageSize) || 1;
+  const paginatedOrders = onPageChange
+    ? orders.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    : orders;
   if (loading) {
     return (
       <div className="bg-white rounded-3xl border border-slate-150/80 shadow-xs flex items-center justify-center py-16">
@@ -44,7 +62,7 @@ export function SalesOrderTable({ orders, loading }: Props) {
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
-          {orders.map((order) => (
+          {paginatedOrders.map((order) => (
             <tr key={order.id} className="hover:bg-slate-50/70 transition-colors">
               <td className="px-4 py-3 font-mono text-xs font-bold text-orange-700">#{order.id.slice(0, 8).toUpperCase()}</td>
               <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
@@ -91,6 +109,20 @@ export function SalesOrderTable({ orders, loading }: Props) {
           </tr>
         </tfoot>
       </table>
+
+      {orders.length > 0 && onPageChange && (
+        <div className="p-4 border-t border-slate-150 bg-slate-50/50">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={orders.length}
+            pageSize={pageSize}
+            pageSizeOptions={pageSizeOptions}
+            onPageSizeChange={onPageSizeChange}
+            onPageChange={onPageChange}
+          />
+        </div>
+      )}
     </div>
   );
 }

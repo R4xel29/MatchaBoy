@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface RecipeUser {
   id: string;
@@ -73,6 +74,8 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
   const [sortBy, setSortBy] = useState<'newest' | 'popularity'>('newest');
   const [loading, setLoading] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(12);
 
   const { showToast } = useToast();
 
@@ -99,6 +102,14 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
 
     return result;
   }, [recipes, searchTerm, statusFilter, sortBy]);
+
+  const totalPages = Math.ceil(filteredRecipes.length / pageSize) || 1;
+  const paginatedRecipes = useMemo(() => {
+    return filteredRecipes.slice(
+      (currentPage - 1) * pageSize,
+      currentPage * pageSize
+    );
+  }, [filteredRecipes, currentPage, pageSize]);
 
   // Handle action
   const handleAction = async (id: string, action: 'approve' | 'reject' | 'feature' | 'unfeature') => {
@@ -223,14 +234,20 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
             type="text"
             placeholder="Cari resep atau pembuat..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-border bg-card focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
           />
         </div>
 
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as 'newest' | 'popularity')}
+          onChange={(e) => {
+            setSortBy(e.target.value as 'newest' | 'popularity');
+            setCurrentPage(1);
+          }}
           className="px-4 py-2 text-sm rounded-xl border border-border bg-card focus:outline-none focus:border-brand-500"
         >
           <option value="newest">Terbaru</option>
@@ -241,7 +258,10 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
       {/* Tabs */}
       <div className="flex border-b border-border select-none">
         <button
-          onClick={() => setStatusFilter('ALL')}
+          onClick={() => {
+            setStatusFilter('ALL');
+            setCurrentPage(1);
+          }}
           className={cn(
             "px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all",
             statusFilter === 'ALL' ? 'border-brand-600 text-brand-700' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -250,7 +270,10 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
           Semua ({recipes.length})
         </button>
         <button
-          onClick={() => setStatusFilter('PRIVATE')}
+          onClick={() => {
+            setStatusFilter('PRIVATE');
+            setCurrentPage(1);
+          }}
           className={cn(
             "px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5",
             statusFilter === 'PRIVATE' ? 'border-brand-600 text-brand-700' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -260,7 +283,10 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
           Pending ({stats.pendingApproval})
         </button>
         <button
-          onClick={() => setStatusFilter('PUBLIC')}
+          onClick={() => {
+            setStatusFilter('PUBLIC');
+            setCurrentPage(1);
+          }}
           className={cn(
             "px-4 py-2 text-xs font-bold uppercase tracking-wider border-b-2 transition-all flex items-center gap-1.5",
             statusFilter === 'PUBLIC' ? 'border-brand-600 text-brand-700' : 'border-transparent text-muted-foreground hover:text-foreground'
@@ -273,7 +299,7 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
 
       {/* Recipe Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredRecipes.map(recipe => {
+        {paginatedRecipes.map(recipe => {
           const toppings = parseToppings(recipe.toppings);
 
           return (
@@ -429,6 +455,23 @@ export default function AdminRecipesClient({ initialRecipes, initialStats }: Adm
           );
         })}
       </div>
+
+      {filteredRecipes.length > 0 && (
+        <div className="bg-card border border-border rounded-2xl p-4">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredRecipes.length}
+            pageSize={pageSize}
+            pageSizeOptions={[6, 12, 24, 48]}
+            onPageSizeChange={(sz) => {
+              setPageSize(sz);
+              setCurrentPage(1);
+            }}
+            onPageChange={setCurrentPage}
+          />
+        </div>
+      )}
 
       {/* Empty State */}
       {filteredRecipes.length === 0 && (

@@ -38,6 +38,10 @@ export default function SalesReportClient({ reportSettings }: Props) {
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [sourceFilter, setSourceFilter] = useState('ALL');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
@@ -261,21 +265,50 @@ export default function SalesReportClient({ reportSettings }: Props) {
       {/* Filters */}
       <SalesReportFilters
         dateRange={dateRange}
-        setDateRange={setDateRange}
+        setDateRange={(r) => {
+          setDateRange(r);
+          setCurrentPage(1);
+        }}
         startDate={startDate}
-        setStartDate={setStartDate}
+        setStartDate={(sd) => {
+          setStartDate(sd);
+          setCurrentPage(1);
+        }}
         endDate={endDate}
-        setEndDate={setEndDate}
+        setEndDate={(ed) => {
+          setEndDate(ed);
+          setCurrentPage(1);
+        }}
         search={search}
-        setSearch={setSearch}
+        setSearch={(s) => {
+          setSearch(s);
+          setCurrentPage(1);
+        }}
         typeFilter={typeFilter}
-        setTypeFilter={setTypeFilter}
+        setTypeFilter={(tf) => {
+          setTypeFilter(tf);
+          setCurrentPage(1);
+        }}
         sourceFilter={sourceFilter}
-        setSourceFilter={setSourceFilter}
+        setSourceFilter={(sf) => {
+          setSourceFilter(sf);
+          setCurrentPage(1);
+        }}
       />
 
       {/* Table */}
-      <SalesOrderTable orders={filteredOrders} loading={loading} />
+      <SalesOrderTable
+        orders={filteredOrders}
+        loading={loading}
+        currentPage={currentPage}
+        pageSize={pageSize}
+        pageSizeOptions={[10, 20, 50, 100]}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={(sz) => {
+          setPageSize(sz);
+          setCurrentPage(1);
+        }}
+      />
     </div>
   );
 }

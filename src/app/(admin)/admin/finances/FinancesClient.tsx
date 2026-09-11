@@ -51,6 +51,10 @@ export default function FinancesClient({
   const [methodFilter, setMethodFilter] = useState<'ALL' | 'CASH' | 'QRIS'>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'INCOME' | 'CAPITAL' | 'EXPENSE'>('ALL');
 
+  // Pagination for Mutasi Table
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
   // Modal State
   const [showInjectModal, setShowInjectModal] = useState(false);
   const [editingInjection, setEditingInjection] = useState<CapitalInjectionItem | null>(null);
@@ -107,6 +111,11 @@ export default function FinancesClient({
       (item.orderNumber && item.orderNumber.toLowerCase().includes(q))
     );
   });
+
+  const paginatedLedger = filteredLedger.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   // Handle Delete Capital Injection
   const handleDeleteInjection = async () => {
@@ -218,16 +227,39 @@ export default function FinancesClient({
         <div className="space-y-4">
           <FinanceFilters
             search={search}
-            onSearchChange={setSearch}
+            onSearchChange={(val) => {
+              setSearch(val);
+              setCurrentPage(1);
+            }}
             range={range}
-            onRangeChange={setRange}
+            onRangeChange={(r) => {
+              setRange(r);
+              setCurrentPage(1);
+            }}
             methodFilter={methodFilter}
-            onMethodFilterChange={setMethodFilter}
+            onMethodFilterChange={(m) => {
+              setMethodFilter(m);
+              setCurrentPage(1);
+            }}
             typeFilter={typeFilter}
-            onTypeFilterChange={setTypeFilter}
+            onTypeFilterChange={(t) => {
+              setTypeFilter(t);
+              setCurrentPage(1);
+            }}
             onPrintLedger={printLedger}
           />
-          <MutasiTable ledger={filteredLedger} />
+          <MutasiTable
+            ledger={paginatedLedger}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalItems={filteredLedger.length}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setPageSize(newSize);
+              setCurrentPage(1);
+            }}
+          />
         </div>
       )}
 

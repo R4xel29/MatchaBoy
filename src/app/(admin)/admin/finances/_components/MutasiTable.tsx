@@ -2,13 +2,29 @@
 
 import { Coins, ArrowDownRight, ArrowUpRight, Banknote, QrCode } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import { Pagination } from '@/components/ui/Pagination';
 import { LedgerTransaction } from './types';
 
 interface Props {
   ledger: LedgerTransaction[];
+  currentPage?: number;
+  pageSize?: number;
+  totalItems?: number;
+  pageSizeOptions?: number[];
+  onPageChange?: (page: number) => void;
+  onPageSizeChange?: (pageSize: number) => void;
 }
 
-export function MutasiTable({ ledger }: Props) {
+export function MutasiTable({
+  ledger,
+  currentPage = 1,
+  pageSize = 20,
+  totalItems,
+  pageSizeOptions,
+  onPageChange,
+  onPageSizeChange,
+}: Props) {
+  const totalPages = totalItems !== undefined ? Math.ceil(totalItems / pageSize) || 1 : 1;
   return (
     <div className="bg-white border border-slate-150/80 rounded-3xl shadow-xs overflow-hidden overflow-x-auto">
       <table className="w-full text-sm text-left">
@@ -131,6 +147,20 @@ export function MutasiTable({ ledger }: Props) {
           )}
         </tbody>
       </table>
+
+      {totalItems !== undefined && onPageChange && (
+        <div className="p-4 border-t border-slate-150 bg-slate-50/50">
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            pageSizeOptions={pageSizeOptions}
+            onPageSizeChange={onPageSizeChange}
+            onPageChange={onPageChange}
+          />
+        </div>
+      )}
     </div>
   );
 }

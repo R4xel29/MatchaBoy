@@ -8,6 +8,7 @@ import {
   Search, Plus, Edit2, Trash2, X, Save, Loader2,
   Package, History, AlertTriangle, TrendingUp, TrendingDown
 } from 'lucide-react';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface Ingredient {
   id: string;
@@ -28,6 +29,8 @@ export default function InventoryClient({ initialIngredients }: Props) {
   const { showToast } = useToast();
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
   
   // Modals
   const [showModal, setShowModal] = useState(false);
@@ -54,6 +57,12 @@ export default function InventoryClient({ initialIngredients }: Props) {
 
   const filteredIngredients = initialIngredients.filter(i =>
     i.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalPages = Math.ceil(filteredIngredients.length / pageSize) || 1;
+  const paginatedIngredients = filteredIngredients.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
   );
 
   const openModal = (ingredient?: Ingredient) => {
@@ -155,7 +164,10 @@ export default function InventoryClient({ initialIngredients }: Props) {
             type="text" 
             placeholder="Search ingredients..." 
             value={search} 
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all shadow-sm" 
           />
         </div>
@@ -222,7 +234,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-border/30">
-            {filteredIngredients.map((ing) => (
+            {paginatedIngredients.map((ing) => (
               <tr key={ing.id} className="group hover:bg-muted/10 transition-colors">
                 <td className="px-5 py-3">
                   <div className="flex items-center gap-3">
@@ -254,7 +266,7 @@ export default function InventoryClient({ initialIngredients }: Props) {
                 <td className="px-5 py-3 text-right">
                   <div className="flex justify-end gap-1">
                     <button 
-                      onClick={() => openRestockModal(ing)}
+                      onClick={() => openRestockModal(ing)} 
                       className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors"
                       title="Restock"
                     >
@@ -284,6 +296,23 @@ export default function InventoryClient({ initialIngredients }: Props) {
           <div className="py-12 text-center text-muted-foreground/50">
             <Package className="w-10 h-10 mx-auto mb-2 opacity-30" />
             <p className="text-sm">No ingredients found</p>
+          </div>
+        )}
+
+        {filteredIngredients.length > 0 && (
+          <div className="p-4 border-t border-border/40 bg-muted/10">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filteredIngredients.length}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 15, 25, 50]}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              onPageChange={setCurrentPage}
+            />
           </div>
         )}
       </div>

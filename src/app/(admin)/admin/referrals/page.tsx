@@ -32,7 +32,6 @@ export default async function ReferralTrackingPage() {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: 50,
     }),
     prisma.user.count({ where: { referredById: { not: null } } }),
     prisma.voucher.count({ where: { fromReferralUserId: { not: null } } }),

@@ -5,6 +5,7 @@ import {
   ShoppingBag, Gift, Search, Settings
 } from 'lucide-react';
 import { useState } from 'react';
+import { Pagination } from '@/components/ui/Pagination';
 import ReferralSettingsClient from './ReferralSettingsClient';
 
 interface ReferralData {
@@ -28,6 +29,8 @@ interface Props {
 export default function ReferralTrackingClient({ referrals, stats }: Props) {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'tracking' | 'settings'>('tracking');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
 
   const filtered = referrals.filter((r) => {
     const q = search.toLowerCase();
@@ -39,6 +42,12 @@ export default function ReferralTrackingClient({ referrals, stats }: Props) {
       r.referrer?.referralCode?.toLowerCase().includes(q)
     );
   });
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginated = filtered.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   return (
     <div className="space-y-6">
@@ -117,7 +126,10 @@ export default function ReferralTrackingClient({ referrals, stats }: Props) {
           type="text"
           placeholder="Cari nama, email, atau kode referral..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setCurrentPage(1);
+          }}
           className="w-full pl-10 pr-4 py-2.5 text-sm bg-white border border-border/40 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
         />
       </div>
@@ -144,7 +156,7 @@ export default function ReferralTrackingClient({ referrals, stats }: Props) {
                   </td>
                 </tr>
               ) : (
-                filtered.map((r) => (
+                paginated.map((r) => (
                   <tr key={r.referee.id} className="border-b border-border/20 hover:bg-muted/10 transition-colors">
                     {/* Referrer */}
                     <td className="px-4 py-3">
@@ -195,6 +207,23 @@ export default function ReferralTrackingClient({ referrals, stats }: Props) {
             </tbody>
           </table>
         </div>
+
+        {filtered.length > 0 && (
+          <div className="p-4 border-t border-border/30 bg-muted/10">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 15, 25, 50]}
+              onPageSizeChange={(sz) => {
+                setPageSize(sz);
+                setCurrentPage(1);
+              }}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
       </div>
       </>
       )}

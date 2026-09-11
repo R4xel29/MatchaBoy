@@ -8,6 +8,8 @@ interface PaginationProps {
   totalPages: number;
   totalItems?: number;
   pageSize?: number;
+  pageSizeOptions?: number[];
+  onPageSizeChange?: (pageSize: number) => void;
   onPageChange: (page: number) => void;
   className?: string;
 }
@@ -17,6 +19,8 @@ export function Pagination({
   totalPages,
   totalItems,
   pageSize,
+  pageSizeOptions,
+  onPageSizeChange,
   onPageChange,
   className = '',
 }: PaginationProps) {
@@ -54,8 +58,8 @@ export function Pagination({
 
   return (
     <div className={`flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 px-1 ${className}`}>
-      {/* Items count info */}
-      <div className="text-xs text-muted-foreground font-medium text-center sm:text-left">
+      {/* Items count info & page size selector */}
+      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground font-medium text-center sm:text-left">
         {totalItems !== undefined && pageSize !== undefined ? (
           totalItems > 0 ? (
             <span>
@@ -72,6 +76,24 @@ export function Pagination({
             <span className="font-semibold text-foreground">{totalPages}</span>
           </span>
         )}
+
+        {pageSizeOptions && onPageSizeChange && (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span>Baris:</span>
+            <select
+              value={pageSize}
+              aria-label="Pilih jumlah baris per halaman"
+              onChange={(e) => onPageSizeChange(Number(e.target.value))}
+              className="px-2 py-0.5 bg-muted/40 border border-border/60 rounded-md text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-orange-500 cursor-pointer"
+            >
+              {pageSizeOptions.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Pagination Controls */}
@@ -81,7 +103,7 @@ export function Pagination({
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="flex items-center justify-center w-8 h-8 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95 cursor-pointer"
+            className="flex items-center justify-center w-8 h-8 rounded-lg border border-border bg-card text-foreground hover:bg-muted hover:border-orange-300 disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95 cursor-pointer"
             title="Halaman Sebelumnya"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -105,8 +127,8 @@ export function Pagination({
                   onClick={() => onPageChange(page as number)}
                   className={`w-8 h-8 rounded-lg text-xs font-semibold transition-all active:scale-95 cursor-pointer ${
                     isCurrent
-                      ? 'bg-brand-600 text-white shadow-sm font-bold'
-                      : 'border border-border bg-card text-foreground hover:bg-muted'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs font-bold'
+                      : 'border border-border bg-card text-foreground hover:bg-muted hover:border-orange-300'
                   }`}
                 >
                   {page}
@@ -119,7 +141,7 @@ export function Pagination({
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="flex items-center justify-center w-8 h-8 rounded-lg border border-border bg-card text-foreground hover:bg-muted disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95 cursor-pointer"
+            className="flex items-center justify-center w-8 h-8 rounded-lg border border-border bg-card text-foreground hover:bg-muted hover:border-orange-300 disabled:opacity-40 disabled:pointer-events-none transition-all active:scale-95 cursor-pointer"
             title="Halaman Selanjutnya"
           >
             <ChevronRight className="w-4 h-4" />

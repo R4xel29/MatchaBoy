@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { Plus, Edit2, Trash2, Banknote, QrCode } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
+import { Pagination } from '@/components/ui/Pagination';
 import { CapitalInjectionItem } from '@/components/admin/finances/InjectCapitalModal';
 
 interface Props {
@@ -17,6 +19,14 @@ export function CapitalInjectionsTable({
   onEdit,
   onDelete,
 }: Props) {
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+
+  const totalPages = Math.ceil(injections.length / pageSize) || 1;
+  const paginatedInjections = injections.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -58,7 +68,7 @@ export function CapitalInjectionsTable({
                 </td>
               </tr>
             ) : (
-              injections.map((inj) => (
+              paginatedInjections.map((inj) => (
                 <tr key={inj.id} className="hover:bg-slate-50/70 transition-colors">
                   <td className="px-5 py-3.5 text-xs text-slate-500 font-medium whitespace-nowrap">
                     {new Date(inj.date).toLocaleDateString('id-ID', {
@@ -128,6 +138,18 @@ export function CapitalInjectionsTable({
             )}
           </tbody>
         </table>
+
+        {injections.length > 0 && (
+          <div className="p-4 border-t border-slate-150 bg-slate-50/50">
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={injections.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
