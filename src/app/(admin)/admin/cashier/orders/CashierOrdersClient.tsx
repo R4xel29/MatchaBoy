@@ -219,10 +219,15 @@ export default function CashierOrdersClient({
       .catch(() => {});
   }, []);
 
-  // Initialize auto-printed orders with initialOrders on mount so historical orders don't re-print
+  // Initialize auto-printed orders with initialOrders on mount so historical orders don't re-print.
+  // We exclude PENDING_PAYMENT so that if an order is unpaid on mount, it will properly auto-print once paid (transitions to PENDING).
   useEffect(() => {
     if (initialOrders && initialOrders.length > 0) {
-      initialOrders.forEach((o) => autoPrintedOrderIdsRef.current.add(o.id));
+      initialOrders.forEach((o) => {
+        if (o.status !== 'PENDING_PAYMENT') {
+          autoPrintedOrderIdsRef.current.add(o.id);
+        }
+      });
     }
   }, [initialOrders]);
 
@@ -401,10 +406,12 @@ export default function CashierOrdersClient({
           const incomingOrders: OrderData[] = data.orders;
           setOrders(incomingOrders);
 
-          // Check for newly arrived orders to auto-print
+          // Check for newly arrived orders to auto-print.
+          // Only auto-print orders that are PAID and ready for kitchen (PENDING, PREPARING).
+          // NEVER auto-print unpaid PENDING_PAYMENT orders!
           if (receiptSettings?.autoPrintIncomingOrders) {
             incomingOrders.forEach((ord) => {
-              const isEligible = ['PENDING', 'PENDING_PAYMENT', 'PREPARING'].includes(ord.status);
+              const isEligible = ['PENDING', 'PREPARING'].includes(ord.status);
               if (isEligible && !autoPrintedOrderIdsRef.current.has(ord.id)) {
                 autoPrintedOrderIdsRef.current.add(ord.id);
 

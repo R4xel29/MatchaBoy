@@ -281,6 +281,21 @@ export async function POST(req: NextRequest) {
         });
       } else {
         console.log(`[DOKU WEBHOOK] Payment failed/expired/cancelled for invoice ${invoiceNumber}. Expiring order...`);
+        const existingOrder = await prisma.order.findFirst({
+          where: {
+            OR: [
+              { id: invoiceNumber },
+              { paymentProofUrl: invoiceNumber },
+            ],
+          },
+        });
+
+        // Don't expire if order was already paid or processed
+        if (existingOrder && existingOrder.status !== 'PENDING_PAYMENT') {
+          console.log(`[DOKU WEBHOOK] Order ${invoiceNumber} status is already ${existingOrder.status}, skipping expiry.`);
+          return NextResponse.json({ status: 'OK', message: 'Order already processed or paid' });
+        }
+
         const expiredResult = await expireOrder(invoiceNumber, true); // Force cancel order
         if (expiredResult) {
           // Appending the specific DOKU cancellation note

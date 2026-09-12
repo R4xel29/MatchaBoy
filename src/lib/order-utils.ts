@@ -48,6 +48,19 @@ export async function expireOrder(
         return order;
       }
 
+      // Pembatalan otomatis (non-force) HANYA berlaku untuk pesanan yang belum dibayar (PENDING_PAYMENT).
+      // Pesanan berstatus PENDING adalah pesanan yang sudah sah dibayar (Rule 6) dan tidak boleh kedaluwarsa otomatis.
+      if (order.status !== 'PENDING_PAYMENT' && !force) {
+        console.log(`[Order Expiry] Pesanan ${orderId} berstatus ${order.status} (sudah lunas), lewati pembatalan`);
+        return order;
+      }
+
+      // Jangan pernah membatalkan pesanan yang sudah terverifikasi lunas oleh webhook atau kasir
+      if (order.paymentProofUrl === '/verified-webhook.svg' || order.paymentProofUrl === '/verified-cashier-qris.svg') {
+        console.log(`[Order Expiry] Pesanan ${orderId} sudah terverifikasi lunas via bukti pembayaran, lewati pembatalan`);
+        return order;
+      }
+
       // Cek apakah waktu pembayaran telah habis (batas QRIS standar: 5 menit)
       const isQris = order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN';
       const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60);
@@ -67,7 +80,7 @@ export async function expireOrder(
       const updateResult = await tx.order.updateMany({
         where: { 
           id: orderId,
-          status: { in: ['PENDING_PAYMENT', 'PENDING'] }
+          status: force ? { in: ['PENDING_PAYMENT', 'PENDING'] } : 'PENDING_PAYMENT'
         },
         data: {
           status: 'CANCELLED',
@@ -170,7 +183,10 @@ export async function autoCancelExpiredQrisOrders(): Promise<number> {
     
     const expiredPendingOrders = await prisma.order.findMany({
       where: {
-        status: { in: ['PENDING_PAYMENT', 'PENDING'] },
+        status: 'PENDING_PAYMENT',
+        paymentProofUrl: {
+          notIn: ['/verified-webhook.svg', '/verified-cashier-qris.svg']
+        },
         OR: [
           {
             paymentMethod: { in: ['QRIS', 'QRIS_INSTAN'] },
@@ -199,7 +215,7 @@ export async function autoCancelExpiredQrisOrders(): Promise<number> {
         await expireOrder(
           ord.id, 
           true, 
-          'Dibatalkan otomatis oleh sistem (QRIS kedaluwarsa > 5 menit).'
+          'Dibatalkan otomatis oleh sistem (QRIS belum terbayar > 5 menit).'
         );
         cancelledCount++;
       } catch (err) {
