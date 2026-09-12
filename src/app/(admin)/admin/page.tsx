@@ -239,11 +239,13 @@ export default async function AdminDashboardPage() {
   let allTimeCashCount = 0;
   let allTimeQris = 0;
   let allTimeQrisCount = 0;
+  let totalCompletedOrders = 0;
 
   allCompletedOrdersSummary.forEach((o) => {
     const pm = (o.paymentMethod || '').toUpperCase();
     const sum = o._sum.total || 0;
     const count = o._count.id || 0;
+    totalCompletedOrders += count;
     if (pm === 'CASH' || pm === 'TUNAI' || pm === 'COD') {
       allTimeCash += sum;
       allTimeCashCount += count;
@@ -293,7 +295,7 @@ export default async function AdminDashboardPage() {
     qrisCount: allTimeQrisCount,
     grossTotalMoney,
     netTotalMoney,
-    totalCompletedOrders: allCompletedOrders.length,
+    totalCompletedOrders,
   };
 
   const paymentMap = new Map<string, { count: number; amount: number }>();
