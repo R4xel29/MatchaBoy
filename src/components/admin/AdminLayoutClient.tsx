@@ -5,7 +5,19 @@ import { AdminSidebar } from './AdminSidebar';
 import { AdminIncomingOrderAlarm } from './AdminIncomingOrderAlarm';
 import { AdminAIAssistantWidget } from './AdminAIAssistantWidget';
 
-export function AdminLayoutClient({ children }: { children: ReactNode }) {
+interface AdminLayoutClientProps {
+  children: ReactNode;
+  initialAlarmSoundUrl?: string;
+  initialAlarmVolumeBoost?: number;
+  initialPickupAlarmLeadTime?: number;
+}
+
+export function AdminLayoutClient({
+  children,
+  initialAlarmSoundUrl = '',
+  initialAlarmVolumeBoost = 100,
+  initialPickupAlarmLeadTime = 30,
+}: AdminLayoutClientProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
@@ -26,7 +38,11 @@ export function AdminLayoutClient({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-[#F8F9FB] flex flex-col">
       <AdminSidebar isCollapsed={isCollapsed} onToggleCollapse={toggleCollapsed} />
-      <AdminIncomingOrderAlarm />
+      <AdminIncomingOrderAlarm
+        initialAlarmSoundUrl={initialAlarmSoundUrl}
+        initialAlarmVolumeBoost={initialAlarmVolumeBoost}
+        initialPickupAlarmLeadTime={initialPickupAlarmLeadTime}
+      />
 
       {/* Main Content */}
       <main

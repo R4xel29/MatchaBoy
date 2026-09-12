@@ -390,8 +390,9 @@ export default function StoreSettingsPage() {
       previewAudioRef.current.pause();
     }
 
-    const audio = new Audio(effectiveUrl);
+    const audio = new Audio();
     audio.crossOrigin = 'anonymous';
+    audio.src = effectiveUrl;
     previewAudioRef.current = audio;
     setIsPlayingPreview(true);
 
@@ -445,8 +446,9 @@ export default function StoreSettingsPage() {
       if (previewAudioRef.current) {
         previewAudioRef.current.pause();
       }
-      const audio = new Audio(data.url);
+      const audio = new Audio();
       audio.crossOrigin = 'anonymous';
+      audio.src = data.url;
       previewAudioRef.current = audio;
       setIsPlayingPreview(true);
       playBoostedAudio(audio, alarmVolumeBoost).catch(() => setIsPlayingPreview(false));

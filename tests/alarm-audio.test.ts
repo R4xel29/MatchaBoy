@@ -177,4 +177,71 @@ describe('Tier 1.8: Custom Incoming Order Alarm Audio Compliance', () => {
     expect(settingsContent.includes('1000%')).toBe(true);
     expect(settingsContent.includes('max="1000"')).toBe(true);
   });
+
+  it('T1.8.12: AdminIncomingOrderAlarm excludes only /admin/cashier/orders and remains active on POS and other menus', () => {
+    const adminAlarmPath = path.join(
+      process.cwd(),
+      'src',
+      'components',
+      'admin',
+      'AdminIncomingOrderAlarm.tsx'
+    );
+    const content = fs.readFileSync(adminAlarmPath, 'utf8');
+    expect(content.includes("'/admin/cashier/orders'")).toBe(true);
+    // Ensure it no longer disables across the entire /admin/cashier prefix
+    expect(content.includes("pathname.startsWith('/admin/cashier')")).toBe(false);
+  });
+
+  it('T1.8.13: AdminLayoutClient and layout.tsx pass server-side storeSettings alarm props to AdminIncomingOrderAlarm', () => {
+    const layoutPath = path.join(
+      process.cwd(),
+      'src',
+      'app',
+      '(admin)',
+      'layout.tsx'
+    );
+    const layoutContent = fs.readFileSync(layoutPath, 'utf8');
+    expect(layoutContent.includes('alarmSoundUrl: true')).toBe(true);
+    expect(layoutContent.includes('initialAlarmSoundUrl')).toBe(true);
+
+    const clientPath = path.join(
+      process.cwd(),
+      'src',
+      'components',
+      'admin',
+      'AdminLayoutClient.tsx'
+    );
+    const clientContent = fs.readFileSync(clientPath, 'utf8');
+    expect(clientContent.includes('initialAlarmSoundUrl')).toBe(true);
+    expect(clientContent.includes('AdminIncomingOrderAlarm')).toBe(true);
+  });
+
+  it('T1.8.14: Audio elements set crossOrigin before src and alarm-utils handles <= 100% direct playback', () => {
+    const utilsPath = path.join(process.cwd(), 'src', 'lib', 'alarm-utils.ts');
+    const utilsContent = fs.readFileSync(utilsPath, 'utf8');
+    expect(utilsContent.includes('boostPercent <= 100')).toBe(true);
+
+    const adminAlarmPath = path.join(
+      process.cwd(),
+      'src',
+      'components',
+      'admin',
+      'AdminIncomingOrderAlarm.tsx'
+    );
+    const adminContent = fs.readFileSync(adminAlarmPath, 'utf8');
+    expect(adminContent.includes("audio.crossOrigin = 'anonymous'")).toBe(true);
+
+    const cashierPath = path.join(
+      process.cwd(),
+      'src',
+      'app',
+      '(admin)',
+      'admin',
+      'cashier',
+      'orders',
+      'CashierOrdersClient.tsx'
+    );
+    const cashierContent = fs.readFileSync(cashierPath, 'utf8');
+    expect(cashierContent.includes("audio.crossOrigin = 'anonymous'")).toBe(true);
+  });
 });

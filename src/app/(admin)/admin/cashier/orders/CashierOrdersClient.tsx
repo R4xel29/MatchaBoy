@@ -326,13 +326,15 @@ export default function CashierOrdersClient({
     const soundUrl = getAlarmSoundUrl(alarmSoundUrl);
 
     if (hasUnreadOrders && !isAudioMuted) {
-      if (!alarmAudioRef.current) {
-        const audio = new Audio(soundUrl);
+      if (!alarmAudioRef.current || alarmAudioRef.current.src !== soundUrl) {
+        if (alarmAudioRef.current) {
+          alarmAudioRef.current.pause();
+        }
+        const audio = new Audio();
         audio.crossOrigin = 'anonymous';
+        audio.src = soundUrl;
         audio.loop = true;
         alarmAudioRef.current = audio;
-      } else if (alarmAudioRef.current.src !== soundUrl) {
-        alarmAudioRef.current.src = soundUrl;
       }
 
       playBoostedAudio(alarmAudioRef.current, alarmVolumeBoost)
@@ -355,16 +357,41 @@ export default function CashierOrdersClient({
     };
   }, [hasUnreadOrders, isAudioMuted, alarmSoundUrl, alarmVolumeBoost]);
 
+  // Auto-unlock audio playback on first user gesture anywhere if autoplay was initially blocked
+  useEffect(() => {
+    if (!hasUnreadOrders || !isAudioBlocked || isAudioMuted) return;
+
+    const handleUnlockInteraction = () => {
+      if (alarmAudioRef.current) {
+        playBoostedAudio(alarmAudioRef.current, alarmVolumeBoost)
+          .then(() => setIsAudioBlocked(false))
+          .catch((err) => console.warn('Continuous alarm interaction retry failed:', err));
+      }
+    };
+
+    window.addEventListener('click', handleUnlockInteraction, { once: true });
+    window.addEventListener('touchstart', handleUnlockInteraction, { once: true });
+    window.addEventListener('keydown', handleUnlockInteraction, { once: true });
+
+    return () => {
+      window.removeEventListener('click', handleUnlockInteraction);
+      window.removeEventListener('touchstart', handleUnlockInteraction);
+      window.removeEventListener('keydown', handleUnlockInteraction);
+    };
+  }, [hasUnreadOrders, isAudioBlocked, isAudioMuted, alarmVolumeBoost]);
+
   // Unmute / enable audio user gesture
   const handleEnableAudio = () => {
     const soundUrl = getAlarmSoundUrl(alarmSoundUrl);
-    if (!alarmAudioRef.current) {
-      const audio = new Audio(soundUrl);
+    if (!alarmAudioRef.current || alarmAudioRef.current.src !== soundUrl) {
+      if (alarmAudioRef.current) {
+        alarmAudioRef.current.pause();
+      }
+      const audio = new Audio();
       audio.crossOrigin = 'anonymous';
+      audio.src = soundUrl;
       audio.loop = true;
       alarmAudioRef.current = audio;
-    } else if (alarmAudioRef.current.src !== soundUrl) {
-      alarmAudioRef.current.src = soundUrl;
     }
     playBoostedAudio(alarmAudioRef.current, alarmVolumeBoost)
       .then(() => {

@@ -208,11 +208,24 @@ export async function playBoostedAudio(
   audio: HTMLAudioElement,
   boostPercent: number = 350
 ): Promise<void> {
-  setupSpeakerPecahBooster(audio, boostPercent);
-  if (globalSharedCtx && globalSharedCtx.state === 'suspended') {
-    await globalSharedCtx.resume().catch(() => {});
+  // If boost is standard (<= 100%), play directly via standard HTML5 Audio.
+  // This bypasses Web Audio API to prevent cross-origin silencing on remote assets (e.g. Supabase storage).
+  if (boostPercent <= 100) {
+    audio.volume = 1.0;
+    return audio.play();
   }
-  return audio.play();
+
+  try {
+    setupSpeakerPecahBooster(audio, boostPercent);
+    if (globalSharedCtx && globalSharedCtx.state === 'suspended') {
+      await globalSharedCtx.resume().catch(() => {});
+    }
+    return await audio.play();
+  } catch (err) {
+    console.warn('[AlarmBooster] Boosted playback failed, falling back to direct audio:', err);
+    audio.volume = 1.0;
+    return audio.play();
+  }
 }
 
 /**
@@ -224,14 +237,28 @@ export function playOneShotBoostedAlarm(
 ): void {
   if (typeof window === 'undefined') return;
   try {
-    const audio = new Audio(url);
+    const audio = new Audio();
     audio.crossOrigin = 'anonymous';
+    audio.src = url;
+
+    if (boostPercent <= 100) {
+      audio.volume = 1.0;
+      audio.play().catch((err) => {
+        console.warn('[OneShotAlarm] Play blocked:', err);
+      });
+      return;
+    }
+
     setupSpeakerPecahBooster(audio, boostPercent);
     if (globalSharedCtx && globalSharedCtx.state === 'suspended') {
       globalSharedCtx.resume().catch(() => {});
     }
     audio.play().catch((err) => {
       console.warn('[OneShotAlarm] Play blocked:', err);
+      try {
+        const fallback = new Audio(url);
+        fallback.play().catch(() => {});
+      } catch {}
     });
   } catch {
     try {
