@@ -104,10 +104,230 @@ export function RecipePrintModal({
     setSelectedProductIds(first12);
   };
 
-  // Direct Print via Window.print
+  // Standalone A4 HTML generator with embedded styles for high-fidelity printing
+  const generateA4PrintHtml = () => {
+    const pagesHtml = printPages.map((pageItems, pageIdx) => {
+      const cardsHtml = pageItems.map((prod) => {
+        let pMods: ModifiersData = {};
+        try {
+          pMods = typeof prod.modifiers === 'string' ? JSON.parse(prod.modifiers || '{}') : (prod.modifiers || {});
+        } catch {}
+
+        const isFood =
+          pMods.productType === 'makanan' ||
+          (prod.category?.name || '').toLowerCase().includes('makanan') ||
+          (prod.category?.name || '').toLowerCase().includes('snack') ||
+          (prod.category?.name || '').toLowerCase().includes('food');
+
+        const bIngs = prod.productIngredients || [];
+        const jIngs = Array.isArray(pMods.jumboRecipe) ? pMods.jumboRecipe : [];
+        const sDoses = pMods.sugarDoses;
+        const mDoses = pMods.matchaDoses;
+        const shDoses = pMods.shotDoses;
+
+        // Base Ingredients
+        const ingsHtml = bIngs.map((bi) => {
+          const jItem = jIngs.find((j) => j.ingredientId === bi.ingredientId);
+          const hasJumbo = !isFood && jItem && jItem.quantity > 0;
+          return `
+            <div style="background: #fafaf9; border: 0.5px solid #e7e5e4; border-radius: 4px; padding: 1mm 1.6mm; font-size: 6.8pt; color: #292524; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.8mm;">
+              <span style="font-weight: 700; color: #1c1917;">${bi.ingredient?.name || 'Bahan'}</span>
+              <span style="font-size: 6.8pt; color: #57534e;">
+                ${bi.quantity} ${bi.ingredient?.unit || ''}
+                ${hasJumbo ? `<strong style="color: #ea580c; font-weight: 800; margin-left: 2mm; background: #fff7ed; padding: 0.2mm 1mm; border-radius: 2px; border: 0.5px solid #fed7aa;">Jmb: ${jItem.quantity} ${bi.ingredient?.unit || ''}</strong>` : ''}
+              </span>
+            </div>
+          `;
+        }).join('');
+
+        // Modifiers Blocks
+        let modHtml = '';
+        if (!isFood) {
+          let sHtml = '';
+          if (sDoses && (sDoses.less > 0 || sDoses.lumayan > 0 || sDoses.manisSekali > 0)) {
+            sHtml = `
+              <div style="background: #fffbeb; border: 0.5px solid #fde68a; border-radius: 4px; padding: 0.8mm 1.5mm; margin-top: 1mm;">
+                <div style="font-size: 5.8pt; font-weight: 800; color: #92400e; margin-bottom: 0.4mm;">GULA / MANIS:</div>
+                <div style="display: flex; justify-content: space-between; font-size: 6.5pt; color: #78350f; font-weight: 700;">
+                  <span>Less: ${sDoses.less}</span>
+                  <span>Sedang: ${sDoses.lumayan}</span>
+                  <span>Manis: ${sDoses.manisSekali}</span>
+                </div>
+              </div>
+            `;
+          }
+
+          let mHtml = '';
+          if (mDoses && (mDoses.light > 0 || mDoses.medium > 0 || mDoses.bold > 0 || mDoses.extraBold > 0)) {
+            mHtml = `
+              <div style="background: #f0fdf4; border: 0.5px solid #bbf7d0; border-radius: 4px; padding: 0.8mm 1.5mm; margin-top: 1mm;">
+                <div style="font-size: 5.8pt; font-weight: 800; color: #166534; margin-bottom: 0.4mm;">MATCHA (BUBUK):</div>
+                <div style="display: flex; justify-content: space-between; font-size: 6.2pt; color: #14532d; font-weight: 700;">
+                  <span>Light: ${mDoses.light}g</span>
+                  <span>Med: ${mDoses.medium}g</span>
+                  <span>Bold: ${mDoses.bold}g</span>
+                  <span>Ex: ${mDoses.extraBold}g</span>
+                </div>
+              </div>
+            `;
+          }
+
+          let shHtml = '';
+          if (shDoses && (shDoses.single > 0 || shDoses.double > 0 || shDoses.triple > 0)) {
+            shHtml = `
+              <div style="background: #fff7ed; border: 0.5px solid #fed7aa; border-radius: 4px; padding: 0.8mm 1.5mm; margin-top: 1mm;">
+                <div style="font-size: 5.8pt; font-weight: 800; color: #9a3412; margin-bottom: 0.4mm;">ESPRESSO SHOT:</div>
+                <div style="display: flex; justify-content: space-between; font-size: 6.2pt; color: #7c2d12; font-weight: 700;">
+                  <span>Single: ${shDoses.single}</span>
+                  <span>Double: ${shDoses.double}</span>
+                  <span>Triple: ${shDoses.triple}</span>
+                </div>
+              </div>
+            `;
+          }
+
+          if (sHtml || mHtml || shHtml) {
+            modHtml = `<div style="border-top: 0.5px dashed #e7e5e4; padding-top: 1mm; margin-top: auto;">${sHtml}${mHtml}${shHtml}</div>`;
+          }
+        }
+
+        return `
+          <div style="background: #ffffff; border: 1px solid #e7e5e4; border-top: 3px solid #ea580c; border-radius: 6px; padding: 2mm; display: flex; flex-direction: column; justify-content: space-between; page-break-inside: avoid; break-inside: avoid; box-sizing: border-box; overflow: hidden; position: relative;">
+            <div style="border-bottom: 0.5px solid #e7e5e4; padding-bottom: 1.2mm; margin-bottom: 1.2mm; display: flex; justify-content: space-between; align-items: flex-start; gap: 1mm;">
+              <div style="font-weight: 900; font-size: 8.5pt; color: #1c1917; line-height: 1.15;">${prod.name}</div>
+              <span style="font-size: 6pt; font-weight: 800; text-transform: uppercase; padding: 0.4mm 1.5mm; border-radius: 3px; background: #fff7ed; color: #c2410c; border: 0.5px solid #ffedd5; white-space: nowrap;">${prod.category?.name || 'Menu'}</span>
+            </div>
+            
+            <div style="margin-bottom: 1mm;">
+              <div style="font-size: 5.8pt; font-weight: 800; text-transform: uppercase; color: #78716c; margin-bottom: 0.6mm; display: flex; justify-content: space-between; align-items: center;">
+                <span>Takaran Dasar:</span>
+                ${!isFood ? `<span style="font-size: 5.5pt; color: #ea580c; font-weight: 800;">Reg 12oz • Jmb 16oz</span>` : ''}
+              </div>
+              ${ingsHtml || '<div style="font-style: italic; color: #a8a29e; font-size: 6.5pt;">Resep belum dikonfigurasi</div>'}
+            </div>
+
+            ${modHtml}
+          </div>
+        `;
+      }).join('');
+
+      const emptySlotsHtml = Array.from({ length: 12 - pageItems.length }).map(() => `
+        <div style="border: 1px dashed #e7e5e4; border-radius: 6px; padding: 2mm; display: flex; align-items: center; justify-content: center; color: #d6d3d1; font-size: 7pt; font-weight: 600;">
+          (Slot Resep Kosong)
+        </div>
+      `).join('');
+
+      return `
+        <div class="a4-print-page" style="width: 100%; height: 284mm; max-height: 284mm; page-break-after: always; break-after: page; display: flex; flex-direction: column; justify-content: space-between; padding: 0; box-sizing: border-box;">
+          <!-- Sheet Header -->
+          <div style="border-bottom: 2px solid #ea580c; padding-bottom: 2mm; margin-bottom: 2mm; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 2.5mm;">
+              <div style="width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #f97316, #f59e0b); color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 11pt;">
+                AS
+              </div>
+              <div>
+                <div style="font-size: 12pt; font-weight: 900; color: #1c1917; letter-spacing: -0.3px; line-height: 1.1;">
+                  ARUM SEDUH &bull; PANDUAN TAKARAN RESEP BARISTA
+                </div>
+                <div style="font-size: 7.5pt; color: #78716c; font-weight: 600;">
+                  Standar Resmi Meja Bar &bull; Regular (12 oz) &bull; Jumbo (16 oz) &bull; Dicetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </div>
+              </div>
+            </div>
+            <div style="font-size: 8pt; font-weight: 800; background: #1c1917; color: white; padding: 1mm 2.5mm; border-radius: 4px;">
+              Halaman ${pageIdx + 1} dari ${printPages.length}
+            </div>
+          </div>
+
+          <!-- 3x4 Grid = 12 Cards -->
+          <div class="a4-print-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 2.2mm; flex: 1;">
+            ${cardsHtml}
+            ${emptySlotsHtml}
+          </div>
+
+          <!-- Sheet Footer -->
+          <div style="border-top: 1px solid #e7e5e4; padding-top: 1.5mm; margin-top: 1.5mm; font-size: 6.5pt; color: #78716c; display: flex; justify-content: space-between; align-items: center;">
+            <span>Arum Seduh Official Recipe Guide &bull; Selalu gunakan timbangan digital atau jigger takar</span>
+            <span>Format Standar 12 Resep / Lembar A4</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>ARUM SEDUH - PANDUAN TAKARAN RESEP BARISTA (A4)</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 6mm 6mm 6mm 6mm;
+            }
+            * {
+              box-sizing: border-box;
+              margin: 0;
+              padding: 0;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              background: #ffffff;
+              color: #1c1917;
+            }
+            .a4-print-page:last-child {
+              page-break-after: auto !important;
+              break-after: auto !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${pagesHtml}
+        </body>
+      </html>
+    `;
+  };
+
+  // Dedicated Print Execution via Isolated Iframe to prevent modal backdrop clipping & POS58 printer override
   const handlePrint = () => {
     if (printProducts.length === 0) return;
-    window.print();
+
+    let iframe = document.getElementById('recipe-print-sheet-iframe') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'recipe-print-sheet-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+      document.body.appendChild(iframe);
+    }
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    const htmlContent = generateA4PrintHtml();
+    doc.open();
+    doc.write(htmlContent);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch {
+        window.print();
+      }
+    }, 250);
   };
 
   if (!isOpen) return null;
@@ -332,7 +552,22 @@ export function RecipePrintModal({
               </div>
             ) : (
               /* TAB 2: A4 VISUAL PREVIEW & PAGINATION */
-              <div className="space-y-8 max-w-5xl mx-auto">
+              <div className="space-y-6 max-w-5xl mx-auto">
+                {/* Visual Tip Banner for Browser Printer Selection */}
+                <div className="p-3.5 bg-gradient-to-r from-orange-50 via-amber-50 to-orange-50 rounded-2xl border border-orange-200 flex items-start sm:items-center gap-3 text-xs shadow-xs text-left">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Printer className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-stone-900">
+                      Petunjuk Cetak Lembar Presisi Kertas A4:
+                    </p>
+                    <p className="text-stone-600 text-[11px] leading-relaxed mt-0.5">
+                      Jika di jendela cetak browser Anda otomatis mengarah ke <strong>POS58 Printer</strong> (printer kasir struk), silakan ubah menu <strong>"Printer / Destination"</strong> di bagian atas dialog menjadi <strong>"Save as PDF"</strong> atau printer kantor A4 Anda agar hasil cetak pas di kertas A4 dan tidak mengecil ke kertas struk roll.
+                    </p>
+                  </div>
+                </div>
+
                 {printProducts.length === 0 ? (
                   <div className="p-12 text-center bg-white rounded-3xl border border-stone-200/80 shadow-xs">
                     <AlertCircle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
@@ -362,24 +597,29 @@ export function RecipePrintModal({
                       </div>
 
                       {/* Scaled Visual Sheet */}
-                      <div className="bg-white p-4 sm:p-6 rounded-3xl border border-stone-300 shadow-md">
+                      <div className="bg-white p-4 sm:p-6 rounded-3xl border border-stone-200/90 shadow-md">
                         {/* Sheet Header */}
-                        <div className="pb-3 mb-3 border-b-2 border-stone-900 flex items-center justify-between">
-                          <div>
-                            <h1 className="text-base font-heading font-black text-stone-900 tracking-tight">
-                              ARUM SEDUH &bull; PANDUAN TAKARAN RESEP BARISTA
-                            </h1>
-                            <p className="text-[10px] text-stone-500 font-medium">
-                              Standar Takaran Resmi Meja Bar & Dapur &bull; Tanggal Cetak:{' '}
-                              {new Date().toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'long',
-                                year: 'numeric',
-                              })}
-                            </p>
+                        <div className="pb-3 mb-3.5 border-b-2 border-orange-500 flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center font-black text-xs shadow-xs">
+                              AS
+                            </div>
+                            <div>
+                              <h1 className="text-base font-heading font-black text-stone-900 tracking-tight">
+                                ARUM SEDUH &bull; PANDUAN TAKARAN RESEP BARISTA
+                              </h1>
+                              <p className="text-[10px] text-stone-500 font-medium">
+                                Standar Resmi Meja Bar &bull; Regular (12 oz) &bull; Jumbo (16 oz) &bull; Tanggal Cetak:{' '}
+                                {new Date().toLocaleDateString('id-ID', {
+                                  day: 'numeric',
+                                  month: 'long',
+                                  year: 'numeric',
+                                })}
+                              </p>
+                            </div>
                           </div>
                           <div className="text-right">
-                            <span className="px-2.5 py-1 rounded-md bg-stone-900 text-white text-[10px] font-black uppercase tracking-wider">
+                            <span className="px-2.5 py-1 rounded-lg bg-stone-900 text-white text-[10px] font-black uppercase tracking-wider shadow-2xs">
                               Lembar {pageIdx + 1} / {printPages.length}
                             </span>
                           </div>
@@ -730,7 +970,7 @@ function RecipeSheetCard({
       className={`recipe-print-card ${
         isPrintMode
           ? 'recipe-print-card'
-          : 'bg-white rounded-2xl border border-stone-300 p-3 shadow-2xs flex flex-col justify-between text-left text-xs'
+          : 'bg-white rounded-2xl border border-stone-200/90 hover:border-orange-300 transition-all p-3.5 shadow-2xs flex flex-col justify-between text-left text-xs border-t-4 border-t-orange-500'
       }`}
       style={
         isPrintMode
@@ -740,27 +980,55 @@ function RecipeSheetCard({
               justifyContent: 'space-between',
               fontSize: '7.5pt',
               lineHeight: 1.25,
+              backgroundColor: '#ffffff',
+              border: '1px solid #e7e5e4',
+              borderTop: '3px solid #ea580c',
+              borderRadius: '6px',
+              padding: '2mm',
+              boxSizing: 'border-box',
+              overflow: 'hidden',
+              breakInside: 'avoid',
+              pageBreakInside: 'avoid',
             }
           : undefined
       }
     >
       {/* 1. Header Card: Nama Menu & Kategori */}
-      <div style={{ borderBottom: '1px solid #e7e5e4', paddingBottom: '1.5mm', marginBottom: '1.5mm' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1mm' }}>
-          <div style={{ fontWeight: 900, fontSize: isPrintMode ? '8.5pt' : '13px', color: '#1c1917', lineHeight: 1.15 }}>
+      <div
+        style={{
+          borderBottom: '0.5px solid #e7e5e4',
+          paddingBottom: isPrintMode ? '1.2mm' : '6px',
+          marginBottom: isPrintMode ? '1.2mm' : '8px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '4px' }}>
+          <div
+            className={!isPrintMode ? 'font-black text-stone-900 text-sm line-clamp-1 tracking-tight' : ''}
+            style={isPrintMode ? { fontWeight: 900, fontSize: '8.5pt', color: '#1c1917', lineHeight: 1.15 } : undefined}
+          >
             {product.name}
           </div>
           <span
-            style={{
-              fontSize: isPrintMode ? '6pt' : '9px',
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              padding: '0.5mm 1.5mm',
-              borderRadius: '3px',
-              backgroundColor: '#f5f5f4',
-              color: '#44403c',
-              whiteSpace: 'nowrap',
-            }}
+            className={
+              !isPrintMode
+                ? 'px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-700 border border-orange-200/80 shrink-0'
+                : ''
+            }
+            style={
+              isPrintMode
+                ? {
+                    fontSize: '6pt',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    padding: '0.4mm 1.5mm',
+                    borderRadius: '3px',
+                    backgroundColor: '#fff7ed',
+                    color: '#c2410c',
+                    border: '0.5px solid #ffedd5',
+                    whiteSpace: 'nowrap',
+                  }
+                : undefined
+            }
           >
             {product.category?.name || 'Menu'}
           </span>
@@ -768,14 +1036,14 @@ function RecipeSheetCard({
       </div>
 
       {/* 2. Bahan Baku Pokok (Base Recipe & Jumbo Recipe) */}
-      <div style={{ marginBottom: '1.5mm' }}>
+      <div style={{ marginBottom: isPrintMode ? '1mm' : '8px' }}>
         <div
           style={{
-            fontSize: isPrintMode ? '6pt' : '10px',
+            fontSize: isPrintMode ? '5.8pt' : '10px',
             fontWeight: 800,
             textTransform: 'uppercase',
             color: '#78716c',
-            marginBottom: '0.5mm',
+            marginBottom: isPrintMode ? '0.6mm' : '4px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -783,40 +1051,94 @@ function RecipeSheetCard({
         >
           <span>Takaran Dasar:</span>
           {!isFood && (
-            <span style={{ fontSize: isPrintMode ? '5.5pt' : '9px', color: '#ea580c', fontWeight: 800 }}>
+            <span
+              style={{
+                fontSize: isPrintMode ? '5.5pt' : '9.5px',
+                color: '#ea580c',
+                fontWeight: 800,
+              }}
+            >
               Reg (12 oz) &bull; Jumbo (16 oz)
             </span>
           )}
         </div>
+
         {baseIngredients.length === 0 ? (
-          <div style={{ fontStyle: 'italic', color: '#a8a29e', fontSize: isPrintMode ? '6.5pt' : '10px' }}>
+          <div
+            style={{
+              fontStyle: 'italic',
+              color: '#a8a29e',
+              fontSize: isPrintMode ? '6.5pt' : '11px',
+              padding: isPrintMode ? '1mm' : '6px',
+            }}
+          >
             Resep belum dikonfigurasi
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1mm' }}>
+        ) : isPrintMode ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6mm' }}>
             {baseIngredients.map((bi, idx) => {
               const jItem = jumboIngredients?.find((j) => j.ingredientId === bi.ingredientId);
               const hasJumbo = !isFood && jItem && jItem.quantity > 0;
               return (
-                <span
+                <div
                   key={idx}
                   style={{
-                    fontSize: isPrintMode ? '6.8pt' : '11px',
                     backgroundColor: '#fafaf9',
-                    border: '1px solid #e7e5e4',
+                    border: '0.5px solid #e7e5e4',
                     borderRadius: '3px',
-                    padding: '0.4mm 1.2mm',
+                    padding: '0.8mm 1.4mm',
+                    fontSize: '6.8pt',
                     color: '#292524',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
                   }}
                 >
-                  <strong>{bi.ingredient?.name || 'Bahan'}:</strong> {bi.quantity}{' '}
-                  {bi.ingredient?.unit || ''}
-                  {hasJumbo && (
-                    <span style={{ color: '#ea580c', fontWeight: 800, marginLeft: '3px' }}>
-                      | Jmb: {jItem.quantity} {bi.ingredient?.unit || ''}
+                  <span style={{ fontWeight: 700, color: '#1c1917' }}>{bi.ingredient?.name || 'Bahan'}</span>
+                  <span style={{ color: '#57534e' }}>
+                    {bi.quantity} {bi.ingredient?.unit || ''}
+                    {hasJumbo && (
+                      <strong
+                        style={{
+                          color: '#ea580c',
+                          fontWeight: 800,
+                          marginLeft: '1.5mm',
+                          backgroundColor: '#fff7ed',
+                          padding: '0.2mm 0.8mm',
+                          borderRadius: '2px',
+                          border: '0.5px solid #fed7aa',
+                        }}
+                      >
+                        Jmb: {jItem.quantity} {bi.ingredient?.unit || ''}
+                      </strong>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {baseIngredients.map((bi, idx) => {
+              const jItem = jumboIngredients?.find((j) => j.ingredientId === bi.ingredientId);
+              const hasJumbo = !isFood && jItem && jItem.quantity > 0;
+              return (
+                <div
+                  key={idx}
+                  className="bg-stone-50/90 border border-stone-200/70 rounded-lg px-2.5 py-1 text-[11px] text-stone-800 flex items-center justify-between"
+                >
+                  <span className="font-semibold text-stone-900">{bi.ingredient?.name || 'Bahan'}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-stone-600">
+                      {bi.quantity} {bi.ingredient?.unit || ''}
                     </span>
-                  )}
-                </span>
+                    {hasJumbo && (
+                      <span className="bg-orange-50 text-orange-700 border border-orange-200/80 font-bold px-1.5 py-0.5 rounded text-[10px]">
+                        Jmb: {jItem.quantity} {bi.ingredient?.unit || ''}
+                      </span>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -827,39 +1149,68 @@ function RecipeSheetCard({
       {!isFood && (sugarDoses || matchaDoses || shotDoses) && (
         <div
           style={{
-            borderTop: '1px dashed #d6d3d1',
-            paddingTop: '1.2mm',
+            borderTop: '0.5px dashed #d6d3d1',
+            paddingTop: isPrintMode ? '1mm' : '8px',
             marginTop: 'auto',
             display: 'flex',
             flexDirection: 'column',
-            gap: '1mm',
+            gap: isPrintMode ? '0.8mm' : '6px',
           }}
         >
           {/* A. Takaran Kemanisan / Gula */}
           {sugarDoses && (
             <div
-              style={{
-                backgroundColor: '#fffbeb',
-                border: '1px solid #fde68a',
-                borderRadius: '3px',
-                padding: '0.8mm 1.2mm',
-              }}
+              className={!isPrintMode ? 'bg-amber-50/80 border border-amber-200 rounded-xl p-2' : ''}
+              style={
+                isPrintMode
+                  ? {
+                      backgroundColor: '#fffbeb',
+                      border: '0.5px solid #fde68a',
+                      borderRadius: '4px',
+                      padding: '0.8mm 1.4mm',
+                    }
+                  : undefined
+              }
             >
-              <div style={{ fontSize: isPrintMode ? '5.8pt' : '9px', fontWeight: 800, color: '#92400e' }}>
-                GULA / MANIS:
+              <div
+                className={!isPrintMode ? 'text-[10px] font-black text-amber-900 mb-1 flex items-center justify-between' : ''}
+                style={
+                  isPrintMode
+                    ? {
+                        fontSize: '5.8pt',
+                        fontWeight: 800,
+                        color: '#92400e',
+                        marginBottom: '0.4mm',
+                      }
+                    : undefined
+                }
+              >
+                <span>GULA / MANIS:</span>
+                {!isPrintMode && <span className="text-[9px] font-normal text-amber-700">({sugarDoses.unit})</span>}
               </div>
               <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: isPrintMode ? '6.5pt' : '10px',
-                  color: '#78350f',
-                  fontWeight: 700,
-                }}
+                className={!isPrintMode ? 'grid grid-cols-3 gap-1 text-center text-[10px] font-bold text-amber-950' : ''}
+                style={
+                  isPrintMode
+                    ? {
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '6.5pt',
+                        color: '#78350f',
+                        fontWeight: 700,
+                      }
+                    : undefined
+                }
               >
-                <span>Less: {sugarDoses.less}</span>
-                <span>Sedang: {sugarDoses.lumayan}</span>
-                <span>Manis: {sugarDoses.manisSekali}</span>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-1 border border-amber-100' : ''}>
+                  Less: {sugarDoses.less}
+                </div>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-1 border border-amber-100' : ''}>
+                  Sedang: {sugarDoses.lumayan}
+                </div>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-1 border border-amber-100' : ''}>
+                  Manis: {sugarDoses.manisSekali}
+                </div>
               </div>
             </div>
           )}
@@ -867,29 +1218,60 @@ function RecipeSheetCard({
           {/* B. Takaran Bubuk Matcha */}
           {matchaDoses && (
             <div
-              style={{
-                backgroundColor: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                borderRadius: '3px',
-                padding: '0.8mm 1.2mm',
-              }}
+              className={!isPrintMode ? 'bg-emerald-50/80 border border-emerald-200 rounded-xl p-2' : ''}
+              style={
+                isPrintMode
+                  ? {
+                      backgroundColor: '#f0fdf4',
+                      border: '0.5px solid #bbf7d0',
+                      borderRadius: '4px',
+                      padding: '0.8mm 1.4mm',
+                    }
+                  : undefined
+              }
             >
-              <div style={{ fontSize: isPrintMode ? '5.8pt' : '9px', fontWeight: 800, color: '#166534' }}>
-                MATCHA (BUBUK):
+              <div
+                className={!isPrintMode ? 'text-[10px] font-black text-emerald-900 mb-1 flex items-center justify-between' : ''}
+                style={
+                  isPrintMode
+                    ? {
+                        fontSize: '5.8pt',
+                        fontWeight: 800,
+                        color: '#166534',
+                        marginBottom: '0.4mm',
+                      }
+                    : undefined
+                }
+              >
+                <span>MATCHA (BUBUK):</span>
+                {!isPrintMode && <span className="text-[9px] font-normal text-emerald-700">({matchaDoses.unit})</span>}
               </div>
               <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: isPrintMode ? '6.2pt' : '9.5px',
-                  color: '#14532d',
-                  fontWeight: 700,
-                }}
+                className={!isPrintMode ? 'grid grid-cols-4 gap-1 text-center text-[10px] font-bold text-emerald-950' : ''}
+                style={
+                  isPrintMode
+                    ? {
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '6.2pt',
+                        color: '#14532d',
+                        fontWeight: 700,
+                      }
+                    : undefined
+                }
               >
-                <span>Light: {matchaDoses.light}g</span>
-                <span>Med: {matchaDoses.medium}g</span>
-                <span>Bold: {matchaDoses.bold}g</span>
-                <span>Ex: {matchaDoses.extraBold}g</span>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-0.5 border border-emerald-100' : ''}>
+                  Light: {matchaDoses.light}g
+                </div>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-0.5 border border-emerald-100' : ''}>
+                  Med: {matchaDoses.medium}g
+                </div>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-0.5 border border-emerald-100' : ''}>
+                  Bold: {matchaDoses.bold}g
+                </div>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-0.5 border border-emerald-100' : ''}>
+                  Ex: {matchaDoses.extraBold}g
+                </div>
               </div>
             </div>
           )}
@@ -897,28 +1279,57 @@ function RecipeSheetCard({
           {/* C. Takaran Espresso Shot */}
           {shotDoses && (
             <div
-              style={{
-                backgroundColor: '#fff7ed',
-                border: '1px solid #fed7aa',
-                borderRadius: '3px',
-                padding: '0.8mm 1.2mm',
-              }}
+              className={!isPrintMode ? 'bg-orange-50/80 border border-orange-200 rounded-xl p-2' : ''}
+              style={
+                isPrintMode
+                  ? {
+                      backgroundColor: '#fff7ed',
+                      border: '0.5px solid #fed7aa',
+                      borderRadius: '4px',
+                      padding: '0.8mm 1.4mm',
+                    }
+                  : undefined
+              }
             >
-              <div style={{ fontSize: isPrintMode ? '5.8pt' : '9px', fontWeight: 800, color: '#9a3412' }}>
-                ESPRESSO SHOT:
+              <div
+                className={!isPrintMode ? 'text-[10px] font-black text-orange-950 mb-1 flex items-center justify-between' : ''}
+                style={
+                  isPrintMode
+                    ? {
+                        fontSize: '5.8pt',
+                        fontWeight: 800,
+                        color: '#9a3412',
+                        marginBottom: '0.4mm',
+                      }
+                    : undefined
+                }
+              >
+                <span>ESPRESSO SHOT:</span>
+                {!isPrintMode && <span className="text-[9px] font-normal text-orange-700">({shotDoses.unit})</span>}
               </div>
               <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: isPrintMode ? '6.2pt' : '9.5px',
-                  color: '#7c2d12',
-                  fontWeight: 700,
-                }}
+                className={!isPrintMode ? 'grid grid-cols-3 gap-1 text-center text-[10px] font-bold text-orange-950' : ''}
+                style={
+                  isPrintMode
+                    ? {
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: '6.2pt',
+                        color: '#7c2d12',
+                        fontWeight: 700,
+                      }
+                    : undefined
+                }
               >
-                <span>Single: {shotDoses.single}</span>
-                <span>Double: {shotDoses.double}</span>
-                <span>Triple: {shotDoses.triple}</span>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-1 border border-orange-100' : ''}>
+                  Single: {shotDoses.single}
+                </div>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-1 border border-orange-100' : ''}>
+                  Double: {shotDoses.double}
+                </div>
+                <div className={!isPrintMode ? 'bg-white/80 rounded py-0.5 px-1 border border-orange-100' : ''}>
+                  Triple: {shotDoses.triple}
+                </div>
               </div>
             </div>
           )}
