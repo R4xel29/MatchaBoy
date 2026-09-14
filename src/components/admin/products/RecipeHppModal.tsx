@@ -281,14 +281,13 @@ export function RecipeHppModal({
     return largeSize?.price ?? 3000;
   }, [parsedModifiers]);
 
-  // Identify packaging cups from ingredients list
+  // Identify packaging cups from ingredients list (Regular 12 oz vs Jumbo 16 oz)
   const cupRegularIng = useMemo(() => {
     return ingredients.find(
       (i) =>
         i.isPackaging &&
-        (i.name.toLowerCase().includes('regular') ||
-          i.name.toLowerCase().includes('14') ||
-          i.name.toLowerCase().includes('16') ||
+        (i.name.toLowerCase().includes('12') ||
+          i.name.toLowerCase().includes('regular') ||
           i.name.toLowerCase().includes('gelas'))
     );
   }, [ingredients]);
@@ -297,9 +296,9 @@ export function RecipeHppModal({
     return ingredients.find(
       (i) =>
         i.isPackaging &&
-        (i.name.toLowerCase().includes('jumbo') ||
-          i.name.toLowerCase().includes('large') ||
-          i.name.toLowerCase().includes('22'))
+        (i.name.toLowerCase().includes('16') ||
+          i.name.toLowerCase().includes('jumbo') ||
+          i.name.toLowerCase().includes('large'))
     );
   }, [ingredients]);
 
@@ -375,12 +374,14 @@ export function RecipeHppModal({
           );
         } else {
           setJumboItems(
-            mappedReg.map((item) => ({
-              ingredientId: item.ingredientId,
-              quantity: (
-                Math.round((parseFloat(item.quantity) || 0) * 1.25 * 100) / 100
-              ).toString(),
-            }))
+            mappedReg.map((item) => {
+              const ing = ingredients.find((i) => i.id === item.ingredientId);
+              const isPackaging = ing?.isPackaging || false;
+              return {
+                ingredientId: item.ingredientId,
+                quantity: isPackaging ? item.quantity : item.quantity,
+              };
+            })
           );
         }
 
@@ -477,15 +478,19 @@ export function RecipeHppModal({
     parsedModifiers,
   ]);
 
-  // Sync Jumbo from Regular (1.25x)
+  // Sync Jumbo from Regular (Packaging is strictly 1 pcs, recipes can be customized)
   const syncJumboFromRegular = () => {
     setJumboItems(
-      regularItems.map((item) => ({
-        ingredientId: item.ingredientId,
-        quantity: (Math.round((parseFloat(item.quantity) || 0) * 1.25 * 100) / 100).toString(),
-      }))
+      regularItems.map((item) => {
+        const ing = ingredients.find((i) => i.id === item.ingredientId);
+        const isPackaging = ing?.isPackaging || false;
+        return {
+          ingredientId: item.ingredientId,
+          quantity: isPackaging ? item.quantity : item.quantity,
+        };
+      })
     );
-    showToast('Resep Jumbo berhasil disinkronkan dari Regular (Skala 1.25x)', 'success');
+    showToast('Resep Jumbo berhasil disalin dari Regular (Bahan kemasan tetap 1 pcs)', 'success');
   };
 
   // Add ingredient row
@@ -497,7 +502,7 @@ export function RecipeHppModal({
       return showToast('Semua bahan baku sudah ditambahkan', 'info');
     }
     setRegularItems((prev) => [...prev, { ingredientId: available.id, quantity: '1' }]);
-    setJumboItems((prev) => [...prev, { ingredientId: available.id, quantity: '1.25' }]);
+    setJumboItems((prev) => [...prev, { ingredientId: available.id, quantity: '1' }]);
   };
 
   const removeRow = (index: number) => {
@@ -779,7 +784,7 @@ export function RecipeHppModal({
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  Regular (16 oz)
+                  Regular (12 oz)
                 </button>
 
                 <button
@@ -792,7 +797,7 @@ export function RecipeHppModal({
                   }`}
                 >
                   <Scale className="w-3.5 h-3.5" />
-                  Jumbo (22 oz)
+                  Jumbo (16 oz)
                 </button>
 
                 <button
@@ -830,9 +835,9 @@ export function RecipeHppModal({
                 type="button"
                 onClick={syncJumboFromRegular}
                 className="hidden sm:inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200/60 transition-colors cursor-pointer"
-                title="Salin semua bahan regular dikali 1.25x ke porsi Jumbo"
+                title="Salin bahan dari takaran Regular ke porsi Jumbo (bahan kemasan tetap 1 pcs)"
               >
-                <RefreshCw className="w-3 h-3" /> Auto Skala 1.25x
+                <RefreshCw className="w-3 h-3" /> Salin dari Regular
               </button>
             )}
           </div>
@@ -940,7 +945,7 @@ export function RecipeHppModal({
                     <p className="text-[11px] text-orange-900">
                       {activeTab === 'JUMBO' ? (
                         <>
-                          Takaran khusus <strong>Gelas Jumbo (22 oz)</strong>. Biaya Cup Jumbo (
+                          Takaran khusus <strong>Gelas Jumbo (16 oz)</strong>. Biaya Cup Jumbo (
                           {formatRupiah(cupJumboCost)}) ditambahkan otomatis.
                         </>
                       ) : activeTab === 'TUMBLER' ? (
@@ -950,7 +955,7 @@ export function RecipeHppModal({
                         </>
                       ) : (
                         <>
-                          Takaran dasar <strong>Gelas Regular (16 oz)</strong>. Biaya Cup Regular (
+                          Takaran dasar <strong>Gelas Regular (12 oz)</strong>. Biaya Cup Regular (
                           {formatRupiah(cupRegularCost)}) ditambahkan otomatis.
                         </>
                       )}
@@ -964,14 +969,14 @@ export function RecipeHppModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
-                      Bahan Baku Racikan ({isFood ? 'Porsi Piring' : activeTab === 'JUMBO' ? 'Porsi Jumbo' : 'Porsi Regular'})
+                      Bahan Baku Racikan ({isFood ? 'Porsi Piring' : activeTab === 'JUMBO' ? 'Porsi Jumbo (16 oz)' : 'Porsi Regular (12 oz)'})
                     </h4>
                     <p className="text-[11px] text-stone-500">
                       {isFood
                         ? 'Tentukan jumlah gram/satuan bahan yang dibutuhkan untuk 1 porsi piring.'
                         : activeTab === 'JUMBO'
-                        ? 'Tentukan jumlah gram/ml bahan yang dibutuhkan khusus untuk porsi Jumbo 22 oz.'
-                        : 'Tentukan jumlah gram/ml bahan yang dibutuhkan untuk porsi Regular 16 oz.'}
+                        ? 'Tentukan jumlah gram/ml bahan yang dibutuhkan khusus untuk porsi Jumbo 16 oz.'
+                        : 'Tentukan jumlah gram/ml bahan yang dibutuhkan untuk porsi Regular 12 oz.'}
                     </p>
                   </div>
 

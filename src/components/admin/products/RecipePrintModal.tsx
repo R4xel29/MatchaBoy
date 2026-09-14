@@ -614,6 +614,14 @@ function RecipeSheetCard({
   // Base Ingredients list
   const baseIngredients = product.productIngredients || [];
 
+  // Jumbo Recipe from user's custom configuration
+  const jumboIngredients = useMemo(() => {
+    if (Array.isArray(parsedMods.jumboRecipe) && parsedMods.jumboRecipe.length > 0) {
+      return parsedMods.jumboRecipe;
+    }
+    return null;
+  }, [parsedMods.jumboRecipe]);
+
   // Sweetener dosage
   const sugarConfig = parsedMods.sugarDoses;
   const sweetenerIngredient = baseIngredients.find((bi) => {
@@ -759,7 +767,7 @@ function RecipeSheetCard({
         </div>
       </div>
 
-      {/* 2. Bahan Baku Pokok (Base Recipe) */}
+      {/* 2. Bahan Baku Pokok (Base Recipe & Jumbo Recipe) */}
       <div style={{ marginBottom: '1.5mm' }}>
         <div
           style={{
@@ -768,9 +776,17 @@ function RecipeSheetCard({
             textTransform: 'uppercase',
             color: '#78716c',
             marginBottom: '0.5mm',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
-          Takaran Dasar:
+          <span>Takaran Dasar:</span>
+          {!isFood && (
+            <span style={{ fontSize: isPrintMode ? '5.5pt' : '9px', color: '#ea580c', fontWeight: 800 }}>
+              Reg (12 oz) &bull; Jumbo (16 oz)
+            </span>
+          )}
         </div>
         {baseIngredients.length === 0 ? (
           <div style={{ fontStyle: 'italic', color: '#a8a29e', fontSize: isPrintMode ? '6.5pt' : '10px' }}>
@@ -778,22 +794,31 @@ function RecipeSheetCard({
           </div>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1mm' }}>
-            {baseIngredients.map((bi, idx) => (
-              <span
-                key={idx}
-                style={{
-                  fontSize: isPrintMode ? '6.8pt' : '11px',
-                  backgroundColor: '#fafaf9',
-                  border: '1px solid #e7e5e4',
-                  borderRadius: '3px',
-                  padding: '0.4mm 1.2mm',
-                  color: '#292524',
-                }}
-              >
-                <strong>{bi.ingredient?.name || 'Bahan'}:</strong> {bi.quantity}{' '}
-                {bi.ingredient?.unit || ''}
-              </span>
-            ))}
+            {baseIngredients.map((bi, idx) => {
+              const jItem = jumboIngredients?.find((j) => j.ingredientId === bi.ingredientId);
+              const hasJumbo = !isFood && jItem && jItem.quantity > 0;
+              return (
+                <span
+                  key={idx}
+                  style={{
+                    fontSize: isPrintMode ? '6.8pt' : '11px',
+                    backgroundColor: '#fafaf9',
+                    border: '1px solid #e7e5e4',
+                    borderRadius: '3px',
+                    padding: '0.4mm 1.2mm',
+                    color: '#292524',
+                  }}
+                >
+                  <strong>{bi.ingredient?.name || 'Bahan'}:</strong> {bi.quantity}{' '}
+                  {bi.ingredient?.unit || ''}
+                  {hasJumbo && (
+                    <span style={{ color: '#ea580c', fontWeight: 800, marginLeft: '3px' }}>
+                      | Jmb: {jItem.quantity} {bi.ingredient?.unit || ''}
+                    </span>
+                  )}
+                </span>
+              );
+            })}
           </div>
         )}
       </div>

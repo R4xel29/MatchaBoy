@@ -70,7 +70,11 @@ export async function deductStockForOrder(orderId: string): Promise<void> {
             product: {
               include: {
                 category: true,
-                productIngredients: true,
+                productIngredients: {
+                  include: {
+                    ingredient: true,
+                  },
+                },
               },
             },
           },
@@ -80,13 +84,26 @@ export async function deductStockForOrder(orderId: string): Promise<void> {
 
     if (!order) throw new Error('Order not found');
 
-    // Fetch cup packaging ingredients
+    // Fetch cup packaging ingredients (Regular 12 oz vs Jumbo 16 oz)
     const [cupRegular, cupJumbo] = await Promise.all([
       prisma.ingredient.findFirst({
-        where: { isPackaging: true, name: { contains: 'Regular', mode: 'insensitive' } },
+        where: {
+          isPackaging: true,
+          OR: [
+            { name: { contains: 'Regular', mode: 'insensitive' } },
+            { name: { contains: '12', mode: 'insensitive' } },
+          ],
+        },
       }),
       prisma.ingredient.findFirst({
-        where: { isPackaging: true, name: { contains: 'Jumbo', mode: 'insensitive' } },
+        where: {
+          isPackaging: true,
+          OR: [
+            { name: { contains: 'Jumbo', mode: 'insensitive' } },
+            { name: { contains: '16', mode: 'insensitive' } },
+            { name: { contains: 'Large', mode: 'insensitive' } },
+          ],
+        },
       }),
     ]);
 
@@ -320,7 +337,10 @@ export async function deductStockForOrder(orderId: string): Promise<void> {
             }
           }
 
-          if (isLarge) {
+          // Packaging ingredients (Cup, Lid, Straw, etc.) are strictly 1 pcs per drink and NEVER multiplied!
+          const isPackaging = (recipeItem as any).ingredient?.isPackaging || false;
+
+          if (isLarge && !isPackaging) {
             if (customJumboRecipe) {
               const customMatch = customJumboRecipe.find((j: any) => j.ingredientId === recipeItem.ingredientId);
               if (customMatch && customMatch.quantity > 0) {
