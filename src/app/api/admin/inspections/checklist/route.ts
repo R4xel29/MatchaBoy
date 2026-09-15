@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 
-// GET: Ambil status checklist SOP hari ini dan riwayat checklist terakhir
+// GET: Ambil status checklist SOP hari ini, riwayat laporan, dan log aktivitas
 export async function GET() {
   try {
     const session = await auth();
@@ -14,22 +14,38 @@ export async function GET() {
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-    const [todayLogs, historyLogs] = await Promise.all([
-      prisma.activityLog.findMany({
+    const [todaySubmissions, historySubmissions, activityLogs] = await Promise.all([
+      prisma.sopSubmission.findMany({
         where: {
-          entity: { in: ['CHECKLIST_OPENING', 'CHECKLIST_CLOSING'] },
           createdAt: { gte: todayStart, lte: todayEnd },
         },
         include: {
           user: {
+            select: { id: true, name: true, role: true, email: true },
+          },
+          reviewedBy: {
             select: { id: true, name: true, role: true },
           },
+          items: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.sopSubmission.findMany({
+        take: 30,
+        include: {
+          user: {
+            select: { id: true, name: true, role: true, email: true },
+          },
+          reviewedBy: {
+            select: { id: true, name: true, role: true },
+          },
+          items: true,
         },
         orderBy: { createdAt: 'desc' },
       }),
       prisma.activityLog.findMany({
         where: {
-          entity: { in: ['CHECKLIST_OPENING', 'CHECKLIST_CLOSING'] },
+          entity: { in: ['CHECKLIST_OPENING', 'CHECKLIST_CLOSING', 'CHECKLIST_ROUTINE', 'SOP_SUBMISSION', 'SOP_VERIFIED'] },
         },
         include: {
           user: {
@@ -37,29 +53,34 @@ export async function GET() {
           },
         },
         orderBy: { createdAt: 'desc' },
-        take: 20,
+        take: 30,
       }),
     ]);
 
-    const todayOpening = todayLogs.find((l) => l.entity === 'CHECKLIST_OPENING');
-    const todayClosing = todayLogs.find((l) => l.entity === 'CHECKLIST_CLOSING');
+    const todayOpening = todaySubmissions.find((s) => s.shiftType === 'OPENING');
+    const todayClosing = todaySubmissions.find((s) => s.shiftType === 'CLOSING');
+    const todayRoutine = todaySubmissions.find((s) => s.shiftType === 'ROUTINE');
 
     return NextResponse.json({
+      success: true,
       today: {
         openingSubmitted: !!todayOpening,
         closingSubmitted: !!todayClosing,
-        openingLog: todayOpening || null,
-        closingLog: todayClosing || null,
+        routineSubmitted: !!todayRoutine,
+        openingSubmission: todayOpening || null,
+        closingSubmission: todayClosing || null,
+        routineSubmission: todayRoutine || null,
       },
-      history: historyLogs,
+      submissions: historySubmissions,
+      activityLogs,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('[CHECKLIST_GET_ERROR]', error);
     return NextResponse.json({ error: 'Gagal mengambil data checklist' }, { status: 500 });
   }
 }
 
-// POST: Kirim pengisian checklist SOP harian oleh staf
+// POST: Kirim pengisian checklist SOP oleh karyawan / staf
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -68,56 +89,155 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { type, items, notes } = body;
+    const { type, items, notes, galleryImages } = body;
 
-    if (!type || (type !== 'OPENING' && type !== 'CLOSING')) {
-      return NextResponse.json({ error: 'Tipe checklist wajib OPENING atau CLOSING' }, { status: 400 });
+    const validTypes = ['OPENING', 'CLOSING', 'ROUTINE'];
+    if (!type || !validTypes.includes(type)) {
+      return NextResponse.json({ error: 'Tipe shift wajib OPENING, CLOSING, atau ROUTINE' }, { status: 400 });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: 'Daftar item checklist wajib diisi' }, { status: 400 });
+      return NextResponse.json({ error: 'Daftar butir checklist wajib diisi' }, { status: 400 });
     }
+
+    const galleryJson = Array.isArray(galleryImages) ? JSON.stringify(galleryImages) : null;
+    const staffName = session.user.name || 'Staf Operasional';
+
+    // Buat SopSubmission beserta item-itemnya
+    const submission = await prisma.sopSubmission.create({
+      data: {
+        shiftType: type,
+        userId: session.user.id,
+        notes: notes?.trim() || null,
+        galleryImages: galleryJson,
+        status: 'PENDING_REVIEW',
+        items: {
+          create: items.map((item: any) => ({
+            templateItemId: item.templateItemId || item.id || null,
+            label: item.label || item.title || 'Butir SOP',
+            isChecked: Boolean(item.checked),
+            photoUrl: item.photoUrl || null,
+            notes: item.notes?.trim() || null,
+          })),
+        },
+      },
+      include: {
+        user: {
+          select: { id: true, name: true, role: true, email: true },
+        },
+        items: true,
+      },
+    });
 
     const totalItems = items.length;
     const completedItems = items.filter((i: any) => i.checked).length;
-    const staffName = session.user.name || 'Staf Operasional';
+    const photoCount = items.filter((i: any) => !!i.photoUrl).length + (Array.isArray(galleryImages) ? galleryImages.length : 0);
 
-    const payloadDetails = JSON.stringify({
+    // Backwards compatibility: catat juga ke ActivityLog
+    const logDetails = JSON.stringify({
+      submissionId: submission.id,
       shiftType: type,
       staffName,
       totalItems,
       completedItems,
       allChecked: completedItems === totalItems,
+      photoCount,
       notes: notes?.trim() || '',
-      items: items.map((i: any) => ({
-        id: i.id,
-        label: i.label,
-        checked: Boolean(i.checked),
-      })),
       submittedAt: new Date().toISOString(),
     });
 
-    const newLog = await prisma.activityLog.create({
+    const entityName = type === 'OPENING' ? 'CHECKLIST_OPENING' : type === 'CLOSING' ? 'CHECKLIST_CLOSING' : 'CHECKLIST_ROUTINE';
+
+    await prisma.activityLog.create({
       data: {
         userId: session.user.id,
         action: 'SUBMIT',
-        entity: type === 'OPENING' ? 'CHECKLIST_OPENING' : 'CHECKLIST_CLOSING',
-        details: payloadDetails,
+        entity: entityName,
+        details: logDetails,
+      },
+    });
+
+    const shiftLabels: Record<string, string> = {
+      OPENING: 'Buka Toko (Opening)',
+      CLOSING: 'Tutup Toko (Closing)',
+      ROUTINE: 'Kebersihan & Rutin Harian',
+    };
+
+    return NextResponse.json({
+      success: true,
+      message: `Laporan checklist ${shiftLabels[type] || type} berhasil dikirim dan siap ditinjau Admin!`,
+      submission,
+    });
+  } catch (error: any) {
+    console.error('[CHECKLIST_POST_ERROR]', error);
+    return NextResponse.json({ error: error.message || 'Gagal menyimpan checklist' }, { status: 500 });
+  }
+}
+
+// PATCH: Verifikasi laporan SOP oleh Admin Utama
+export async function PATCH(req: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user || session.user.role !== 'ADMIN') {
+      return NextResponse.json({ error: 'Hanya Admin Utama yang berwenang memverifikasi laporan SOP' }, { status: 403 });
+    }
+
+    const body = await req.json();
+    const { submissionId, status, reviewNotes } = body;
+
+    if (!submissionId) {
+      return NextResponse.json({ error: 'ID laporan submission wajib disertakan' }, { status: 400 });
+    }
+
+    const validStatuses = ['VERIFIED', 'NEEDS_IMPROVEMENT'];
+    if (!status || !validStatuses.includes(status)) {
+      return NextResponse.json({ error: 'Status verifikasi harus VERIFIED atau NEEDS_IMPROVEMENT' }, { status: 400 });
+    }
+
+    const updated = await prisma.sopSubmission.update({
+      where: { id: submissionId },
+      data: {
+        status,
+        reviewedById: session.user.id,
+        reviewedAt: new Date(),
+        reviewNotes: reviewNotes?.trim() || null,
       },
       include: {
         user: {
           select: { id: true, name: true, role: true },
         },
+        reviewedBy: {
+          select: { id: true, name: true, role: true },
+        },
+        items: true,
+      },
+    });
+
+    // Catat log verifikasi
+    await prisma.activityLog.create({
+      data: {
+        userId: session.user.id,
+        action: status === 'VERIFIED' ? 'VERIFY' : 'REQUEST_REVISION',
+        entity: 'SOP_VERIFIED',
+        details: JSON.stringify({
+          submissionId,
+          shiftType: updated.shiftType,
+          staffId: updated.userId,
+          staffName: updated.user?.name,
+          adminName: session.user.name,
+          status,
+          reviewNotes: reviewNotes?.trim() || '',
+        }),
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: `Laporan checklist ${type === 'OPENING' ? 'Buka Toko (Opening)' : 'Tutup Toko (Closing)'} berhasil dicatat`,
-      log: newLog,
+      message: status === 'VERIFIED' ? 'Laporan SOP berhasil disahkan/diverifikasi!' : 'Catatan perbaikan telah disimpan.',
+      submission: updated,
     });
-  } catch (error) {
-    console.error('[CHECKLIST_POST_ERROR]', error);
-    return NextResponse.json({ error: 'Gagal menyimpan checklist' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[CHECKLIST_PATCH_ERROR]', error);
+    return NextResponse.json({ error: error.message || 'Gagal memverifikasi laporan SOP' }, { status: 500 });
   }
 }

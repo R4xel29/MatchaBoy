@@ -133,9 +133,9 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
 
   const getDeviceIcon = (deviceType: string | null) => {
     const type = deviceType?.toLowerCase() || ''
-    if (type === 'mobile') return <Smartphone className="w-5 h-5 text-brand-600" />
-    if (type === 'tablet') return <Tablet className="w-5 h-5 text-brand-600" />
-    return <Laptop className="w-5 h-5 text-brand-600" />
+    if (type === 'mobile') return <Smartphone className="w-5 h-5 text-orange-600" />
+    if (type === 'tablet') return <Tablet className="w-5 h-5 text-orange-600" />
+    return <Laptop className="w-5 h-5 text-orange-600" />
   }
 
   return (
@@ -143,9 +143,9 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
       {/* Card Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-brand-50 flex items-center justify-center border border-brand-100 shadow-sm relative group overflow-hidden">
-            <span className="absolute inset-0 bg-gradient-to-tr from-brand-400/10 to-brand-600/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
-            <Laptop className="w-5 h-5 text-brand-600 relative z-10 animate-pulse" />
+          <div className="w-10 h-10 rounded-2xl bg-orange-50 flex items-center justify-center border border-orange-100 shadow-sm relative group overflow-hidden">
+            <span className="absolute inset-0 bg-gradient-to-tr from-orange-400/10 to-amber-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+            <Laptop className="w-5 h-5 text-orange-600 relative z-10 animate-pulse" />
           </div>
           <div>
             <h3 className="font-bold text-foreground text-base tracking-tight flex items-center gap-1.5">
@@ -208,7 +208,7 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
                 >
                   <div className="flex items-start gap-4">
                     {/* Device Icon Circle */}
-                    <div className="w-12 h-12 rounded-2xl bg-muted/40 flex items-center justify-center shadow-sm shrink-0 border border-border/30 group-hover:bg-brand-50 group-hover:border-brand-100 transition-colors duration-300">
+                    <div className="w-12 h-12 rounded-2xl bg-muted/40 flex items-center justify-center shadow-sm shrink-0 border border-border/30 group-hover:bg-orange-50 group-hover:border-orange-100 transition-colors duration-300">
                       {getDeviceIcon(session.deviceType)}
                     </div>
 
@@ -218,7 +218,7 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
                         <h4 className="text-sm font-black text-foreground">
                           {session.browser || 'Browser'} di {session.os || 'Perangkat'}
                         </h4>
-                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 tracking-wider">
+                        <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 tracking-wider">
                           {session.deviceType || 'Desktop'}
                         </span>
                       </div>
@@ -231,8 +231,8 @@ export default function CustomerSessions({ sessions, userId }: CustomerSessionsP
                         {session.ipAddress && (
                           <>
                             <span className="w-1 h-1 rounded-full bg-muted-foreground/30 hidden sm:inline-block"></span>
-                            <span className="flex items-center gap-1 text-brand-700">
-                              <MapPin className="w-3.5 h-3.5 text-brand-500" />
+                            <span className="flex items-center gap-1 text-amber-700">
+                              <MapPin className="w-3.5 h-3.5 text-orange-500" />
                               {locations[session.id] || 'Mencari lokasi...'}
                             </span>
                           </>

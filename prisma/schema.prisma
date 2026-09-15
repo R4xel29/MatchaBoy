@@ -13,6 +13,7 @@ datasource db {
 // -----------------------------------------------------------------------------
 model User {
   id            String    @id @default(cuid())
+  slug          String?   @unique
   name          String?
   email         String?   @unique
   emailVerified DateTime?
@@ -76,6 +77,10 @@ model User {
   userQuests        UserQuest[]
   autoReorders      AutoReorder[]
   customRecipes     CustomRecipe[]
+
+  // SOP Outlet & Inspeksi
+  sopSubmissions         SopSubmission[] @relation("UserSopSubmissions")
+  reviewedSopSubmissions SopSubmission[] @relation("AdminReviewedSopSubmissions")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1124,6 +1129,50 @@ model FloorElement {
   color     String?  // optional custom color
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// SOP OUTLET & INSPECTIONS
+// -----------------------------------------------------------------------------
+model SopTemplateItem {
+  id              String   @id @default(cuid())
+  category        String   // OPENING, CLOSING, ROUTINE
+  title           String
+  description     String?  @db.Text
+  isPhotoRequired Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SopSubmission {
+  id            String              @id @default(cuid())
+  shiftType     String              // OPENING, CLOSING, ROUTINE
+  userId        String
+  user          User                @relation("UserSopSubmissions", fields: [userId], references: [id])
+  notes         String?             @db.Text
+  galleryImages String?             @db.Text // JSON string array of image URLs
+  status        String              @default("PENDING_REVIEW") // PENDING_REVIEW, VERIFIED, NEEDS_IMPROVEMENT
+  reviewedById  String?
+  reviewedBy    User?               @relation("AdminReviewedSopSubmissions", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  reviewNotes   String?             @db.Text
+  items         SopSubmissionItem[]
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+}
+
+model SopSubmissionItem {
+  id             String        @id @default(cuid())
+  submissionId   String
+  submission     SopSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  templateItemId String?
+  label          String
+  isChecked      Boolean       @default(false)
+  photoUrl       String?       @db.Text
+  notes          String?       @db.Text
+  createdAt      DateTime      @default(now())
 }
 
 
