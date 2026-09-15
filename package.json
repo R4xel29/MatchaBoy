@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "npx prisma generate && next build",
+    "build:fast": "next build",
+    "typecheck": "tsc --noEmit",
     "start": "next start",
     "lint": "eslint",
     "test": "node node_modules/tsx/dist/cli.mjs tests/run-all-tests.ts",

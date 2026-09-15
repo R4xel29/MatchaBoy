@@ -61,7 +61,9 @@ export async function getOrSetCache<T>(
   ttlSeconds: number = CACHE_TTL.DEFAULT,
   tags?: string[]
 ): Promise<T> {
-  if (!redisClient) {
+  // Saat fase production build / static page pre-rendering, langsung ambil dari DB tanpa menunggu timeout Redis
+  const isBuildPhase = process.env.NEXT_PHASE === 'phase-production-build' || (process.env.npm_lifecycle_event === 'build' && process.env.NODE_ENV !== 'test');
+  if (!redisClient || isBuildPhase) {
     // Graceful fallback to database query
     return fetcher();
   }
