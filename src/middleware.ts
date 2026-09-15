@@ -38,6 +38,8 @@ export default auth((req) => {
                         '/api/admin/expenses',
                         '/api/admin/receipt-settings',
                         '/api/admin/inspections',
+                        '/api/admin/orders',
+                        '/api/admin/karyawan',
                     ]
                     const isAllowed = cashierAllowed.some(route => pathname.startsWith(route))
                     if (!isAllowed) {
@@ -67,7 +69,7 @@ export default auth((req) => {
                 return NextResponse.redirect(new URL('/admin', req.url))
             }
             if (role === 'CASHIER') {
-                return NextResponse.redirect(new URL('/admin/cashier', req.url))
+                return NextResponse.redirect(new URL('/admin/karyawan', req.url))
             }
             return NextResponse.redirect(new URL('/profile', req.url))
         }
@@ -96,9 +98,10 @@ export default auth((req) => {
             // Cashier can only access specific operational pages
             if (role === 'CASHIER') {
                 if (pathname === '/admin') {
-                    return NextResponse.redirect(new URL('/admin/cashier', req.url))
+                    return NextResponse.redirect(new URL('/admin/karyawan', req.url))
                 }
                 const cashierAllowed = [
+                    '/admin/karyawan',
                     '/admin/cashier', 
                     '/admin/orders',
                     '/admin/inventory',

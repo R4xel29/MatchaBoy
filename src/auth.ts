@@ -461,6 +461,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 token.sub = user.id
                 token.role = (user as any).role || "CUSTOMER"
                 token.referralCode = (user as any).referralCode
+                token.jobdeskCode = (user as any).jobdeskCode || null
                 token.phone = (user as any).phone
                 token.name = (user as any).name
                 token.email = (user as any).email
@@ -500,7 +501,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 try {
                     const dbUser = await prisma.user.findUnique({
                         where: { id: token.sub as string },
-                        select: { role: true, referralCode: true, email: true, phone: true, name: true, image: true }
+                        select: { role: true, jobdeskCode: true, referralCode: true, email: true, phone: true, name: true, image: true }
                     })
 
                     // If user was deleted (Logout Paksa / Hapus Akun)
@@ -543,6 +544,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
                     // Sync role, referralCode, and other profile details
                     token.role = dbUser.role
+                    token.jobdeskCode = dbUser.jobdeskCode
                     token.referralCode = dbUser.referralCode
                     token.phone = dbUser.phone
                     token.name = dbUser.name

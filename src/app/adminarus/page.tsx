@@ -13,7 +13,7 @@ export default async function AdminArusLoginPage() {
     if (role === "ADMIN") {
       redirect("/admin");
     } else if (role === "CASHIER") {
-      redirect("/admin/cashier");
+      redirect("/admin/karyawan");
     }
     // We do not redirect CUSTOMERs or other roles, in case they are trying to log in
     // with their Admin or Cashier credentials to perform admin operations.

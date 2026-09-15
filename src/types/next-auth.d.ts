@@ -9,6 +9,7 @@ declare module "next-auth" {
             id: string
             role: string
             referralCode?: string
+            jobdeskCode?: string | null
         } & DefaultSession["user"]
     }
 
@@ -16,6 +17,7 @@ declare module "next-auth" {
         id: string
         role?: string
         referralCode?: string
+        jobdeskCode?: string | null
     }
 }
 
@@ -24,5 +26,6 @@ declare module "next-auth/jwt" {
     interface JWT {
         role?: string
         referralCode?: string
+        jobdeskCode?: string | null
     }
 }
