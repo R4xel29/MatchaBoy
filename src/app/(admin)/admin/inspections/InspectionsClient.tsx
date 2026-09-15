@@ -60,11 +60,12 @@ export default function InspectionsClient({
   const { showToast } = useToast();
   const isAdmin = userRole === 'ADMIN';
 
-  // Tabs for Admin: 'shifts' | 'stock' | 'sop-review' | 'fill-sop' | 'templates' | 'logs'
+  // Tabs for Admin: 'templates' | 'sop-review' | 'fill-sop' | 'shifts' | 'stock' | 'logs'
   // For Karyawan: always locked to SOP checklist form!
-  const [activeTab, setActiveTab] = useState<'shifts' | 'stock' | 'sop-review' | 'fill-sop' | 'templates' | 'logs'>(
-    isAdmin ? 'sop-review' : 'fill-sop'
+  const [activeTab, setActiveTab] = useState<'templates' | 'sop-review' | 'fill-sop' | 'shifts' | 'stock' | 'logs'>(
+    isAdmin ? 'templates' : 'fill-sop'
   );
+  const [previewAsStaff, setPreviewAsStaff] = useState(false);
 
   // --- SOP & TEMPLATES STATE ---
   const [templates, setTemplates] = useState(initialTemplates || []);
@@ -220,19 +221,43 @@ export default function InspectionsClient({
 
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-6 sm:p-8 text-white shadow-md relative overflow-hidden">
-        <div className="relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold mb-3">
-            <ClipboardCheck className="w-3.5 h-3.5" />
-            {isAdmin ? 'Pusat Pengawasan Operasional Arum Seduh' : 'Mode Staf Operasional Arum Seduh'}
+        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold mb-3">
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              {isAdmin
+                ? previewAsStaff
+                  ? 'Pratinjau Mode Staf (Karyawan)'
+                  : 'Pusat Kendali Master Admin Arum Seduh'
+                : 'Mode Staf Operasional Arum Seduh'}
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              {isAdmin
+                ? previewAsStaff
+                  ? 'Pelaporan Checklist SOP (Tampilan Karyawan)'
+                  : 'Master Admin: Audit & Pengecekan Toko'
+                : 'Pelaporan Checklist SOP Outlet'}
+            </h1>
+            <p className="text-orange-100 text-xs sm:text-sm mt-1 max-w-2xl">
+              {isAdmin
+                ? previewAsStaff
+                  ? 'Berikut adalah antarmuka yang dilihat oleh staf kasir & barista saat mengisi laporan checklist SOP.'
+                  : 'Kelola master butir SOP dengan aksi massal (Bulk Action), verifikasi laporan masuk staf, pantau rekonsiliasi kas shift, dan stock opname bar.'
+                : 'Formulir checklist pembukaan toko, kebersihan berkala, dan penutupan shift kasir & barista Arum Seduh.'}
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            {isAdmin ? 'Audit & Pengecekan Toko' : 'Pelaporan Checklist SOP Outlet'}
-          </h1>
-          <p className="text-orange-100 text-xs sm:text-sm mt-1 max-w-2xl">
-            {isAdmin
-              ? 'Pantau rekonsiliasi kas shift karyawan, stock opname bahan baku bar, kelola master SOP, dan verifikasi checklist staf secara real-time.'
-              : 'Formulir checklist pembukaan toko, kebersihan berkala, dan penutupan shift kasir & barista Arum Seduh.'}
-          </p>
+
+          {/* Switcher Mode untuk Admin Utama */}
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setPreviewAsStaff(!previewAsStaff)}
+              className="self-start sm:self-auto px-4 py-2 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-bold text-xs transition-all border border-white/30 shadow-sm flex items-center gap-2 shrink-0"
+            >
+              <Eye className="w-4 h-4" />
+              <span>{previewAsStaff ? 'Kembali ke Master Admin' : 'Lihat Tampilan Karyawan'}</span>
+            </button>
+          )}
         </div>
         <div className="absolute right-0 bottom-0 translate-x-8 translate-y-8 opacity-10 pointer-events-none">
           <Coffee className="w-72 h-72 text-white" />
@@ -240,10 +265,22 @@ export default function InspectionsClient({
       </div>
 
       {/* ========================================================================= */}
-      {/* TAMPILAN UNTUK KARYAWAN (HANYA FORMULIR CHECKLIST SOP & UPLOAD FOTO)     */}
+      {/* TAMPILAN UNTUK KARYAWAN (ATAU SAAT ADMIN MEMILIH PRATINJAU STAF)         */}
       {/* ========================================================================= */}
-      {!isAdmin ? (
+      {(!isAdmin || previewAsStaff) ? (
         <div className="space-y-6">
+          {previewAsStaff && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between text-xs text-amber-900 font-medium">
+              <span>Anda sedang melihat tampilan khusus <strong>Karyawan (Staf Operasional)</strong>. Karyawan hanya bisa mencentang tugas dan mengunggah foto bukti.</span>
+              <button
+                type="button"
+                onClick={() => setPreviewAsStaff(false)}
+                className="font-bold text-orange-600 hover:underline shrink-0 ml-2"
+              >
+                Kembali ke Master Admin &rarr;
+              </button>
+            </div>
+          )}
           <SopChecklistForm
             templates={templates}
             userRole={userRole}
@@ -261,6 +298,21 @@ export default function InspectionsClient({
           {/* Tabs Navigation Admin */}
           <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
             <button
+              onClick={() => setActiveTab('templates')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
+                activeTab === 'templates'
+                  ? 'bg-orange-500 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Kelola Master SOP</span>
+              <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-white/20 text-white font-bold">
+                {templates.length}
+              </span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('sop-review')}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
                 activeTab === 'sop-review'
@@ -275,21 +327,6 @@ export default function InspectionsClient({
                   {pendingReviewCount} Baru
                 </span>
               )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('templates')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all ${
-                activeTab === 'templates'
-                  ? 'bg-orange-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-              <span>Kelola Master SOP</span>
-              <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-white/20 text-white font-bold">
-                {templates.length}
-              </span>
             </button>
 
             <button

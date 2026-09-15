@@ -16,7 +16,12 @@ import {
   Check,
   Power,
   Layers,
-  Sparkles
+  Sparkles,
+  CheckSquare,
+  Square,
+  MoveRight,
+  FolderInput,
+  CameraOff
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 
@@ -42,7 +47,14 @@ export default function SopMasterManagement({
   const { showToast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'OPENING' | 'CLOSING' | 'ROUTINE'>('ALL');
   
-  // Modal states
+  // Selection state for Bulk Action
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isBulkMoveModalOpen, setIsBulkMoveModalOpen] = useState(false);
+  const [targetMoveCategory, setTargetMoveCategory] = useState<'OPENING' | 'CLOSING' | 'ROUTINE'>('OPENING');
+
+  // Modal states for single Create / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SopTemplateItem | null>(null);
 
@@ -55,9 +67,80 @@ export default function SopMasterManagement({
   const [formIsActive, setFormIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Delete modal confirmation
+  // Delete single modal confirmation
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Filter templates
+  const filteredTemplates = templates
+    .filter((t) => (selectedCategory === 'ALL' ? true : t.category === selectedCategory))
+    .sort((a, b) => {
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      return a.sortOrder - b.sortOrder;
+    });
+
+  // Toggle selection for a single item
+  const toggleSelectItem = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  // Select all / deselect all currently filtered items
+  const handleSelectAll = () => {
+    const allFilteredIds = filteredTemplates.map((t) => t.id);
+    const areAllSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.includes(id));
+
+    if (areAllSelected) {
+      // Unselect only the filtered ones
+      setSelectedIds((prev) => prev.filter((id) => !allFilteredIds.includes(id)));
+    } else {
+      // Add all filtered ones that aren't already selected
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...allFilteredIds])));
+    }
+  };
+
+  const areAllFilteredSelected =
+    filteredTemplates.length > 0 && filteredTemplates.every((t) => selectedIds.includes(t.id));
+
+  // Execute Bulk Action
+  const handleExecuteBulkAction = async (action: string, payload?: any) => {
+    if (selectedIds.length === 0) return;
+    setIsBulkLoading(true);
+
+    try {
+      const res = await fetch('/api/admin/inspections/templates/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedIds,
+          action,
+          payload,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menjalankan aksi massal');
+
+      if (data.items) {
+        onTemplatesChange(data.items);
+      } else {
+        // Fallback refresh
+        const refreshed = await fetch('/api/admin/inspections/templates');
+        const rData = await refreshed.json();
+        if (rData.items) onTemplatesChange(rData.items);
+      }
+
+      showToast(data.message || 'Aksi massal berhasil!', 'success');
+      setSelectedIds([]);
+      setIsBulkDeleteModalOpen(false);
+      setIsBulkMoveModalOpen(false);
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menjalankan aksi massal', 'error');
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
 
   // Open Create Modal
   const openCreateModal = () => {
@@ -66,7 +149,6 @@ export default function SopMasterManagement({
     setFormTitle('');
     setFormDescription('');
     setFormPhotoRequired(false);
-    // Find next sort order
     const cat = selectedCategory === 'ALL' ? 'OPENING' : selectedCategory;
     const catItems = templates.filter((t) => t.category === cat);
     const maxOrder = catItems.reduce((max, i) => Math.max(max, i.sortOrder), 0);
@@ -214,7 +296,7 @@ export default function SopMasterManagement({
     }
   };
 
-  // Delete item
+  // Delete single item
   const handleDeleteItem = async () => {
     if (!deletingId) return;
     setIsDeleting(true);
@@ -228,6 +310,7 @@ export default function SopMasterManagement({
       if (!res.ok) throw new Error(data.error || 'Gagal menghapus SOP');
 
       onTemplatesChange(templates.filter((t) => t.id !== deletingId));
+      setSelectedIds((prev) => prev.filter((id) => id !== deletingId));
       showToast('Butir SOP berhasil dihapus', 'success');
       setDeletingId(null);
     } catch (err: any) {
@@ -236,14 +319,6 @@ export default function SopMasterManagement({
       setIsDeleting(false);
     }
   };
-
-  // Filter templates
-  const filteredTemplates = templates
-    .filter((t) => (selectedCategory === 'ALL' ? true : t.category === selectedCategory))
-    .sort((a, b) => {
-      if (a.category !== b.category) return a.category.localeCompare(b.category);
-      return a.sortOrder - b.sortOrder;
-    });
 
   const getCategoryBadge = (cat: string) => {
     switch (cat) {
@@ -259,7 +334,7 @@ export default function SopMasterManagement({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       {/* Header Bar */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -268,7 +343,7 @@ export default function SopMasterManagement({
             Pengaturan Master Template SOP Outlet
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Admin Utama dapat menambah, mengubah instruksi, mengatur kewajiban foto, dan mengubah urutan tugas operasional staf.
+            Admin Utama dapat mengelola butir SOP secara individual maupun menggunakan fitur aksi massal (Bulk Action).
           </p>
         </div>
 
@@ -282,26 +357,50 @@ export default function SopMasterManagement({
         </button>
       </div>
 
-      {/* Category Tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 pb-2">
-        {[
-          { id: 'ALL', label: 'Semua Kategori' },
-          { id: 'OPENING', label: 'Buka Toko (Opening)' },
-          { id: 'CLOSING', label: 'Tutup Toko (Closing)' },
-          { id: 'ROUTINE', label: 'Kebersihan & Rutin' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setSelectedCategory(tab.id as any)}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              selectedCategory === tab.id
-                ? 'bg-slate-900 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Category Tabs & Select All Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: 'ALL', label: 'Semua Kategori' },
+            { id: 'OPENING', label: 'Buka Toko (Opening)' },
+            { id: 'CLOSING', label: 'Tutup Toko (Closing)' },
+            { id: 'ROUTINE', label: 'Kebersihan & Rutin' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setSelectedCategory(tab.id as any)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                selectedCategory === tab.id
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-slate-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Select All Checkbox Button */}
+        {filteredTemplates.length > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSelectAll}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                areAllFilteredSelected
+                  ? 'bg-orange-50 text-orange-700 border-orange-200'
+                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+              }`}
+            >
+              {areAllFilteredSelected ? (
+                <CheckSquare className="w-4 h-4 text-orange-600" />
+              ) : (
+                <Square className="w-4 h-4 text-slate-400" />
+              )}
+              <span>{areAllFilteredSelected ? 'Batalkan Pilih Semua' : 'Pilih Semua'} ({filteredTemplates.length})</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Items Table / Cards */}
@@ -311,103 +410,323 @@ export default function SopMasterManagement({
             <p className="text-xs text-slate-400 font-medium">Belum ada butir SOP pada kategori ini.</p>
           </div>
         ) : (
-          filteredTemplates.map((item, idx) => (
-            <div
-              key={item.id}
-              className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                item.isActive
-                  ? 'bg-white border-slate-200/80 hover:border-orange-200 shadow-sm'
-                  : 'bg-slate-50/70 border-slate-200 opacity-60'
-              }`}
-            >
-              <div className="flex items-start gap-3.5 flex-1">
-                {/* Reorder Buttons */}
-                <div className="flex flex-col gap-1 shrink-0 pt-0.5">
-                  <button
-                    type="button"
-                    onClick={() => handleReorder(item, 'up')}
-                    className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                    title="Pindah ke atas"
-                  >
-                    <ArrowUp className="w-3 h-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleReorder(item, 'down')}
-                    className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
-                    title="Pindah ke bawah"
-                  >
-                    <ArrowDown className="w-3 h-3" />
-                  </button>
-                </div>
+          filteredTemplates.map((item) => {
+            const isSelected = selectedIds.includes(item.id);
 
-                <div className="space-y-1 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-extrabold text-slate-400">#{item.sortOrder}</span>
-                    {getCategoryBadge(item.category)}
-                    {item.isPhotoRequired && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
-                        <Camera className="w-2.5 h-2.5" /> Wajib Foto
-                      </span>
-                    )}
-                    {!item.isActive && (
-                      <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-200 text-slate-600">
-                        Non-Aktif
-                      </span>
-                    )}
+            return (
+              <div
+                key={item.id}
+                className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                  isSelected
+                    ? 'bg-orange-50/60 border-orange-300 ring-2 ring-orange-200 shadow-sm'
+                    : item.isActive
+                    ? 'bg-white border-slate-200/80 hover:border-slate-300 shadow-sm'
+                    : 'bg-slate-50/70 border-slate-200 opacity-60'
+                }`}
+              >
+                <div className="flex items-start gap-3.5 flex-1">
+                  {/* Select Checkbox */}
+                  <div className="pt-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectItem(item.id)}
+                      className={`w-5 h-5 rounded-lg flex items-center justify-center transition-all ${
+                        isSelected
+                          ? 'bg-orange-500 text-white shadow-sm'
+                          : 'border border-slate-300 bg-white hover:border-orange-400'
+                      }`}
+                      title="Pilih butir untuk aksi massal"
+                    >
+                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </button>
                   </div>
 
-                  <h4 className="text-sm font-bold text-slate-800 leading-snug">{item.title}</h4>
-                  {item.description && (
-                    <p className="text-xs text-slate-500 leading-relaxed">{item.description}</p>
-                  )}
+                  {/* Reorder Buttons */}
+                  <div className="flex flex-col gap-1 shrink-0 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => handleReorder(item, 'up')}
+                      className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                      title="Pindah ke atas"
+                    >
+                      <ArrowUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleReorder(item, 'down')}
+                      className="p-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                      title="Pindah ke bawah"
+                    >
+                      <ArrowDown className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-extrabold text-slate-400">#{item.sortOrder}</span>
+                      {getCategoryBadge(item.category)}
+                      {item.isPhotoRequired && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
+                          <Camera className="w-2.5 h-2.5" /> Wajib Foto
+                        </span>
+                      )}
+                      {!item.isActive && (
+                        <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-200 text-slate-600">
+                          Non-Aktif
+                        </span>
+                      )}
+                    </div>
+
+                    <h4 className="text-sm font-bold text-slate-800 leading-snug">{item.title}</h4>
+                    {item.description && (
+                      <p className="text-xs text-slate-500 leading-relaxed">{item.description}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                  {/* Toggle Active Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(item)}
+                    className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                      item.isActive
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                    }`}
+                    title={item.isActive ? 'Klik untuk non-aktifkan' : 'Klik untuk aktifkan'}
+                  >
+                    <Power className="w-3.5 h-3.5" />
+                    <span className="text-[11px]">{item.isActive ? 'Aktif' : 'Non-Aktif'}</span>
+                  </button>
+
+                  {/* Edit Button */}
+                  <button
+                    type="button"
+                    onClick={() => openEditModal(item)}
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-orange-50 hover:text-orange-600 text-slate-600 transition-colors"
+                    title="Edit butir SOP"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Delete Button */}
+                  <button
+                    type="button"
+                    onClick={() => setDeletingId(item.id)}
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 transition-colors"
+                    title="Hapus butir SOP"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                {/* Toggle Active Button */}
-                <button
-                  type="button"
-                  onClick={() => handleToggleActive(item)}
-                  className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
-                    item.isActive
-                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                      : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-                  }`}
-                  title={item.isActive ? 'Klik untuk non-aktifkan' : 'Klik untuk aktifkan'}
-                >
-                  <Power className="w-3.5 h-3.5" />
-                  <span className="text-[11px]">{item.isActive ? 'Aktif' : 'Non-Aktif'}</span>
-                </button>
-
-                {/* Edit Button */}
-                <button
-                  type="button"
-                  onClick={() => openEditModal(item)}
-                  className="p-2 rounded-xl bg-slate-100 hover:bg-orange-50 hover:text-orange-600 text-slate-600 transition-colors"
-                  title="Edit butir SOP"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-
-                {/* Delete Button */}
-                <button
-                  type="button"
-                  onClick={() => setDeletingId(item.id)}
-                  className="p-2 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-600 transition-colors"
-                  title="Hapus butir SOP"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
       {/* ========================================================================= */}
-      {/* MODAL: TAMBAH / EDIT BUTIR SOP                                           */}
+      {/* FLOATING STICKY BULK ACTION BAR                                           */}
+      {/* ========================================================================= */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-2xl px-4 animate-in slide-in-from-bottom duration-300">
+          <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-2xl border border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-4 backdrop-blur-md">
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1 rounded-full bg-orange-500 text-white font-extrabold text-xs shadow-sm">
+                {selectedIds.length} Dipilih
+              </span>
+              <span className="text-xs text-slate-300 font-medium hidden sm:inline">
+                Aksi Massal Master SOP
+              </span>
+            </div>
+
+            {/* Bulk Action Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {/* Aktifkan Semua */}
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => handleExecuteBulkAction('ACTIVATE')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-emerald-600 text-white transition-colors flex items-center gap-1.5"
+                title="Aktifkan butir terpilih"
+              >
+                <Power className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Aktifkan</span>
+              </button>
+
+              {/* Nonaktifkan Semua */}
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => handleExecuteBulkAction('DEACTIVATE')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+                title="Nonaktifkan butir terpilih"
+              >
+                <Power className="w-3.5 h-3.5 text-slate-400" />
+                <span>Non-Aktif</span>
+              </button>
+
+              {/* Wajibkan Foto */}
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => handleExecuteBulkAction('SET_PHOTO_REQUIRED')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-amber-600 text-white transition-colors flex items-center gap-1.5"
+                title="Wajibkan foto bukti"
+              >
+                <Camera className="w-3.5 h-3.5 text-amber-400" />
+                <span>Wajib Foto</span>
+              </button>
+
+              {/* Opsional Foto */}
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => handleExecuteBulkAction('SET_PHOTO_OPTIONAL')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+                title="Jadikan foto opsional"
+              >
+                <CameraOff className="w-3.5 h-3.5 text-slate-400" />
+                <span>Foto Opsional</span>
+              </button>
+
+              {/* Pindah Kategori Modal Trigger */}
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => setIsBulkMoveModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-orange-600 text-white transition-colors flex items-center gap-1.5"
+                title="Pindahkan shift/kategori"
+              >
+                <FolderInput className="w-3.5 h-3.5 text-orange-400" />
+                <span>Pindah Shift</span>
+              </button>
+
+              {/* Hapus Massal */}
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => setIsBulkDeleteModalOpen(true)}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-colors flex items-center gap-1.5 shadow-sm"
+                title="Hapus massal butir terpilih"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus</span>
+              </button>
+
+              {/* Batal Pilihan */}
+              <button
+                type="button"
+                onClick={() => setSelectedIds([])}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Batalkan pilihan"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: BULK MOVE CATEGORY                                                 */}
+      {/* ========================================================================= */}
+      {isBulkMoveModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-orange-100 space-y-4 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto">
+              <FolderInput className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900">Pindahkan Shift Massal</h3>
+              <p className="text-slate-500">
+                Pindahkan <span className="font-bold text-orange-600">{selectedIds.length} butir SOP</span> yang dipilih ke kategori shift:
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Pilih Kategori Tujuan:</label>
+              <select
+                value={targetMoveCategory}
+                onChange={(e) => setTargetMoveCategory(e.target.value as any)}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800"
+              >
+                <option value="OPENING">Buka Toko (Opening Shift)</option>
+                <option value="CLOSING">Tutup Toko (Closing Shift)</option>
+                <option value="ROUTINE">Kebersihan & Rutin Harian (Mid-Shift)</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkMoveModalOpen(false)}
+                className="flex-1 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => handleExecuteBulkAction('MOVE_CATEGORY', { category: targetMoveCategory })}
+                className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {isBulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Pindahkan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: BULK DELETE CONFIRMATION                                           */}
+      {/* ========================================================================= */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-rose-100 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900">Hapus {selectedIds.length} Butir SOP?</h3>
+              <p className="text-xs text-slate-500">
+                Apakah Anda yakin ingin menghapus <span className="font-bold text-rose-600">{selectedIds.length} butir SOP</span> sekaligus? Tindakan ini tidak dapat dibatalkan.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="flex-1 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => handleExecuteBulkAction('DELETE')}
+                className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {isBulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : `Ya, Hapus (${selectedIds.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: TAMBAH / EDIT SINGLE BUTIR SOP                                     */}
       {/* ========================================================================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -546,7 +865,7 @@ export default function SopMasterManagement({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL KONFIRMASI HAPUS                                                   */}
+      {/* MODAL: KONFIRMASI HAPUS SINGLE ITEM                                       */}
       {/* ========================================================================= */}
       {deletingId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
