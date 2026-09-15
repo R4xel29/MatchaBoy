@@ -567,13 +567,14 @@ export default function InspectionsClient({
                                   <User className="w-3.5 h-3.5 text-slate-400" />
                                   <span>{shift.cashier?.name || 'Kasir'}</span>
                                 </div>
-                                <div className="text-[11px] text-slate-400 mt-0.5">
+                                <div className="text-[11px] text-slate-500 font-medium mt-0.5">
                                   {new Date(shift.openedAt).toLocaleDateString('id-ID', {
+                                    weekday: 'long',
                                     day: 'numeric',
                                     month: 'short',
                                     hour: '2-digit',
                                     minute: '2-digit',
-                                  })}
+                                  })} WIB
                                 </div>
                               </td>
 

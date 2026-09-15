@@ -37,6 +37,20 @@ export default function SopEmployeeHistory({
 }: SopEmployeeHistoryProps) {
   const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'NEEDS_IMPROVEMENT' | 'VERIFIED' | 'PENDING_REVIEW'>('ALL');
+  const formatFullDateTime = (dateVal?: any, timeVal?: string | null) => {
+    if (!dateVal) return '-';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '-';
+      const dayName = d.toLocaleDateString('id-ID', { weekday: 'long' });
+      const dateStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+      const timeStr = timeVal ? `${timeVal} WIB` : d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+      return `${dayName}, ${dateStr} • ${timeStr}`;
+    } catch {
+      return String(dateVal);
+    }
+  };
+
 
   // Filter submissions: if currentUserId is present, show staff's own submissions;
   // if not or preview mode, show all submissions in the list
@@ -195,15 +209,9 @@ export default function SopEmployeeHistory({
                         Revisi
                       </span>
                     )}
-                    <span className="text-xs text-slate-400 flex items-center gap-1">
-                      <Calendar className="w-3 h-3" />
-                      {new Date(sub.createdAt).toLocaleDateString('id-ID', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 shadow-xs">
+                      <Calendar className="w-3 h-3 text-orange-500" />
+                      <span>{formatFullDateTime(sub.shiftDate || sub.createdAt, sub.shiftTime)}</span>
                     </span>
                   </div>
 

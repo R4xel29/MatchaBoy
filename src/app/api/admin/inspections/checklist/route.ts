@@ -89,11 +89,19 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { type, jobdeskCode, items, notes, galleryImages } = body;
+    const { type, jobdeskCode, shiftDate, shiftTime, items, notes, galleryImages } = body;
 
     const validTypes = ['OPENING', 'CLOSING', 'ROUTINE'];
     if (!type || !validTypes.includes(type)) {
       return NextResponse.json({ error: 'Tipe shift wajib OPENING, CLOSING, atau ROUTINE' }, { status: 400 });
+    }
+
+    if (!shiftDate) {
+      return NextResponse.json({ error: 'Tanggal shift pelaksanaan wajib dipilih' }, { status: 400 });
+    }
+
+    if (!shiftTime) {
+      return NextResponse.json({ error: 'Waktu / jam pelaksanaan shift wajib diisi' }, { status: 400 });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
@@ -108,6 +116,8 @@ export async function POST(req: Request) {
       data: {
         shiftType: type,
         jobdeskCode: jobdeskCode || 'GENERAL',
+        shiftDate: new Date(shiftDate),
+        shiftTime: String(shiftTime).trim(),
         userId: session.user.id,
         notes: notes?.trim() || null,
         galleryImages: galleryJson,
@@ -139,6 +149,8 @@ export async function POST(req: Request) {
       submissionId: submission.id,
       shiftType: type,
       jobdeskCode: submission.jobdeskCode,
+      shiftDate: submission.shiftDate,
+      shiftTime: submission.shiftTime,
       staffName,
       totalItems,
       completedItems,
@@ -253,7 +265,7 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json();
-    const { submissionId, items, notes, galleryImages } = body;
+    const { submissionId, shiftDate, shiftTime, items, notes, galleryImages } = body;
 
     if (!submissionId) {
       return NextResponse.json({ error: 'ID laporan submission wajib disertakan' }, { status: 400 });
@@ -290,6 +302,8 @@ export async function PUT(req: Request) {
           status: 'PENDING_REVIEW',
           isRevised: true,
           revisedAt: new Date(),
+          shiftDate: shiftDate ? new Date(shiftDate) : existing.shiftDate,
+          shiftTime: shiftTime ? String(shiftTime).trim() : existing.shiftTime,
           notes: notes !== undefined ? (notes?.trim() || null) : existing.notes,
           galleryImages: galleryJson,
           items: {

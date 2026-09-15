@@ -16,6 +16,8 @@ import {
   Sparkles,
   Layers,
   RotateCcw,
+  Calendar,
+  Clock,
   MessageSquare,
   X,
   ArrowRight
@@ -71,6 +73,49 @@ export default function SopChecklistForm({
   const [shiftType, setShiftType] = useState<'OPENING' | 'CLOSING' | 'ROUTINE'>('OPENING');
   const [selectedJobdeskCode, setSelectedJobdeskCode] = useState<string>(userJobdeskCode || 'ALL');
   const isJobdeskLocked = !!userJobdeskCode;
+
+  // Tanggal dan Waktu Pelaksanaan Shift (Wajib)
+  const getTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  const getCurrentTimeStr = () => {
+    const d = new Date();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const [shiftDate, setShiftDate] = useState<string>(getTodayStr());
+  const [shiftTime, setShiftTime] = useState<string>(getCurrentTimeStr());
+
+  const getFormattedFullDate = (dateString: string) => {
+    if (!dateString) return '';
+    try {
+      const parts = dateString.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        return d.toLocaleDateString('id-ID', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        });
+      }
+      const d = new Date(dateString);
+      return d.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+    } catch {
+      return dateString;
+    }
+  };
   
   // State checklist items: key is template.id
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
@@ -96,6 +141,15 @@ export default function SopChecklistForm({
       setShiftType(revisingSubmission.shiftType || 'OPENING');
       setSelectedJobdeskCode(revisingSubmission.jobdeskCode || 'ALL');
       setShiftNotes(revisingSubmission.notes || '');
+      if (revisingSubmission.shiftDate) {
+        try {
+          const d = new Date(revisingSubmission.shiftDate);
+          setShiftDate(d.toISOString().split('T')[0]);
+        } catch {}
+      }
+      if (revisingSubmission.shiftTime) {
+        setShiftTime(revisingSubmission.shiftTime);
+      }
 
       // Parse gallery
       try {
@@ -288,6 +342,8 @@ export default function SopChecklistForm({
       const bodyPayload = isRevising
         ? {
             submissionId: revisingSubmission.id,
+            shiftDate,
+            shiftTime,
             items: itemsPayload,
             notes: shiftNotes,
             galleryImages,
@@ -295,6 +351,8 @@ export default function SopChecklistForm({
         : {
             type: shiftType,
             jobdeskCode: selectedJobdeskCode,
+            shiftDate,
+            shiftTime,
             items: itemsPayload,
             notes: shiftNotes,
             galleryImages,
@@ -624,6 +682,69 @@ export default function SopChecklistForm({
                 Jobdesk Anda telah ditetapkan oleh admin. Filter terkunci otomatis.
               </p>
             )}
+          </div>
+
+          {/* JADWAL & WAKTU SHIFT (WAJIB) */}
+          <div className="bg-gradient-to-r from-orange-50/70 to-amber-50/70 border border-orange-200/80 rounded-2xl p-4 space-y-3 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-orange-500 text-white shadow-xs">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    Tanggal & Waktu Pelaksanaan Shift
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white shadow-xs">
+                      Wajib *
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500">
+                    Tentukan hari, tanggal, dan jam shift saat tugas SOP ini dilaksanakan.
+                  </p>
+                </div>
+              </div>
+
+              {/* Realtime day badge */}
+              {shiftDate && (
+                <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-orange-200 text-xs font-bold text-orange-800 shadow-xs self-start sm:self-auto">
+                  <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                  <span>{getFormattedFullDate(shiftDate)}</span>
+                  {shiftTime && (
+                    <span className="text-orange-600 font-semibold">• {shiftTime} WIB</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-orange-600" />
+                  Tanggal Shift:
+                </label>
+                <input
+                  type="date"
+                  value={shiftDate}
+                  onChange={(e) => setShiftDate(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2 text-xs font-semibold bg-white border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-800 shadow-xs"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-orange-600" />
+                  Jam Pelaksanaan (WIB):
+                </label>
+                <input
+                  type="time"
+                  value={shiftTime}
+                  onChange={(e) => setShiftTime(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2 text-xs font-semibold bg-white border border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-800 shadow-xs"
+                />
+              </div>
+            </div>
           </div>
         </div>
 

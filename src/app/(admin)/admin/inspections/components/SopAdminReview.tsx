@@ -18,7 +18,13 @@ import {
   Loader2,
   ExternalLink,
   ChevronRight,
-  Filter
+  ChevronLeft,
+  Filter,
+  Calendar,
+  Layers,
+  LayoutGrid,
+  List,
+  Sparkles
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 
@@ -39,6 +45,66 @@ export default function SopAdminReview({
   const [selectedShiftFilter, setSelectedShiftFilter] = useState<string>('ALL');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<string>('ALL');
   const [selectedSubmission, setSelectedSubmission] = useState<any | null>(null);
+  // View Mode: 'calendar' (Bentukan Kalender) | 'list' (Daftar Kartu)
+  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+  const [currentMonthDate, setCurrentMonthDate] = useState<Date>(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<string | null>(null);
+
+  // Helper formatting Hari & Tanggal dalam Bahasa Indonesia
+  const formatDayAndDate = (dateVal?: any) => {
+    if (!dateVal) return '-';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '-';
+      return d.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return String(dateVal);
+    }
+  };
+
+  const formatFullDateWithTime = (dateVal?: any, timeVal?: string | null) => {
+    if (!dateVal) return '-';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '-';
+      const dayName = d.toLocaleDateString('id-ID', { weekday: 'long' });
+      const dateStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      const timeStr = timeVal ? `${timeVal} WIB` : d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+      return `${dayName}, ${dateStr} • ${timeStr}`;
+    } catch {
+      return String(dateVal);
+    }
+  };
+
+  const getDayNameOnly = (dateVal?: any) => {
+    if (!dateVal) return '';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleDateString('id-ID', { weekday: 'long' });
+    } catch {
+      return '';
+    }
+  };
+
+  const getDateKey = (dateVal?: any) => {
+    if (!dateVal) return '';
+    try {
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch {
+      return '';
+    }
+  };
 
   // Verification Form in Modal
   const [reviewStatus, setReviewStatus] = useState<'VERIFIED' | 'NEEDS_IMPROVEMENT'>('VERIFIED');
@@ -84,6 +150,10 @@ export default function SopAdminReview({
   const filteredSubmissions = submissions.filter((sub) => {
     if (selectedShiftFilter !== 'ALL' && sub.shiftType !== selectedShiftFilter) return false;
     if (selectedStatusFilter !== 'ALL' && sub.status !== selectedStatusFilter) return false;
+    if (selectedCalendarDate) {
+      const subDateKey = getDateKey(sub.shiftDate || sub.createdAt);
+      if (subDateKey !== selectedCalendarDate) return false;
+    }
     return true;
   });
 
@@ -129,8 +199,102 @@ export default function SopAdminReview({
     }
   };
 
+  // Perhitungan hari kalender bulanan
+  const calendarYear = currentMonthDate.getFullYear();
+  const calendarMonth = currentMonthDate.getMonth();
+  const monthNameIndo = currentMonthDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
+  const firstDayObj = new Date(calendarYear, calendarMonth, 1);
+  const lastDayObj = new Date(calendarYear, calendarMonth + 1, 0);
+  const daysInMonth = lastDayObj.getDate();
+  // ISO day: 0=Monday, 6=Sunday
+  const startDayOffset = (firstDayObj.getDay() + 6) % 7;
+
+  // Previous month filler days
+  const prevMonthLastDay = new Date(calendarYear, calendarMonth, 0).getDate();
+  const prevDays = [];
+  for (let i = startDayOffset - 1; i >= 0; i--) {
+    prevDays.push(prevMonthLastDay - i);
+  }
+
+  // Month navigation
+  const handlePrevMonth = () => {
+    setCurrentMonthDate(new Date(calendarYear, calendarMonth - 1, 1));
+  };
+  const handleNextMonth = () => {
+    setCurrentMonthDate(new Date(calendarYear, calendarMonth + 1, 1));
+  };
+  const handleTodayMonth = () => {
+    const today = new Date();
+    setCurrentMonthDate(new Date(today.getFullYear(), today.getMonth(), 1));
+    setSelectedCalendarDate(getDateKey(today));
+  };
+
+  const todayKey = getDateKey(new Date());
+
+  // Grouping submissions per date key (YYYY-MM-DD)
+  const submissionsByDate: Record<string, any[]> = {};
+  submissions.forEach((sub) => {
+    const key = getDateKey(sub.shiftDate || sub.createdAt);
+    if (!submissionsByDate[key]) submissionsByDate[key] = [];
+    submissionsByDate[key].push(sub);
+  });
+
   return (
     <div className="space-y-5">
+      {/* Top Header & View Switcher */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-orange-500 text-white shadow-xs">
+              <Calendar className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-base text-slate-800 tracking-tight">
+                Pemeriksaan & Kalender Shift SOP
+              </h3>
+              <p className="text-xs text-slate-500">
+                Pantau laporan pelaksanaan tugas staf berdasarkan hari, tanggal, dan waktu kerja.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* View Switcher: Kalender vs List */}
+        <div className="inline-flex p-1 rounded-2xl bg-slate-100 border border-slate-200/60 self-start sm:self-auto">
+          <button
+            type="button"
+            onClick={() => setViewMode('calendar')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              viewMode === 'calendar'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Bentukan Kalender</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('list');
+              setSelectedCalendarDate(null);
+            }}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+              viewMode === 'list'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <List className="w-3.5 h-3.5" />
+            <span>Daftar Kartu</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-md text-[10px] bg-black/10 text-current font-extrabold">
+              {filteredSubmissions.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Filter Controls */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -178,7 +342,189 @@ export default function SopAdminReview({
         </div>
       </div>
 
-      {/* Submissions List */}
+      {/* ========================================================================= */}
+      {/* BENTUKAN KALENDER INTERAKTIF                                            */}
+      {/* ========================================================================= */}
+      {viewMode === 'calendar' && (
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-6 shadow-sm space-y-5">
+          {/* Calendar Month Navigation Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors"
+                title="Bulan Sebelumnya"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <h4 className="font-extrabold text-base sm:text-lg text-slate-800 capitalize min-w-[170px] text-center">
+                {monthNameIndo}
+              </h4>
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 transition-colors"
+                title="Bulan Berikutnya"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={handleTodayMonth}
+                className="ml-2 px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 transition-colors"
+              >
+                Bulan Ini
+              </button>
+            </div>
+
+            {/* Selected Date Tag & Reset Button */}
+            {selectedCalendarDate ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500">Filter Aktif:</span>
+                <span className="px-3 py-1 rounded-xl text-xs font-bold bg-orange-500 text-white shadow-xs">
+                  {formatDayAndDate(selectedCalendarDate)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedCalendarDate(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors text-xs"
+                  title="Tampilkan semua hari di bulan ini"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400">
+                Klik salah satu tanggal pada kalender untuk melihat rincian shift.
+              </p>
+            )}
+          </div>
+
+          {/* 7 Columns Days of Week Header (Indonesian) */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-2 text-center text-xs font-extrabold text-slate-600 pb-1">
+            <span className="text-slate-500">Senin</span>
+            <span className="text-slate-500">Selasa</span>
+            <span className="text-slate-500">Rabu</span>
+            <span className="text-slate-500">Kamis</span>
+            <span className="text-slate-500">Jumat</span>
+            <span className="text-amber-700">Sabtu</span>
+            <span className="text-rose-600">Minggu</span>
+          </div>
+
+          {/* Calendar Day Grid */}
+          <div className="grid grid-cols-7 gap-1 sm:gap-2">
+            {/* Prev month padding days */}
+            {prevDays.map((d, i) => (
+              <div
+                key={`prev-${i}`}
+                className="min-h-[75px] sm:min-h-[95px] p-1.5 sm:p-2 rounded-2xl bg-slate-50/50 border border-dashed border-slate-100 text-slate-300 select-none"
+              >
+                <span className="text-[11px] font-semibold">{d}</span>
+              </div>
+            ))}
+
+            {/* Current month days */}
+            {Array.from({ length: daysInMonth }, (_, idx) => {
+              const dayNum = idx + 1;
+              const dateKey = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+              const daySubs = submissionsByDate[dateKey] || [];
+              const isToday = dateKey === todayKey;
+              const isSelected = selectedCalendarDate === dateKey;
+
+              return (
+                <div
+                  key={dateKey}
+                  onClick={() => setSelectedCalendarDate(isSelected ? null : dateKey)}
+                  className={`min-h-[75px] sm:min-h-[95px] p-1.5 sm:p-2 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                    isSelected
+                      ? 'border-orange-500 ring-2 ring-orange-500/20 bg-orange-50/40 shadow-sm'
+                      : isToday
+                      ? 'border-orange-300 bg-orange-50/20 hover:border-orange-400'
+                      : 'border-slate-100 bg-white hover:border-slate-300 hover:shadow-xs'
+                  }`}
+                >
+                  {/* Top Day Number & Today indicator */}
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`text-xs font-bold ${
+                        isToday
+                          ? 'w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs'
+                          : isSelected
+                          ? 'text-orange-600 font-extrabold'
+                          : 'text-slate-700'
+                      }`}
+                    >
+                      {dayNum}
+                    </span>
+
+                    {daySubs.length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-700">
+                        {daySubs.length} shift
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Shift Pills in Day Cell */}
+                  <div className="space-y-1 mt-1 overflow-hidden">
+                    {daySubs.slice(0, 2).map((sub) => (
+                      <div
+                        key={sub.id}
+                        className={`px-1.5 py-0.5 rounded-lg text-[9px] font-bold truncate flex items-center gap-1 ${
+                          sub.shiftType === 'OPENING'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                            : sub.shiftType === 'CLOSING'
+                            ? 'bg-purple-100 text-purple-900 border border-purple-200'
+                            : 'bg-blue-100 text-blue-900 border border-blue-200'
+                        }`}
+                      >
+                        <span className="truncate">
+                          {sub.user?.name ? sub.user.name.split(' ')[0] : 'Staf'} ({getJobdeskName(sub.jobdeskCode)})
+                        </span>
+                        {sub.status === 'VERIFIED' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        )}
+                        {sub.status === 'NEEDS_IMPROVEMENT' && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                        )}
+                      </div>
+                    ))}
+                    {daySubs.length > 2 && (
+                      <p className="text-[9px] text-slate-400 font-semibold text-center">
+                        +{daySubs.length - 2} lagi
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Selected Day Submissions Header (in Calendar Mode) */}
+      {viewMode === 'calendar' && selectedCalendarDate && (
+        <div className="flex items-center justify-between bg-orange-50 border border-orange-200 px-4 py-3 rounded-2xl">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-orange-600" />
+            <span className="text-xs font-bold text-orange-950">
+              Rincian Shift: {formatDayAndDate(selectedCalendarDate)}
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-orange-500 text-white">
+              {filteredSubmissions.length} Laporan
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSelectedCalendarDate(null)}
+            className="text-xs font-bold text-orange-700 hover:text-orange-900 underline"
+          >
+            Lihat Semua Laporan
+          </button>
+        </div>
+      )}
+
+      {/* Submissions List / Cards */}
       {filteredSubmissions.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 shadow-sm">
           <ClipboardCheck className="w-10 h-10 text-slate-300 mx-auto mb-2" />
@@ -217,13 +563,12 @@ export default function SopAdminReview({
                           Revisi
                         </span>
                       )}
-                      <span className="text-[11px] text-slate-400">
-                        {new Date(sub.createdAt).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200">
+                        <Calendar className="w-3 h-3 text-orange-500" />
+                        <span>{formatDayAndDate(sub.shiftDate || sub.createdAt)}</span>
+                        <span className="text-slate-300">•</span>
+                        <Clock className="w-3 h-3 text-amber-500" />
+                        <span>{sub.shiftTime ? `${sub.shiftTime} WIB` : new Date(sub.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB'}</span>
                       </span>
                     </div>
                     <p className="text-sm font-extrabold text-slate-800">
@@ -282,9 +627,17 @@ export default function SopAdminReview({
                     </span>
                   )}
                 </div>
-                <p className="text-xs text-orange-100">
-                  Diajukan oleh {selectedSubmission.user?.name || 'Staf'} pada {new Date(selectedSubmission.createdAt).toLocaleString('id-ID')}
-                </p>
+                <div className="flex flex-wrap items-center gap-2 pt-0.5 text-xs text-orange-100 font-medium">
+                  <span className="flex items-center gap-1">
+                    <User className="w-3.5 h-3.5" />
+                    {selectedSubmission.user?.name || 'Staf Operasional'}
+                  </span>
+                  <span>•</span>
+                  <span className="flex items-center gap-1 bg-white/15 px-2 py-0.5 rounded-md text-white font-bold">
+                    <Calendar className="w-3.5 h-3.5 text-amber-200" />
+                    {formatFullDateWithTime(selectedSubmission.shiftDate || selectedSubmission.createdAt, selectedSubmission.shiftTime)}
+                  </span>
+                </div>
               </div>
 
               <button
