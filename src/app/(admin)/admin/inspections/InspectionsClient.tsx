@@ -30,17 +30,20 @@ import { useToast } from '@/components/ui/Toast';
 import SopChecklistForm from './components/SopChecklistForm';
 import SopAdminReview from './components/SopAdminReview';
 import SopMasterManagement from './components/SopMasterManagement';
+import SopEmployeeHistory from './components/SopEmployeeHistory';
 import PhotoLightboxModal from './components/PhotoLightboxModal';
 
 interface InspectionsClientProps {
   userRole: string;
   userName: string;
+  currentUserId?: string;
   initialShifts: any[];
   initialIngredients: any[];
   initialMovements: any[];
   initialLogs: any[];
   initialTodayChecklists: any[];
   initialTemplates: any[];
+  initialJobdesks?: any[];
   initialTodaySubmissions: any[];
   initialRecentSubmissions: any[];
 }
@@ -48,12 +51,14 @@ interface InspectionsClientProps {
 export default function InspectionsClient({
   userRole,
   userName,
+  currentUserId,
   initialShifts,
   initialIngredients,
   initialMovements,
   initialLogs,
   initialTodayChecklists,
   initialTemplates,
+  initialJobdesks,
   initialTodaySubmissions,
   initialRecentSubmissions,
 }: InspectionsClientProps) {
@@ -69,8 +74,11 @@ export default function InspectionsClient({
 
   // --- SOP & TEMPLATES STATE ---
   const [templates, setTemplates] = useState(initialTemplates || []);
+  const [jobdesks, setJobdesks] = useState(initialJobdesks || []);
   const [submissions, setSubmissions] = useState(initialRecentSubmissions || []);
   const [todaySubmissions, setTodaySubmissions] = useState(initialTodaySubmissions || []);
+  const [employeeSubTab, setEmployeeSubTab] = useState<'form' | 'history'>('form');
+  const [revisingSubmission, setRevisingSubmission] = useState<any | null>(null);
 
   // --- PHOTO LIGHTBOX STATE ---
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -180,10 +188,32 @@ export default function InspectionsClient({
     }
   };
 
-  // Callback on submission success from SopChecklistForm
-  const handleSubmissionSuccess = (newSub: any) => {
-    setTodaySubmissions((prev) => [newSub, ...prev]);
-    setSubmissions((prev) => [newSub, ...prev]);
+  // Callback on submission success from SopChecklistForm (supports new and revised)
+  const handleSubmissionSuccess = (newOrUpdatedSub: any) => {
+    setSubmissions((prev) => {
+      const exists = prev.some((s) => s.id === newOrUpdatedSub.id);
+      if (exists) {
+        return prev.map((s) => (s.id === newOrUpdatedSub.id ? newOrUpdatedSub : s));
+      }
+      return [newOrUpdatedSub, ...prev];
+    });
+    setTodaySubmissions((prev) => {
+      const exists = prev.some((s) => s.id === newOrUpdatedSub.id);
+      if (exists) {
+        return prev.map((s) => (s.id === newOrUpdatedSub.id ? newOrUpdatedSub : s));
+      }
+      return [newOrUpdatedSub, ...prev];
+    });
+    setRevisingSubmission(null);
+  };
+
+  const handleStartRevision = (sub: any) => {
+    setRevisingSubmission(sub);
+    setEmployeeSubTab('form');
+  };
+
+  const handleCancelRevision = () => {
+    setRevisingSubmission(null);
   };
 
   // Callback on verification success from SopAdminReview
@@ -271,7 +301,7 @@ export default function InspectionsClient({
         <div className="space-y-6">
           {previewAsStaff && (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-center justify-between text-xs text-amber-900 font-medium">
-              <span>Anda sedang melihat tampilan khusus <strong>Karyawan (Staf Operasional)</strong>. Karyawan hanya bisa mencentang tugas dan mengunggah foto bukti.</span>
+              <span>Anda sedang melihat tampilan khusus <strong>Karyawan (Staf Operasional)</strong>. Karyawan dapat mengisi checklist sesuai peran jobdesk dan melihat catatan evaluasi.</span>
               <button
                 type="button"
                 onClick={() => setPreviewAsStaff(false)}
@@ -281,14 +311,69 @@ export default function InspectionsClient({
               </button>
             </div>
           )}
-          <SopChecklistForm
-            templates={templates}
-            userRole={userRole}
-            userName={userName}
-            todaySubmissions={todaySubmissions}
-            onSubmissionSuccess={handleSubmissionSuccess}
-            onPreviewPhoto={handlePreviewPhoto}
-          />
+
+          {/* Sub-tab navigasi staf */}
+          {(() => {
+            const staffSubs = submissions.filter((s) => !currentUserId || s.userId === currentUserId);
+            const needsImprovementCount = staffSubs.filter((s) => s.status === 'NEEDS_IMPROVEMENT').length;
+
+            return (
+              <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+                <button
+                  type="button"
+                  onClick={() => setEmployeeSubTab('form')}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all ${
+                    employeeSubTab === 'form'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <ListChecks className="w-4 h-4" />
+                  <span>Formulir Checklist SOP</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEmployeeSubTab('history')}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all ${
+                    employeeSubTab === 'history'
+                      ? 'bg-orange-500 text-white shadow-sm'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  <Clock className="w-4 h-4" />
+                  <span>Riwayat & Feedback Saya</span>
+                  {needsImprovementCount > 0 && (
+                    <span className="ml-1 px-2 py-0.5 rounded-md text-[10px] bg-rose-500 text-white font-extrabold animate-pulse">
+                      {needsImprovementCount} Perlu Perbaikan
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
+
+          {employeeSubTab === 'form' ? (
+            <SopChecklistForm
+              templates={templates}
+              jobdesks={jobdesks}
+              userRole={userRole}
+              userName={userName}
+              todaySubmissions={todaySubmissions}
+              revisingSubmission={revisingSubmission}
+              onCancelRevision={handleCancelRevision}
+              onSubmissionSuccess={handleSubmissionSuccess}
+              onPreviewPhoto={handlePreviewPhoto}
+            />
+          ) : (
+            <SopEmployeeHistory
+              submissions={submissions}
+              jobdesks={jobdesks}
+              currentUserId={currentUserId}
+              onStartRevision={handleStartRevision}
+              onPreviewPhoto={handlePreviewPhoto}
+            />
+          )}
         </div>
       ) : (
         /* ========================================================================= */
@@ -388,6 +473,7 @@ export default function InspectionsClient({
           {activeTab === 'sop-review' && (
             <SopAdminReview
               submissions={submissions}
+              jobdesks={jobdesks}
               onVerificationSuccess={handleVerificationSuccess}
               onPreviewPhoto={handlePreviewPhoto}
             />
@@ -397,7 +483,9 @@ export default function InspectionsClient({
           {activeTab === 'templates' && (
             <SopMasterManagement
               templates={templates}
+              jobdesks={jobdesks}
               onTemplatesChange={(updated) => setTemplates(updated)}
+              onJobdesksChange={(updated) => setJobdesks(updated)}
             />
           )}
 
@@ -405,6 +493,7 @@ export default function InspectionsClient({
           {activeTab === 'fill-sop' && (
             <SopChecklistForm
               templates={templates}
+              jobdesks={jobdesks}
               userRole={userRole}
               userName={userName}
               todaySubmissions={todaySubmissions}

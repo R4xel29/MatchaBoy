@@ -19,15 +19,17 @@ import {
   Sparkles,
   CheckSquare,
   Square,
-  MoveRight,
   FolderInput,
-  CameraOff
+  CameraOff,
+  Settings2,
+  ShieldAlert
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 
-interface SopTemplateItem {
+export interface SopTemplateItem {
   id: string;
   category: string;
+  jobdeskCode?: string;
   title: string;
   description: string | null;
   isPhotoRequired: boolean;
@@ -35,31 +37,51 @@ interface SopTemplateItem {
   isActive: boolean;
 }
 
+export interface SopJobdesk {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 interface SopMasterManagementProps {
   templates: SopTemplateItem[];
+  jobdesks?: SopJobdesk[];
   onTemplatesChange: (updatedTemplates: SopTemplateItem[]) => void;
+  onJobdesksChange?: (updatedJobdesks: SopJobdesk[]) => void;
 }
 
 export default function SopMasterManagement({
   templates,
+  jobdesks = [],
   onTemplatesChange,
+  onJobdesksChange,
 }: SopMasterManagementProps) {
   const { showToast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<'ALL' | 'OPENING' | 'CLOSING' | 'ROUTINE'>('ALL');
+  const [selectedJobdeskFilter, setSelectedJobdeskFilter] = useState<string>('ALL');
   
+  // Local jobdesks state
+  const [localJobdesks, setLocalJobdesks] = useState<SopJobdesk[]>(jobdesks);
+
   // Selection state for Bulk Action
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
   const [isBulkMoveModalOpen, setIsBulkMoveModalOpen] = useState(false);
   const [targetMoveCategory, setTargetMoveCategory] = useState<'OPENING' | 'CLOSING' | 'ROUTINE'>('OPENING');
+  const [isBulkMoveJobdeskModalOpen, setIsBulkMoveJobdeskModalOpen] = useState(false);
+  const [targetMoveJobdeskCode, setTargetMoveJobdeskCode] = useState<string>('GENERAL');
 
   // Modal states for single Create / Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<SopTemplateItem | null>(null);
 
-  // Form states
+  // Form states for SOP Item
   const [formCategory, setFormCategory] = useState<'OPENING' | 'CLOSING' | 'ROUTINE'>('OPENING');
+  const [formJobdeskCode, setFormJobdeskCode] = useState<string>('GENERAL');
   const [formTitle, setFormTitle] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formPhotoRequired, setFormPhotoRequired] = useState(false);
@@ -71,9 +93,25 @@ export default function SopMasterManagement({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Jobdesks Management Modal states
+  const [isJobdesksModalOpen, setIsJobdesksModalOpen] = useState(false);
+  const [newJobdeskCode, setNewJobdeskCode] = useState('');
+  const [newJobdeskName, setNewJobdeskName] = useState('');
+  const [newJobdeskDesc, setNewJobdeskDesc] = useState('');
+  const [isSavingJobdesk, setIsSavingJobdesk] = useState(false);
+  const [editingJobdesk, setEditingJobdesk] = useState<SopJobdesk | null>(null);
+
+  // Helper jobdesk name
+  const getJobdeskName = (code?: string | null) => {
+    if (!code || code === 'GENERAL') return 'Umum';
+    const found = localJobdesks.find((j) => j.code === code);
+    return found ? found.name : code;
+  };
+
   // Filter templates
   const filteredTemplates = templates
     .filter((t) => (selectedCategory === 'ALL' ? true : t.category === selectedCategory))
+    .filter((t) => (selectedJobdeskFilter === 'ALL' ? true : (t.jobdeskCode || 'GENERAL') === selectedJobdeskFilter))
     .sort((a, b) => {
       if (a.category !== b.category) return a.category.localeCompare(b.category);
       return a.sortOrder - b.sortOrder;
@@ -92,10 +130,8 @@ export default function SopMasterManagement({
     const areAllSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedIds.includes(id));
 
     if (areAllSelected) {
-      // Unselect only the filtered ones
       setSelectedIds((prev) => prev.filter((id) => !allFilteredIds.includes(id)));
     } else {
-      // Add all filtered ones that aren't already selected
       setSelectedIds((prev) => Array.from(new Set([...prev, ...allFilteredIds])));
     }
   };
@@ -125,7 +161,6 @@ export default function SopMasterManagement({
       if (data.items) {
         onTemplatesChange(data.items);
       } else {
-        // Fallback refresh
         const refreshed = await fetch('/api/admin/inspections/templates');
         const rData = await refreshed.json();
         if (rData.items) onTemplatesChange(rData.items);
@@ -135,6 +170,7 @@ export default function SopMasterManagement({
       setSelectedIds([]);
       setIsBulkDeleteModalOpen(false);
       setIsBulkMoveModalOpen(false);
+      setIsBulkMoveJobdeskModalOpen(false);
     } catch (err: any) {
       showToast(err.message || 'Gagal menjalankan aksi massal', 'error');
     } finally {
@@ -146,6 +182,7 @@ export default function SopMasterManagement({
   const openCreateModal = () => {
     setEditingItem(null);
     setFormCategory(selectedCategory === 'ALL' ? 'OPENING' : selectedCategory);
+    setFormJobdeskCode(selectedJobdeskFilter === 'ALL' ? 'GENERAL' : selectedJobdeskFilter);
     setFormTitle('');
     setFormDescription('');
     setFormPhotoRequired(false);
@@ -161,6 +198,7 @@ export default function SopMasterManagement({
   const openEditModal = (item: SopTemplateItem) => {
     setEditingItem(item);
     setFormCategory(item.category as any);
+    setFormJobdeskCode(item.jobdeskCode || 'GENERAL');
     setFormTitle(item.title);
     setFormDescription(item.description || '');
     setFormPhotoRequired(item.isPhotoRequired);
@@ -169,7 +207,7 @@ export default function SopMasterManagement({
     setIsModalOpen(true);
   };
 
-  // Submit Create or Edit
+  // Submit Create or Edit Item
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) {
@@ -180,13 +218,13 @@ export default function SopMasterManagement({
     setIsSaving(true);
     try {
       if (editingItem) {
-        // Edit existing
         const res = await fetch('/api/admin/inspections/templates', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: editingItem.id,
             category: formCategory,
+            jobdeskCode: formJobdeskCode,
             title: formTitle,
             description: formDescription,
             isPhotoRequired: formPhotoRequired,
@@ -202,12 +240,12 @@ export default function SopMasterManagement({
         onTemplatesChange(next);
         showToast('Butir SOP berhasil diperbarui', 'success');
       } else {
-        // Create new
         const res = await fetch('/api/admin/inspections/templates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             category: formCategory,
+            jobdeskCode: formJobdeskCode,
             title: formTitle,
             description: formDescription,
             isPhotoRequired: formPhotoRequired,
@@ -230,73 +268,68 @@ export default function SopMasterManagement({
     }
   };
 
-  // Toggle active status
+  // Quick Toggle Active
   const handleToggleActive = async (item: SopTemplateItem) => {
     try {
-      const updatedStatus = !item.isActive;
       const res = await fetch('/api/admin/inspections/templates', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: item.id,
-          isActive: updatedStatus,
+          isActive: !item.isActive,
         }),
       });
 
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Gagal mengubah status');
 
-      const next = templates.map((t) => (t.id === item.id ? data.item : t));
-      onTemplatesChange(next);
-      showToast(`SOP "${item.title}" ${updatedStatus ? 'diaktifkan' : 'dinonaktifkan'}`, 'success');
+      onTemplatesChange(templates.map((t) => (t.id === item.id ? data.item : t)));
+      showToast(`Status SOP diubah menjadi ${!item.isActive ? 'Aktif' : 'Non-Aktif'}`, 'success');
     } catch (err: any) {
       showToast(err.message || 'Gagal mengubah status', 'error');
     }
   };
 
-  // Reorder priority (Move up or down)
+  // Reorder Item
   const handleReorder = async (item: SopTemplateItem, direction: 'up' | 'down') => {
-    const sameCatItems = templates
-      .filter((t) => t.category === item.category)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
+    const catItems = filteredTemplates.filter((t) => t.category === item.category);
+    const currentIndex = catItems.findIndex((t) => t.id === item.id);
+    if (currentIndex === -1) return;
 
-    const index = sameCatItems.findIndex((t) => t.id === item.id);
-    if (direction === 'up' && index <= 0) return;
-    if (direction === 'down' && index >= sameCatItems.length - 1) return;
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= catItems.length) return;
 
-    const targetItem = direction === 'up' ? sameCatItems[index - 1] : sameCatItems[index + 1];
-
-    const currentOrder = item.sortOrder;
-    const targetOrder = targetItem.sortOrder;
+    const targetItem = catItems[targetIndex];
+    const newOrder = targetItem.sortOrder;
+    const oldOrder = item.sortOrder;
 
     try {
       await Promise.all([
         fetch('/api/admin/inspections/templates', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: item.id, sortOrder: targetOrder }),
+          body: JSON.stringify({ id: item.id, sortOrder: newOrder }),
         }),
         fetch('/api/admin/inspections/templates', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: targetItem.id, sortOrder: currentOrder }),
+          body: JSON.stringify({ id: targetItem.id, sortOrder: oldOrder }),
         }),
       ]);
 
-      const next = templates.map((t) => {
-        if (t.id === item.id) return { ...t, sortOrder: targetOrder };
-        if (t.id === targetItem.id) return { ...t, sortOrder: currentOrder };
+      const updated = templates.map((t) => {
+        if (t.id === item.id) return { ...t, sortOrder: newOrder };
+        if (t.id === targetItem.id) return { ...t, sortOrder: oldOrder };
         return t;
       });
 
-      onTemplatesChange(next);
-      showToast('Urutan SOP berhasil disesuaikan', 'success');
+      onTemplatesChange(updated);
     } catch (err: any) {
-      showToast('Gagal mengubah urutan SOP', 'error');
+      showToast('Gagal mengubah urutan', 'error');
     }
   };
 
-  // Delete single item
+  // Delete Single Item
   const handleDeleteItem = async () => {
     if (!deletingId) return;
     setIsDeleting(true);
@@ -317,6 +350,95 @@ export default function SopMasterManagement({
       showToast(err.message || 'Gagal menghapus SOP', 'error');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // JOBDESK CRUD HANDLERS
+  const handleCreateJobdesk = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newJobdeskName.trim()) {
+      showToast('Nama Peran / Jobdesk wajib diisi', 'error');
+      return;
+    }
+
+    const code = (newJobdeskCode || newJobdeskName).toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    setIsSavingJobdesk(true);
+
+    try {
+      const res = await fetch('/api/admin/inspections/jobdesks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          name: newJobdeskName.trim(),
+          description: newJobdeskDesc.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menambahkan jobdesk');
+
+      const updated = [...localJobdesks, data.jobdesk];
+      setLocalJobdesks(updated);
+      if (onJobdesksChange) onJobdesksChange(updated);
+
+      setNewJobdeskCode('');
+      setNewJobdeskName('');
+      setNewJobdeskDesc('');
+      showToast(`Peran Jobdesk "${data.jobdesk.name}" berhasil ditambahkan!`, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menyimpan jobdesk', 'error');
+    } finally {
+      setIsSavingJobdesk(false);
+    }
+  };
+
+  const handleUpdateJobdesk = async (j: SopJobdesk) => {
+    try {
+      const res = await fetch('/api/admin/inspections/jobdesks', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: j.id,
+          name: j.name,
+          description: j.description,
+          isActive: j.isActive,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal memperbarui jobdesk');
+
+      const updated = localJobdesks.map((item) => (item.id === j.id ? data.jobdesk : item));
+      setLocalJobdesks(updated);
+      if (onJobdesksChange) onJobdesksChange(updated);
+      setEditingJobdesk(null);
+      showToast('Peran Jobdesk berhasil diperbarui', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal memperbarui', 'error');
+    }
+  };
+
+  const handleDeleteJobdesk = async (id: string, code: string) => {
+    if (code === 'GENERAL') {
+      showToast('Jobdesk Umum (GENERAL) tidak boleh dihapus', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/inspections/jobdesks?id=${id}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Gagal menghapus jobdesk');
+
+      const updated = localJobdesks.filter((j) => j.id !== id);
+      setLocalJobdesks(updated);
+      if (onJobdesksChange) onJobdesksChange(updated);
+      showToast(data.message || 'Peran Jobdesk dihapus', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menghapus jobdesk', 'error');
     }
   };
 
@@ -343,75 +465,136 @@ export default function SopMasterManagement({
             Pengaturan Master Template SOP Outlet
           </h3>
           <p className="text-xs text-slate-500 mt-0.5">
-            Admin Utama dapat mengelola butir SOP secara individual maupun menggunakan fitur aksi massal (Bulk Action).
+            Admin Utama dapat mengatur butir SOP per shift dan peran jobdesk, serta menggunakan aksi massal (Bulk Action).
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openCreateModal}
-          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow transition-all shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tambah Butir SOP Baru</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsJobdesksModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition-all"
+          >
+            <Layers className="w-4 h-4 text-orange-500" />
+            <span>Kelola Peran Jobdesk ({localJobdesks.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={openCreateModal}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 shadow-sm hover:shadow transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Butir SOP</span>
+          </button>
+        </div>
       </div>
 
-      {/* Category Tabs & Select All Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {[
-            { id: 'ALL', label: 'Semua Kategori' },
-            { id: 'OPENING', label: 'Buka Toko (Opening)' },
-            { id: 'CLOSING', label: 'Tutup Toko (Closing)' },
-            { id: 'ROUTINE', label: 'Kebersihan & Rutin' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setSelectedCategory(tab.id as any)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                selectedCategory === tab.id
-                  ? 'bg-slate-900 text-white shadow-sm'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+      {/* Filter Bar: Category & Jobdesk */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+        {/* Category Filters */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-500 mr-1">Shift:</span>
+            {[
+              { id: 'ALL', label: 'Semua Shift' },
+              { id: 'OPENING', label: 'Buka Toko' },
+              { id: 'CLOSING', label: 'Tutup Toko' },
+              { id: 'ROUTINE', label: 'Rutin Harian' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedCategory(tab.id as any)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  selectedCategory === tab.id
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Select All Checkbox Button */}
+          {filteredTemplates.length > 0 && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSelectAll}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  areAllFilteredSelected
+                    ? 'bg-orange-50 text-orange-700 border-orange-200'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {areAllFilteredSelected ? (
+                  <CheckSquare className="w-4 h-4 text-orange-600" />
+                ) : (
+                  <Square className="w-4 h-4 text-slate-400" />
+                )}
+                <span>{areAllFilteredSelected ? 'Batalkan Pilih Semua' : 'Pilih Semua'} ({filteredTemplates.length})</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Select All Checkbox Button */}
-        {filteredTemplates.length > 0 && (
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                areAllFilteredSelected
-                  ? 'bg-orange-50 text-orange-700 border-orange-200'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              {areAllFilteredSelected ? (
-                <CheckSquare className="w-4 h-4 text-orange-600" />
-              ) : (
-                <Square className="w-4 h-4 text-slate-400" />
-              )}
-              <span>{areAllFilteredSelected ? 'Batalkan Pilih Semua' : 'Pilih Semua'} ({filteredTemplates.length})</span>
-            </button>
-          </div>
-        )}
+        {/* Jobdesk Filters */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+            <Layers className="w-3 h-3 text-orange-500" /> Jobdesk:
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedJobdeskFilter('ALL')}
+            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+              selectedJobdeskFilter === 'ALL'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Semua Jobdesk
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedJobdeskFilter('GENERAL')}
+            className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+              selectedJobdeskFilter === 'GENERAL'
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Umum
+          </button>
+          {localJobdesks
+            .filter((j) => j.code !== 'GENERAL')
+            .map((j) => (
+              <button
+                key={j.code}
+                type="button"
+                onClick={() => setSelectedJobdeskFilter(j.code)}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all ${
+                  selectedJobdeskFilter === j.code
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {j.name}
+              </button>
+            ))}
+        </div>
       </div>
 
       {/* Items Table / Cards */}
       <div className="space-y-3">
         {filteredTemplates.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-3xl border border-slate-200/80 shadow-sm">
-            <p className="text-xs text-slate-400 font-medium">Belum ada butir SOP pada kategori ini.</p>
+            <p className="text-xs text-slate-400 font-medium">Belum ada butir SOP pada filter shift dan jobdesk ini.</p>
           </div>
         ) : (
           filteredTemplates.map((item) => {
             const isSelected = selectedIds.includes(item.id);
+            const jobdeskLabel = getJobdeskName(item.jobdeskCode);
 
             return (
               <div
@@ -461,10 +644,17 @@ export default function SopMasterManagement({
                     </button>
                   </div>
 
-                  <div className="space-y-1 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-extrabold text-slate-400">#{item.sortOrder}</span>
+                  {/* Content Details */}
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {getCategoryBadge(item.category)}
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200 flex items-center gap-1">
+                        <Layers className="w-2.5 h-2.5" />
+                        {jobdeskLabel}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400">
+                        Urutan #{item.sortOrder}
+                      </span>
                       {item.isPhotoRequired && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
                           <Camera className="w-2.5 h-2.5" /> Wajib Foto
@@ -477,25 +667,30 @@ export default function SopMasterManagement({
                       )}
                     </div>
 
-                    <h4 className="text-sm font-bold text-slate-800 leading-snug">{item.title}</h4>
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-900">
+                      {item.title}
+                    </h4>
+
                     {item.description && (
-                      <p className="text-xs text-slate-500 leading-relaxed">{item.description}</p>
+                      <p className="text-[11px] text-slate-500 leading-normal line-clamp-2">
+                        {item.description}
+                      </p>
                     )}
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                {/* Item Actions */}
+                <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                   {/* Toggle Active Button */}
                   <button
                     type="button"
                     onClick={() => handleToggleActive(item)}
-                    className={`p-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all flex items-center gap-1.5 ${
                       item.isActive
                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                         : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
                     }`}
-                    title={item.isActive ? 'Klik untuk non-aktifkan' : 'Klik untuk aktifkan'}
+                    title={item.isActive ? 'Nonaktifkan tugas ini' : 'Aktifkan tugas ini'}
                   >
                     <Power className="w-3.5 h-3.5" />
                     <span className="text-[11px]">{item.isActive ? 'Aktif' : 'Non-Aktif'}</span>
@@ -531,7 +726,7 @@ export default function SopMasterManagement({
       {/* FLOATING STICKY BULK ACTION BAR                                           */}
       {/* ========================================================================= */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-2xl px-4 animate-in slide-in-from-bottom duration-300">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-3xl px-4 animate-in slide-in-from-bottom duration-300">
           <div className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-2xl border border-slate-700/80 flex flex-col sm:flex-row items-center justify-between gap-4 backdrop-blur-md">
             <div className="flex items-center gap-3">
               <span className="px-3 py-1 rounded-full bg-orange-500 text-white font-extrabold text-xs shadow-sm">
@@ -544,64 +739,76 @@ export default function SopMasterManagement({
 
             {/* Bulk Action Buttons */}
             <div className="flex flex-wrap items-center justify-center gap-2">
-              {/* Aktifkan Semua */}
+              {/* Aktifkan */}
               <button
                 type="button"
                 disabled={isBulkLoading}
                 onClick={() => handleExecuteBulkAction('ACTIVATE')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-emerald-600 text-white transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-emerald-600 text-white transition-colors flex items-center gap-1.5"
                 title="Aktifkan butir terpilih"
               >
                 <Power className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Aktifkan</span>
               </button>
 
-              {/* Nonaktifkan Semua */}
+              {/* Non-Aktif */}
               <button
                 type="button"
                 disabled={isBulkLoading}
                 onClick={() => handleExecuteBulkAction('DEACTIVATE')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
                 title="Nonaktifkan butir terpilih"
               >
                 <Power className="w-3.5 h-3.5 text-slate-400" />
                 <span>Non-Aktif</span>
               </button>
 
-              {/* Wajibkan Foto */}
+              {/* Wajib Foto */}
               <button
                 type="button"
                 disabled={isBulkLoading}
                 onClick={() => handleExecuteBulkAction('SET_PHOTO_REQUIRED')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-amber-600 text-white transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-amber-600 text-white transition-colors flex items-center gap-1.5"
                 title="Wajibkan foto bukti"
               >
                 <Camera className="w-3.5 h-3.5 text-amber-400" />
                 <span>Wajib Foto</span>
               </button>
 
-              {/* Opsional Foto */}
+              {/* Foto Opsional */}
               <button
                 type="button"
                 disabled={isBulkLoading}
                 onClick={() => handleExecuteBulkAction('SET_PHOTO_OPTIONAL')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5"
                 title="Jadikan foto opsional"
               >
                 <CameraOff className="w-3.5 h-3.5 text-slate-400" />
                 <span>Foto Opsional</span>
               </button>
 
-              {/* Pindah Kategori Modal Trigger */}
+              {/* Pindah Shift */}
               <button
                 type="button"
                 disabled={isBulkLoading}
                 onClick={() => setIsBulkMoveModalOpen(true)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-orange-600 text-white transition-colors flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-orange-600 text-white transition-colors flex items-center gap-1.5"
                 title="Pindahkan shift/kategori"
               >
                 <FolderInput className="w-3.5 h-3.5 text-orange-400" />
                 <span>Pindah Shift</span>
+              </button>
+
+              {/* Pindah Jobdesk */}
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => setIsBulkMoveJobdeskModalOpen(true)}
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 hover:bg-orange-600 text-white transition-colors flex items-center gap-1.5"
+                title="Pindahkan peran jobdesk"
+              >
+                <Layers className="w-3.5 h-3.5 text-amber-400" />
+                <span>Pindah Jobdesk</span>
               </button>
 
               {/* Hapus Massal */}
@@ -609,7 +816,7 @@ export default function SopMasterManagement({
                 type="button"
                 disabled={isBulkLoading}
                 onClick={() => setIsBulkDeleteModalOpen(true)}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-colors flex items-center gap-1.5 shadow-sm"
+                className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-colors flex items-center gap-1.5 shadow-sm"
                 title="Hapus massal butir terpilih"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -631,7 +838,7 @@ export default function SopMasterManagement({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: BULK MOVE CATEGORY                                                 */}
+      {/* MODAL: BULK MOVE SHIFT CATEGORY                                           */}
       {/* ========================================================================= */}
       {isBulkMoveModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -678,6 +885,65 @@ export default function SopMasterManagement({
                 className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1"
               >
                 {isBulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Pindahkan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: BULK MOVE JOBDESK                                                  */}
+      {/* ========================================================================= */}
+      {isBulkMoveJobdeskModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-white rounded-3xl w-full max-w-sm p-6 shadow-2xl border border-orange-100 space-y-4 text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+              <Layers className="w-6 h-6" />
+            </div>
+
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-extrabold text-slate-900">Pindahkan Jobdesk Massal</h3>
+              <p className="text-slate-500">
+                Pindahkan <span className="font-bold text-orange-600">{selectedIds.length} butir SOP</span> ke peran jobdesk:
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-slate-700">Pilih Peran Jobdesk Tujuan:</label>
+              <select
+                value={targetMoveJobdeskCode}
+                onChange={(e) => setTargetMoveJobdeskCode(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800"
+              >
+                <option value="GENERAL">Umum (Semua Peran)</option>
+                {localJobdesks
+                  .filter((j) => j.code !== 'GENERAL')
+                  .map((j) => (
+                    <option key={j.code} value={j.code}>
+                      {j.name} ({j.code})
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsBulkMoveJobdeskModalOpen(false)}
+                className="flex-1 py-2 rounded-xl text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isBulkLoading}
+                onClick={() => handleExecuteBulkAction('MOVE_JOBDESK', { jobdeskCode: targetMoveJobdeskCode })}
+                className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 shadow-sm disabled:opacity-50 flex items-center justify-center gap-1"
+              >
+                {isBulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Terapkan'}
               </button>
             </div>
           </div>
@@ -750,18 +1016,38 @@ export default function SopMasterManagement({
             </div>
 
             <form onSubmit={handleSaveItem} className="p-6 space-y-4 text-xs">
-              {/* Kategori Shift */}
-              <div className="space-y-1">
-                <label className="font-bold text-slate-700">Kategori Shift:</label>
-                <select
-                  value={formCategory}
-                  onChange={(e) => setFormCategory(e.target.value as any)}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-700"
-                >
-                  <option value="OPENING">Buka Toko (Opening Shift)</option>
-                  <option value="CLOSING">Tutup Toko (Closing Shift)</option>
-                  <option value="ROUTINE">Kebersihan & Rutin Harian (Mid-Shift)</option>
-                </select>
+              {/* Kategori Shift & Peran Jobdesk */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Kategori Shift:</label>
+                  <select
+                    value={formCategory}
+                    onChange={(e) => setFormCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-700"
+                  >
+                    <option value="OPENING">Buka Toko (Opening Shift)</option>
+                    <option value="CLOSING">Tutup Toko (Closing Shift)</option>
+                    <option value="ROUTINE">Kebersihan & Rutin Harian (Mid-Shift)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Peran / Jobdesk Tugas:</label>
+                  <select
+                    value={formJobdeskCode}
+                    onChange={(e) => setFormJobdeskCode(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-700"
+                  >
+                    <option value="GENERAL">Umum (Semua Peran)</option>
+                    {localJobdesks
+                      .filter((j) => j.code !== 'GENERAL')
+                      .map((j) => (
+                        <option key={j.code} value={j.code}>
+                          {j.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
               </div>
 
               {/* Judul SOP */}
@@ -860,6 +1146,144 @@ export default function SopMasterManagement({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: KELOLA PERAN JOBDESK (CRUD ADMIN UTAMA)                             */}
+      {/* ========================================================================= */}
+      {isJobdesksModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div
+            className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl border border-orange-100 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5" />
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base">Kelola Peran & Jobdesk Staf</h3>
+                  <p className="text-[11px] text-orange-100">Kustomisasi peran tugas shift (Barista, Kasir, Kitchen, dll.)</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsJobdesksModalOpen(false)}
+                className="p-1.5 rounded-xl hover:bg-white/20 text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-6 text-xs flex-1">
+              {/* Form Tambah Jobdesk Baru */}
+              <form onSubmit={handleCreateJobdesk} className="bg-orange-50/50 p-4 rounded-2xl border border-orange-100 space-y-3">
+                <h4 className="font-bold text-orange-950 flex items-center gap-1.5">
+                  <Plus className="w-4 h-4 text-orange-600" />
+                  Tambah Peran Jobdesk Baru
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Nama Peran:</label>
+                    <input
+                      type="text"
+                      value={newJobdeskName}
+                      onChange={(e) => setNewJobdeskName(e.target.value)}
+                      placeholder="Contoh: Barista Espresso / Server"
+                      required
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Kode Unik (Opsional):</label>
+                    <input
+                      type="text"
+                      value={newJobdeskCode}
+                      onChange={(e) => setNewJobdeskCode(e.target.value.toUpperCase())}
+                      placeholder="Contoh: BARISTA_SPECIALTY"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800 font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Deskripsi Tugas (Opsional):</label>
+                  <input
+                    type="text"
+                    value={newJobdeskDesc}
+                    onChange={(e) => setNewJobdeskDesc(e.target.value)}
+                    placeholder="Contoh: Menangani kalibrasi espresso, steaming susu, dan kebersihan bar kopi"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 text-slate-800"
+                  />
+                </div>
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="submit"
+                    disabled={isSavingJobdesk}
+                    className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isSavingJobdesk ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                    <span>Simpan Peran Baru</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Daftar Jobdesk yang Ada */}
+              <div className="space-y-2.5">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wider text-[11px]">
+                  Daftar Peran Jobdesk Aktif ({localJobdesks.length})
+                </h4>
+
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                  {localJobdesks.map((j) => (
+                    <div key={j.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 transition-colors">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-slate-800 text-xs">{j.name}</span>
+                          <span className="px-2 py-0.5 rounded-md text-[9px] font-mono font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                            {j.code}
+                          </span>
+                          {j.code === 'GENERAL' && (
+                            <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-amber-100 text-amber-800">
+                              Bawaan Sistem
+                            </span>
+                          )}
+                        </div>
+                        {j.description && (
+                          <p className="text-[11px] text-slate-500">{j.description}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {j.code !== 'GENERAL' && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteJobdesk(j.id, j.code)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"
+                            title="Hapus Jobdesk"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 flex justify-end bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => setIsJobdesksModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold text-xs transition-all"
+              >
+                Selesai
+              </button>
+            </div>
           </div>
         </div>
       )}

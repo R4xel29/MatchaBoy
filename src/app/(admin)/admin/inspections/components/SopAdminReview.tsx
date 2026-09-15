@@ -24,12 +24,14 @@ import { useToast } from '@/components/ui/Toast';
 
 interface SopAdminReviewProps {
   submissions: any[];
+  jobdesks?: any[];
   onVerificationSuccess: (updatedSubmission: any) => void;
   onPreviewPhoto: (url: string, title?: string) => void;
 }
 
 export default function SopAdminReview({
   submissions,
+  jobdesks = [],
   onVerificationSuccess,
   onPreviewPhoto,
 }: SopAdminReviewProps) {
@@ -84,6 +86,12 @@ export default function SopAdminReview({
     if (selectedStatusFilter !== 'ALL' && sub.status !== selectedStatusFilter) return false;
     return true;
   });
+
+  const getJobdeskName = (code?: string | null) => {
+    if (!code || code === 'GENERAL') return 'Umum';
+    const found = jobdesks.find((j) => j.code === code);
+    return found ? found.name : code;
+  };
 
   const getShiftBadge = (type: string) => {
     switch (type) {
@@ -201,6 +209,14 @@ export default function SopAdminReview({
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       {getShiftBadge(sub.shiftType)}
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+                        {getJobdeskName(sub.jobdeskCode)}
+                      </span>
+                      {sub.isRevised && (
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                          Revisi
+                        </span>
+                      )}
                       <span className="text-[11px] text-slate-400">
                         {new Date(sub.createdAt).toLocaleDateString('id-ID', {
                           day: 'numeric',
@@ -252,11 +268,19 @@ export default function SopAdminReview({
             {/* Header */}
             <div className="px-6 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-between shrink-0">
               <div className="space-y-0.5">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <ShieldCheck className="w-5 h-5" />
                   <h3 className="font-extrabold text-sm sm:text-base">
                     Verifikasi Laporan SOP: {selectedSubmission.shiftType === 'OPENING' ? 'Buka Toko' : selectedSubmission.shiftType === 'CLOSING' ? 'Tutup Toko' : 'Rutin'}
                   </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white border border-white/30">
+                    {getJobdeskName(selectedSubmission.jobdeskCode)}
+                  </span>
+                  {selectedSubmission.isRevised && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-900/60 text-purple-200 border border-purple-300/40">
+                      Revisi Dikirim
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-orange-100">
                   Diajukan oleh {selectedSubmission.user?.name || 'Staf'} pada {new Date(selectedSubmission.createdAt).toLocaleString('id-ID')}

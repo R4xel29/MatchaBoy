@@ -25,6 +25,7 @@ export async function POST(request: Request) {
       'SET_PHOTO_REQUIRED',
       'SET_PHOTO_OPTIONAL',
       'MOVE_CATEGORY',
+      'MOVE_JOBDESK',
       'DELETE',
     ];
 
@@ -82,6 +83,18 @@ export async function POST(request: Request) {
           ROUTINE: 'Kebersihan & Rutin',
         };
         message = `Berhasil memindahkan ${ids.length} butir SOP ke kategori ${catLabels[targetCategory] || targetCategory}.`;
+        break;
+      }
+      case 'MOVE_JOBDESK': {
+        const targetJobdesk = payload?.jobdeskCode;
+        if (!targetJobdesk) {
+          return NextResponse.json({ error: 'Kode jobdesk tujuan wajib disertakan' }, { status: 400 });
+        }
+        await prisma.sopTemplateItem.updateMany({
+          where: { id: { in: ids } },
+          data: { jobdeskCode: targetJobdesk.toUpperCase() },
+        });
+        message = `Berhasil mengubah penugasan Jobdesk ${ids.length} butir SOP ke '${targetJobdesk}'.`;
         break;
       }
       case 'DELETE': {

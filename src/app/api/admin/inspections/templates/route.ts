@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { category, title, description, isPhotoRequired, sortOrder } = body;
+    const { category, jobdeskCode, title, description, isPhotoRequired, sortOrder } = body;
 
     if (!title || !title.trim()) {
       return NextResponse.json({ error: 'Judul / Butir SOP wajib diisi' }, { status: 400 });
@@ -52,6 +52,7 @@ export async function POST(req: Request) {
     const newItem = await prisma.sopTemplateItem.create({
       data: {
         category: validCategory,
+        jobdeskCode: jobdeskCode?.trim() ? jobdeskCode.trim().toUpperCase() : 'GENERAL',
         title: title.trim(),
         description: description?.trim() || null,
         isPhotoRequired: Boolean(isPhotoRequired),
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
           itemId: newItem.id,
           title: newItem.title,
           category: newItem.category,
+          jobdeskCode: newItem.jobdeskCode,
         }),
       },
     });
@@ -90,7 +92,7 @@ export async function PUT(req: Request) {
     }
 
     const body = await req.json();
-    const { id, category, title, description, isPhotoRequired, sortOrder, isActive } = body;
+    const { id, category, jobdeskCode, title, description, isPhotoRequired, sortOrder, isActive } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'ID butir SOP wajib disertakan' }, { status: 400 });
@@ -105,6 +107,7 @@ export async function PUT(req: Request) {
       where: { id },
       data: {
         category: category !== undefined ? category : existing.category,
+        jobdeskCode: jobdeskCode !== undefined ? (jobdeskCode?.trim() ? jobdeskCode.trim().toUpperCase() : 'GENERAL') : existing.jobdeskCode,
         title: title !== undefined ? title.trim() : existing.title,
         description: description !== undefined ? description?.trim() : existing.description,
         isPhotoRequired: isPhotoRequired !== undefined ? Boolean(isPhotoRequired) : existing.isPhotoRequired,

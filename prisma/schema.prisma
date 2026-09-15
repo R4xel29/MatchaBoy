@@ -1134,9 +1134,21 @@ model FloorElement {
 // -----------------------------------------------------------------------------
 // SOP OUTLET & INSPECTIONS
 // -----------------------------------------------------------------------------
+model SopJobdesk {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?  @db.Text
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model SopTemplateItem {
   id              String   @id @default(cuid())
   category        String   // OPENING, CLOSING, ROUTINE
+  jobdeskCode     String   @default("GENERAL") // BARISTA, CASHIER, KITCHEN, CLEANING, GENERAL
   title           String
   description     String?  @db.Text
   isPhotoRequired Boolean  @default(false)
@@ -1149,6 +1161,7 @@ model SopTemplateItem {
 model SopSubmission {
   id            String              @id @default(cuid())
   shiftType     String              // OPENING, CLOSING, ROUTINE
+  jobdeskCode   String?             // Peran yang dipilih staf saat mengisi
   userId        String
   user          User                @relation("UserSopSubmissions", fields: [userId], references: [id])
   notes         String?             @db.Text
@@ -1158,6 +1171,8 @@ model SopSubmission {
   reviewedBy    User?               @relation("AdminReviewedSopSubmissions", fields: [reviewedById], references: [id])
   reviewedAt    DateTime?
   reviewNotes   String?             @db.Text
+  isRevised     Boolean             @default(false)
+  revisedAt     DateTime?
   items         SopSubmissionItem[]
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -1174,5 +1189,6 @@ model SopSubmissionItem {
   notes          String?       @db.Text
   createdAt      DateTime      @default(now())
 }
+
 
 

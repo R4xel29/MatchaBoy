@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import InspectionsClient from './InspectionsClient';
-import { getOrSeedSopTemplates } from '@/lib/sop-defaults';
+import { getOrSeedSopTemplates, getOrSeedSopJobdesks } from '@/lib/sop-defaults';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -10,14 +10,18 @@ export default async function AdminInspectionsPage() {
   const session = await auth();
   const userRole = session?.user?.role || 'CASHIER';
   const userName = session?.user?.name || 'Staf';
+  const currentUserId = session?.user?.id || '';
   const isAdmin = userRole === 'ADMIN';
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-  // Ambil template SOP (auto-seed bila belum ada di DB)
-  const sopTemplates = await getOrSeedSopTemplates(isAdmin);
+  // Ambil template SOP & Jobdesks (auto-seed bila belum ada di DB)
+  const [sopTemplates, sopJobdesks] = await Promise.all([
+    getOrSeedSopTemplates(isAdmin),
+    getOrSeedSopJobdesks(isAdmin),
+  ]);
 
   // Ambil riwayat submissions SOP terkini
   const [todaySubmissions, recentSubmissions] = await Promise.all([
@@ -172,12 +176,14 @@ export default async function AdminInspectionsPage() {
       <InspectionsClient
         userRole={userRole}
         userName={userName}
+        currentUserId={currentUserId}
         initialShifts={shifts}
         initialIngredients={ingredients}
         initialMovements={recentMovements}
         initialLogs={recentLogs}
         initialTodayChecklists={todayChecklistLogs}
         initialTemplates={sopTemplates}
+        initialJobdesks={sopJobdesks}
         initialTodaySubmissions={todaySubmissions}
         initialRecentSubmissions={recentSubmissions}
       />

@@ -89,7 +89,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { type, items, notes, galleryImages } = body;
+    const { type, jobdeskCode, items, notes, galleryImages } = body;
 
     const validTypes = ['OPENING', 'CLOSING', 'ROUTINE'];
     if (!type || !validTypes.includes(type)) {
@@ -107,6 +107,7 @@ export async function POST(req: Request) {
     const submission = await prisma.sopSubmission.create({
       data: {
         shiftType: type,
+        jobdeskCode: jobdeskCode || 'GENERAL',
         userId: session.user.id,
         notes: notes?.trim() || null,
         galleryImages: galleryJson,
@@ -137,6 +138,7 @@ export async function POST(req: Request) {
     const logDetails = JSON.stringify({
       submissionId: submission.id,
       shiftType: type,
+      jobdeskCode: submission.jobdeskCode,
       staffName,
       totalItems,
       completedItems,
@@ -239,5 +241,104 @@ export async function PATCH(req: Request) {
   } catch (error: any) {
     console.error('[CHECKLIST_PATCH_ERROR]', error);
     return NextResponse.json({ error: error.message || 'Gagal memverifikasi laporan SOP' }, { status: 500 });
+  }
+}
+
+// PUT: Revisi laporan SOP oleh staf pengirim
+export async function PUT(req: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user || (session.user.role !== 'ADMIN' && session.user.role !== 'CASHIER')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await req.json();
+    const { submissionId, items, notes, galleryImages } = body;
+
+    if (!submissionId) {
+      return NextResponse.json({ error: 'ID laporan submission wajib disertakan' }, { status: 400 });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return NextResponse.json({ error: 'Daftar butir checklist wajib diisi' }, { status: 400 });
+    }
+
+    const existing = await prisma.sopSubmission.findUnique({
+      where: { id: submissionId },
+    });
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Laporan tidak ditemukan' }, { status: 404 });
+    }
+
+    // Pastikan hanya pengirim laporan atau Admin yang bisa merevisi
+    if (session.user.role !== 'ADMIN' && existing.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Anda hanya dapat merevisi laporan Anda sendiri' }, { status: 403 });
+    }
+
+    const galleryJson = Array.isArray(galleryImages) ? JSON.stringify(galleryImages) : (galleryImages !== undefined ? null : existing.galleryImages);
+
+    // Gunakan transaksi untuk menghapus item lama dan membuat item baru yang telah direvisi
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.sopSubmissionItem.deleteMany({
+        where: { submissionId },
+      });
+
+      return tx.sopSubmission.update({
+        where: { id: submissionId },
+        data: {
+          status: 'PENDING_REVIEW',
+          isRevised: true,
+          revisedAt: new Date(),
+          notes: notes !== undefined ? (notes?.trim() || null) : existing.notes,
+          galleryImages: galleryJson,
+          items: {
+            create: items.map((item: any) => ({
+              templateItemId: item.templateItemId || item.id || null,
+              label: item.label || item.title || 'Butir SOP',
+              isChecked: Boolean(item.checked),
+              photoUrl: item.photoUrl || null,
+              notes: item.notes?.trim() || null,
+            })),
+          },
+        },
+        include: {
+          user: {
+            select: { id: true, name: true, role: true, email: true },
+          },
+          reviewedBy: {
+            select: { id: true, name: true, role: true },
+          },
+          items: true,
+        },
+      });
+    });
+
+    // Catat log revisi
+    await prisma.activityLog.create({
+      data: {
+        userId: session.user.id,
+        action: 'REVISE',
+        entity: 'SOP_REVISED',
+        details: JSON.stringify({
+          submissionId,
+          shiftType: updated.shiftType,
+          jobdeskCode: updated.jobdeskCode,
+          staffName: session.user.name,
+          totalItems: items.length,
+          completedItems: items.filter((i: any) => i.checked).length,
+          submittedAt: new Date().toISOString(),
+        }),
+      },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Laporan perbaikan SOP berhasil dikirim ulang untuk ditinjau!',
+      submission: updated,
+    });
+  } catch (error: any) {
+    console.error('[CHECKLIST_PUT_ERROR]', error);
+    return NextResponse.json({ error: error.message || 'Gagal merevisi laporan SOP' }, { status: 500 });
   }
 }

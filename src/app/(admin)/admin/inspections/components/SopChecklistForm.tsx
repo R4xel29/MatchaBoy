@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ClipboardCheck,
   CheckCircle2,
@@ -13,13 +13,19 @@ import {
   ZoomIn,
   Plus,
   Info,
-  Sparkles
+  Sparkles,
+  Layers,
+  RotateCcw,
+  MessageSquare,
+  X,
+  ArrowRight
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 
-interface SopTemplateItem {
+export interface SopTemplateItem {
   id: string;
   category: string;
+  jobdeskCode?: string;
   title: string;
   description: string | null;
   isPhotoRequired: boolean;
@@ -27,25 +33,41 @@ interface SopTemplateItem {
   isActive: boolean;
 }
 
+export interface SopJobdesk {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  sortOrder: number;
+  isActive: boolean;
+}
+
 interface SopChecklistFormProps {
   templates: SopTemplateItem[];
+  jobdesks?: SopJobdesk[];
   userRole: string;
   userName: string;
   todaySubmissions: any[];
+  revisingSubmission?: any | null;
+  onCancelRevision?: () => void;
   onSubmissionSuccess: (submission: any) => void;
   onPreviewPhoto: (url: string, title?: string) => void;
 }
 
 export default function SopChecklistForm({
   templates,
+  jobdesks = [],
   userRole,
   userName,
   todaySubmissions,
+  revisingSubmission,
+  onCancelRevision,
   onSubmissionSuccess,
   onPreviewPhoto,
 }: SopChecklistFormProps) {
   const { showToast } = useToast();
   const [shiftType, setShiftType] = useState<'OPENING' | 'CLOSING' | 'ROUTINE'>('OPENING');
+  const [selectedJobdeskCode, setSelectedJobdeskCode] = useState<string>('ALL');
   
   // State checklist items: key is template.id
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
@@ -65,9 +87,59 @@ export default function SopChecklistForm({
   // File input refs
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Filter templates for the current shift
+  // Handle pre-filling when in revision mode
+  useEffect(() => {
+    if (revisingSubmission) {
+      setShiftType(revisingSubmission.shiftType || 'OPENING');
+      setSelectedJobdeskCode(revisingSubmission.jobdeskCode || 'ALL');
+      setShiftNotes(revisingSubmission.notes || '');
+
+      // Parse gallery
+      try {
+        if (revisingSubmission.galleryImages) {
+          setGalleryImages(JSON.parse(revisingSubmission.galleryImages));
+        } else {
+          setGalleryImages([]);
+        }
+      } catch {
+        setGalleryImages([]);
+      }
+
+      // Prefill items
+      const newChecked: Record<string, boolean> = {};
+      const newPhotos: Record<string, string> = {};
+      const newNotes: Record<string, string> = {};
+
+      if (Array.isArray(revisingSubmission.items)) {
+        revisingSubmission.items.forEach((item: any) => {
+          const targetKey = item.templateItemId || item.id;
+          if (targetKey) {
+            newChecked[targetKey] = Boolean(item.isChecked);
+            if (item.photoUrl) newPhotos[targetKey] = item.photoUrl;
+            if (item.notes) newNotes[targetKey] = item.notes;
+          }
+        });
+      }
+
+      setCheckedItems(newChecked);
+      setItemPhotos(newPhotos);
+      setItemNotes(newNotes);
+      setFormAlert({
+        msg: `Mode revisi aktif untuk shift ${revisingSubmission.shiftType}. Perbaiki butir sesuai evaluasi Admin dan kirimkan kembali.`,
+        type: 'success',
+      });
+    }
+  }, [revisingSubmission]);
+
+  // Filter templates for current shift & selected jobdesk
   const currentTemplates = templates
-    .filter((t) => t.category === shiftType && t.isActive)
+    .filter((t) => {
+      if (t.category !== shiftType || !t.isActive) return false;
+      if (selectedJobdeskCode === 'ALL') return true;
+      const tJobdesk = t.jobdeskCode || 'GENERAL';
+      // Show if it matches selected jobdesk OR is GENERAL task
+      return tJobdesk === selectedJobdeskCode || tJobdesk === 'GENERAL';
+    })
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
   // Check today's submission status for this shift
@@ -75,9 +147,8 @@ export default function SopChecklistForm({
   const todayClosing = todaySubmissions.find((s) => s.shiftType === 'CLOSING');
   const todayRoutine = todaySubmissions.find((s) => s.shiftType === 'ROUTINE');
 
-  const currentSubmission = 
-    shiftType === 'OPENING' ? todayOpening :
-    shiftType === 'CLOSING' ? todayClosing : todayRoutine;
+  // Check if any today submission needs improvement
+  const needsImprovementSubmission = todaySubmissions.find((s) => s.status === 'NEEDS_IMPROVEMENT');
 
   // Toggle item
   const toggleItem = (id: string) => {
@@ -173,11 +244,11 @@ export default function SopChecklistForm({
   const totalCount = currentTemplates.length;
   const progressPercent = totalCount > 0 ? Math.round((checkedCount / totalCount) * 100) : 0;
 
-  // Submit checklist
+  // Submit checklist (either POST new or PUT revision)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (totalCount === 0) {
-      setFormAlert({ msg: 'Tidak ada butir SOP aktif pada shift ini', type: 'error' });
+      setFormAlert({ msg: 'Tidak ada butir SOP aktif pada shift dan jobdesk ini', type: 'error' });
       return;
     }
 
@@ -208,15 +279,28 @@ export default function SopChecklistForm({
     }));
 
     try {
-      const res = await fetch('/api/admin/inspections/checklist', {
-        method: 'POST',
+      const isRevising = Boolean(revisingSubmission);
+      const url = '/api/admin/inspections/checklist';
+      const method = isRevising ? 'PUT' : 'POST';
+      const bodyPayload = isRevising
+        ? {
+            submissionId: revisingSubmission.id,
+            items: itemsPayload,
+            notes: shiftNotes,
+            galleryImages,
+          }
+        : {
+            type: shiftType,
+            jobdeskCode: selectedJobdeskCode,
+            items: itemsPayload,
+            notes: shiftNotes,
+            galleryImages,
+          };
+
+      const res = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: shiftType,
-          items: itemsPayload,
-          notes: shiftNotes,
-          galleryImages,
-        }),
+        body: JSON.stringify(bodyPayload),
       });
 
       const data = await res.json();
@@ -243,11 +327,87 @@ export default function SopChecklistForm({
 
   return (
     <div className="space-y-6">
+      {/* BANNER NOTIFIKASI REVISI AKTIF */}
+      {revisingSubmission && (
+        <div className="bg-gradient-to-r from-amber-500 to-orange-500 rounded-3xl p-5 sm:p-6 text-white shadow-md relative overflow-hidden animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-bold mb-1">
+                <RotateCcw className="w-3.5 h-3.5" />
+                Mode Revisi Laporan Aktif
+              </div>
+              <h3 className="text-lg font-black">
+                Perbaikan Checklist {revisingSubmission.shiftType === 'OPENING' ? 'Buka Toko' : revisingSubmission.shiftType === 'CLOSING' ? 'Tutup Toko' : 'Rutin Harian'}
+              </h3>
+              {revisingSubmission.reviewNotes && (
+                <div className="mt-2 bg-white/10 backdrop-blur-md p-3 rounded-2xl border border-white/20 text-xs">
+                  <span className="font-bold block text-amber-100 mb-0.5">
+                    Catatan Evaluasi Admin ({revisingSubmission.reviewedBy?.name || 'Admin'}):
+                  </span>
+                  <p className="whitespace-pre-wrap">{revisingSubmission.reviewNotes}</p>
+                </div>
+              )}
+            </div>
+
+            {onCancelRevision && (
+              <button
+                type="button"
+                onClick={onCancelRevision}
+                className="self-start sm:self-auto px-4 py-2 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-bold text-xs transition-all border border-white/30 shrink-0 flex items-center gap-1.5"
+              >
+                <X className="w-4 h-4" />
+                Batalkan Revisi
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* BANNER PEMBERITAHUAN PERLU PERBAIKAN JIKA BELUM MODE REVISI */}
+      {!revisingSubmission && needsImprovementSubmission && (
+        <div className="bg-rose-50 border border-rose-200 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="space-y-0.5">
+              <h4 className="text-sm font-extrabold text-rose-950">
+                Laporan {needsImprovementSubmission.shiftType} Memerlukan Perbaikan
+              </h4>
+              <p className="text-xs text-rose-800">
+                Admin mencatat: &ldquo;{needsImprovementSubmission.reviewNotes || 'Harap periksa kelengkapan butir tugas dan foto bukti'}&rdquo;
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              // Trigger fill with needsImprovementSubmission
+              setShiftType(needsImprovementSubmission.shiftType);
+              if (revisingSubmission === undefined) {
+                // If parent doesn't handle directly, local fallback
+                window.scrollTo({ top: 400, behavior: 'smooth' });
+              }
+            }}
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs shrink-0 flex items-center gap-1.5"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            Lihat di Tab Riwayat &rarr;
+          </button>
+        </div>
+      )}
+
       {/* Status Cards Hari Ini */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Card Opening */}
         <div
-          onClick={() => setShiftType('OPENING')}
+          onClick={() => {
+            if (!revisingSubmission) {
+              setShiftType('OPENING');
+              setCheckedItems({});
+              setItemPhotos({});
+            }
+          }}
           className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer shadow-sm ${
             shiftType === 'OPENING' ? 'ring-2 ring-orange-500 shadow-md' : 'hover:bg-slate-50/70'
           } ${todayOpening ? 'bg-emerald-50/40 border-emerald-200' : 'bg-amber-50/40 border-amber-200'}`}
@@ -273,7 +433,13 @@ export default function SopChecklistForm({
 
         {/* Card Routine */}
         <div
-          onClick={() => setShiftType('ROUTINE')}
+          onClick={() => {
+            if (!revisingSubmission) {
+              setShiftType('ROUTINE');
+              setCheckedItems({});
+              setItemPhotos({});
+            }
+          }}
           className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer shadow-sm ${
             shiftType === 'ROUTINE' ? 'ring-2 ring-orange-500 shadow-md' : 'hover:bg-slate-50/70'
           } ${todayRoutine ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}
@@ -299,7 +465,13 @@ export default function SopChecklistForm({
 
         {/* Card Closing */}
         <div
-          onClick={() => setShiftType('CLOSING')}
+          onClick={() => {
+            if (!revisingSubmission) {
+              setShiftType('CLOSING');
+              setCheckedItems({});
+              setItemPhotos({});
+            }
+          }}
           className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer shadow-sm ${
             shiftType === 'CLOSING' ? 'ring-2 ring-orange-500 shadow-md' : 'hover:bg-slate-50/70'
           } ${todayClosing ? 'bg-emerald-50/40 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}
@@ -326,69 +498,121 @@ export default function SopChecklistForm({
 
       {/* Main Checklist Card */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-7 shadow-sm space-y-6">
-        {/* Header Shift Selector & Progress */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-          <div>
-            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full mb-1.5">
-              <ClipboardCheck className="w-3.5 h-3.5" />
-              Laporan Pelaksanaan SOP Staf
+        {/* Header Shift Selector & Jobdesk Selector */}
+        <div className="space-y-4 border-b border-slate-100 pb-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full mb-1.5">
+                <ClipboardCheck className="w-3.5 h-3.5" />
+                Laporan Pelaksanaan SOP Staf
+              </div>
+              <h3 className="text-lg font-extrabold text-slate-800">
+                {shiftType === 'OPENING' && 'Checklist Buka Toko (Opening Shift)'}
+                {shiftType === 'CLOSING' && 'Checklist Tutup Toko (Closing Shift)'}
+                {shiftType === 'ROUTINE' && 'Checklist Kebersihan & Rutin Harian'}
+              </h3>
+              <p className="text-xs text-slate-500">
+                Centang tugas yang telah Anda selesaikan dan lampirkan foto bukti pada butir yang ditentukan.
+              </p>
             </div>
-            <h3 className="text-lg font-extrabold text-slate-800">
-              {shiftType === 'OPENING' && 'Checklist Buka Toko (Opening Shift)'}
-              {shiftType === 'CLOSING' && 'Checklist Tutup Toko (Closing Shift)'}
-              {shiftType === 'ROUTINE' && 'Checklist Kebersihan & Rutin Harian'}
-            </h3>
-            <p className="text-xs text-slate-500">
-              Centang tugas yang telah Anda selesaikan dan lampirkan foto bukti pada butir yang ditentukan.
-            </p>
+
+            <div className="inline-flex p-1 rounded-2xl bg-slate-100 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!revisingSubmission) {
+                    setShiftType('OPENING');
+                    setCheckedItems({});
+                    setItemPhotos({});
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  shiftType === 'OPENING'
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Buka Toko
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!revisingSubmission) {
+                    setShiftType('ROUTINE');
+                    setCheckedItems({});
+                    setItemPhotos({});
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  shiftType === 'ROUTINE'
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Rutin
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!revisingSubmission) {
+                    setShiftType('CLOSING');
+                    setCheckedItems({});
+                    setItemPhotos({});
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  shiftType === 'CLOSING'
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Tutup Toko
+              </button>
+            </div>
           </div>
 
-          <div className="inline-flex p-1 rounded-2xl bg-slate-100 self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => {
-                setShiftType('OPENING');
-                setCheckedItems({});
-                setItemPhotos({});
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                shiftType === 'OPENING'
-                  ? 'bg-orange-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Buka Toko
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShiftType('ROUTINE');
-                setCheckedItems({});
-                setItemPhotos({});
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                shiftType === 'ROUTINE'
-                  ? 'bg-orange-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Rutin
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setShiftType('CLOSING');
-                setCheckedItems({});
-                setItemPhotos({});
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                shiftType === 'CLOSING'
-                  ? 'bg-orange-500 text-white shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Tutup Toko
-            </button>
+          {/* PERAN / JOBDESK SELECTOR */}
+          <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-3.5 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-orange-950 flex items-center gap-1.5">
+                <Layers className="w-3.5 h-3.5 text-orange-600" />
+                Pilih Peran / Jobdesk Anda pada Shift Ini:
+              </span>
+              <span className="text-[11px] text-orange-700 font-medium hidden sm:inline">
+                Tugas difilter sesuai peran + tugas umum outlet
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSelectedJobdeskCode('ALL')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  selectedJobdeskCode === 'ALL'
+                    ? 'bg-orange-500 text-white shadow-sm'
+                    : 'bg-white border border-orange-200 text-orange-800 hover:bg-orange-100/60'
+                }`}
+              >
+                Semua Tugas Shift
+              </button>
+
+              {jobdesks
+                .filter((j) => j.isActive)
+                .map((j) => (
+                  <button
+                    key={j.code}
+                    type="button"
+                    onClick={() => setSelectedJobdeskCode(j.code)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      selectedJobdeskCode === j.code
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'bg-white border border-orange-200 text-orange-800 hover:bg-orange-100/60'
+                    }`}
+                  >
+                    {j.name}
+                  </button>
+                ))}
+            </div>
           </div>
         </div>
 
@@ -435,13 +659,16 @@ export default function SopChecklistForm({
           {currentTemplates.length === 0 ? (
             <div className="p-8 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
               <Info className="w-6 h-6 text-slate-400 mx-auto mb-2" />
-              <p className="text-xs text-slate-500 font-medium">Belum ada butir SOP yang didaftarkan untuk shift ini.</p>
+              <p className="text-xs text-slate-500 font-medium">
+                Belum ada butir SOP yang didaftarkan untuk shift & peran jobdesk ini.
+              </p>
             </div>
           ) : (
             currentTemplates.map((item, idx) => {
               const isChecked = Boolean(checkedItems[item.id]);
               const photoUrl = itemPhotos[item.id];
               const isUploading = Boolean(uploadingItemMap[item.id]);
+              const itemJobdeskName = jobdesks.find((j) => j.code === item.jobdeskCode)?.name || (item.jobdeskCode === 'GENERAL' ? 'Umum' : item.jobdeskCode);
 
               return (
                 <div
@@ -475,6 +702,11 @@ export default function SopChecklistForm({
                           >
                             {item.title}
                           </span>
+                          {itemJobdeskName && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                              {itemJobdeskName}
+                            </span>
+                          )}
                           {item.isPhotoRequired && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-100 text-amber-800 border border-amber-200">
                               <Camera className="w-2.5 h-2.5" /> Wajib Foto
@@ -685,12 +917,12 @@ export default function SopChecklistForm({
             {isSubmitting ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Mengirim Laporan...</span>
+                <span>{revisingSubmission ? 'Mengirim Perbaikan...' : 'Mengirim Laporan...'}</span>
               </>
             ) : (
               <>
-                <ClipboardCheck className="w-4 h-4" />
-                <span>Kirim Laporan Pengecekan SOP</span>
+                {revisingSubmission ? <RotateCcw className="w-4 h-4" /> : <ClipboardCheck className="w-4 h-4" />}
+                <span>{revisingSubmission ? 'Kirim Perbaikan Laporan SOP' : 'Kirim Laporan Pengecekan SOP'}</span>
               </>
             )}
           </button>
