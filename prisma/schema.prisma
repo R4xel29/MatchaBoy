@@ -20,6 +20,7 @@ model User {
   image         String?
   password      String?
   role          String    @default("CUSTOMER") // CUSTOMER, ADMIN, CASHIER, DRIVER
+  jobdeskCode   String?   // Peran tugas SOP permanen karyawan (BARISTA, CASHIER, KITCHEN, dll.)
 
   accounts Account[]
   sessions Session[]

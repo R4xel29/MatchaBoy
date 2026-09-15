@@ -47,6 +47,7 @@ interface SopChecklistFormProps {
   jobdesks?: SopJobdesk[];
   userRole: string;
   userName: string;
+  userJobdeskCode?: string;
   todaySubmissions: any[];
   revisingSubmission?: any | null;
   onCancelRevision?: () => void;
@@ -59,6 +60,7 @@ export default function SopChecklistForm({
   jobdesks = [],
   userRole,
   userName,
+  userJobdeskCode,
   todaySubmissions,
   revisingSubmission,
   onCancelRevision,
@@ -67,7 +69,8 @@ export default function SopChecklistForm({
 }: SopChecklistFormProps) {
   const { showToast } = useToast();
   const [shiftType, setShiftType] = useState<'OPENING' | 'CLOSING' | 'ROUTINE'>('OPENING');
-  const [selectedJobdeskCode, setSelectedJobdeskCode] = useState<string>('ALL');
+  const [selectedJobdeskCode, setSelectedJobdeskCode] = useState<string>(userJobdeskCode || 'ALL');
+  const isJobdeskLocked = !!userJobdeskCode;
   
   // State checklist items: key is template.id
   const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
@@ -586,8 +589,9 @@ export default function SopChecklistForm({
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
-                onClick={() => setSelectedJobdeskCode('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                onClick={() => !isJobdeskLocked && setSelectedJobdeskCode('ALL')}
+                disabled={isJobdeskLocked}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isJobdeskLocked ? 'opacity-50 cursor-not-allowed ' : ''}${
                   selectedJobdeskCode === 'ALL'
                     ? 'bg-orange-500 text-white shadow-sm'
                     : 'bg-white border border-orange-200 text-orange-800 hover:bg-orange-100/60'
@@ -602,8 +606,9 @@ export default function SopChecklistForm({
                   <button
                     key={j.code}
                     type="button"
-                    onClick={() => setSelectedJobdeskCode(j.code)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    onClick={() => !isJobdeskLocked && setSelectedJobdeskCode(j.code)}
+                    disabled={isJobdeskLocked}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${isJobdeskLocked ? 'opacity-50 cursor-not-allowed ' : ''}${
                       selectedJobdeskCode === j.code
                         ? 'bg-orange-500 text-white shadow-sm'
                         : 'bg-white border border-orange-200 text-orange-800 hover:bg-orange-100/60'
@@ -613,6 +618,12 @@ export default function SopChecklistForm({
                   </button>
                 ))}
             </div>
+            {isJobdeskLocked && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100 mt-1.5 flex items-center gap-1.5">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                Jobdesk Anda telah ditetapkan oleh admin. Filter terkunci otomatis.
+              </p>
+            )}
           </div>
         </div>
 

@@ -37,6 +37,7 @@ interface InspectionsClientProps {
   userRole: string;
   userName: string;
   currentUserId?: string;
+  userJobdeskCode?: string;
   initialShifts: any[];
   initialIngredients: any[];
   initialMovements: any[];
@@ -52,6 +53,7 @@ export default function InspectionsClient({
   userRole,
   userName,
   currentUserId,
+  userJobdeskCode,
   initialShifts,
   initialIngredients,
   initialMovements,
@@ -359,6 +361,7 @@ export default function InspectionsClient({
               jobdesks={jobdesks}
               userRole={userRole}
               userName={userName}
+              userJobdeskCode={userJobdeskCode}
               todaySubmissions={todaySubmissions}
               revisingSubmission={revisingSubmission}
               onCancelRevision={handleCancelRevision}
@@ -496,6 +499,7 @@ export default function InspectionsClient({
               jobdesks={jobdesks}
               userRole={userRole}
               userName={userName}
+              userJobdeskCode={userJobdeskCode}
               todaySubmissions={todaySubmissions}
               onSubmissionSuccess={handleSubmissionSuccess}
               onPreviewPhoto={handlePreviewPhoto}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   UserPlus, 
   X, 
@@ -12,7 +12,8 @@ import {
   CheckCircle2, 
   AlertCircle, 
   Loader2,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import { createStaffUserAction } from '@/app/actions/admin';
 
@@ -28,7 +29,19 @@ export default function CreateStaffModal() {
     phone: '',
     password: '',
     role: 'CASHIER',
+    jobdeskCode: '',
   });
+
+  const [availableJobdesks, setAvailableJobdesks] = useState<{code: string; name: string}[]>([]);
+
+  useEffect(() => {
+    fetch('/api/admin/inspections/jobdesks')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setAvailableJobdesks(data.filter((j: any) => j.isActive));
+      })
+      .catch(() => {});
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -43,6 +56,7 @@ export default function CreateStaffModal() {
       phone: '',
       password: '',
       role: 'CASHIER',
+      jobdeskCode: '',
     });
     setError(null);
     setSuccess(null);
@@ -239,6 +253,33 @@ export default function CreateStaffModal() {
                   <span>Staf Operasional berhak mengakses POS Kasir, antrean live pesanan dapur, stok bahan baku, dan kas kecil. Laporan keuangan pemilik tetap terlindungi aman.</span>
                 </p>
               </div>
+
+              {/* Jobdesk / Tugas Utama */}
+              {formData.role === 'CASHIER' && availableJobdesks.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-orange-500" />
+                    Jobdesk / Tugas Utama
+                  </label>
+                  <select
+                    name="jobdeskCode"
+                    value={formData.jobdeskCode}
+                    onChange={handleChange}
+                    disabled={loading}
+                    className="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all text-slate-800"
+                  >
+                    <option value="">Belum Ditentukan</option>
+                    {availableJobdesks.map((jd) => (
+                      <option key={jd.code} value={jd.code}>
+                        {jd.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-slate-400">
+                    Tentukan jobdesk utama staf. Checklist SOP akan otomatis terfilter sesuai tugas ini.
+                  </p>
+                </div>
+              )}
 
               {/* Buttons */}
               <div className="pt-3 flex items-center justify-end gap-2.5">

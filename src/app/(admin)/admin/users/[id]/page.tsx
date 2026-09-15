@@ -50,10 +50,17 @@ export default async function StaffDetailPage({ params }: PageProps) {
   const totalOrdersProcessed = staff.cashierOrders.length;
   const totalRevenueProcessed = staff.cashierOrders.reduce((acc, o) => acc + o.total, 0);
 
+  // Ambil peran jobdesk aktif untuk ditugaskan ke staf
+  const jobdesks = await prisma.sopJobdesk.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: 'asc' },
+  });
+
   return (
     <div className="space-y-6">
       <StaffDetailClient
         staff={staff}
+        jobdesks={jobdesks}
         stats={{
           totalShifts,
           totalOrdersProcessed,

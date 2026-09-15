@@ -11,6 +11,14 @@ export default async function AdminInspectionsPage() {
   const userRole = session?.user?.role || 'CASHIER';
   const userName = session?.user?.name || 'Staf';
   const currentUserId = session?.user?.id || '';
+
+  // Fetch user's permanent jobdesk assignment
+  const currentUser = currentUserId ? await prisma.user.findUnique({
+    where: { id: currentUserId },
+    select: { jobdeskCode: true },
+  }) : null;
+  const userJobdeskCode = currentUser?.jobdeskCode || undefined;
+
   const isAdmin = userRole === 'ADMIN';
 
   const now = new Date();
@@ -177,6 +185,7 @@ export default async function AdminInspectionsPage() {
         userRole={userRole}
         userName={userName}
         currentUserId={currentUserId}
+        userJobdeskCode={userJobdeskCode}
         initialShifts={shifts}
         initialIngredients={ingredients}
         initialMovements={recentMovements}

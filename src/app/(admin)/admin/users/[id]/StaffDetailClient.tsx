@@ -24,12 +24,14 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   TrendingUp,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import { updateStaffDetailsAction } from '@/app/actions/admin';
 
 interface StaffDetailClientProps {
   staff: any;
+  jobdesks?: { id: string; code: string; name: string; description?: string | null; sortOrder: number; isActive: boolean }[];
   stats: {
     totalShifts: number;
     totalOrdersProcessed: number;
@@ -37,12 +39,13 @@ interface StaffDetailClientProps {
   };
 }
 
-export default function StaffDetailClient({ staff, stats }: StaffDetailClientProps) {
+export default function StaffDetailClient({ staff, jobdesks = [], stats }: StaffDetailClientProps) {
   // Form State
   const [name, setName] = useState(staff.name || '');
   const [email, setEmail] = useState(staff.email || '');
   const [phone, setPhone] = useState(staff.phone || '');
   const [role, setRole] = useState(staff.role || 'CASHIER');
+  const [jobdeskCode, setJobdeskCode] = useState(staff.jobdeskCode || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -67,6 +70,7 @@ export default function StaffDetailClient({ staff, stats }: StaffDetailClientPro
         email,
         phone,
         role,
+        jobdeskCode: jobdeskCode || undefined,
         password: password ? password : undefined,
       });
 
@@ -273,8 +277,34 @@ export default function StaffDetailClient({ staff, stats }: StaffDetailClientPro
                 <option value="CASHIER">Staf Operasional (Kasir & Barista)</option>
                 <option value="ADMIN">Admin Utama (Owner)</option>
                 <option value="CUSTOMER">Pelanggan (Customer)</option>
-              </select>
+                          </select>
             </div>
+
+            {/* Jobdesk / Tugas Utama */}
+            {role === 'CASHIER' && jobdesks.length > 0 && (
+              <div className="space-y-1.5">
+                <label className="font-semibold text-slate-700 flex items-center gap-1.5">
+                  <Layers className="w-3.5 h-3.5 text-orange-500" />
+                  Jobdesk / Tugas Utama
+                </label>
+                <select
+                  value={jobdeskCode}
+                  onChange={(e) => setJobdeskCode(e.target.value)}
+                  disabled={loading}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 text-slate-800 text-xs font-medium"
+                >
+                  <option value="">Belum Ditentukan</option>
+                  {jobdesks.map((jd) => (
+                    <option key={jd.code} value={jd.code}>
+                      {jd.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400">
+                  Tentukan jobdesk utama staf ini. Checklist SOP akan otomatis terfilter sesuai jobdesk yang dipilih.
+                </p>
+              </div>
+            )}
 
             {/* Reset / Ubah Password */}
             <div className="space-y-1.5 pt-2 border-t border-slate-100">

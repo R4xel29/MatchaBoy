@@ -13,6 +13,7 @@ export async function createStaffUserAction(formData: {
   phone?: string;
   password?: string;
   role?: string;
+  jobdeskCode?: string;
 }) {
   const session = await auth();
   
@@ -25,6 +26,7 @@ export async function createStaffUserAction(formData: {
   const rawPhone = formData.phone?.trim() || '';
   const password = formData.password?.trim() || '';
   const role = formData.role || 'CASHIER';
+  const jobdeskCode = formData.jobdeskCode?.trim() || null;
 
   if (!name) {
     return { success: false, error: 'Nama karyawan wajib diisi' };
@@ -84,6 +86,7 @@ export async function createStaffUserAction(formData: {
         phoneVerified: !!cleanPhone,
         password: hashedPassword,
         role: role === 'ADMIN' ? 'ADMIN' : 'CASHIER',
+        jobdeskCode: jobdeskCode || null,
       },
     });
 
@@ -146,6 +149,7 @@ export async function updateStaffDetailsAction(data: {
   phone?: string;
   password?: string;
   role?: string;
+  jobdeskCode?: string;
 }) {
   const session = await auth();
 
@@ -153,7 +157,7 @@ export async function updateStaffDetailsAction(data: {
     return { success: false, error: 'Hanya Admin Utama yang berhak mengubah data staf' };
   }
 
-  const { userId, name, email, phone, password, role } = data;
+  const { userId, name, email, phone, password, role, jobdeskCode } = data;
 
   if (!userId) {
     return { success: false, error: 'User ID tidak valid' };
@@ -244,6 +248,11 @@ export async function updateStaffDetailsAction(data: {
     }
     updatePayload.password = await bcrypt.hash(cleanPassword, 10);
     passwordChanged = true;
+  }
+
+  // Jobdesk update
+  if (jobdeskCode !== undefined) {
+    updatePayload.jobdeskCode = jobdeskCode ? jobdeskCode.trim() : null;
   }
 
   try {
