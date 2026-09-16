@@ -175,7 +175,7 @@ export async function GET() {
         where: { isActive: true },
         select: {
           title: true,
-          description: true,
+          linkUrl: true,
         },
       }),
     ]);

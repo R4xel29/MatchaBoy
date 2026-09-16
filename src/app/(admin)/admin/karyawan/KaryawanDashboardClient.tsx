@@ -160,7 +160,7 @@ export interface KaryawanInitialData {
   } | null;
   activePromo?: {
     title?: string | null;
-    description?: string | null;
+    linkUrl?: string | null;
   } | null;
   allJobdesks?: Array<{ code: string; name: string }>;
 }
@@ -1073,9 +1073,7 @@ export default function KaryawanDashboardClient({
             {data.activePromo && (
               <div className="bg-amber-50/90 p-3 rounded-xl border border-amber-200 text-xs text-amber-900 mt-3 space-y-0.5">
                 <span className="font-bold text-amber-800 block">Promo Berjalan: {data.activePromo.title}</span>
-                {data.activePromo.description && (
-                  <p className="text-[11px] text-amber-700">{data.activePromo.description}</p>
-                )}
+                <p className="text-[11px] text-amber-700">Tawarkan promo spesial ini ke pelanggan di kasir Arum Seduh.</p>
               </div>
             )}
 

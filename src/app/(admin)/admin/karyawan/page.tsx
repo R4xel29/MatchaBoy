@@ -110,7 +110,7 @@ export default async function KaryawanDashboardPage() {
       where: { isActive: true },
       select: {
         title: true,
-        description: true,
+        linkUrl: true,
       },
     }),
     prisma.sopJobdesk.findMany({
