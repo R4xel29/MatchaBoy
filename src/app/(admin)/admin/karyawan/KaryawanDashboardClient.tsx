@@ -413,8 +413,8 @@ export default function KaryawanDashboardClient({
       if (found) return found.name;
       return data.user.jobdeskCode.replace('_', ' ');
     }
-    return data.user.role === 'ADMIN' ? 'Admin Outlet' : 'Staf Operasional';
-  }, [data.user.jobdeskCode, data.user.role, data.allJobdesks]);
+    return 'Staf Karyawan';
+  }, [data.user.jobdeskCode, data.allJobdesks]);
 
   return (
     <div className="space-y-6 pb-12">

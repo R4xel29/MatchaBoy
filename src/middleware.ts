@@ -25,11 +25,16 @@ export default auth((req) => {
             const isPublicAdminRoute = pathname === '/api/admin/loyalty/settings' || pathname === '/api/admin/store-settings' || pathname === '/api/admin/tables'
             const isGetRequest = req.method === 'GET'
             
+            const isKaryawan = role === 'CASHIER' || role === 'KARYAWAN'
             if (!(isPublicAdminRoute && isGetRequest)) {
-                if (role !== 'ADMIN' && role !== 'CASHIER') {
+                if (role !== 'ADMIN' && !isKaryawan) {
                     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
                 }
-                if (role === 'CASHIER') {
+                // Endpoint /api/admin/karyawan hanya untuk karyawan
+                if (pathname.startsWith('/api/admin/karyawan') && !isKaryawan) {
+                    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+                }
+                if (isKaryawan) {
                     const cashierAllowed = [
                         '/api/admin/reports', 
                         '/api/admin/bank-accounts', 
@@ -53,7 +58,8 @@ export default auth((req) => {
             if (!isLoggedIn) {
                 return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
             }
-            if (role !== 'ADMIN' && role !== 'CASHIER') {
+            const isKaryawan = role === 'CASHIER' || role === 'KARYAWAN'
+            if (role !== 'ADMIN' && !isKaryawan) {
                 return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
             }
         }
@@ -68,7 +74,7 @@ export default auth((req) => {
             if (role === 'ADMIN') {
                 return NextResponse.redirect(new URL('/admin', req.url))
             }
-            if (role === 'CASHIER') {
+            if (role === 'CASHIER' || role === 'KARYAWAN') {
                 return NextResponse.redirect(new URL('/admin/karyawan', req.url))
             }
             return NextResponse.redirect(new URL('/profile', req.url))
@@ -88,15 +94,22 @@ export default auth((req) => {
             return NextResponse.redirect(loginUrl)
         }
 
-        // Admin routes: allow ADMIN and CASHIER roles
+        const isKaryawan = role === 'CASHIER' || role === 'KARYAWAN'
+
+        // Admin routes: allow ADMIN and CASHIER/KARYAWAN roles
         if (pathname.startsWith('/admin')) {
-            if (role !== 'ADMIN' && role !== 'CASHIER') {
+            if (role !== 'ADMIN' && !isKaryawan) {
                 // Rewrite to 404 even for logged-in customers to keep the admin portal hidden
                 return NextResponse.rewrite(new URL('/404', req.url))
             }
 
-            // Cashier can only access specific operational pages
-            if (role === 'CASHIER') {
+            // Dashboard karyawan HANYA untuk role karyawan. Jika admin mengakses, redirect ke dashboard admin
+            if (pathname === '/admin/karyawan' && role === 'ADMIN') {
+                return NextResponse.redirect(new URL('/admin', req.url))
+            }
+
+            // Karyawan hanya dapat mengakses halaman operasional spesifik
+            if (isKaryawan) {
                 if (pathname === '/admin') {
                     return NextResponse.redirect(new URL('/admin/karyawan', req.url))
                 }

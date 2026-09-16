@@ -9,8 +9,10 @@ export async function GET() {
   try {
     const session = await auth();
 
-    if (!session?.user || (session.user.role !== 'CASHIER' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Dashboard karyawan hanya untuk sesi dan role karyawan (bukan admin)
+    const isKaryawan = session?.user && (session.user.role === 'CASHIER' || session.user.role === 'KARYAWAN');
+    if (!isKaryawan) {
+      return NextResponse.json({ error: 'Forbidden: Endpoint ini khusus untuk sesi dan role karyawan' }, { status: 403 });
     }
 
     const userId = session.user.id;

@@ -23,12 +23,14 @@ describe('Tier 1.16: Dashboard Karyawan & Staff Operational Hub Compliance', () 
     expect(content.includes('liveOrders')).toBeTruthy();
   });
 
-  it('T1.16.2: Server page /admin/karyawan/page.tsx guards access and provides parallel data loading', () => {
+  it('T1.16.2: Server page /admin/karyawan/page.tsx guards access exclusively for employee role and redirects ADMIN to /admin', () => {
     const pagePath = path.resolve(process.cwd(), 'src/app/(admin)/admin/karyawan/page.tsx');
     expect(fs.existsSync(pagePath)).toBeTruthy();
 
     const content = fs.readFileSync(pagePath, 'utf8');
-    expect(content.includes("session.user.role !== 'CASHIER' && session.user.role !== 'ADMIN'")).toBeTruthy();
+    expect(content.includes("session.user.role === 'CASHIER' || session.user.role === 'KARYAWAN'")).toBeTruthy();
+    expect(content.includes("session?.user?.role === 'ADMIN'")).toBeTruthy();
+    expect(content.includes("redirect('/admin')")).toBeTruthy();
     expect(content.includes('Promise.all([')).toBeTruthy();
     expect(content.includes('<KaryawanDashboardClient')).toBeTruthy();
     expect(content.includes('initialData={initialData}')).toBeTruthy();
@@ -56,16 +58,22 @@ describe('Tier 1.16: Dashboard Karyawan & Staff Operational Hub Compliance', () 
     expect(content.includes('criticalIngredients')).toBeTruthy();
   });
 
-  it('T1.16.4: Middleware and AdminSidebar grant CASHIER access to /admin/karyawan and feature Dashboard Karyawan', () => {
+  it('T1.16.4: Middleware and AdminSidebar restrict Dashboard Karyawan strictly to employee session/role', () => {
     const middlewarePath = path.resolve(process.cwd(), 'src/middleware.ts');
     const middlewareContent = fs.readFileSync(middlewarePath, 'utf8');
     expect(middlewareContent.includes("'/admin/karyawan'")).toBeTruthy();
     expect(middlewareContent.includes("'/api/admin/karyawan'")).toBeTruthy();
+    expect(middlewareContent.includes("pathname === '/admin/karyawan' && role === 'ADMIN'")).toBeTruthy();
     expect(middlewareContent.includes("redirect(new URL('/admin/karyawan', req.url))")).toBeTruthy();
 
     const sidebarPath = path.resolve(process.cwd(), 'src/components/admin/AdminSidebar.tsx');
     const sidebarContent = fs.readFileSync(sidebarPath, 'utf8');
+    // Featured in STAFF_ITEMS for employees
     expect(sidebarContent.includes("{ label: 'Dashboard Karyawan', href: '/admin/karyawan', icon: LayoutDashboard }")).toBeTruthy();
+    // NOT in MAIN_ITEMS for admin
+    const mainItemsMatch = sidebarContent.match(/const MAIN_ITEMS = \[([\s\S]*?)\];/);
+    expect(mainItemsMatch).toBeTruthy();
+    expect(mainItemsMatch![1].includes('/admin/karyawan')).toBeFalsy();
   });
 
   it('T1.16.5: NextAuth session and JWT callbacks support jobdeskCode', () => {

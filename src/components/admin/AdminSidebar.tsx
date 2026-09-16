@@ -61,7 +61,6 @@ import { getAlarmSoundUrl, playOneShotBoostedAlarm } from '@/lib/alarm-utils';
 
 const MAIN_ITEMS = [
   { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-  { label: 'Dashboard Karyawan', href: '/admin/karyawan', icon: Coffee },
   { label: 'Audit & Pengecekan Toko', href: '/admin/inspections', icon: ClipboardCheck },
   { label: 'Buku Kas & Keuangan', href: '/admin/finances', icon: Coins },
   { label: 'Analisis & KPI', href: '/admin/finances/analytics', icon: TrendingUp },
@@ -588,7 +587,7 @@ function SidebarContent({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-slate-800 truncate">{userName}</p>
-                <p className="text-[10px] text-slate-500 truncate">{userRole === 'CASHIER' ? 'Staf Kasir & Barista' : 'Administrator'}</p>
+                <p className="text-[10px] text-slate-500 truncate">{userRole === 'CASHIER' || userRole === 'KARYAWAN' ? 'Staf Karyawan & Barista' : 'Administrator'}</p>
               </div>
             </div>
             <button
@@ -602,7 +601,7 @@ function SidebarContent({
         ) : (
           <>
             <div 
-              title={`${userName} (${userRole === 'CASHIER' ? 'Staf Kasir & Barista' : 'Administrator'})`}
+              title={`${userName} (${userRole === 'CASHIER' || userRole === 'KARYAWAN' ? 'Staf Karyawan & Barista' : 'Administrator'})`}
               className="w-8 h-8 rounded-lg bg-orange-500 text-white text-xs font-bold flex items-center justify-center shadow-sm"
             >
               {userName.charAt(0).toUpperCase()}

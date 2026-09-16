@@ -12,7 +12,7 @@ export default async function AdminArusLoginPage() {
     const role = session.user.role;
     if (role === "ADMIN") {
       redirect("/admin");
-    } else if (role === "CASHIER") {
+    } else if (role === "CASHIER" || role === "KARYAWAN") {
       redirect("/admin/karyawan");
     }
     // We do not redirect CUSTOMERs or other roles, in case they are trying to log in

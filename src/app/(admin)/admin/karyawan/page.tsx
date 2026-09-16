@@ -9,7 +9,12 @@ export const revalidate = 0;
 export default async function KaryawanDashboardPage() {
   const session = await auth();
 
-  if (!session?.user || (session.user.role !== 'CASHIER' && session.user.role !== 'ADMIN')) {
+  // Dashboard karyawan hanya untuk sesi dan role karyawan (bukan admin)
+  const isKaryawan = session?.user && (session.user.role === 'CASHIER' || session.user.role === 'KARYAWAN');
+  if (!isKaryawan) {
+    if (session?.user?.role === 'ADMIN') {
+      redirect('/admin');
+    }
     redirect('/adminarus');
   }
 
