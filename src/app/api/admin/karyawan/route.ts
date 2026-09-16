@@ -161,14 +161,24 @@ export async function GET() {
       take: 5,
     });
 
-    // 7. Store settings for greeting / announcement
-    const storeSettings = await prisma.storeSettings.findFirst({
-      select: {
-        storeName: true,
-        announcementText: true,
-        isOpen: true,
-      },
-    });
+    // 7. Store settings & active promo for greeting / announcement
+    const [storeSettings, activePromo] = await Promise.all([
+      prisma.storeSettings.findFirst({
+        select: {
+          storeName: true,
+          openTime: true,
+          closeTime: true,
+          storeAddress: true,
+        },
+      }),
+      prisma.promoPopup.findFirst({
+        where: { isActive: true },
+        select: {
+          title: true,
+          description: true,
+        },
+      }),
+    ]);
 
     return NextResponse.json({
       success: true,
@@ -189,6 +199,7 @@ export async function GET() {
         criticalIngredients,
         activeStaff,
         storeSettings,
+        activePromo,
       },
     });
   } catch (error) {

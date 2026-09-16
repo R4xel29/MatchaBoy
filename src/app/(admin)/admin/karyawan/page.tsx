@@ -32,6 +32,7 @@ export default async function KaryawanDashboardPage() {
     criticalIngredients,
     activeStaff,
     storeSettings,
+    activePromo,
     allJobdesks,
   ] = await Promise.all([
     prisma.cashierShift.findFirst({
@@ -100,8 +101,16 @@ export default async function KaryawanDashboardPage() {
     prisma.storeSettings.findFirst({
       select: {
         storeName: true,
-        announcementText: true,
-        isOpen: true,
+        openTime: true,
+        closeTime: true,
+        storeAddress: true,
+      },
+    }),
+    prisma.promoPopup.findFirst({
+      where: { isActive: true },
+      select: {
+        title: true,
+        description: true,
       },
     }),
     prisma.sopJobdesk.findMany({
@@ -219,6 +228,7 @@ export default async function KaryawanDashboardPage() {
       updatedAt: st.updatedAt.toISOString(),
     })),
     storeSettings,
+    activePromo,
     allJobdesks,
   };
 
