@@ -20,6 +20,7 @@ import {
   Layers, 
   Coins, 
   LogOut, 
+  Loader2,
   Plus, 
   RefreshCw, 
   Printer, 
@@ -35,6 +36,7 @@ import {
   SlidersHorizontal,
   Flame
 } from 'lucide-react';
+import { signOut } from 'next-auth/react';
 import { formatRupiah, cn } from '@/lib/utils';
 import { formatOrderCardModifiers } from '@/lib/receipt-modifiers';
 import { useToast } from '@/components/ui/Toast';
@@ -185,6 +187,8 @@ export default function KaryawanDashboardClient({
   // Modal states
   const [isShiftOpenModalOpen, setIsShiftOpenModalOpen] = useState(false);
   const [isShiftCloseModalOpen, setIsShiftCloseModalOpen] = useState(false);
+  const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Form states for Open Shift
   const [openShiftCash, setOpenShiftCash] = useState('100000');
@@ -363,6 +367,20 @@ export default function KaryawanDashboardClient({
     }
   };
 
+  // Account Logout Handler
+  const handleAccountLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      await signOut({ redirect: false }).catch(() => {});
+    } catch (err) {
+      console.error('[LOGOUT] Error signing out from karyawan dashboard:', err);
+    } finally {
+      window.location.href = '/adminarus';
+    }
+  };
+
   // Filtered Orders
   const filteredOrders = useMemo(() => {
     if (orderFilter === 'ALL') return data.liveOrders;
@@ -481,6 +499,20 @@ export default function KaryawanDashboardClient({
               title="Perbarui Data"
             >
               <RefreshCw className={cn('w-4 h-4', isRefreshing && 'animate-spin')} />
+            </button>
+
+            <button
+              onClick={() => setIsLogoutModalOpen(true)}
+              disabled={isLoggingOut}
+              className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200/80 transition-colors text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+              title="Keluar dari Akun Pegawai"
+            >
+              {isLoggingOut ? (
+                <Loader2 className="w-3.5 h-3.5 text-rose-500 animate-spin" />
+              ) : (
+                <LogOut className="w-3.5 h-3.5 text-rose-500" />
+              )}
+              <span>Keluar Akun</span>
             </button>
           </div>
         </div>
@@ -1340,6 +1372,79 @@ export default function KaryawanDashboardClient({
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------- */}
+      {/* 7. MODAL KONFIRMASI KELUAR AKUN PEGAWAI                       */}
+      {/* ------------------------------------------------------------- */}
+      {isLogoutModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-orange-100 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-white/20 backdrop-blur-md">
+                  <LogOut className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base tracking-tight">Keluar Akun Pegawai</h3>
+                  <p className="text-xs text-orange-100">Portal Operasional Arum Seduh</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsLogoutModalOpen(false)}
+                disabled={isLoggingOut}
+                className="p-1 rounded-lg hover:bg-white/20 text-white/80 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Apakah Anda yakin ingin keluar dari akun <strong className="text-slate-800">{data.user.name}</strong>? Sesi Anda akan diakhiri dan dialihkan ke Portal Login Admin &amp; Pegawai.
+              </p>
+
+              {data.activeShift && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800 leading-tight">
+                    <strong>Perhatian:</strong> Shift kasir Anda saat ini masih berjalan ({shiftDuration}). Pastikan Anda telah menutup shift terlebih dahulu jika jam kerja operasional telah selesai.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsLogoutModalOpen(false)}
+                  disabled={isLoggingOut}
+                  className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors disabled:opacity-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAccountLogout}
+                  disabled={isLoggingOut}
+                  className="px-5 py-2 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl shadow-md shadow-rose-600/20 transition-all flex items-center gap-1.5 disabled:opacity-60"
+                >
+                  {isLoggingOut ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Sedang Keluar...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Ya, Keluar Akun</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

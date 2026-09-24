@@ -113,4 +113,47 @@ describe('Tier 1.16: Dashboard Karyawan & Staff Operational Hub Compliance', () 
     // Official Brand name
     expect(clientContent.includes('Arum Seduh')).toBeTruthy();
   });
+
+  it('T1.16.7: Employee and admin logout flows revoke sessions, clear cookies, and route to /adminarus', () => {
+    // 1. Verify dedicated /api/auth/logout endpoint exists and handles session revocation
+    const logoutApiPath = path.resolve(process.cwd(), 'src/app/api/auth/logout/route.ts');
+    expect(fs.existsSync(logoutApiPath)).toBeTruthy();
+    const logoutApiContent = fs.readFileSync(logoutApiPath, 'utf8');
+    expect(logoutApiContent.includes('prisma.session.deleteMany')).toBeTruthy();
+    expect(logoutApiContent.includes('authjs.session-token')).toBeTruthy();
+    expect(logoutApiContent.includes("redirectUrl: '/adminarus'")).toBeTruthy();
+
+    // 2. Verify AdminSidebar handleLogout calls /api/auth/logout, signOut, and routes to /adminarus
+    const sidebarPath = path.resolve(process.cwd(), 'src/components/admin/AdminSidebar.tsx');
+    const sidebarContent = fs.readFileSync(sidebarPath, 'utf8');
+    expect(sidebarContent.includes("fetch('/api/auth/logout'")).toBeTruthy();
+    expect(sidebarContent.includes('signOut({ redirect: false })')).toBeTruthy();
+    expect(sidebarContent.includes("window.location.href = '/adminarus'")).toBeTruthy();
+    expect(sidebarContent.includes("router.push('/login')")).toBeFalsy();
+
+    // 3. Verify KaryawanDashboardClient implements account logout with modal and redirects to /adminarus
+    const dashboardClientPath = path.resolve(process.cwd(), 'src/app/(admin)/admin/karyawan/KaryawanDashboardClient.tsx');
+    const dashboardClientContent = fs.readFileSync(dashboardClientPath, 'utf8');
+    expect(dashboardClientContent.includes('handleAccountLogout')).toBeTruthy();
+    expect(dashboardClientContent.includes("window.location.href = '/adminarus'")).toBeTruthy();
+    expect(dashboardClientContent.includes('isLogoutModalOpen')).toBeTruthy();
+    expect(dashboardClientContent.includes('Keluar Akun')).toBeTruthy();
+
+    // 4. Verify middleware and /admin/login redirect to /adminarus
+    const middlewarePath = path.resolve(process.cwd(), 'src/middleware.ts');
+    const middlewareContent = fs.readFileSync(middlewarePath, 'utf8');
+    expect(middlewareContent.includes("pathname === '/admin/login'")).toBeTruthy();
+    expect(middlewareContent.includes("new URL('/adminarus', req.url)")).toBeTruthy();
+
+    // 5. Verify auth configuration resilience
+    const authConfigPath = path.resolve(process.cwd(), 'src/auth.config.ts');
+    const authConfigContent = fs.readFileSync(authConfigPath, 'utf8');
+    expect(authConfigContent.includes('trustHost: true')).toBeTruthy();
+
+    const authPath = path.resolve(process.cwd(), 'src/auth.ts');
+    const authContent = fs.readFileSync(authPath, 'utf8');
+    expect(authContent.includes('events:')).toBeTruthy();
+    expect(authContent.includes('prisma.session.deleteMany')).toBeTruthy();
+  });
 });
+

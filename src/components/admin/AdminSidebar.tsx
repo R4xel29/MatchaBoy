@@ -11,6 +11,7 @@ import {
   Users,
   Shield,
   LogOut,
+  Loader2,
   Menu,
   X,
   ChevronRight,
@@ -391,17 +392,26 @@ function SidebarContent({
   const userName = session?.user?.name || 'Admin';
   const isAdmin = userRole === 'ADMIN';
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const handleLogout = async () => {
-    await signOut({ redirect: false });
-    router.push('/login');
-    router.refresh();
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      await signOut({ redirect: false }).catch(() => {});
+    } catch (err) {
+      console.error('[LOGOUT] Error signing out:', err);
+    } finally {
+      window.location.href = '/adminarus';
+    }
   };
 
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Brand & Toggle Header */}
       <div className={`pt-6 pb-5 flex items-center ${isCollapsed ? 'flex-col gap-3 px-2 justify-center' : 'px-5 justify-between'}`}>
-        <Link href="/admin" className="flex items-center gap-3" onClick={onNavigate}>
+        <Link href={isAdmin ? '/admin' : '/admin/karyawan'} className="flex items-center gap-3" onClick={onNavigate}>
           <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center p-1.5 shadow-sm flex-shrink-0">
             <Image 
               src="/icons/arus.png" 
@@ -592,10 +602,15 @@ function SidebarContent({
             </div>
             <button
               onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100/70 border border-rose-100 transition-all duration-200"
+              disabled={isLoggingOut}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[12px] font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100/70 border border-rose-100 transition-all duration-200 disabled:opacity-60"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              Sign Out
+              {isLoggingOut ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <LogOut className="w-3.5 h-3.5" />
+              )}
+              {isLoggingOut ? 'Keluar...' : 'Sign Out'}
             </button>
           </>
         ) : (
@@ -608,10 +623,15 @@ function SidebarContent({
             </div>
             <button
               onClick={handleLogout}
+              disabled={isLoggingOut}
               title="Sign Out"
-              className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-100 transition-colors"
+              className="p-2 rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-100 transition-colors disabled:opacity-60"
             >
-              <LogOut className="w-4 h-4" />
+              {isLoggingOut ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <LogOut className="w-4 h-4" />
+              )}
             </button>
           </>
         )}

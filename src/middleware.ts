@@ -67,6 +67,11 @@ export default auth((req) => {
         return NextResponse.next()
     }
 
+    // Route alias: /admin/login redirects to the official admin & employee portal /adminarus
+    if (pathname === '/admin/login') {
+        return NextResponse.redirect(new URL('/adminarus', req.url))
+    }
+
     // Redirect authenticated users away from auth pages
     if (authRoutes.some(route => pathname.startsWith(route))) {
         if (isLoggedIn) {

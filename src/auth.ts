@@ -558,4 +558,18 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return token
         },
     },
+    events: {
+        async signOut(message) {
+            const sessionToken = (message as any)?.token?.sessionToken
+            if (sessionToken) {
+                try {
+                    await prisma.session.deleteMany({
+                        where: { sessionToken: String(sessionToken) }
+                    })
+                } catch (err) {
+                    console.error("[AUTH] Error deleting db session on signOut:", err)
+                }
+            }
+        }
+    },
 })
