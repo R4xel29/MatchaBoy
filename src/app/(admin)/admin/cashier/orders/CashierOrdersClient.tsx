@@ -143,8 +143,30 @@ ${itemsText}
 Jika ada pertanyaan atau pesanan Anda sudah siap, staf kami akan segera melayani. Terima kasih!`;
 };
 
+const isUnpaidQrisOrder = (order: OrderData) => {
+  if (order.status === 'PENDING_PAYMENT') return true;
+  const isQris =
+    (order.paymentMethod || '').toUpperCase().includes('QRIS') ||
+    (order.paymentMethod || '').toUpperCase() === 'DOKU';
+  const isVerified =
+    order.paymentProofUrl === '/verified-webhook.svg' ||
+    order.paymentProofUrl === '/verified-cashier-qris.svg' ||
+    order.paymentProofUrl === '/verified-cashier.svg';
+  if (
+    isQris &&
+    order.status === 'PENDING' &&
+    order.paymentProofUrl &&
+    !isVerified &&
+    !order.paymentProofUrl.startsWith('http') &&
+    !order.paymentProofUrl.startsWith('/')
+  ) {
+    return true;
+  }
+  return false;
+};
+
 const shouldTriggerAlarm = (order: OrderData, leadTimeMin: number) => {
-  if (order.status !== 'PENDING' && order.status !== 'PENDING_PAYMENT') {
+  if (order.status !== 'PENDING' || isUnpaidQrisOrder(order)) {
     return false;
   }
   if (order.orderType !== 'PICKUP') {
@@ -224,7 +246,7 @@ export default function CashierOrdersClient({
   useEffect(() => {
     if (initialOrders && initialOrders.length > 0) {
       initialOrders.forEach((o) => {
-        if (o.status !== 'PENDING_PAYMENT') {
+        if (o.status !== 'PENDING_PAYMENT' && !isUnpaidQrisOrder(o)) {
           autoPrintedOrderIdsRef.current.add(o.id);
         }
       });
@@ -232,6 +254,11 @@ export default function CashierOrdersClient({
   }, [initialOrders]);
 
   const handleOpenReceipt = (order: OrderData) => {
+    if (isUnpaidQrisOrder(order)) {
+      showToast('Pembayaran QRIS belum terkonfirmasi masuk. Struk belum dapat dicetak.', 'error');
+      return;
+    }
+
     const rawSubtotal = order.subtotal || order.total;
     const computedDiscount = Math.max(0, rawSubtotal + (order.deliveryFee || 0) - order.total);
 
@@ -295,7 +322,7 @@ export default function CashierOrdersClient({
   };
 
   useEffect(() => {
-    if (selectedOrder) {
+    if (selectedOrder && !isUnpaidQrisOrder(selectedOrder)) {
       markOrderAsRead(selectedOrder.id);
     }
   }, [selectedOrder]);
@@ -402,7 +429,7 @@ export default function CashierOrdersClient({
   };
 
   const handleDismissAllAlarms = () => {
-    const allPendingIds = antrianOrders.map(o => o.id);
+    const allPendingIds = antrianOrders.filter(o => !isUnpaidQrisOrder(o)).map(o => o.id);
     setReadOrderIds(allPendingIds);
     if (typeof window !== 'undefined') {
       localStorage.setItem('cashier_read_orders', JSON.stringify(allPendingIds));
@@ -439,7 +466,7 @@ export default function CashierOrdersClient({
           if (receiptSettings?.autoPrintIncomingOrders) {
             incomingOrders.forEach((ord) => {
               const isEligible = ['PENDING', 'PREPARING'].includes(ord.status);
-              if (isEligible && !autoPrintedOrderIdsRef.current.has(ord.id)) {
+              if (isEligible && !isUnpaidQrisOrder(ord) && !autoPrintedOrderIdsRef.current.has(ord.id)) {
                 autoPrintedOrderIdsRef.current.add(ord.id);
 
                 const rawSubtotal = ord.subtotal || ord.total;
@@ -510,6 +537,11 @@ export default function CashierOrdersClient({
 
   // Update order status
   const handleUpdateStatus = async (orderId: string, nextStatus: string) => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (targetOrder && isUnpaidQrisOrder(targetOrder) && nextStatus !== 'CANCELLED') {
+      showToast('Pembayaran QRIS belum terkonfirmasi masuk. Pesanan belum dapat diselesaikan.', 'error');
+      return;
+    }
     setIsUpdating(orderId);
     markOrderAsRead(orderId);
     try {
@@ -853,6 +885,7 @@ export default function CashierOrdersClient({
       {/* Orders Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filteredOrders.map((order) => {
+          const isUnpaidQris = isUnpaidQrisOrder(order);
           const isUnread = shouldTriggerAlarm(order, pickupAlarmLeadTime) && !readOrderIds.includes(order.id);
           const TypeIcon = ORDER_TYPE_ICONS[order.orderType] || Coffee;
           const isPending = order.status === 'PENDING' || order.status === 'PENDING_PAYMENT';
@@ -862,7 +895,7 @@ export default function CashierOrdersClient({
           const isCancelled = order.status === 'CANCELLED';
 
           const elapsedSecs = Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 1000);
-          const isLate = elapsedSecs > 20 * 60 && !isCompleted && !isCancelled;
+          const isLate = elapsedSecs > 20 * 60 && !isCompleted && !isCancelled && !isUnpaidQris;
 
           return (
             <motion.div
@@ -870,21 +903,29 @@ export default function CashierOrdersClient({
               layout
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
-              onClick={() => markOrderAsRead(order.id)}
-              className={`bg-white rounded-3xl border overflow-hidden shadow-sm flex flex-col justify-between transition-all text-left ${
-                isUnread
-                  ? 'ring-4 ring-orange-500/30 border-orange-500 shadow-lg'
+              onClick={() => {
+                if (!isUnpaidQris) markOrderAsRead(order.id);
+              }}
+              className={`rounded-3xl border overflow-hidden shadow-sm flex flex-col justify-between transition-all text-left ${
+                isUnpaidQris
+                  ? 'bg-stone-100/90 border-stone-300 text-stone-400 opacity-70 grayscale'
+                  : isUnread
+                  ? 'bg-white ring-4 ring-orange-500/30 border-orange-500 shadow-lg'
                   : isLate
-                  ? 'border-rose-400 ring-2 ring-rose-300/40'
-                  : 'border-stone-200 hover:border-orange-300'
+                  ? 'bg-white border-rose-400 ring-2 ring-rose-300/40'
+                  : 'bg-white border-stone-200 hover:border-orange-300'
               }`}
             >
               {/* Card Header */}
-              <div className="p-4 bg-[#FAF9F6] border-b border-stone-100 flex items-start justify-between gap-2">
+              <div className={`p-4 border-b flex items-start justify-between gap-2 ${
+                isUnpaidQris ? 'bg-stone-200/80 border-stone-200' : 'bg-[#FAF9F6] border-stone-100'
+              }`}>
                 <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {order.queueNumber ? (
-                      <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm">
+                      <span className={`font-mono font-black text-sm px-2.5 py-0.5 rounded-xl text-white shadow-sm ${
+                        isUnpaidQris ? 'bg-stone-400' : 'bg-gradient-to-r from-orange-500 to-amber-500'
+                      }`}>
                         {order.queueNumber}
                       </span>
                     ) : (
@@ -894,7 +935,7 @@ export default function CashierOrdersClient({
                     )}
 
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-white border border-stone-200 text-stone-700 text-[10px] font-bold">
-                      <TypeIcon className="w-3 h-3 text-orange-600" />
+                      <TypeIcon className={`w-3 h-3 ${isUnpaidQris ? 'text-stone-500' : 'text-orange-600'}`} />
                       {ORDER_TYPE_LABELS[order.orderType] || order.orderType}
                     </span>
 
@@ -904,7 +945,14 @@ export default function CashierOrdersClient({
                       </span>
                     )}
 
-                    {isReady && (
+                    {isUnpaidQris && !isCancelled && !isCompleted && (
+                      <span className="text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-stone-300 text-stone-700 border border-stone-400/60 flex items-center gap-1">
+                        <Clock className="w-2.5 h-2.5" />
+                        Menunggu QRIS
+                      </span>
+                    )}
+
+                    {isReady && !isUnpaidQris && (
                       <span className="text-[9.5px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 border border-blue-200 animate-pulse flex items-center gap-1">
                         <CheckCircle2 className="w-2.5 h-2.5" />
                         Siap Saji
@@ -912,12 +960,16 @@ export default function CashierOrdersClient({
                     )}
                   </div>
 
-                  <h3 className="font-serif font-bold text-base text-stone-900 leading-tight">
+                  <h3 className={`font-serif font-bold text-base leading-tight ${
+                    isUnpaidQris ? 'text-stone-500' : 'text-stone-900'
+                  }`}>
                     {order.customerName}
                   </h3>
 
                   {order.tableNumber && (
-                    <p className="text-xs font-bold text-orange-700 flex items-center gap-1">
+                    <p className={`text-xs font-bold flex items-center gap-1 ${
+                      isUnpaidQris ? 'text-stone-500' : 'text-orange-700'
+                    }`}>
                       <UtensilsCrossed className="w-3 h-3" /> {order.tableNumber}
                     </p>
                   )}
@@ -942,10 +994,12 @@ export default function CashierOrdersClient({
                   {order.items.map((item) => {
                     const { tags, promoText } = formatOrderCardModifiers(item.modifiers, item.product.name);
                     return (
-                      <div key={item.id} className="p-2.5 rounded-2xl border border-stone-100 bg-stone-50/50 flex items-start justify-between gap-3 text-xs">
+                      <div key={item.id} className={`p-2.5 rounded-2xl border flex items-start justify-between gap-3 text-xs ${
+                        isUnpaidQris ? 'border-stone-200 bg-stone-200/40' : 'border-stone-100 bg-stone-50/50'
+                      }`}>
                         <div>
-                          <p className="font-bold text-stone-900 leading-tight">
-                            <span className="text-orange-600 font-black mr-1">{item.qty}x</span>
+                          <p className={`font-bold leading-tight ${isUnpaidQris ? 'text-stone-500' : 'text-stone-900'}`}>
+                            <span className={`${isUnpaidQris ? 'text-stone-500' : 'text-orange-600'} font-black mr-1`}>{item.qty}x</span>
                             {item.product.name}
                           </p>
                           {(tags.length > 0 || promoText) && (
@@ -964,7 +1018,7 @@ export default function CashierOrdersClient({
                             </div>
                           )}
                         </div>
-                        <span className="font-bold text-stone-700 shrink-0">
+                        <span className={`font-bold shrink-0 ${isUnpaidQris ? 'text-stone-500' : 'text-stone-700'}`}>
                           {formatRupiah(item.price * item.qty)}
                         </span>
                       </div>
@@ -980,20 +1034,37 @@ export default function CashierOrdersClient({
               </div>
 
               {/* Card Footer & Stepper */}
-              <div className="p-4 bg-[#FAF9F6] border-t border-stone-100 space-y-3">
+              <div className={`p-4 border-t space-y-3 ${
+                isUnpaidQris ? 'bg-stone-200/80 border-stone-200' : 'bg-[#FAF9F6] border-stone-100'
+              }`}>
                 <div className="flex items-center justify-between text-xs font-bold">
                   <span className="text-stone-500">Total Tagihan</span>
-                  <span className="text-base font-serif font-black text-orange-600">
+                  <span className={`text-base font-serif font-black ${
+                    isUnpaidQris ? 'text-stone-500' : 'text-orange-600'
+                  }`}>
                     {formatRupiah(order.total)}
                   </span>
                 </div>
 
-                {/* 1-Tap Progressive Action: Siap Saji -> Selesai */}
+                {/* Direct 1-Tap Completion Action: Langsung Selesai (Disabled when QRIS is unpaid) */}
                 {!isCompleted && !isCancelled && (
                   <div>
-                    {isReady ? (
+                    {isUnpaidQris ? (
                       <button
-                        onClick={() => handleUpdateStatus(order.id, 'COMPLETED')}
+                        type="button"
+                        disabled={true}
+                        className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-stone-300 text-stone-500 border border-stone-300 cursor-not-allowed flex items-center justify-center gap-2"
+                      >
+                        <Clock className="w-4 h-4" />
+                        <span>Menunggu Pembayaran QRIS...</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleUpdateStatus(order.id, 'COMPLETED');
+                        }}
                         disabled={isUpdating === order.id}
                         className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white shadow-sm hover:shadow flex items-center justify-center gap-2 disabled:opacity-50"
                       >
@@ -1006,24 +1077,6 @@ export default function CashierOrdersClient({
                           <>
                             <CheckCircle2 className="w-4 h-4" />
                             <span>Selesai</span>
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleUpdateStatus(order.id, 'READY')}
-                        disabled={isUpdating === order.id}
-                        className="w-full py-2.5 px-4 rounded-xl text-xs font-bold transition-all cursor-pointer bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.99] text-white shadow-sm hover:shadow flex items-center justify-center gap-2 disabled:opacity-50"
-                      >
-                        {isUpdating === order.id ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Memproses...</span>
-                          </>
-                        ) : (
-                          <>
-                            <UtensilsCrossed className="w-4 h-4" />
-                            <span>Siap Saji</span>
                           </>
                         )}
                       </button>
@@ -1050,12 +1103,18 @@ export default function CashierOrdersClient({
                   </button>
 
                   <button
+                    type="button"
+                    disabled={isUnpaidQris}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleOpenReceipt(order);
                     }}
-                    className="p-2 rounded-xl border border-stone-200 bg-white hover:bg-orange-50 hover:border-orange-300 text-orange-600 transition-all cursor-pointer"
-                    title="Cetak Struk Thermal (58mm)"
+                    className={`p-2 rounded-xl border transition-all ${
+                      isUnpaidQris
+                        ? 'border-stone-300 bg-stone-200 text-stone-400 cursor-not-allowed'
+                        : 'border-stone-200 bg-white hover:bg-orange-50 hover:border-orange-300 text-orange-600 cursor-pointer'
+                    }`}
+                    title={isUnpaidQris ? 'Pembayaran QRIS belum terkonfirmasi, struk tidak dapat dicetak' : 'Cetak Struk Thermal (58mm)'}
                   >
                     <Printer className="w-4 h-4" />
                   </button>
@@ -1197,7 +1256,7 @@ export default function CashierOrdersClient({
                 </div>
 
                 {/* Payment Proof */}
-                {selectedOrder.paymentProofUrl && (
+                {selectedOrder.paymentProofUrl && (selectedOrder.paymentProofUrl.startsWith('/') || selectedOrder.paymentProofUrl.startsWith('http')) && (
                   <div className="space-y-1.5">
                     <p className="text-xs font-bold text-stone-400 uppercase tracking-wider">Bukti Pembayaran</p>
                     <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-stone-200">
@@ -1216,11 +1275,17 @@ export default function CashierOrdersClient({
                   Tutup
                 </button>
                 <button
+                  type="button"
+                  disabled={isUnpaidQrisOrder(selectedOrder)}
                   onClick={() => {
                     handleOpenReceipt(selectedOrder);
                   }}
-                  className="py-3 px-4 rounded-xl border border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                  title="Cetak Struk (58mm)"
+                  className={`py-3 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                    isUnpaidQrisOrder(selectedOrder)
+                      ? 'border-stone-300 bg-stone-200 text-stone-400 cursor-not-allowed'
+                      : 'border-orange-200 bg-orange-50 hover:bg-orange-100 text-orange-700 cursor-pointer'
+                  }`}
+                  title={isUnpaidQrisOrder(selectedOrder) ? 'Pembayaran QRIS belum terkonfirmasi, struk tidak dapat dicetak' : 'Cetak Struk (58mm)'}
                 >
                   <Printer className="w-4 h-4" /> Cetak Struk
                 </button>

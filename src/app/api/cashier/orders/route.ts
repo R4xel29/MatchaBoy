@@ -133,13 +133,21 @@ export async function POST(req: Request) {
     const body = await req.json()
 
     // QRIS Confirmation: Update the pre-existing QRIS order rather than creating a duplicate
-    if (body.isQrisConfirm && body.invoiceNumber) {
+    if (body.isQrisConfirm || body.paymentMethod === 'QRIS') {
+      if (!body.invoiceNumber) {
+        return NextResponse.json({ error: 'Silakan tampilkan kode QRIS dan tunggu pembayaran terkonfirmasi terlebih dahulu' }, { status: 400 });
+      }
+
       const existingOrder = await prisma.order.findUnique({
         where: { id: body.invoiceNumber }
       });
       
       if (!existingOrder) {
         return NextResponse.json({ error: 'Pesanan QRIS tidak ditemukan' }, { status: 404 });
+      }
+
+      if (existingOrder.status === 'PENDING_PAYMENT') {
+        return NextResponse.json({ error: 'Pembayaran QRIS belum terkonfirmasi masuk. Struk belum dapat dicetak.' }, { status: 400 });
       }
       
       // Update cashierId

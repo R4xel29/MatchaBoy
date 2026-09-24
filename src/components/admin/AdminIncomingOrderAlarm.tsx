@@ -21,7 +21,7 @@ interface AdminIncomingOrderAlarmProps {
 }
 
 const shouldTriggerAlarm = (order: OrderData, leadTimeMin: number) => {
-  if (order.status !== 'PENDING' && order.status !== 'PENDING_PAYMENT') {
+  if (order.status !== 'PENDING') {
     return false;
   }
   if (order.orderType !== 'PICKUP') {

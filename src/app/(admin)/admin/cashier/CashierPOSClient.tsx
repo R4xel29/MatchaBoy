@@ -1880,11 +1880,11 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                 <button
                   type="button"
                   onClick={handleSubmitOrder}
-                  disabled={isSubmitting || !customerName || cart.length === 0}
-                  className={`w-full py-3.5 rounded-xl text-white font-bold text-sm shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-2 ${
+                  disabled={isSubmitting || !customerName || cart.length === 0 || paymentMethod === 'QRIS'}
+                  className={`w-full py-3.5 rounded-xl font-bold text-sm shadow-md transition-all disabled:opacity-70 disabled:cursor-not-allowed active:scale-[0.98] flex items-center justify-center gap-2 ${
                     paymentMethod === 'QRIS'
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500'
-                      : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400'
+                      ? 'bg-stone-300 text-stone-600 border border-stone-300'
+                      : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white hover:shadow-lg'
                   }`}
                 >
                   {isSubmitting ? (
@@ -1894,8 +1894,12 @@ export default function CashierPOSClient({ products, categories, packagingStock,
                     </>
                   ) : paymentMethod === 'QRIS' ? (
                     <>
-                      <Check className="w-4 h-4" />
-                      <span>Konfirmasi QRIS Lunas ({formatRupiah(totalPayable)})</span>
+                      <Clock className="w-4 h-4 animate-pulse" />
+                      <span>
+                        {isQrisConfirmed
+                          ? `Menunggu Konfirmasi Pembayaran QRIS (${formatRupiah(totalPayable)})...`
+                          : 'Klik "Tampilkan Kode QRIS" di Atas'}
+                      </span>
                     </>
                   ) : (
                     <>

@@ -52,12 +52,16 @@ export async function PATCH(
       return NextResponse.json({ error: 'Pesanan tidak ditemukan' }, { status: 404 })
     }
 
-    // Validation: if no proof uploaded yet for QRIS/TRANSFER, cashier cannot change to PREPARING or beyond,
-    // but they can change to PENDING (Accept) or CANCELLED (Reject/Cancel)
     const isManualPayment = existingOrder.paymentMethod === 'TRANSFER'
     const hasNoProof = !existingOrder.paymentProofUrl
     const isCurrentlyPending = ['PENDING', 'PENDING_PAYMENT'].includes(existingOrder.status)
     const isAttemptingProgress = !['PENDING', 'PENDING_PAYMENT', 'CANCELLED'].includes(status)
+
+    if (existingOrder.status === 'PENDING_PAYMENT' && isAttemptingProgress) {
+      return NextResponse.json({
+        error: 'Pembayaran QRIS belum terkonfirmasi masuk. Pesanan belum dapat diselesaikan.'
+      }, { status: 400 })
+    }
 
     if (isManualPayment && hasNoProof && isCurrentlyPending && isAttemptingProgress) {
       return NextResponse.json({
