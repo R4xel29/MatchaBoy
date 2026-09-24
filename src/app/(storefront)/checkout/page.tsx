@@ -571,6 +571,10 @@ export default function CheckoutPage() {
         let pName = session.user.name || '';
         let pPhone = '';
         if (profileData) {
+          if (profileData.phoneVerified === false) {
+            router.push('/setup-phone?callbackUrl=/checkout');
+            return;
+          }
           if (profileData.name) pName = profileData.name;
           if (profileData.phone) pPhone = profileData.phone;
           if (profileData.points !== undefined) setUserPoints(profileData.points);

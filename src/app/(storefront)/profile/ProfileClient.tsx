@@ -78,6 +78,7 @@ type UserShape = {
   name: string;
   email: string;
   phone: string;
+  phoneVerified?: boolean;
   points: number;
   tumblerCount?: number;
   currentTumblerGoal?: number;
@@ -206,6 +207,7 @@ export default function ProfileClient({
             points: data.points,
             name: data.name || prev.name,
             phone: data.phone || prev.phone,
+            phoneVerified: data.phoneVerified !== undefined ? data.phoneVerified : prev.phoneVerified,
             image: data.image || prev.image,
             email: data.email || prev.email,
             tumblerCount: data.tumblerCount !== undefined ? data.tumblerCount : prev.tumblerCount,
@@ -453,6 +455,29 @@ export default function ProfileClient({
               exit={{ opacity: 0, y: -10 }}
               className="space-y-6"
             >
+              {!user.isGuest && user.phoneVerified === false && (
+                <div className="bg-gradient-to-r from-orange-50 to-amber-50 border border-amber-200/80 rounded-3xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-amber-100 text-orange-600 flex items-center justify-center shrink-0">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-gray-900">Nomor WhatsApp Belum Terverifikasi</h4>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        Hubungkan nomor WhatsApp aktif Anda untuk memesan dan menerima notifikasi status pesanan.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/setup-phone?callbackUrl=/profile')}
+                    className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95 shrink-0"
+                  >
+                    Verifikasi Sekarang
+                  </button>
+                </div>
+              )}
+
               <div className="bg-white/80 backdrop-blur-md rounded-[32px] border border-[#D4A574]/15 shadow-sm overflow-hidden p-3 space-y-1">
                 {menuItems.map((item) => (
                   <button
@@ -510,6 +535,10 @@ export default function ProfileClient({
               {!user.isGuest && (
                 <button 
                   onClick={async () => {
+                     try {
+                       sessionStorage.removeItem('skip_phone_setup');
+                       localStorage.removeItem('skip_phone_setup');
+                     } catch {}
                      useCartStore.getState().clearCart();
                      await signOut({ redirect: false });
                      router.push('/');
@@ -858,8 +887,12 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
                   className="w-full pl-14 pr-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/15 rounded-2xl text-[15px] font-semibold text-gray-500 cursor-not-allowed shadow-inner"
                 />
               </div>
-              <button className="px-5 py-3 border border-[#B48A5E] text-[#B48A5E] rounded-2xl text-sm font-bold hover:bg-[#B48A5E]/5 transition-colors">
-                Ganti
+              <button
+                type="button"
+                onClick={() => router.push('/setup-phone?callbackUrl=/profile')}
+                className="px-5 py-3 border border-[#B48A5E] text-[#B48A5E] rounded-2xl text-sm font-bold hover:bg-[#B48A5E]/5 transition-colors"
+              >
+                {user.phoneVerified === false ? 'Verifikasi' : 'Ganti'}
               </button>
             </div>
           </div>

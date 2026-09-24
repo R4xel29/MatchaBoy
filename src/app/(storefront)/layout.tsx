@@ -52,6 +52,7 @@ export default function StorefrontLayout({
   const [loginOpen, setLoginOpen] = useState(false);
   const { data: session, status } = useSession();
   const [setupChecked, setSetupChecked] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState<boolean | null>(null);
   const setupCheckRef = useRef(false);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function StorefrontLayout({
       fetch('/api/user/check-phone')
         .then((res) => res.json())
         .then((data) => {
+          setPhoneVerified(!!data.phoneVerified);
           // If we are already on a setup page, don't redirect
           const path = window.location.pathname;
           if (path.startsWith('/setup-')) {
@@ -79,7 +81,20 @@ export default function StorefrontLayout({
           } else if (!data.hasName) {
             router.push('/setup-profile');
           } else if (!data.phoneVerified) {
-            router.push('/setup-phone');
+            let hasSkipped = false;
+            try {
+              hasSkipped =
+                sessionStorage.getItem('skip_phone_setup') === 'true' ||
+                localStorage.getItem('skip_phone_setup') === 'true';
+            } catch {}
+
+            if (path.startsWith('/checkout')) {
+              router.push('/setup-phone?callbackUrl=/checkout');
+            } else if (!hasSkipped) {
+              router.push('/setup-phone');
+            } else {
+              setSetupChecked(true);
+            }
           } else {
             setSetupChecked(true);
           }
@@ -91,6 +106,13 @@ export default function StorefrontLayout({
       setSetupChecked(true);
     }
   }, [status, session?.user?.id, router]);
+
+  // Enforce WhatsApp phone verification when navigating to /checkout
+  useEffect(() => {
+    if (status === 'authenticated' && phoneVerified === false && pathname.startsWith('/checkout')) {
+      router.push('/setup-phone?callbackUrl=/checkout');
+    }
+  }, [pathname, status, phoneVerified, router]);
 
   if (pathname !== '/spmb' && (status === 'loading' || (status === 'authenticated' && !setupChecked))) {
     return (

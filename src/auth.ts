@@ -383,14 +383,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                         return `/login?error=PhoneConflict`;
                     }
 
-                    // Update newly created user with phone
-                    await prisma.user.update({
-                        where: { id: user.id },
-                        data: {
-                            phone: standardizedPhone,
-                            phoneVerified: false
-                        }
-                    });
+                    // Update user with phone if already exists in DB
+                    if (dbUser) {
+                        await prisma.user.update({
+                            where: { id: dbUser.id },
+                            data: {
+                                phone: standardizedPhone,
+                                phoneVerified: false
+                            }
+                        });
+                    }
 
                     // Clear cookie using next cookies store if possible
                     try {
@@ -420,22 +422,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
                     return true;
                 } else {
-                    // Cookie not present -> Cancelled or Bypassed
-                    console.log(`[AUTH] Google login without pending_oauth_phone cookie. Deleting user ${user.id} if newly created.`);
-                    
-                    // Only delete newly created Google accounts, never delete existing credential accounts
-                    if (dbUser && !dbUser.password) {
-                        try {
-                            await prisma.user.delete({
-                                where: { id: dbUser.id }
-                            });
-                        } catch (e) {
-                            console.error("[AUTH] Failed to clean up user record:", e);
+                    // Allow direct Google login without pre-OAuth phone modal;
+                    // phone setup & verification are handled during onboarding (/setup-phone) or checkout.
+                    const banned = await prisma.bannedContact.findFirst({
+                        where: {
+                            OR: [
+                                { type: 'EMAIL', value: user.email || '___' },
+                                ...(dbUser?.phone ? [{ type: 'PHONE' as const, value: dbUser.phone }] : [])
+                            ]
                         }
+                    });
+                    if (banned) {
+                        return false;
                     }
-                    
-                    // Redirect to login page with custom error instead of throwing AccessDenied (suspended account) error
-                    return `/login?error=PhoneRequired`;
+                    return true;
                 }
             }
  
@@ -559,6 +559,30 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
     },
     events: {
+        async createUser({ user }) {
+            if (!user?.id) return;
+            try {
+                const reqHeaders = await headers();
+                const cookieHeader = reqHeaders.get("cookie") || "";
+                const match = cookieHeader.match(/pending_oauth_phone=([^;]+)/);
+                if (match) {
+                    let standardizedPhone = decodeURIComponent(match[1]).replace(/[^0-9]/g, '');
+                    if (standardizedPhone.startsWith('08')) {
+                        standardizedPhone = '62' + standardizedPhone.substring(1);
+                    } else if (standardizedPhone.startsWith('8')) {
+                        standardizedPhone = '62' + standardizedPhone;
+                    }
+                    if (standardizedPhone.length >= 9) {
+                        await prisma.user.update({
+                            where: { id: user.id },
+                            data: { phone: standardizedPhone, phoneVerified: false }
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("[AUTH] Error in createUser event:", e);
+            }
+        },
         async signOut(message) {
             const sessionToken = (message as any)?.token?.sessionToken
             if (sessionToken) {

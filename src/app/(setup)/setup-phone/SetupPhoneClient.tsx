@@ -2,18 +2,74 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Smartphone, MessageSquare, Timer } from 'lucide-react';
+import { signOut } from 'next-auth/react';
+import { Loader2, Smartphone, MessageSquare, Timer, Coffee, LogOut, AlertCircle } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { useCartStore } from '@/stores/cart-store';
 
-export default function SetupPhoneClient() {
-  const [phone, setPhone] = useState('');
+function formatLocalPhoneInput(raw: string): string {
+  const digits = (raw || '').replace(/\D/g, '');
+  if (digits.startsWith('62')) return digits.slice(2);
+  if (digits.startsWith('0')) return digits.slice(1);
+  return digits;
+}
+
+export default function SetupPhoneClient({ initialPhone = '' }: { initialPhone?: string }) {
+  const [phone, setPhone] = useState(() => formatLocalPhoneInput(initialPhone));
   const [loading, setLoading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [step, setStep] = useState<'input' | 'verify'>('input');
   const [verificationCode, setVerificationCode] = useState('');
   const [targetPhone, setTargetPhone] = useState('');
   const [timeLeft, setTimeLeft] = useState(900); // 15 minutes in seconds
+  const [callbackUrl, setCallbackUrl] = useState('/');
   const router = useRouter();
   const { showToast } = useToast();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const cb = params.get('callbackUrl');
+      if (cb && cb.startsWith('/')) {
+        setCallbackUrl(cb);
+      }
+      // Mark that the user has seen the phone setup screen so they are never trapped in a redirect loop when browsing the menu
+      try {
+        sessionStorage.setItem('skip_phone_setup', 'true');
+        localStorage.setItem('skip_phone_setup', 'true');
+      } catch {}
+    }
+  }, []);
+
+  useEffect(() => {
+    if (initialPhone && !phone) {
+      setPhone(formatLocalPhoneInput(initialPhone));
+    }
+  }, [initialPhone]);
+
+  const handleSkipToMenu = () => {
+    try {
+      sessionStorage.setItem('skip_phone_setup', 'true');
+      localStorage.setItem('skip_phone_setup', 'true');
+    } catch {}
+    router.push('/');
+    router.refresh();
+  };
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      sessionStorage.removeItem('skip_phone_setup');
+      localStorage.removeItem('skip_phone_setup');
+      useCartStore.getState().clearCart();
+      await signOut({ redirect: false });
+      router.push('/login');
+      router.refresh();
+    } catch (err) {
+      console.error(err);
+      setLoggingOut(false);
+    }
+  };
 
   const handleRequestVerification = async () => {
     if (!phone.trim()) return;
@@ -99,10 +155,14 @@ export default function SetupPhoneClient() {
 
         if (res.ok && data.verified) {
           clearInterval(pollInterval);
+          try {
+            sessionStorage.removeItem('skip_phone_setup');
+            localStorage.removeItem('skip_phone_setup');
+          } catch {}
           showToast('WhatsApp berhasil diverifikasi!', 'success');
           
-          // Complete onboarding, redirect to homepage
-          router.push('/');
+          // Complete onboarding, redirect to callbackUrl or homepage
+          router.push(callbackUrl || '/');
           router.refresh();
         }
       } catch (err) {
@@ -111,7 +171,7 @@ export default function SetupPhoneClient() {
     }, 3000); // Poll every 3 seconds
 
     return () => clearInterval(pollInterval);
-  }, [step, router, showToast]);
+  }, [step, router, showToast, callbackUrl]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -126,8 +186,39 @@ export default function SetupPhoneClient() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] flex flex-col justify-between pt-12 px-6 pb-safe">
-      <div className="flex-1 max-w-md w-full mx-auto flex flex-col justify-center">
+    <div className="min-h-screen bg-[#FDFBF7] flex flex-col justify-between pt-6 px-6 pb-safe">
+      {/* Top Bar: Skip to Menu & Logout */}
+      <div className="max-w-md w-full mx-auto flex items-center justify-between py-2">
+        <button
+          type="button"
+          onClick={handleSkipToMenu}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-50 text-orange-600 hover:bg-orange-100/80 text-xs font-bold transition-all active:scale-95"
+        >
+          <Coffee className="w-4 h-4" />
+          <span>Lihat Menu Dulu</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-gray-200 bg-white text-gray-600 hover:text-red-600 hover:border-red-200 text-xs font-bold transition-all active:scale-95 disabled:opacity-50"
+        >
+          {loggingOut ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+          <span>Keluar / Ganti Akun</span>
+        </button>
+      </div>
+
+      <div className="flex-1 max-w-md w-full mx-auto flex flex-col justify-center py-6">
+        {callbackUrl.startsWith('/checkout') && (
+          <div className="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200/80 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="text-xs text-amber-800 leading-relaxed font-medium">
+              Verifikasi nomor WhatsApp diperlukan sebelum menyelesaikan pesanan di halaman Checkout agar Anda menerima info status pesanan.
+            </div>
+          </div>
+        )}
+
         {step === 'input' ? (
           <div className="space-y-6">
             <div className="text-center space-y-2">
@@ -192,6 +283,15 @@ export default function SetupPhoneClient() {
                 'KIRIM KODE VERIFIKASI MANUAL'
               )}
             </button>
+
+            <button
+              type="button"
+              onClick={handleSkipToMenu}
+              className="w-full py-3.5 bg-white border border-[#D4A574]/30 text-[#B48A5E] rounded-xl font-bold text-[14px] hover:bg-amber-50/50 active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+            >
+              <Coffee className="w-4 h-4" />
+              <span>Lewati & Lihat Menu Dulu</span>
+            </button>
           </div>
         ) : (
           <div className="space-y-6">
@@ -243,6 +343,15 @@ export default function SetupPhoneClient() {
                 className="w-full py-4 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold text-[14px] hover:bg-gray-50 active:scale-[0.98] transition-all flex justify-center items-center gap-1.5"
               >
                 Ganti Nomor WhatsApp
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSkipToMenu}
+                className="w-full py-3.5 bg-white border border-[#D4A574]/30 text-[#B48A5E] rounded-xl font-bold text-[14px] hover:bg-amber-50/50 active:scale-[0.98] transition-all flex justify-center items-center gap-2"
+              >
+                <Coffee className="w-4 h-4" />
+                <span>Lewati & Lihat Menu Dulu</span>
               </button>
             </div>
 

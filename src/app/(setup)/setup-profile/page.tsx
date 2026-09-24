@@ -13,7 +13,7 @@ export default async function SetupProfilePage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { pin: true, name: true },
+    select: { pin: true, name: true, phoneVerified: true },
   });
 
   // If user doesn't have PIN yet, send them to PIN setup first
@@ -21,10 +21,13 @@ export default async function SetupProfilePage() {
     redirect('/setup-pin');
   }
 
-  // If user already has a real name, they're done
+  // If user already has a real name, proceed to setup-phone (if unverified) or home
   const name = user?.name?.trim() || '';
   const hasRealName = name !== '' && !/^User \d+$/i.test(name);
   if (hasRealName) {
+    if (!user?.phoneVerified) {
+      redirect('/setup-phone');
+    }
     redirect('/');
   }
 

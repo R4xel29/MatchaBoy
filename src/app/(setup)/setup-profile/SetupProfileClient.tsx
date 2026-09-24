@@ -21,6 +21,15 @@ export default function SetupProfileClient() {
       });
       
       if (res.ok) {
+        try {
+          const checkRes = await fetch('/api/user/check-phone');
+          const checkData = await checkRes.json();
+          if (!checkData.phoneVerified) {
+            router.push('/setup-phone');
+            router.refresh();
+            return;
+          }
+        } catch {}
         router.push('/');
         router.refresh();
       }

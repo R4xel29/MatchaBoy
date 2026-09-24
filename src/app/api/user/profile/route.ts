@@ -12,7 +12,7 @@ export async function GET() {
         const user = await prisma.user.findUnique({
             where: { id: session.user.id },
             select: {
-                id: true, name: true, email: true, phone: true,
+                id: true, name: true, email: true, phone: true, phoneVerified: true,
                 gender: true, birthDate: true,
                 referralCode: true, points: true, role: true,
                 image: true,
@@ -54,6 +54,7 @@ export async function GET() {
             name: user.name,
             email: user.email,
             phone: user.phone,
+            phoneVerified: !!user.phoneVerified,
             gender: user.gender,
             birthDate: user.birthDate,
             referralCode: user.referralCode,
@@ -86,9 +87,8 @@ export async function PUT(req: NextRequest) {
         const data: any = {};
         if (name !== undefined) data.name = name;
         if (email !== undefined) data.email = email;
-        if (phone !== undefined) {
+        if (phone !== undefined && phone !== '-' && phone.trim() !== '') {
             data.phone = phone;
-            data.phoneVerified = true;
         }
         if (gender !== undefined) data.gender = gender;
         if (birthDate !== undefined) data.birthDate = birthDate ? new Date(birthDate) : null;

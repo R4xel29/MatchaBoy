@@ -13,13 +13,17 @@ export default async function SetupPinPage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { pin: true, name: true },
+    select: { pin: true, name: true, phoneVerified: true },
   });
 
   // If user already has a PIN, skip this step
   if (user?.pin && user.pin.trim() !== '') {
-    if (!user.name || user.name.trim() === '') {
+    const name = user?.name?.trim() || '';
+    const hasRealName = name !== '' && !/^User \d+$/i.test(name);
+    if (!hasRealName) {
       redirect('/setup-profile');
+    } else if (!user.phoneVerified) {
+      redirect('/setup-phone');
     } else {
       redirect('/');
     }

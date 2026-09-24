@@ -72,6 +72,22 @@ function LoginContent() {
     }, 2500);
   };
 
+  const handleGoogleDirectLogin = async () => {
+    setLoadingMessages([
+      "Menghubungkan ke Google...",
+      "Mempersiapkan sesi akun Anda..."
+    ]);
+    setGoogleLoading(true);
+    try {
+      const callbackUrl = searchParams.get("callbackUrl") || "/profile";
+      await signIn("google", { callbackUrl });
+    } catch (err) {
+      console.error(err);
+      showToast("Gagal masuk dengan Google", "error");
+      setGoogleLoading(false);
+    }
+  };
+
   const handleGoogleSubmit = async () => {
     if (!googlePhone) return;
     setLoadingMessages([
@@ -264,7 +280,7 @@ function LoginContent() {
 
               <button
                 type="button"
-                onClick={() => setShowGoogleModal(true)}
+                onClick={handleGoogleDirectLogin}
                 className="w-full py-3.5 bg-white border border-gray-200 text-gray-700 rounded-full font-bold shadow-sm hover:bg-gray-50 active:scale-[0.98] transition-all flex justify-center items-center gap-3"
               >
                 <svg viewBox="0 0 24 24" className="w-5 h-5" aria-hidden="true">

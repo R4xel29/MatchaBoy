@@ -13,7 +13,7 @@ export default async function SetupPhonePage() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { pin: true, name: true, phoneVerified: true },
+    select: { pin: true, name: true, phone: true, phoneVerified: true },
   });
 
   // If already verified, skip this step and check other steps
@@ -27,5 +27,5 @@ export default async function SetupPhonePage() {
     }
   }
 
-  return <SetupPhoneClient />;
+  return <SetupPhoneClient initialPhone={user?.phone || ''} />;
 }

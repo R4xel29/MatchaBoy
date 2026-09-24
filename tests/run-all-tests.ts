@@ -28,6 +28,7 @@ import './food-packaging-exclusion.test';
 import './qris-lifecycle-and-printing.test';
 import './admin-customers.test';
 import './employee-dashboard.test';
+import './google-login-phone-setup.test';
 
 async function main() {
   console.log('\x1b[33m============================================================\x1b[0m');

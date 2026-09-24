@@ -87,6 +87,7 @@ export default async function ProfilePage() {
           name: user.name || "Matcha Lover",
           email: user.email || "",
           phone: user.phone || "-",
+          phoneVerified: !!user.phoneVerified,
           points: user.points,
           tumblerCount: (user as any).tumblerCount || 0,
           currentTumblerGoal: (user as any).currentTumblerGoal || 10,
