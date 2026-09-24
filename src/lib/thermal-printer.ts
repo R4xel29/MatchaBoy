@@ -1,5 +1,5 @@
 import { formatRupiah } from './utils';
-import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary } from './receipt-modifiers';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes } from './receipt-modifiers';
 import { isBluetoothPrinterConnected, printDirectBluetooth } from './bluetooth-printer';
 
 /**
@@ -189,9 +189,9 @@ export async function printThermalReceipt(
             ${itemsHtml}
           </div>
 
-          ${order.notes ? `
+          ${cleanOrderNotes(order.notes) ? `
             <div style="border: 1px solid #000; padding: 4px; margin-top: 4px; font-size: 10.5px;">
-              <b>Catatan:</b><br/>${order.notes}
+              <b>Catatan:</b><br/>${cleanOrderNotes(order.notes)}
             </div>
           ` : ''}
 
@@ -346,6 +346,12 @@ export async function printThermalReceipt(
           <div style="margin: 4px 0;">
             ${itemsHtml}
           </div>
+
+          ${cleanOrderNotes(order.notes) ? `
+            <div style="border: 1px dashed #000; padding: 4px; margin: 4px 0; font-size: 10px;">
+              <b>Catatan:</b> ${cleanOrderNotes(order.notes)}
+            </div>
+          ` : ''}
 
           <div class="divider"></div>
 

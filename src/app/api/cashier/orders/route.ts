@@ -150,11 +150,16 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Pembayaran QRIS belum terkonfirmasi masuk. Struk belum dapat dicetak.' }, { status: 400 });
       }
       
-      // Update cashierId
+      // Update cashierId and sync customer notes if provided
+      const cleanNotes = body.notes !== undefined
+        ? (body.notes ? body.notes.toString().trim() : null)
+        : (existingOrder.notes ? existingOrder.notes.replace(/\[POS QRIS Order\]/gi, '').replace(/\[DOKU Webhook\][^\n\r]*/gi, '').trim() || null : null);
+
       await prisma.order.update({
         where: { id: existingOrder.id },
         data: {
-          cashierId: session.user.id
+          cashierId: session.user.id,
+          notes: cleanNotes,
         }
       });
       

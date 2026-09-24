@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { Coffee } from 'lucide-react';
 import type { Product } from '@/types';
 import { ProductCard } from './ProductCard';
 
@@ -29,12 +30,15 @@ export function ProductGrid({
 
   if (filtered.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-        <div className="w-16 h-16 rounded-full bg-brand-50 flex items-center justify-center mb-4">
-          <span className="text-3xl">🍵</span>
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center bg-white/80 rounded-3xl border border-amber-100">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200/70 flex items-center justify-center mb-4 text-orange-600 shadow-inner">
+          <Coffee className="w-7 h-7" />
         </div>
-        <p className="text-muted-foreground text-sm">
-          Belum ada menu di kategori ini.
+        <p className="text-foreground font-bold text-sm">
+          Belum ada menu di kategori ini
+        </p>
+        <p className="text-muted-foreground text-xs mt-1">
+          Silakan pilih kategori makanan atau minuman lainnya.
         </p>
       </div>
     );

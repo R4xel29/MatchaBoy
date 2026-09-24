@@ -47,7 +47,7 @@ import { LiveTableMinimap } from '@/components/admin/tables/LiveTableMinimap';
 import { ThermalReceiptModal, ReceiptData } from '@/components/cashier/ThermalReceiptModal';
 import { BluetoothPrinterPill } from '@/components/cashier/BluetoothPrinterPill';
 import { printThermalReceipt, ThermalPrintOrder } from '@/lib/thermal-printer';
-import { formatOrderCardModifiers } from '@/lib/receipt-modifiers';
+import { formatOrderCardModifiers, cleanOrderNotes, resolveEffectiveItemPrice } from '@/lib/receipt-modifiers';
 import { useToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getAlarmSoundUrl, playBoostedAudio, setupSpeakerPecahBooster } from '@/lib/alarm-utils';
@@ -273,12 +273,13 @@ export default function CashierOrdersClient({
       paymentMethod: order.paymentMethod,
       createdAt: order.createdAt,
       items: order.items.map((item) => {
-        const origPrice = item.product.price && item.product.price > item.price ? item.product.price : undefined;
-        const pDiscount = origPrice ? (origPrice - item.price) : undefined;
+        const unitPrice = resolveEffectiveItemPrice(item);
+        const origPrice = item.product.price && item.product.price > unitPrice ? item.product.price : undefined;
+        const pDiscount = origPrice ? (origPrice - unitPrice) : undefined;
         return {
           name: item.product.name,
           qty: item.qty,
-          price: item.price,
+          price: unitPrice,
           originalPrice: origPrice,
           promoDiscount: pDiscount,
           modifiersString: item.modifiers || undefined,
@@ -291,7 +292,7 @@ export default function CashierOrdersClient({
       voucherTitle: order.voucherTitle || undefined,
       hasTumbler: order.hasTumbler || false,
       total: order.total,
-      notes: order.notes || undefined,
+      notes: cleanOrderNotes(order.notes) || undefined,
     };
     setSelectedReceiptOrder(receiptData);
     setShowReceiptModal(true);
@@ -483,12 +484,13 @@ export default function CashierOrdersClient({
                   paymentMethod: ord.paymentMethod,
                   createdAt: ord.createdAt,
                   items: ord.items.map((item) => {
-                    const origPrice = item.product.price && item.product.price > item.price ? item.product.price : undefined;
-                    const pDiscount = origPrice ? (origPrice - item.price) : undefined;
+                    const unitPrice = resolveEffectiveItemPrice(item);
+                    const origPrice = item.product.price && item.product.price > unitPrice ? item.product.price : undefined;
+                    const pDiscount = origPrice ? (origPrice - unitPrice) : undefined;
                     return {
                       name: item.product.name,
                       qty: item.qty,
-                      price: item.price,
+                      price: unitPrice,
                       originalPrice: origPrice,
                       promoDiscount: pDiscount,
                       modifiersString: item.modifiers || undefined,
@@ -501,7 +503,7 @@ export default function CashierOrdersClient({
                   voucherTitle: ord.voucherTitle || undefined,
                   hasTumbler: ord.hasTumbler || false,
                   total: ord.total,
-                  notes: ord.notes || undefined,
+                  notes: cleanOrderNotes(ord.notes) || undefined,
                 };
 
                 // Trigger auto-print to thermal printer
@@ -993,6 +995,7 @@ export default function CashierOrdersClient({
                 <div className="space-y-1.5">
                   {order.items.map((item) => {
                     const { tags, promoText } = formatOrderCardModifiers(item.modifiers, item.product.name);
+                    const unitPrice = resolveEffectiveItemPrice(item);
                     return (
                       <div key={item.id} className={`p-2.5 rounded-2xl border flex items-start justify-between gap-3 text-xs ${
                         isUnpaidQris ? 'border-stone-200 bg-stone-200/40' : 'border-stone-100 bg-stone-50/50'
@@ -1019,16 +1022,16 @@ export default function CashierOrdersClient({
                           )}
                         </div>
                         <span className={`font-bold shrink-0 ${isUnpaidQris ? 'text-stone-500' : 'text-stone-700'}`}>
-                          {formatRupiah(item.price * item.qty)}
+                          {formatRupiah(unitPrice * item.qty)}
                         </span>
                       </div>
                     );
                   })}
                 </div>
 
-                {order.notes && (
+                {cleanOrderNotes(order.notes) && (
                   <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-medium mt-2">
-                    <span className="font-bold">Catatan:</span> {order.notes}
+                    <span className="font-bold">Catatan:</span> {cleanOrderNotes(order.notes)}
                   </div>
                 )}
               </div>
@@ -1212,6 +1215,7 @@ export default function CashierOrdersClient({
                   <div className="space-y-1">
                     {selectedOrder.items.map((item) => {
                       const { tags, promoText } = formatOrderCardModifiers(item.modifiers, item.product.name);
+                      const unitPrice = resolveEffectiveItemPrice(item);
                       return (
                         <div key={item.id} className="p-2.5 rounded-xl border border-stone-100 bg-stone-50/50 flex justify-between items-center text-xs">
                           <div>
@@ -1230,12 +1234,18 @@ export default function CashierOrdersClient({
                               </div>
                             )}
                           </div>
-                          <span className="font-bold text-stone-700">{formatRupiah(item.price * item.qty)}</span>
+                          <span className="font-bold text-stone-700">{formatRupiah(unitPrice * item.qty)}</span>
                         </div>
                       );
                     })}
                   </div>
                 </div>
+
+                {cleanOrderNotes(selectedOrder.notes) && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium">
+                    <span className="font-bold">Catatan Pembeli:</span> {cleanOrderNotes(selectedOrder.notes)}
+                  </div>
+                )}
 
                 {/* Totals */}
                 <div className="p-4 rounded-2xl bg-orange-50/50 border border-orange-200 space-y-1.5 text-xs font-bold">

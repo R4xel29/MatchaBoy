@@ -456,6 +456,81 @@ export interface ReceiptPricingSummary {
  * console.log('Total Hemat:', summary.totalFlashSaleDiscount + summary.voucherDiscount);
  * ```
  */
+/**
+ * Membersihkan catatan pesanan dari tag sistem internal (seperti [POS QRIS Order],
+ * [DOKU Webhook]..., atau [CHANNEL:...]) sehingga hanya menampilkan pesan asli dari pembeli/kasir.
+ */
+export function cleanOrderNotes(notes?: string | null): string {
+  if (!notes) return '';
+  return notes
+    .replace(/\[POS QRIS Order\]/gi, '')
+    .replace(/\[DOKU Webhook\][^\n\r]*/gi, '')
+    .replace(/\[DOKU Active Check\][^\n\r]*/gi, '')
+    .replace(/\[CHANNEL:[^\]]*\]/gi, '')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
+
+/**
+ * Menghitung harga satuan efektif item pesanan, termasuk fallback ke harga produk master
+ * apabila item pesanan lama tersimpan dengan harga Rp 0 (misal pada histori POS QRIS).
+ */
+export function resolveEffectiveItemPrice(item: {
+  price?: number;
+  totalPrice?: number;
+  qty?: number;
+  modifiers?: string | null;
+  modifiersString?: string | null;
+  product?: { price?: number } | null;
+}): number {
+  const qty = Math.max(1, Number(item.qty) || 1);
+  let unitPrice = Number(item.price) || 0;
+
+  if (item.totalPrice && Number(item.totalPrice) > 0) {
+    const tp = Number(item.totalPrice);
+    if (unitPrice <= 0) {
+      unitPrice = Math.round(tp / qty);
+    } else if (qty > 1 && tp >= unitPrice * qty) {
+      unitPrice = Math.round(tp / qty);
+    } else if (qty === 1 && tp >= unitPrice) {
+      unitPrice = tp;
+    }
+  }
+
+  if (unitPrice <= 0) {
+    const modStr = (item.modifiersString || item.modifiers || '').toString();
+    const eqMatch = modStr.match(/=\s*Rp\s*([\d.]+)/i);
+    if (eqMatch && eqMatch[1]) {
+      const parsedNet = parseInt(eqMatch[1].replace(/\./g, ''), 10);
+      if (!isNaN(parsedNet) && parsedNet > 0) {
+        unitPrice = parsedNet;
+      }
+    }
+    if (unitPrice <= 0 && item.product?.price && Number(item.product.price) > 0) {
+      unitPrice = Number(item.product.price);
+    }
+    if (unitPrice > 0 && modStr) {
+      const lowerMod = modStr.toLowerCase();
+      if (lowerMod.includes('size: large') || lowerMod.includes('size: jumbo')) {
+        unitPrice += 3000;
+      }
+      if (lowerMod.includes('double shot')) {
+        unitPrice += 3000;
+      } else if (lowerMod.includes('triple shot')) {
+        unitPrice += 6000;
+      }
+      const mMatch = lowerMod.match(/matcha\s*(?:lvl|level)\s*[:=]?\s*(\d+)/i);
+      if (mMatch) {
+        const lvl = parseInt(mMatch[1], 10);
+        if (lvl === 7 || lvl === 8) unitPrice += 1000;
+        else if (lvl >= 9) unitPrice += 2000;
+      }
+    }
+  }
+
+  return unitPrice;
+}
+
 export function calculateGrossReceiptSummary(order: {
   subtotal?: number;
   total: number;
@@ -484,7 +559,7 @@ export function calculateGrossReceiptSummary(order: {
 
   const processedItems = items.map((item) => {
     const qty = Number(item.qty) || 1;
-    const finalUnitPrice = Number(item.totalPrice || item.price) || 0;
+    const finalUnitPrice = resolveEffectiveItemPrice(item);
 
     // Detect original price
     let originalUnitPrice = Number(item.originalPrice);

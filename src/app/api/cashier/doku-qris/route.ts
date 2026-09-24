@@ -20,9 +20,36 @@ export async function POST(req: Request) {
 
     const voucherCode = body.voucherCode ? body.voucherCode.toString().trim() : null;
     const subtotal = Number(body.subtotal) || amount;
+    const cleanNotes = body.notes ? body.notes.toString().trim() : null;
 
     // Create a PENDING_PAYMENT order in Prisma DB so DOKU Webhook & Polling can find & update it
     try {
+      const productIds = items.map((i: any) => i.productId).filter(Boolean);
+      const dbProducts = productIds.length > 0
+        ? await prisma.product.findMany({
+            where: { id: { in: productIds } },
+            select: { id: true, price: true },
+          })
+        : [];
+      const productPriceMap = new Map(dbProducts.map((p) => [p.id, p.price]));
+
+      const parsedItems = items.map((i: any) => {
+        const qty = Math.max(1, Number(i.quantity || i.qty) || 1);
+        let unitPrice = Number(i.price) || Number(i.basePrice) || 0;
+        if (unitPrice <= 0 && i.totalPrice && Number(i.totalPrice) > 0) {
+          unitPrice = Math.round(Number(i.totalPrice) / qty);
+        }
+        if (unitPrice <= 0 && i.productId && productPriceMap.has(i.productId)) {
+          unitPrice = productPriceMap.get(i.productId) || 0;
+        }
+        return {
+          productId: i.productId,
+          qty,
+          price: Math.round(unitPrice),
+          modifiers: i.modsString || '',
+        };
+      });
+
       await prisma.order.upsert({
         where: { id: invoiceNumber },
         create: {
@@ -40,14 +67,9 @@ export async function POST(req: Request) {
           status: 'PENDING_PAYMENT',
           paymentProofUrl: invoiceNumber,
           paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),
-          notes: '[POS QRIS Order]',
-          items: items.length > 0 ? {
-            create: items.map((i: any) => ({
-              productId: i.productId,
-              qty: i.quantity || i.qty || 1,
-              price: i.basePrice || i.price || 0,
-              modifiers: i.modsString || '',
-            })),
+          notes: cleanNotes,
+          items: parsedItems.length > 0 ? {
+            create: parsedItems,
           } : undefined,
         },
         update: {
@@ -55,6 +77,7 @@ export async function POST(req: Request) {
           total: Math.round(amount),
           voucherCode: voucherCode,
           customerName: customerName,
+          notes: cleanNotes,
           status: 'PENDING_PAYMENT',
           paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),
         },

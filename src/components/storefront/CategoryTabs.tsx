@@ -39,11 +39,11 @@ export function CategoryTabs({
   return (
     <div
       id="category-tabs"
-      className="sticky top-[60px] z-40 bg-cream/95 backdrop-blur-sm border-b border-brand-100/50 pt-safe"
+      className="sticky top-[60px] z-40 bg-[#FFFBF5]/95 backdrop-blur-md border-b border-amber-100 pt-safe"
     >
       <div
         ref={scrollRef}
-        className="flex gap-2 px-4 sm:px-6 lg:px-8 py-3 overflow-x-auto scrollbar-hide max-w-7xl mx-auto w-full"
+        className="flex gap-2 px-4 sm:px-6 lg:px-8 py-3 overflow-x-auto scrollbar-hide max-w-6xl mx-auto w-full"
       >
         {categories.map((cat) => {
           const isActive = cat.id === activeCategory;
@@ -53,17 +53,17 @@ export function CategoryTabs({
               data-category-id={cat.id}
               onClick={() => onCategoryChange(cat.id)}
               className={cn(
-                "relative shrink-0 px-5 py-2 rounded-full text-sm font-medium transition-colors touch-target whitespace-nowrap",
+                'relative shrink-0 px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-colors touch-target whitespace-nowrap cursor-pointer',
                 isActive
-                  ? "text-white"
-                  : "text-muted-foreground hover:text-foreground hover:bg-brand-50"
+                  ? 'text-white'
+                  : 'text-stone-600 bg-white border border-amber-100 hover:text-orange-600 hover:border-orange-300'
               )}
             >
               {/* Animated pill background */}
               {isActive && (
                 <motion.div
                   layoutId="activeCategory"
-                  className="absolute inset-0 bg-brand-700 rounded-full shadow-sm"
+                  className="absolute inset-0 bg-gradient-to-r from-orange-500 to-amber-500 rounded-full shadow-md shadow-orange-500/20"
                   transition={{
                     type: 'spring',
                     stiffness: 500,

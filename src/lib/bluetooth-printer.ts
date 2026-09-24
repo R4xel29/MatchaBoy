@@ -4,7 +4,7 @@
  */
 
 import { formatRupiah } from './utils';
-import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary } from './receipt-modifiers';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes } from './receipt-modifiers';
 import html2canvas from 'html2canvas';
 
 export interface BluetoothPrinterDevice {
@@ -373,6 +373,13 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
     writeText('--------------------------------\n');
   });
 
+  if (cleanOrderNotes(order.notes)) {
+    boldOn();
+    writeText(`Catatan: ${cleanOrderNotes(order.notes)}\n`);
+    boldOff();
+    writeText('--------------------------------\n');
+  }
+
   // 6. Barcode Graphic
   alignCenter();
   writeText('|||| | ||||| || ||||||||| | |||\n');
@@ -540,13 +547,13 @@ export function buildKitchenTicketEscPos(order: any, settings?: any): Uint8Array
     writeText('--------------------------------\n');
   });
 
-  if (order.notes) {
+  if (cleanOrderNotes(order.notes)) {
     reverseOn();
     boldOn();
     writeText(' CATATAN KHUSUS: \n');
     reverseOff();
     boldOff();
-    writeText(`${order.notes}\n`);
+    writeText(`${cleanOrderNotes(order.notes)}\n`);
     writeText('--------------------------------\n');
   }
 
@@ -831,6 +838,16 @@ export function renderCgvTicketCanvas(
       y += 10;
     });
 
+    if (cleanOrderNotes(order.notes)) {
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 10.5px monospace, sans-serif';
+      ctx.fillStyle = '#000000';
+      ctx.fillText(`Catatan: ${cleanOrderNotes(order.notes)}`, paddingX, y + 11);
+      y += 16;
+      drawDivider(y, 'dashed');
+      y += 10;
+    }
+
     // 5. Barcode Graphic
     y += 4;
     ctx.textAlign = 'center';
@@ -1045,11 +1062,11 @@ export function renderCgvTicketCanvas(
       y += 10;
     });
 
-    if (order.notes) {
+    if (cleanOrderNotes(order.notes)) {
       drawBadge('CATATAN KHUSUS', paddingX, y, 10, true);
       y += 20;
       ctx.font = 'bold 11px monospace, sans-serif';
-      ctx.fillText(order.notes, paddingX, y + 10);
+      ctx.fillText(cleanOrderNotes(order.notes), paddingX, y + 10);
       y += 20;
       drawDivider(y, 'solid');
       y += 10;

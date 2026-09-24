@@ -10,6 +10,7 @@
 import { describe, it, expect } from './test-framework';
 import * as fs from 'fs';
 import * as path from 'path';
+import { cleanOrderNotes, resolveEffectiveItemPrice, calculateGrossReceiptSummary } from '../src/lib/receipt-modifiers';
 
 describe('QRIS Payment Lifecycle & Receipt Auto-Print Compliance', () => {
   it('T_QRIS_1: autoCancelExpiredQrisOrders in order-utils.ts targets only PENDING_PAYMENT and ignores PENDING', () => {
@@ -93,5 +94,56 @@ describe('QRIS Payment Lifecycle & Receipt Auto-Print Compliance', () => {
     const posRoutePath = path.resolve(process.cwd(), 'src/app/api/cashier/orders/route.ts');
     const posRouteContent = fs.readFileSync(posRoutePath, 'utf8');
     expect(posRouteContent.includes("existingOrder.status === 'PENDING_PAYMENT'")).toBeTruthy();
+  });
+
+  it('T_QRIS_7: Order notes contain only buyer custom message and strip legacy DOKU/POS QRIS system tags', () => {
+    expect(cleanOrderNotes('[POS QRIS Order]\n[DOKU Webhook] Pembayaran otomatis sukses via DOKU.')).toBe('');
+    expect(cleanOrderNotes('Tolong es dipisah\n[POS QRIS Order]\n[DOKU Webhook] Pembayaran otomatis sukses via DOKU.')).toBe('Tolong es dipisah');
+    expect(cleanOrderNotes('Jangan pakai bawang goreng [CHANNEL: QRIS]')).toBe('Jangan pakai bawang goreng');
+
+    const dokuQrisPath = path.resolve(process.cwd(), 'src/app/api/cashier/doku-qris/route.ts');
+    const dokuQrisContent = fs.readFileSync(dokuQrisPath, 'utf8');
+    expect(dokuQrisContent.includes("notes: '[POS QRIS Order]'")).toBeFalsy();
+
+    const webhookPath = path.resolve(process.cwd(), 'src/app/api/payment/doku-webhook/route.ts');
+    const webhookContent = fs.readFileSync(webhookPath, 'utf8');
+    expect(webhookContent.includes('Pembayaran otomatis sukses via DOKU.')).toBeFalsy();
+  });
+
+  it('T_QRIS_8: POS QRIS items store non-zero unit prices and resolveEffectiveItemPrice recovers historical Rp 0 items', () => {
+    // Historical item with price: 0 falls back to product.price
+    const recoveredPrice = resolveEffectiveItemPrice({
+      price: 0,
+      qty: 1,
+      modifiers: 'Normal Ice → Biasa, Matcha Lvl: 5',
+      product: { price: 12000 },
+    });
+    expect(recoveredPrice).toBe(12000);
+
+    // Receipt summary uses recovered price instead of Rp 0
+    const summary = calculateGrossReceiptSummary({
+      total: 22000,
+      items: [
+        { name: 'Iced Matcha Latte', qty: 1, price: 0, product: { name: 'Iced Matcha Latte', price: 12000 } },
+        { name: 'Indomie Goreng double 2x', qty: 1, price: 0, product: { name: 'Indomie Goreng double 2x', price: 10000 } },
+      ],
+    });
+    expect(summary.items[0].totalFinalPrice).toBe(12000);
+    expect(summary.items[1].totalFinalPrice).toBe(10000);
+    expect(summary.grossSubtotal).toBe(22000);
+  });
+
+  it('T_QRIS_9: Custom user notes are rendered on Customer Receipts as well as Kitchen Tickets', () => {
+    const modalPath = path.resolve(process.cwd(), 'src/components/cashier/ThermalReceiptModal.tsx');
+    const modalContent = fs.readFileSync(modalPath, 'utf8');
+    expect(modalContent.includes('cleanOrderNotes(order.notes)')).toBeTruthy();
+
+    const thermalPath = path.resolve(process.cwd(), 'src/lib/thermal-printer.ts');
+    const thermalContent = fs.readFileSync(thermalPath, 'utf8');
+    expect(thermalContent.includes('cleanOrderNotes(order.notes)')).toBeTruthy();
+
+    const btPath = path.resolve(process.cwd(), 'src/lib/bluetooth-printer.ts');
+    const btContent = fs.readFileSync(btPath, 'utf8');
+    expect(btContent.includes('cleanOrderNotes(order.notes)')).toBeTruthy();
   });
 });

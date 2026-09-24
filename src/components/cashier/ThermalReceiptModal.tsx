@@ -15,7 +15,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
-import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary } from '@/lib/receipt-modifiers';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes } from '@/lib/receipt-modifiers';
 import { BluetoothPrinterPill } from './BluetoothPrinterPill';
 import { isBluetoothPrinterConnected, printDirectBluetooth, printCgvTicketRasterBluetooth } from '@/lib/bluetooth-printer';
 
@@ -456,6 +456,12 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
             </div>
           </div>
 
+          ${cleanOrderNotes(order.notes) ? `
+            <div style="border: 1.5px solid #000; padding: 4px; margin-top: 4px; font-size: 10px; font-weight: bold; background: #f9f9f9;">
+              <b>CATATAN:</b> ${cleanOrderNotes(order.notes)}
+            </div>
+          ` : ''}
+
           <div class="divider-solid"></div>
 
           <!-- Section 4: Barcode & Payment -->
@@ -657,9 +663,9 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
             ${itemsHtml}
           </div>
 
-          ${order.notes ? `
+          ${cleanOrderNotes(order.notes) ? `
             <div style="border: 1.5px solid #000; padding: 4px; margin-top: 4px; font-size: 11px; font-weight: 900; background: #f5f5f5;">
-              <b>CATATAN KHUSUS:</b><br/>${order.notes}
+              <b>CATATAN KHUSUS:</b><br/>${cleanOrderNotes(order.notes)}
             </div>
           ` : ''}
 
@@ -755,6 +761,10 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
         receiptText += `  » ${l.label}: ${l.value}\n`;
       });
     });
+    if (cleanOrderNotes(order.notes)) {
+      receiptText += `--------------------------------\n`;
+      receiptText += `Catatan: ${cleanOrderNotes(order.notes)}\n`;
+    }
     receiptText += `--------------------------------\n`;
     receiptText += `Subtotal                ${formatRupiah(summary.grossSubtotal).padStart(10)}\n`;
     if (summary.totalFlashSaleDiscount > 0) {
@@ -966,6 +976,12 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
                         );
                       })}
                     </div>
+
+                    {cleanOrderNotes(order.notes) && (
+                      <div className="border-2 border-black p-2 bg-slate-50 text-black text-[10px] font-black mt-2">
+                        <span className="underline">CATATAN:</span> {cleanOrderNotes(order.notes)}
+                      </div>
+                    )}
                   </div>
 
                   {/* Section 4: Barcode & Payment Breakdown */}
@@ -1130,10 +1146,10 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
                     })}
                   </div>
 
-                  {order.notes && (
+                  {cleanOrderNotes(order.notes) && (
                     <div className="border-2 border-black p-2 bg-slate-50 text-black text-[10px] font-black mt-2">
                       <div className="underline">CATATAN KHUSUS:</div>
-                      <p className="mt-0.5 text-[11px]">{order.notes}</p>
+                      <p className="mt-0.5 text-[11px]">{cleanOrderNotes(order.notes)}</p>
                     </div>
                   )}
 

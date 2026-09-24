@@ -206,6 +206,12 @@ export async function POST(req: NextRequest) {
         if (order.status === 'PENDING_PAYMENT' || order.status === 'PENDING') {
           const isSpmbPending = order.source === 'SPMB' && order.customerPhone.startsWith('SPMB-PENDING');
           const cleanPhone = order.customerPhone.replace(/^SPMB-PENDING_/, '');
+          const cleanedBuyerNotes = order.notes
+            ? order.notes
+                .replace(/\[POS QRIS Order\]/gi, '')
+                .replace(/\[DOKU Webhook\][^\n\r]*/gi, '')
+                .trim() || null
+            : null;
           
           await prisma.order.update({
             where: { id: order.id },
@@ -213,9 +219,7 @@ export async function POST(req: NextRequest) {
               status: 'PENDING',
               paymentProofUrl: '/verified-webhook.svg',
               customerPhone: isSpmbPending ? (cleanPhone || 'SPMB-PAID') : order.customerPhone,
-              notes: order.notes 
-                ? `${order.notes}\n[DOKU Webhook] Pembayaran otomatis sukses via DOKU.`
-                : '[DOKU Webhook] Pembayaran otomatis sukses via DOKU.',
+              notes: cleanedBuyerNotes,
             },
           });
 
