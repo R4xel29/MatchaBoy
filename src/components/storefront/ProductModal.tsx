@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Image from 'next/image';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import {
   X,
   Plus,
@@ -58,6 +58,8 @@ interface ProductModalProps {
 }
 
 const ICE_LEVELS: IceLevel[] = ['Normal Ice', 'Less Ice', 'No Ice'];
+const EMPTY_PRODUCTS: Product[] = [];
+const EMPTY_CATEGORIES: Category[] = [];
 
 export function ProductModal({
   product,
@@ -65,12 +67,13 @@ export function ProductModal({
   onClose,
   editCartItemId,
   initialData,
-  allProducts = [],
-  categories = [],
+  allProducts = EMPTY_PRODUCTS,
+  categories = EMPTY_CATEGORIES,
   packagingStock: propPackagingStock,
 }: ProductModalProps) {
   const addItem = useCartStore((s) => s.addItem);
   const editItem = useCartStore((s) => s.editItem);
+  const dragControls = useDragControls();
 
   const [iceLevel, setIceLevel] = useState<IceLevel>('Normal Ice');
   const [sugarLevel, setSugarLevel] = useState<SugarLevel>('Normal Sugar');
@@ -103,29 +106,42 @@ export function ProductModal({
   const { data: session } = useSession();
   const { showToast } = useToast();
 
+  const checkProductIsFood = useCallback(
+    (targetProduct?: Product | null, fallbackName?: string): boolean => {
+      const targetName = targetProduct?.name || fallbackName || '';
+      if (!targetProduct && !targetName) return false;
+      const catObj = targetProduct
+        ? categories.find((c) => c.id === targetProduct.category || c.slug === targetProduct.category)
+        : undefined;
+      const catLower = targetProduct
+        ? `${targetProduct.category || ''} ${(targetProduct as any).categoryName || ''} ${(targetProduct as any).categorySlug || ''} ${catObj?.name || ''} ${catObj?.slug || ''}`.toLowerCase()
+        : '';
+      const nameLower = targetName.toLowerCase();
+      const descLower = (targetProduct?.description || '').toLowerCase();
+      return (
+        isFoodItem(targetName) ||
+        (targetProduct?.modifiers as any)?.productType === 'makanan' ||
+        catLower.includes('pastries') ||
+        catLower.includes('makan') ||
+        catLower.includes('food') ||
+        catLower.includes('snack') ||
+        catLower.includes('roti') ||
+        catLower.includes('pastry') ||
+        catLower.includes('cemilan') ||
+        nameLower.includes('croissant') ||
+        nameLower.includes('cookie') ||
+        nameLower.includes('tiramisu') ||
+        descLower.includes('croissant') ||
+        descLower.includes('cookie')
+      );
+    },
+    [categories]
+  );
+
   const isFood = useMemo(() => {
     if (!product) return false;
-    const catObj = categories.find((c) => c.id === product.category || c.slug === product.category);
-    const catLower = `${product.category || ''} ${(product as any).categoryName || ''} ${(product as any).categorySlug || ''} ${catObj?.name || ''} ${catObj?.slug || ''}`.toLowerCase();
-    const nameLower = product.name.toLowerCase();
-    const descLower = (product.description || '').toLowerCase();
-    return (
-      isFoodItem(product.name) ||
-      (product.modifiers as any)?.productType === 'makanan' ||
-      catLower.includes('pastries') ||
-      catLower.includes('makan') ||
-      catLower.includes('food') ||
-      catLower.includes('snack') ||
-      catLower.includes('roti') ||
-      catLower.includes('pastry') ||
-      catLower.includes('cemilan') ||
-      nameLower.includes('croissant') ||
-      nameLower.includes('cookie') ||
-      nameLower.includes('tiramisu') ||
-      descLower.includes('croissant') ||
-      descLower.includes('cookie')
-    );
-  }, [product, categories]);
+    return checkProductIsFood(product);
+  }, [product, checkProductIsFood]);
 
   const isBeverage = !isFood;
 
@@ -298,81 +314,82 @@ export function ProductModal({
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
-  // Sync state with initialData when modal opens
-  useMemo(() => {
-    if (isOpen) {
-      if (initialData) {
-        setIceLevel(initialData.iceLevel || 'Normal Ice');
-        setSugarLevel(initialData.sugarLevel || 'Normal Sugar');
-        setSelectedAddOns(initialData.addOns || []);
-        setSize(initialData.size || 'Normal');
-        setSizePrice(initialData.sizePrice || 0);
-        setQuantity(initialData.quantity || 1);
-        setMatchaLevel(initialData.matchaLevel || 5);
-        setHasTumbler(initialData.hasTumbler || false);
-        setShot(initialData.shot || 'Single Shot');
-        setShotPrice(initialData.shotPrice || 0);
-        if (initialData.bundleSelections) {
-          const loaded: { [groupId: string]: any } = {};
-          initialData.bundleSelections.forEach((s: any) => {
-            loaded[s.groupId] = s;
-          });
-          setBundleSelections(loaded);
-        }
+  // Sync state with initialData only when modal opens or product/cart item changes
+  useEffect(() => {
+    if (!isOpen || !product) return;
+
+    if (initialData) {
+      setIceLevel(initialData.iceLevel || 'Normal Ice');
+      setSugarLevel(initialData.sugarLevel || 'Normal Sugar');
+      setSelectedAddOns(initialData.addOns || []);
+      setSize(initialData.size || 'Normal');
+      setSizePrice(initialData.sizePrice || 0);
+      setQuantity(initialData.quantity || 1);
+      setMatchaLevel(initialData.matchaLevel || 5);
+      setHasTumbler(initialData.hasTumbler || false);
+      setShot(initialData.shot || 'Single Shot');
+      setShotPrice(initialData.shotPrice || 0);
+      if (initialData.bundleSelections) {
+        const loaded: { [groupId: string]: any } = {};
+        initialData.bundleSelections.forEach((s: any) => {
+          loaded[s.groupId] = s;
+        });
+        setBundleSelections(loaded);
+      }
+    } else {
+      const isRegularOut =
+        isBeverage &&
+        !product.modifiers?.isBundle &&
+        packagingStock.cupRegular <= 0 &&
+        packagingStock.cupJumbo > 0;
+      const largeOpt = product.modifiers?.sizes?.find(
+        (s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')
+      );
+      const defaultSize = isRegularOut ? largeOpt?.name || 'Large' : 'Normal';
+      const defaultSizePrice = isRegularOut ? largeOpt?.price ?? 3000 : 0;
+
+      setIceLevel((product.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
+      setSugarLevel((product.modifiers?.defaultSugar as SugarLevel) || 'Biasa');
+      setSelectedAddOns([]);
+      setSize(defaultSize);
+      setSizePrice(defaultSizePrice);
+      setShot('Single Shot');
+      setShotPrice(0);
+      setQuantity(1);
+      setMatchaLevel(product.modifiers?.defaultMatcha ?? 5);
+      setHasTumbler(false);
+
+      if (product.modifiers?.isBundle && product.modifiers.bundleGroups) {
+        const defaults: { [groupId: string]: any } = {};
+        product.modifiers.bundleGroups.forEach((group) => {
+          const firstOption = group.options?.[0];
+          if (firstOption) {
+            const optProduct = allProducts?.find((p) => p.id === firstOption.productId);
+            const optIsFood = checkProductIsFood(optProduct, firstOption.name);
+            defaults[group.id] = {
+              groupId: group.id,
+              groupName: group.name,
+              productId: firstOption.productId,
+              productName: firstOption.name,
+              priceAdjustment: firstOption.priceAdjustment || 0,
+              iceLevel:
+                !optIsFood && optProduct?.modifiers?.iceLevel && optProduct.modifiers.iceLevel.length > 0
+                  ? optProduct.modifiers.iceLevel[0]
+                  : undefined,
+              sugarLevel:
+                !optIsFood && optProduct?.modifiers?.sugarLevel && optProduct.modifiers.sugarLevel.length > 0
+                  ? optProduct.modifiers.sugarLevel[0]
+                  : undefined,
+            };
+          }
+        });
+        setBundleSelections(defaults);
       } else {
-        const isRegularOut =
-          isBeverage &&
-          !product?.modifiers?.isBundle &&
-          packagingStock.cupRegular <= 0 &&
-          packagingStock.cupJumbo > 0;
-        const largeOpt = product?.modifiers?.sizes?.find(
-          (s: any) => s.name?.toLowerCase().includes('large') || s.name?.toLowerCase().includes('jumbo')
-        );
-        const defaultSize = isRegularOut ? largeOpt?.name || 'Large' : 'Normal';
-        const defaultSizePrice = isRegularOut ? largeOpt?.price ?? 3000 : 0;
-
-        setIceLevel((product?.modifiers?.defaultIce as IceLevel) || 'Normal Ice');
-        setSugarLevel((product?.modifiers?.defaultSugar as SugarLevel) || 'Biasa');
-        setSelectedAddOns([]);
-        setSize(defaultSize);
-        setSizePrice(defaultSizePrice);
-        setShot('Single Shot');
-        setShotPrice(0);
-        setQuantity(1);
-        setMatchaLevel(product?.modifiers?.defaultMatcha ?? 5);
-        setHasTumbler(false);
-
-        if (product?.modifiers?.isBundle && product.modifiers.bundleGroups) {
-          const defaults: { [groupId: string]: any } = {};
-          product.modifiers.bundleGroups.forEach((group) => {
-            const firstOption = group.options?.[0];
-            if (firstOption) {
-              const optProduct = allProducts?.find((p) => p.id === firstOption.productId);
-              const optIsFood = optProduct ? isFoodItem(optProduct.name) : false;
-              defaults[group.id] = {
-                groupId: group.id,
-                groupName: group.name,
-                productId: firstOption.productId,
-                productName: firstOption.name,
-                priceAdjustment: firstOption.priceAdjustment || 0,
-                iceLevel:
-                  !optIsFood && optProduct?.modifiers?.iceLevel && optProduct.modifiers.iceLevel.length > 0
-                    ? optProduct.modifiers.iceLevel[0]
-                    : undefined,
-                sugarLevel:
-                  !optIsFood && optProduct?.modifiers?.sugarLevel && optProduct.modifiers.sugarLevel.length > 0
-                    ? optProduct.modifiers.sugarLevel[0]
-                    : undefined,
-              };
-            }
-          });
-          setBundleSelections(defaults);
-        } else {
-          setBundleSelections({});
-        }
+        setBundleSelections({});
       }
     }
-  }, [isOpen, initialData, product, allProducts, packagingStock, isBeverage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, product?.id, editCartItemId, initialData]);
 
   // Reset state on explicit close (fallback)
   const resetState = () => {
@@ -506,7 +523,7 @@ export function ProductModal({
 
   const handleSelectOption = (groupId: string, option: any) => {
     const optProduct = allProducts?.find((p) => p.id === option.productId);
-    const optIsFood = optProduct ? isFoodItem(optProduct.name) : false;
+    const optIsFood = checkProductIsFood(optProduct, option.name);
     setBundleSelections((prev) => ({
       ...prev,
       [groupId]: {
@@ -554,6 +571,10 @@ export function ProductModal({
 
     // Validate Cup Stock Availability (Drinks only)
     if (!product.modifiers?.isBundle && !hasTumbler && isBeverage) {
+      if (packagingStock.cupRegular <= 0 && packagingStock.cupJumbo <= 0) {
+        showToast('Stok gelas Regular & Jumbo sedang habis. Silakan aktifkan opsi Bawa Tumbler Sendiri.', 'error');
+        return;
+      }
       const isLarge = size.toLowerCase().includes('large') || size.toLowerCase().includes('jumbo');
       const isRegular = size.toLowerCase().includes('normal') || size.toLowerCase().includes('regular');
 
@@ -767,6 +788,8 @@ export function ProductModal({
             }
             transition={{ type: 'spring', stiffness: 360, damping: 34 }}
             drag={isDesktop ? false : 'y'}
+            dragControls={dragControls}
+            dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.55 }}
             onDragEnd={(_, { offset }) => {
@@ -781,7 +804,10 @@ export function ProductModal({
           >
             {/* Drag handle (Mobile / Android only) */}
             {!isDesktop && (
-              <div className="flex justify-center pt-3 pb-1.5 shrink-0 bg-[#FFFDF9] z-20">
+              <div
+                onPointerDown={(e) => dragControls.start(e)}
+                className="flex justify-center pt-3 pb-1.5 shrink-0 bg-[#FFFDF9] z-20 touch-none cursor-grab active:cursor-grabbing"
+              >
                 <div className="w-11 h-1.5 rounded-full bg-amber-200" />
               </div>
             )}
@@ -796,7 +822,7 @@ export function ProductModal({
             </button>
 
             {/* Body Container: Split on Desktop, Single Scroll + Sticky Footer on Mobile */}
-            <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-12 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-12 overflow-y-auto md:overflow-hidden">
               {/* Left Column on Desktop / Top Hero on Mobile */}
               <div className="md:col-span-5 md:border-r md:border-amber-100/80 md:bg-amber-50/25 md:overflow-y-auto scrollbar-hide flex flex-col shrink-0 md:shrink">
                 {/* Product Image */}
@@ -908,8 +934,8 @@ export function ProductModal({
               </div>
 
               {/* Right Column on Desktop / Main Scrollable Area on Mobile */}
-              <div className="md:col-span-7 flex-1 min-h-0 flex flex-col overflow-hidden">
-                <div className="flex-1 overflow-y-auto px-5 pt-4 pb-6 space-y-5">
+              <div className="md:col-span-7 flex-1 min-h-0 flex flex-col md:overflow-hidden">
+                <div className="flex-1 md:overflow-y-auto px-5 pt-4 pb-6 space-y-5">
                   {/* Mobile-only Title, Description & Price */}
                   <div className="md:hidden text-left">
                     <h2 className="font-serif font-bold text-xl text-stone-900 leading-snug">
@@ -1046,9 +1072,7 @@ export function ProductModal({
                                     const optProduct = allProducts?.find(
                                       (p) => p.id === option.productId
                                     );
-                                    const optIsFood = optProduct
-                                      ? isFoodItem(optProduct.name)
-                                      : false;
+                                    const optIsFood = checkProductIsFood(optProduct, option.name);
 
                                     return (
                                       <div key={option.productId} className="flex flex-col">
@@ -1285,6 +1309,7 @@ export function ProductModal({
                                   min="1"
                                   max="10"
                                   value={matchaLevel}
+                                  onPointerDown={(e) => e.stopPropagation()}
                                   onChange={(e) => setMatchaLevel(parseInt(e.target.value))}
                                   className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-gradient-to-r from-amber-100 via-amber-400 to-orange-600 focus:outline-none"
                                   style={{
@@ -1498,6 +1523,7 @@ export function ProductModal({
                                   min="0"
                                   max="3"
                                   value={currentSweetnessIndex}
+                                  onPointerDown={(e) => e.stopPropagation()}
                                   onChange={(e) =>
                                     handleSweetnessSliderChange(parseInt(e.target.value))
                                   }
@@ -1615,7 +1641,7 @@ export function ProductModal({
 
                 {/* Sticky Bottom Footer: Quantity + Add to Cart CTA */}
                 {!isSoldOut && (
-                  <div className="shrink-0 border-t border-amber-200/70 bg-white/95 backdrop-blur-md px-5 py-3.5 pb-safe z-20">
+                  <div className="sticky bottom-0 md:static shrink-0 border-t border-amber-200/70 bg-white/95 backdrop-blur-md px-5 py-3.5 pb-safe z-20">
                     <div className="flex items-center gap-3.5">
                       {/* Quantity controls */}
                       <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200/80 rounded-2xl p-1">

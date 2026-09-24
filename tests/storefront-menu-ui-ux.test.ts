@@ -122,4 +122,35 @@ describe('Tier 1.18: Storefront Food & Beverage Menu UI/UX Compliance (Desktop &
     expect(drinkDisplay2.isBothOut).toBe(true);
     expect(drinkDisplay2.isSoldOut).toBe(true);
   });
+
+  it('T1.18.6: Regression guards for ProductModal state persistence, mobile drag/scroll isolation, and SPMB/SearchOverlay category & bundle sync', () => {
+    const modalContent = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/components/storefront/ProductModal.tsx'),
+      'utf8'
+    );
+    expect(modalContent.includes('EMPTY_PRODUCTS')).toBeTruthy();
+    expect(modalContent.includes('EMPTY_CATEGORIES')).toBeTruthy();
+    expect(modalContent.includes('useDragControls')).toBeTruthy();
+    expect(modalContent.includes('dragListener={false}')).toBeTruthy();
+    expect(modalContent.includes('checkProductIsFood(optProduct, option.name)')).toBeTruthy();
+    expect(
+      modalContent.includes('packagingStock.cupRegular <= 0 && packagingStock.cupJumbo <= 0')
+    ).toBeTruthy();
+
+    const spmbContent = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/app/(storefront)/spmb/SpmbClient.tsx'),
+      'utf8'
+    );
+    expect(spmbContent.includes('visibleCategories')).toBeTruthy();
+    expect(spmbContent.includes('!isFood && !isBundle')).toBeTruthy();
+    expect(spmbContent.includes('item.bundleSelections.map')).toBeTruthy();
+
+    const searchContent = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/components/storefront/SearchOverlay.tsx'),
+      'utf8'
+    );
+    expect(searchContent.includes('initialTypeFilter')).toBeTruthy();
+    expect(searchContent.includes('productMatchesCategory')).toBeTruthy();
+    expect(searchContent.includes('className="flex-1 overflow-y-auto pb-28 relative"')).toBeTruthy();
+  });
 });

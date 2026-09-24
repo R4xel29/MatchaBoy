@@ -394,6 +394,26 @@ export default function SpmbClient({
     return { all: products.length, drink, food, promo };
   }, [products, checkIsFood]);
 
+  const visibleCategories = useMemo(() => {
+    if (menuTypeFilter === 'all') return categories;
+    return categories.filter((c) => {
+      if (c.id === 'all' || c.slug === 'all') return true;
+      const catProducts = products.filter(
+        (p: any) => p.category === c.id || p.categorySlug === c.slug || p.category === c.slug
+      );
+      if (menuTypeFilter === 'food') return catProducts.some((p) => checkIsFood(p));
+      if (menuTypeFilter === 'drink') return catProducts.some((p) => !checkIsFood(p));
+      if (menuTypeFilter === 'promo') {
+        return catProducts.some(
+          (p) =>
+            !!getActivePromo(p) ||
+            !!(p.modifiers?.originalPrice && p.modifiers.originalPrice > p.price)
+        );
+      }
+      return true;
+    });
+  }, [categories, products, menuTypeFilter, checkIsFood]);
+
   const filteredProducts = useMemo(() => {
     const targetCat =
       selectedCategory && selectedCategory !== 'all'
@@ -493,26 +513,20 @@ export default function SpmbClient({
     try {
       const itemsPayload = cartItems.map((item) => {
         const prod = products.find((p) => p.id === item.productId);
-        const category = categories?.find((c: any) => c.id === (prod as any)?.categoryId || c.slug === (prod as any)?.category?.slug);
-        const isFood = isFoodItem(prod?.name || item.name) || (
-          (prod?.modifiers as any)?.productType === 'makanan' ||
-          category?.slug === 'makanan' ||
-          category?.slug === 'snack' ||
-          category?.slug === 'food' ||
-          category?.name?.toLowerCase().includes('makan')
-        );
+        const isFood = prod ? checkIsFood(prod) : isFoodItem(item.name);
+        const isBundle = Boolean(item.isBundle || prod?.modifiers?.isBundle);
 
         const parts: string[] = [];
-        if (!isFood && item.matchaLevel !== undefined && item.matchaLevel !== null && prod?.modifiers?.showMatcha === true) {
+        if (!isFood && !isBundle && item.matchaLevel !== undefined && item.matchaLevel !== null && prod?.modifiers?.showMatcha === true) {
           parts.push(`Matcha Lvl: ${item.matchaLevel}`);
         }
-        if (!isFood && (item as any).shot && (prod?.modifiers?.showEspressoShot === true || (prod?.modifiers?.espressoShots && prod.modifiers.espressoShots.length > 0))) {
+        if (!isFood && !isBundle && (item as any).shot && (prod?.modifiers?.showEspressoShot === true || (prod?.modifiers?.espressoShots && prod.modifiers.espressoShots.length > 0))) {
           parts.push(`${(item as any).shot}`);
         }
-        if (!isFood && item.size && item.size !== 'Normal' && item.size !== 'Regular') {
+        if (!isFood && !isBundle && item.size && item.size !== 'Normal' && item.size !== 'Regular') {
           parts.push(`Size: ${item.size}`);
         }
-        if (!isFood) {
+        if (!isFood && !isBundle) {
           if (item.iceLevel && item.sugarLevel) {
             parts.push(`${item.iceLevel} → ${item.sugarLevel}`);
           } else if (item.iceLevel) {
@@ -535,13 +549,13 @@ export default function SpmbClient({
           productId: item.productId,
           name: item.name,
           quantity: item.quantity,
-          size: isFood ? undefined : (item.size || 'Normal'),
-          sizePrice: (item as any).sizePrice || 0,
-          shot: isFood ? undefined : ((item as any).shot || undefined),
+          size: isFood || isBundle ? undefined : (item.size || 'Normal'),
+          sizePrice: isFood || isBundle ? 0 : ((item as any).sizePrice || 0),
+          shot: isFood || isBundle ? undefined : ((item as any).shot || undefined),
           addOnIds: item.addOns ? item.addOns.map((a: any) => a.id) : [],
           modsString: parts.length > 0 ? parts.join(', ') : null,
           bundleSelections: item.bundleSelections,
-          matchaLevel: isFood ? undefined : (item as any).matchaLevel
+          matchaLevel: isFood || isBundle ? undefined : (item as any).matchaLevel
         };
       });
 
@@ -968,7 +982,10 @@ export default function SpmbClient({
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setMenuTypeFilter(tab.id)}
+                  onClick={() => {
+                    setMenuTypeFilter(tab.id);
+                    setSelectedCategory('all');
+                  }}
                   className={cn(
                     'flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all cursor-pointer shrink-0 border',
                     isActive
@@ -993,7 +1010,7 @@ export default function SpmbClient({
 
           {/* Category Navigation Pills */}
           <nav className="flex gap-2 overflow-x-auto pt-1 pb-1 scrollbar-none select-none border-t border-amber-100/70">
-            {categories.map((cat) => {
+            {visibleCategories.map((cat) => {
               const isSelected = selectedCategory === cat.id || selectedCategory === cat.slug;
               return (
                 <button
@@ -1431,37 +1448,45 @@ export default function SpmbClient({
                         <h4 className="text-xs font-bold text-stone-900 line-clamp-1">{item.name}</h4>
                         {(() => {
                           const prod = products.find((p) => p.id === item.productId);
-                          const category = categories?.find((c: any) => c.id === (prod as any)?.categoryId || c.slug === (prod as any)?.category?.slug);
-                          const isFood = isFoodItem(prod?.name || item.name) || (
-                            (prod?.modifiers as any)?.productType === 'makanan' ||
-                            category?.slug === 'makanan' ||
-                            category?.slug === 'snack' ||
-                            category?.slug === 'food' ||
-                            category?.name?.toLowerCase().includes('makan')
-                          );
+                          const isFood = prod ? checkIsFood(prod) : isFoodItem(item.name);
+                          const isBundle = Boolean(item.isBundle || prod?.modifiers?.isBundle);
                           const activePromo = prod ? getActivePromo(prod) : null;
                           const promoPotongan = activePromo && prod && activePromo.promoPrice < prod.price ? (prod.price - activePromo.promoPrice) : 0;
 
                           return (
                             <div className="flex flex-wrap items-center gap-1 mt-1">
-                              {!isFood && (item.size && item.size !== 'Normal' && item.size !== 'Regular') && (
+                              {isBundle && item.bundleSelections && item.bundleSelections.length > 0 && item.bundleSelections.map((bs, idx) => {
+                                const bsProd = products.find((p) => p.id === bs.productId);
+                                const bsIsFood = bsProd ? checkIsFood(bsProd) : isFoodItem(bs.name);
+                                return (
+                                  <span key={`${bs.groupId}-${idx}`} className="inline-flex items-center gap-1 text-[9px] font-semibold bg-amber-50 border border-amber-200/70 text-stone-700 px-1.5 py-0.5 rounded">
+                                    <span className="font-bold text-stone-800">{bs.name}</span>
+                                    {!bsIsFood && (bs.iceLevel || bs.sugarLevel) && (
+                                      <span className="text-stone-500">
+                                        ({bs.iceLevel && bs.sugarLevel ? `${bs.iceLevel} → ${bs.sugarLevel}` : (bs.iceLevel || bs.sugarLevel)})
+                                      </span>
+                                    )}
+                                  </span>
+                                );
+                              })}
+                              {!isFood && !isBundle && (item.size && item.size !== 'Normal' && item.size !== 'Regular') && (
                                 <span className="inline-block text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
                                   {item.size}
                                 </span>
                               )}
-                              {!isFood && (item.iceLevel || item.sugarLevel) && (
+                              {!isFood && !isBundle && (item.iceLevel || item.sugarLevel) && (
                                 <span className="inline-flex items-center gap-1 text-[9px] font-semibold bg-stone-200/70 text-stone-700 px-1.5 py-0.5 rounded">
                                   {item.iceLevel && <span>{item.iceLevel}</span>}
                                   {item.iceLevel && item.sugarLevel && <span className="text-orange-600 font-bold">→</span>}
                                   {item.sugarLevel && <span>{item.sugarLevel}</span>}
                                 </span>
                               )}
-                              {!isFood && item.matchaLevel !== undefined && prod?.modifiers?.showMatcha === true && (
+                              {!isFood && !isBundle && item.matchaLevel !== undefined && prod?.modifiers?.showMatcha === true && (
                                 <span className="inline-block text-[9px] font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
                                   Matcha Lvl {item.matchaLevel}
                                 </span>
                               )}
-                              {!isFood && (item as any).shot && (prod?.modifiers?.showEspressoShot === true || (prod?.modifiers?.espressoShots && prod.modifiers.espressoShots.length > 0)) && (
+                              {!isFood && !isBundle && (item as any).shot && (prod?.modifiers?.showEspressoShot === true || (prod?.modifiers?.espressoShots && prod.modifiers.espressoShots.length > 0)) && (
                                 <span className="inline-block text-[9px] font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
                                   {(item as any).shot}
                                 </span>

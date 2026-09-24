@@ -1347,10 +1347,12 @@ export default function StorefrontClient({
               {/* Recommended Items */}
               <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
                 {weatherData.recommendations?.map((p: any) => {
-                  const isSoldOut = p.badge === 'sold-out';
-                  const promo = getActivePromo(p);
-                  const displayPrice = promo ? promo.promoPrice : p.price;
-                  const originalPrice = promo ? p.price : p.modifiers?.originalPrice || null;
+                  const {
+                    displayPrice,
+                    originalPrice,
+                    isRegularOut,
+                    isSoldOut,
+                  } = getEffectiveProductDisplay(p, packagingStock);
                   const discountAmount =
                     originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
                   const isFood = checkIsFood(p);
@@ -1359,7 +1361,11 @@ export default function StorefrontClient({
                     <div
                       key={p.id}
                       onClick={() => handleProductClick(p)}
-                      className="w-[145px] md:w-[168px] shrink-0 bg-white border border-amber-100 rounded-2xl p-2.5 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer overflow-hidden relative group flex flex-col justify-between"
+                      className={`w-[145px] md:w-[168px] shrink-0 bg-white border border-amber-100 rounded-2xl p-2.5 transition-all overflow-hidden relative group flex flex-col justify-between ${
+                        isSoldOut
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'hover:border-orange-400 hover:shadow-md cursor-pointer'
+                      }`}
                     >
                       {p.image && (
                         <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-amber-50 mb-2 border border-amber-100/60 shadow-sm">
@@ -1368,21 +1374,31 @@ export default function StorefrontClient({
                             alt={p.name}
                             fill
                             sizes="(max-width: 640px) 145px, 168px"
-                            className="object-cover group-hover:scale-105 transition-transform duration-500"
+                            className={`object-cover group-hover:scale-105 transition-transform duration-500 ${
+                              isSoldOut ? 'grayscale brightness-50' : ''
+                            }`}
                           />
-                          <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-gray-800 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-amber-100">
-                            {isFood ? (
-                              <>
-                                <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
-                                <span>Makanan</span>
-                              </>
-                            ) : (
-                              <>
-                                <Coffee className="w-2.5 h-2.5 text-orange-600" />
-                                <span>Minuman</span>
-                              </>
-                            )}
-                          </span>
+                          {isSoldOut ? (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                              <span className="bg-black/80 text-white font-extrabold text-[8px] px-2 py-0.5 rounded-md tracking-wider uppercase">
+                                Habis
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-gray-800 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-amber-100">
+                              {isFood ? (
+                                <>
+                                  <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                                  <span>Makanan</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                                  <span>Minuman</span>
+                                </>
+                              )}
+                            </span>
+                          )}
                         </div>
                       )}
                       <div>
@@ -1397,9 +1413,16 @@ export default function StorefrontClient({
                         )}
                       </div>
                       <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-50">
-                        <span className="font-black text-[11px] text-orange-600">
-                          {formatRupiah(displayPrice)}
-                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-black text-[11px] text-orange-600">
+                            {formatRupiah(displayPrice)}
+                          </span>
+                          {isRegularOut && !isFood && (
+                            <span className="text-[7.5px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                              (Jumbo)
+                            </span>
+                          )}
+                        </div>
                         {!isSoldOut && (
                           <div className="w-6 h-6 rounded-lg bg-orange-50 group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:to-amber-500 text-orange-600 group-hover:text-white flex items-center justify-center transition-all">
                             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -2461,6 +2484,13 @@ export default function StorefrontClient({
         products={products}
         categories={categories}
         packagingStock={packagingStock}
+        initialTypeFilter={
+          catalogTypeFilter === 'food'
+            ? 'food'
+            : catalogTypeFilter === 'drink'
+            ? 'drink'
+            : 'all'
+        }
       />
 
       <EasterEggOverlay

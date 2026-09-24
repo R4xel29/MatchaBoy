@@ -31,11 +31,17 @@ interface SearchOverlayProps {
   products: Product[];
   categories: Category[];
   packagingStock?: { cupRegular: number; cupJumbo: number };
+  initialTypeFilter?: 'all' | 'drink' | 'food' | 'promo';
 }
 
 function checkIsFoodProduct(product: Product, categories?: Category[]): boolean {
-  const catObj = categories?.find((c) => c.id === product.category || c.slug === product.category);
-  const catLower = `${product.category || ''} ${catObj?.name || ''} ${catObj?.slug || ''}`.toLowerCase();
+  const catObj = categories?.find(
+    (c) =>
+      c.id === product.category ||
+      c.slug === product.category ||
+      c.slug === (product as any).categorySlug
+  );
+  const catLower = `${product.category || ''} ${(product as any).categorySlug || ''} ${catObj?.name || ''} ${catObj?.slug || ''}`.toLowerCase();
   return (
     isFoodItem(product.name) ||
     (product.modifiers as any)?.productType === 'makanan' ||
@@ -48,6 +54,14 @@ function checkIsFoodProduct(product: Product, categories?: Category[]): boolean 
   );
 }
 
+function productMatchesCategory(product: Product, cat: Category): boolean {
+  return (
+    product.category === cat.id ||
+    product.category === cat.slug ||
+    (product as any).categorySlug === cat.slug
+  );
+}
+
 export function SearchOverlay({
   isOpen,
   onClose,
@@ -55,6 +69,7 @@ export function SearchOverlay({
   products,
   categories,
   packagingStock,
+  initialTypeFilter,
 }: SearchOverlayProps) {
   const [query, setQuery] = useState('');
   const [isSearchingLoading, setIsSearchingLoading] = useState(false);
@@ -110,13 +125,17 @@ export function SearchOverlay({
     const dbCats = categories
       .filter((c) => c.id !== 'all')
       .filter((c) => {
-        const count = typeFilteredProducts.filter((p) => p.category === c.id && !p.modifiers?.isBundle).length;
+        const count = typeFilteredProducts.filter(
+          (p) => productMatchesCategory(p, c) && !p.modifiers?.isBundle
+        ).length;
         return count > 0;
       })
       .map((c) => ({
         id: c.id,
         name: c.name,
-        count: typeFilteredProducts.filter((p) => p.category === c.id && !p.modifiers?.isBundle).length,
+        count: typeFilteredProducts.filter(
+          (p) => productMatchesCategory(p, c) && !p.modifiers?.isBundle
+        ).length,
       }));
 
     if (typeFilter !== 'all') {
@@ -161,7 +180,8 @@ export function SearchOverlay({
     if (query.trim().length === 0) return [];
     const q = query.toLowerCase();
     const list = typeFilteredProducts.filter((p) => {
-      const catName = categories.find((c) => c.id === p.category)?.name.toLowerCase() || '';
+      const catName =
+        categories.find((c) => productMatchesCategory(p, c))?.name.toLowerCase() || '';
       const isFood = checkIsFoodProduct(p, categories);
       const typeLabel = isFood ? 'makanan cemilan roti snack' : 'minuman kopi teh matcha';
       return (
@@ -189,14 +209,18 @@ export function SearchOverlay({
     }
   }, [query]);
 
-  // Clear query saat overlay ditutup
+  // Sinkronisasi filter awal saat dibuka & reset saat ditutup
   useEffect(() => {
-    if (!isOpen) {
+    if (isOpen) {
+      if (initialTypeFilter) {
+        setTypeFilter(initialTypeFilter);
+      }
+    } else {
       setQuery('');
       setActiveTab('combo');
       setTypeFilter('all');
     }
-  }, [isOpen]);
+  }, [isOpen, initialTypeFilter]);
 
   // Pastikan activeTab selalu mengarah ke tab yang tersedia saat filter berubah
   useEffect(() => {
@@ -212,7 +236,7 @@ export function SearchOverlay({
     if (!container) return;
 
     const handleScroll = () => {
-      const scrollTop = container.scrollTop + 240;
+      const scrollTop = container.scrollTop + 80;
       for (let i = categoryTabs.length - 1; i >= 0; i--) {
         const tab = categoryTabs[i];
         const el = sectionsRef.current[tab.id];
@@ -246,9 +270,8 @@ export function SearchOverlay({
     const el = sectionsRef.current[tabId];
     const container = scrollContainerRef.current;
     if (el && container) {
-      const offset = 210;
       container.scrollTo({
-        top: Math.max(0, el.offsetTop - offset),
+        top: Math.max(0, el.offsetTop - 20),
         behavior: 'smooth',
       });
     }
@@ -437,7 +460,7 @@ export function SearchOverlay({
               ═══════════════════════════════════════════════════════════════ */}
           <div
             ref={scrollContainerRef}
-            className="flex-1 overflow-y-auto pb-28"
+            className="flex-1 overflow-y-auto pb-28 relative"
           >
             <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 pt-5">
               {isSearching ? (
@@ -695,7 +718,7 @@ export function SearchOverlay({
                       .filter((cat) => cat.id !== 'all')
                       .map((cat) => {
                         const filteredProducts = typeFilteredProducts
-                          .filter((p) => p.category === cat.id && !p.modifiers?.isBundle)
+                          .filter((p) => productMatchesCategory(p, cat) && !p.modifiers?.isBundle)
                           .sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
                         if (filteredProducts.length === 0) return null;
 
