@@ -6,7 +6,7 @@ import { getOrSetCache, invalidateStoriesCache, CACHE_KEYS, CACHE_TTL } from '@/
 const FALLBACK_STORIES = [
   {
     id: 'seed-story-1',
-    title: 'Behind The Scenes: Pemetikan Daun Teh Uji 🍃',
+    title: 'Behind The Scenes: Pemetikan Daun Teh Pilihan',
     mediaUrl: 'https://images.unsplash.com/photo-1536256263959-770b48d82b0a?auto=format&fit=crop&q=80&w=720',
     mediaType: 'IMAGE',
     linkUrl: '/custom-studio',
@@ -15,7 +15,7 @@ const FALLBACK_STORIES = [
   },
   {
     id: 'seed-story-2',
-    title: 'Promo Spesial: Happy Hour Diskon 20%! 🔥',
+    title: 'Promo Spesial: Happy Hour Diskon 20%!',
     mediaUrl: 'https://images.unsplash.com/photo-1515694346937-94d85e41e6f0?auto=format&fit=crop&q=80&w=720',
     mediaType: 'IMAGE',
     linkUrl: '/?openMenu=true',
@@ -24,7 +24,7 @@ const FALLBACK_STORIES = [
   },
   {
     id: 'seed-story-3',
-    title: 'Arum Seduh Secret: Seni Pengocokan Chasen 🍵',
+    title: 'Arum Seduh Secret: Racikan Seduhan Terbaik',
     mediaUrl: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&q=80&w=720',
     mediaType: 'IMAGE',
     linkUrl: '/custom-studio',

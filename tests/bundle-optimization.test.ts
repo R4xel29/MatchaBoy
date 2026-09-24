@@ -104,4 +104,12 @@ describe('Tier 1.4: Dynamic Imports & Bundle Optimization', () => {
     expect(bottomNavContent.includes("href: '/'")).toBe(true);
     expect(bottomNavContent.includes("href: '/spmb'")).toBe(false);
   });
+
+  it('T1.4.8: StoryBar portals full-screen story overlay to document.body to escape parent stacking context', () => {
+    const storyBarPath = path.resolve(process.cwd(), 'src/components/storefront/StoryBar.tsx');
+    const content = fs.readFileSync(storyBarPath, 'utf8');
+    expect(content.includes('createPortal')).toBe(true);
+    expect(content.includes('document.body')).toBe(true);
+    expect(content.includes('z-[9999]')).toBe(true);
+  });
 });
