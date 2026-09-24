@@ -30,15 +30,6 @@ const nextConfig: NextConfig = {
       'class-variance-authority',
     ],
   },
-  async redirects() {
-    return [
-      {
-        source: '/',
-        destination: '/spmb',
-        permanent: false,
-      },
-    ];
-  },
 };
 
 export default nextConfig;

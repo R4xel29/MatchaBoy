@@ -88,4 +88,20 @@ describe('Tier 1.4: Dynamic Imports & Bundle Optimization', () => {
       expect(content.includes('prisma')).toBeTruthy();
     }
   });
+
+  it('T1.4.7: Main storefront route (/) is active and not redirected to /spmb', () => {
+    const nextConfigPath = path.resolve(process.cwd(), 'next.config.ts');
+    const middlewarePath = path.resolve(process.cwd(), 'src/middleware.ts');
+    const bottomNavPath = path.resolve(process.cwd(), 'src/components/storefront/BottomNav.tsx');
+
+    const nextConfigContent = fs.readFileSync(nextConfigPath, 'utf8');
+    expect(nextConfigContent.includes("destination: '/spmb'")).toBe(false);
+
+    const middlewareContent = fs.readFileSync(middlewarePath, 'utf8');
+    expect(middlewareContent.includes("url.pathname = '/spmb'")).toBe(false);
+
+    const bottomNavContent = fs.readFileSync(bottomNavPath, 'utf8');
+    expect(bottomNavContent.includes("href: '/'")).toBe(true);
+    expect(bottomNavContent.includes("href: '/spmb'")).toBe(false);
+  });
 });
