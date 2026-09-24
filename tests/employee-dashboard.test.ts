@@ -155,5 +155,32 @@ describe('Tier 1.16: Dashboard Karyawan & Staff Operational Hub Compliance', () 
     expect(authContent.includes('events:')).toBeTruthy();
     expect(authContent.includes('prisma.session.deleteMany')).toBeTruthy();
   });
+
+  it('T1.16.8: WhatsApp Bot (wa-bot) auto-clears expired/logged-out DB sessions and serves live QR Code endpoints', () => {
+    const waBotIndexPath = path.resolve(process.cwd(), '../wa-bot/index.js');
+    const waBotAuthPath = path.resolve(process.cwd(), '../wa-bot/postgres-auth.js');
+    const waBotDbPath = path.resolve(process.cwd(), '../wa-bot/db.js');
+
+    if (fs.existsSync(waBotIndexPath) && fs.existsSync(waBotAuthPath) && fs.existsSync(waBotDbPath)) {
+      const indexContent = fs.readFileSync(waBotIndexPath, 'utf8');
+      const authContent = fs.readFileSync(waBotAuthPath, 'utf8');
+      const dbContent = fs.readFileSync(waBotDbPath, 'utf8');
+
+      // Ensure dotenv is loaded before db initialization
+      expect(indexContent.trim().startsWith("require('dotenv').config()")).toBeTruthy();
+      expect(dbContent.trim().startsWith("require('dotenv').config()")).toBeTruthy();
+
+      // Ensure clearAuthState exists and deletes stale wa_bot_session records
+      expect(authContent.includes('clearAuthState')).toBeTruthy();
+      expect(authContent.includes('DELETE FROM wa_bot_session')).toBeTruthy();
+
+      // Ensure index.js handles 401/loggedOut by clearing DB session and reconnecting for new QR
+      expect(indexContent.includes('fetchLatestBaileysVersion')).toBeTruthy();
+      expect(indexContent.includes('await clearAuthState()')).toBeTruthy();
+      expect(indexContent.includes("app.get('/qr/status'")).toBeTruthy();
+      expect(indexContent.includes("app.post('/reset-qr'")).toBeTruthy();
+    }
+  });
 });
+
 
