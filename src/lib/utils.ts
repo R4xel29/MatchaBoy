@@ -57,8 +57,7 @@ export interface ProductPromoInfo {
  * ```
  */
 export function getActivePromo(product: {
-  modifiers?: string | Record<string, unknown> | null;
-  [key: string]: unknown;
+  modifiers?: string | object | null;
 } | null | undefined): ProductPromoInfo | null {
   if (!product || !product.modifiers) return null;
   try {
@@ -95,8 +94,7 @@ export function getActivePromo(product: {
  */
 export function getCurrentProductPrice(product: {
   price?: number;
-  modifiers?: string | Record<string, unknown> | null;
-  [key: string]: unknown;
+  modifiers?: string | object | null;
 } | null | undefined): number {
   const promo = getActivePromo(product);
   return promo ? promo.promoPrice : (product?.price ?? 0);
@@ -128,8 +126,9 @@ export interface EffectiveProductDisplayResult {
  * Menghitung harga efektif dan ketersediaan varian produk berdasarkan sisa stok kemasan cup.
  *
  * Mendukung skenario:
- * - Jika cup Regular habis namun cup Jumbo masih ada, produk otomatis diarahkan ke ukuran Jumbo (+harga large).
- * - Jika kedua cup habis, produk otomatis berstatus `isSoldOut: true`.
+ * - Jika cup Regular habis namun cup Jumbo masih ada (khusus minuman), produk otomatis diarahkan ke ukuran Jumbo (+harga large).
+ * - Jika kedua cup habis (khusus minuman), produk otomatis berstatus `isSoldOut: true`.
+ * - Produk makanan/roti/cemilan bebas dari ketergantungan stok cup minuman.
  *
  * @param {object} product - Objek produk katalog
  * @param {{ cupRegular: number; cupJumbo: number }} [packagingStock] - Stok fisik cup saat ini
@@ -143,22 +142,23 @@ export interface EffectiveProductDisplayResult {
  */
 export function getEffectiveProductDisplay(
   product: {
+    name?: string;
     price?: number;
-    badge?: string;
+    badge?: string | null;
     category?: string;
     modifiers?: string | {
       isBundle?: boolean;
+      productType?: string;
       originalPrice?: number;
       sizes?: Array<{ name?: string; price?: number }>;
       promo?: ProductPromoInfo;
-      [key: string]: unknown;
-    } | null;
-    [key: string]: unknown;
+    } | object | null;
   } | null | undefined,
   packagingStock?: { cupRegular: number; cupJumbo: number }
 ): EffectiveProductDisplayResult {
   let parsedMods: {
     isBundle?: boolean;
+    productType?: string;
     originalPrice?: number;
     sizes?: Array<{ name?: string; price?: number }>;
     promo?: ProductPromoInfo;
@@ -170,19 +170,50 @@ export function getEffectiveProductDisplay(
         parsedMods = JSON.parse(product.modifiers);
       } catch {}
     } else {
-      parsedMods = product.modifiers;
+      parsedMods = product.modifiers as {
+        isBundle?: boolean;
+        productType?: string;
+        originalPrice?: number;
+        sizes?: Array<{ name?: string; price?: number }>;
+        promo?: ProductPromoInfo;
+      };
     }
   }
 
   const isBundle = parsedMods?.isBundle === true;
+  const catLower = (product?.category || '').toLowerCase();
+  const nameLower = (product?.name || '').toLowerCase();
+  const isFood =
+    parsedMods?.productType === 'makanan' ||
+    catLower === 'pastries' ||
+    catLower.includes('makan') ||
+    catLower.includes('food') ||
+    catLower.includes('snack') ||
+    catLower.includes('roti') ||
+    catLower.includes('pastry') ||
+    catLower.includes('cemilan') ||
+    nameLower.includes('croissant') ||
+    nameLower.includes('cookie') ||
+    nameLower.includes('tiramisu') ||
+    nameLower.includes('roti') ||
+    nameLower.includes('donat') ||
+    nameLower.includes('donut') ||
+    nameLower.includes('cake') ||
+    nameLower.includes('pastry') ||
+    nameLower.includes('waffle') ||
+    nameLower.includes('toast') ||
+    nameLower.includes('dimsum') ||
+    nameLower.includes('kentang') ||
+    nameLower.includes('fries');
+
   const promo = getActivePromo(product);
   const basePrice = promo ? promo.promoPrice : (product?.price ?? 0);
   const originalPrice = promo ? (product?.price ?? null) : (parsedMods?.originalPrice || null);
 
   const cupRegular = packagingStock?.cupRegular ?? 999;
   const cupJumbo = packagingStock?.cupJumbo ?? 999;
-  const isRegularOut = !isBundle && cupRegular <= 0 && cupJumbo > 0;
-  const isBothOut = !isBundle && cupRegular <= 0 && cupJumbo <= 0;
+  const isRegularOut = !isBundle && !isFood && cupRegular <= 0 && cupJumbo > 0;
+  const isBothOut = !isBundle && !isFood && cupRegular <= 0 && cupJumbo <= 0;
 
   let displayPrice = basePrice;
   let sizeNotice: string | null = null;
@@ -203,6 +234,6 @@ export function getEffectiveProductDisplay(
     isRegularOut,
     isBothOut,
     sizeNotice,
-    isSoldOut: product?.badge === 'sold-out' || (isBothOut && product?.category !== 'pastries'),
+    isSoldOut: product?.badge === 'sold-out' || isBothOut,
   };
 }

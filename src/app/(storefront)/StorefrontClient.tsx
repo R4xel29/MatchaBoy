@@ -40,7 +40,19 @@ import {
   Wallet,
   Loader2,
   CloudSun,
+  Coffee,
+  UtensilsCrossed,
+  Search,
+  LayoutGrid,
+  List,
+  CupSoda,
+  Sun,
+  Moon,
+  Zap,
+  Users,
+  Heart,
 } from 'lucide-react';
+import { isFoodItem } from '@/lib/receipt-modifiers';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
 import {
   useWallet,
@@ -236,7 +248,7 @@ export default function StorefrontClient({
       return;
     }
     const text = encodeURIComponent(
-      `Cobain Arum Seduh! 🍵 Seduhan teh dan kopi istimewa. Daftar pakai link ini dan dapatkan diskon langsung Rp3.000 tanpa batas belanja:\n${getReferralUrl()}`
+      `Cobain Arum Seduh! Seduhan teh dan kopi istimewa. Daftar pakai link ini dan dapatkan diskon langsung Rp3.000 tanpa batas belanja:\n${getReferralUrl()}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
@@ -381,7 +393,7 @@ export default function StorefrontClient({
           id: `flash-sale-${p.id}`,
           image: p.image || '/hero/hero-1.jpg',
           alt: `Flash Sale ${p.name}`,
-          headline: `🔥 Flash Sale: ${p.name}`,
+          headline: `Flash Sale: ${p.name}`,
           subheadline: `Nikmati harga spesial hanya ${formatRupiah(promo.promoPrice)} (Hemat ${formatRupiah(
             p.price - promo.promoPrice
           )})! Buruan beli sebelum kehabisan!`,
@@ -422,6 +434,39 @@ export default function StorefrontClient({
     return () => clearInterval(timer);
   }, [displayBanners]);
 
+  const checkIsFood = useMemo(() => {
+    const foodKeywords = [
+      'roti',
+      'croissant',
+      'donut',
+      'cake',
+      'pastry',
+      'sweet',
+      'makanan',
+      'bread',
+      'bun',
+      'pie',
+      'chocolate',
+      'keju',
+      'snack',
+      'food',
+      'cemilan',
+    ];
+    return (p: Product) => {
+      const nameLower = p.name.toLowerCase();
+      const descLower = (p.description || '').toLowerCase();
+      const catObj = categories.find((c) => c.id === p.category || c.slug === p.category);
+      const catLower = `${p.category || ''} ${catObj?.name || ''} ${catObj?.slug || ''}`.toLowerCase();
+      return (
+        isFoodItem(p.name) ||
+        (p.modifiers as any)?.productType === 'makanan' ||
+        foodKeywords.some(
+          (kw) => nameLower.includes(kw) || descLower.includes(kw) || catLower.includes(kw)
+        )
+      );
+    };
+  }, [categories]);
+
   const comboProducts = useMemo(() => {
     const list = products.filter((p) => p.modifiers?.isBundle === true);
     return [...list].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
@@ -440,41 +485,67 @@ export default function StorefrontClient({
   }, [products]);
 
   const makananProducts = useMemo(() => {
-    const foodKeywords = [
-      'roti',
-      'croissant',
-      'donut',
-      'cake',
-      'pastry',
-      'sweet',
-      'makanan',
-      'bread',
-      'bun',
-      'pie',
-      'chocolate',
-      'keju',
-      'susu',
-    ];
-    const list = products.filter((p) => {
-      const nameLower = p.name.toLowerCase();
-      const descLower = p.description.toLowerCase();
-      const catLower = p.category.toLowerCase();
-      return foodKeywords.some(
-        (kw) => nameLower.includes(kw) || descLower.includes(kw) || catLower.includes(kw)
-      );
-    });
+    const list = products.filter((p) => checkIsFood(p) && !p.modifiers?.isBundle);
     const baseList = list.length > 0 ? list : products.slice(2, 8);
     return [...baseList].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
-  }, [products]);
+  }, [products, checkIsFood]);
+
+  // Interactive Storefront Menu Explorer State
+  const [catalogTypeFilter, setCatalogTypeFilter] = useState<'all' | 'drink' | 'food' | 'combo'>('all');
+  const [catalogCategory, setCatalogCategory] = useState<string>('all');
+  const [catalogViewMode, setCatalogViewMode] = useState<'grid' | 'list'>('grid');
+
+  const catalogTypeCounts = useMemo(() => {
+    let drink = 0;
+    let food = 0;
+    let combo = 0;
+    products.forEach((p) => {
+      if (p.modifiers?.isBundle) {
+        combo++;
+      } else if (checkIsFood(p)) {
+        food++;
+      } else {
+        drink++;
+      }
+    });
+    return {
+      all: products.length,
+      drink,
+      food,
+      combo,
+    };
+  }, [products, checkIsFood]);
+
+  const catalogCategories = useMemo(() => {
+    return categories.filter((c) => {
+      if (c.id === 'all') return true;
+      return products.some((p) => {
+        if (p.category !== c.id) return false;
+        if (catalogTypeFilter === 'combo') return !!p.modifiers?.isBundle;
+        if (catalogTypeFilter === 'food') return checkIsFood(p) && !p.modifiers?.isBundle;
+        if (catalogTypeFilter === 'drink') return !checkIsFood(p) && !p.modifiers?.isBundle;
+        return true;
+      });
+    });
+  }, [categories, products, catalogTypeFilter, checkIsFood]);
+
+  const catalogFilteredProducts = useMemo(() => {
+    const list = products.filter((p) => {
+      if (catalogTypeFilter === 'combo' && !p.modifiers?.isBundle) return false;
+      if (catalogTypeFilter === 'food' && (!checkIsFood(p) || p.modifiers?.isBundle)) return false;
+      if (catalogTypeFilter === 'drink' && (checkIsFood(p) || p.modifiers?.isBundle)) return false;
+      if (catalogCategory !== 'all' && p.category !== catalogCategory) return false;
+      return true;
+    });
+    return [...list].sort((a, b) => (a.badge === 'sold-out' ? 1 : 0) - (b.badge === 'sold-out' ? 1 : 0));
+  }, [products, catalogTypeFilter, catalogCategory, checkIsFood]);
 
   const handleProductClick = (product: Product) => {
-    if (product.badge === 'sold-out') return;
     setSelectedProduct(product);
     setIsModalOpen(true);
   };
 
   const handleSearchSelect = (product: Product) => {
-    if (product.badge === 'sold-out') return;
     setSelectedProduct(product);
     setIsModalOpen(true);
   };
@@ -531,7 +602,7 @@ export default function StorefrontClient({
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 relative z-10 pt-2">
             <div className="space-y-0.5">
               <p
-                className={`text-[9px] font-black uppercase tracking-[0.25em] select-none ${
+                className={`text-[9px] font-black uppercase tracking-[0.25em] select-none flex items-center gap-1 ${
                   timePeriod === 'malam' || timePeriod === 'sore'
                     ? 'text-[#FEF08A] drop-shadow-[0_1px_2px_rgba(0,0,0,0.3)]'
                     : timePeriod === 'pagi'
@@ -539,10 +610,30 @@ export default function StorefrontClient({
                     : 'text-amber-800'
                 }`}
               >
-                {timePeriod === 'pagi' && 'Selamat Pagi 🌅'}
-                {timePeriod === 'siang' && 'Selamat Siang ☀️'}
-                {timePeriod === 'sore' && 'Selamat Sore 🌇'}
-                {timePeriod === 'malam' && 'Selamat Malam 🌃'}
+                {timePeriod === 'pagi' && (
+                  <>
+                    <Sun className="w-3 h-3 text-orange-500" />
+                    <span>Selamat Pagi</span>
+                  </>
+                )}
+                {timePeriod === 'siang' && (
+                  <>
+                    <Sun className="w-3 h-3 text-amber-500" />
+                    <span>Selamat Siang</span>
+                  </>
+                )}
+                {timePeriod === 'sore' && (
+                  <>
+                    <CloudSun className="w-3 h-3 text-amber-300" />
+                    <span>Selamat Sore</span>
+                  </>
+                )}
+                {timePeriod === 'malam' && (
+                  <>
+                    <Moon className="w-3 h-3 text-amber-300" />
+                    <span>Selamat Malam</span>
+                  </>
+                )}
               </p>
               <h1
                 className={`font-serif text-lg md:text-2xl font-black tracking-tight ${
@@ -606,8 +697,10 @@ export default function StorefrontClient({
           {/* Hint tarik ke bawah */}
           {isNight && easterEggConfig?.enabled && !easterEggConfig?.hasClaimed && (
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col items-center gap-0.5 animate-bounce">
-              <span className="text-[8px] font-black uppercase tracking-widest text-amber-200 drop-shadow">
-                ✦ Tarik untuk Voucher Rahasia ✦
+              <span className="text-[8px] font-black uppercase tracking-widest text-amber-200 drop-shadow flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
+                <span>Tarik untuk Voucher Rahasia</span>
+                <Sparkles className="w-2.5 h-2.5 text-amber-300" />
               </span>
             </div>
           )}
@@ -617,12 +710,24 @@ export default function StorefrontClient({
         <div className="hidden md:block max-w-6xl mx-auto px-6 mt-4 mb-6">
           <div className="flex items-center justify-between border-b border-amber-100 pb-6">
             <div className="space-y-1">
-              <span className="text-[10px] font-black uppercase text-amber-800/60 tracking-[0.2em] select-none">
-                {isNight ? 'Selamat Malam 🌃' : 'Selamat Siang ☀️'}
+              <span className="text-[10px] font-black uppercase text-amber-800/70 tracking-[0.2em] select-none flex items-center gap-1.5">
+                {isNight ? (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-orange-500" />
+                    <span>Selamat Malam</span>
+                  </>
+                ) : (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-amber-500" />
+                    <span>Selamat Siang</span>
+                  </>
+                )}
               </span>
-              <h1 className="font-serif text-3xl font-black text-gray-900 tracking-tight">
-                Hai, <span className="text-orange-600">{userName}</span>{' '}
-                <span className="text-2xl animate-pulse">👋</span>
+              <h1 className="font-serif text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
+                <span>
+                  Hai, <span className="text-orange-600">{userName}</span>
+                </span>
+                <Sparkles className="w-6 h-6 text-amber-500 animate-pulse" />
               </h1>
             </div>
             <div className="flex items-center gap-4">
@@ -631,11 +736,11 @@ export default function StorefrontClient({
                   Arum Seduh
                 </span>
                 <span className="text-[10px] font-bold text-amber-700/60 mt-0.5">
-                  Artisanal Coffee & Tea
+                  Artisanal Coffee, Matcha & Eatery
                 </span>
               </div>
               <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center shadow-sm text-orange-600">
-                <Sparkles className="w-6 h-6 text-orange-500" />
+                <Coffee className="w-6 h-6 text-orange-500" />
               </div>
             </div>
           </div>
@@ -682,7 +787,7 @@ export default function StorefrontClient({
                   />
 
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex flex-col justify-end p-5 md:p-8">
-                    <div className="relative w-[115px] h-[26px] mb-2.5 select-none flex items-center justify-center">
+                    <div className="relative w-[125px] h-[26px] mb-2.5 select-none flex items-center justify-center">
                       <svg
                         className="absolute inset-0 w-full h-full drop-shadow-[0_2px_4px_rgba(0,0,0,0.35)]"
                         viewBox="0 0 115 26"
@@ -706,8 +811,15 @@ export default function StorefrontClient({
                           fill="none"
                         />
                       </svg>
-                      <span className="relative z-10 text-white text-[8.5px] font-black uppercase tracking-widest leading-none pr-2.5 pt-0.5">
-                        {slide?.isFlashSale ? 'FLASH SALE 🔥' : 'Promo Spesial'}
+                      <span className="relative z-10 text-white text-[8.5px] font-black uppercase tracking-widest leading-none pr-2.5 pt-0.5 flex items-center gap-1">
+                        {slide?.isFlashSale ? (
+                          <>
+                            <Flame className="w-2.5 h-2.5 fill-white" />
+                            <span>FLASH SALE</span>
+                          </>
+                        ) : (
+                          <span>Promo Spesial</span>
+                        )}
                       </span>
                     </div>
 
@@ -771,8 +883,9 @@ export default function StorefrontClient({
                 <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
                   Papan Peringkat
                 </h4>
-                <p className="text-[9px] text-gray-400 font-bold leading-tight">
-                  Juara Arum Seduh 🏆
+                <p className="text-[9px] text-gray-500 font-bold leading-tight flex items-center gap-1">
+                  <span>Juara Arum Seduh</span>
+                  <Award className="w-2.5 h-2.5 text-amber-600" />
                 </p>
               </div>
             </motion.button>
@@ -797,8 +910,9 @@ export default function StorefrontClient({
                 <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
                   Pemesanan Rutin
                 </h4>
-                <p className="text-[9px] text-gray-400 font-bold leading-tight">
-                  Jadwal Otomatis ⏰
+                <p className="text-[9px] text-gray-500 font-bold leading-tight flex items-center gap-1">
+                  <span>Jadwal Otomatis</span>
+                  <Clock className="w-2.5 h-2.5 text-orange-600" />
                 </p>
               </div>
             </motion.button>
@@ -823,8 +937,9 @@ export default function StorefrontClient({
                 <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
                   Top Up Saldo
                 </h4>
-                <p className="text-[9px] text-gray-400 font-bold leading-tight">
-                  Arus Pay Instan ⚡
+                <p className="text-[9px] text-gray-500 font-bold leading-tight flex items-center gap-1">
+                  <span>Arus Pay Instan</span>
+                  <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
                 </p>
               </div>
             </motion.button>
@@ -854,8 +969,9 @@ export default function StorefrontClient({
                 <h4 className="font-serif font-black text-xs text-gray-900 leading-tight">
                   Lucky Gacha
                 </h4>
-                <p className="text-[9px] text-gray-400 font-bold leading-tight">
-                  Hadiah & Game 🎁
+                <p className="text-[9px] text-gray-500 font-bold leading-tight flex items-center gap-1">
+                  <span>Hadiah & Game</span>
+                  <Sparkles className="w-2.5 h-2.5 text-rose-500" />
                 </p>
               </div>
             </motion.button>
@@ -880,8 +996,9 @@ export default function StorefrontClient({
                       Arus Pay
                     </span>
                   </div>
-                  <div className="px-2.5 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-300 text-[9px] font-black tracking-wider uppercase">
-                    Dompet Digital ⚡
+                  <div className="px-2.5 py-0.5 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-300 text-[9px] font-black tracking-wider uppercase flex items-center gap-1">
+                    <Zap className="w-2.5 h-2.5 fill-amber-300" />
+                    <span>Dompet Digital</span>
                   </div>
                 </div>
 
@@ -985,7 +1102,7 @@ export default function StorefrontClient({
                     </span>
                   </div>
                   <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-100 border border-amber-200 text-amber-800 text-[9px] font-black tracking-wider uppercase shadow-inner">
-                    <span>✨</span>
+                    <Sparkles className="w-2.5 h-2.5 text-orange-600" />
                     <span>{arusLevel}</span>
                   </div>
                 </div>
@@ -1003,8 +1120,14 @@ export default function StorefrontClient({
                     </div>
                   </div>
 
-                  <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-xl shadow-inner animate-pulse-once">
-                    {arusLevel.includes('Tunas') ? '🌱' : arusLevel.includes('Mengalir') ? '🌊' : '✨'}
+                  <div className="w-11 h-11 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-orange-600 shadow-inner animate-pulse-once">
+                    {arusLevel.includes('Tunas') ? (
+                      <Leaf className="w-5 h-5 text-orange-600" />
+                    ) : arusLevel.includes('Mengalir') ? (
+                      <Award className="w-5 h-5 text-amber-600" />
+                    ) : (
+                      <Sparkles className="w-5 h-5 text-orange-500" />
+                    )}
                   </div>
                 </div>
 
@@ -1037,7 +1160,7 @@ export default function StorefrontClient({
                       } else {
                         target = milestones.milestone3.target;
                         prevTarget = milestones.milestone2.target;
-                        nextReward = 'Maximum Milestone Reached 🎉';
+                        nextReward = 'Maximum Milestone Reached';
                       }
                     }
 
@@ -1060,8 +1183,9 @@ export default function StorefrontClient({
                             style={{ width: `${progressPct}%` }}
                           />
                         </div>
-                        <p className="text-[8.5px] font-bold text-gray-500 leading-none">
-                          🎁 Target: {nextReward}
+                        <p className="text-[8.5px] font-bold text-gray-500 leading-none flex items-center gap-1">
+                          <Gift className="w-2.5 h-2.5 text-orange-500 shrink-0" />
+                          <span>Target: {nextReward}</span>
                         </p>
                       </div>
                     );
@@ -1160,8 +1284,8 @@ export default function StorefrontClient({
                 <h3 className="font-serif font-black text-xs md:text-sm text-gray-900 leading-snug">
                   Ajak Teman, Dapat Reward Voucher!
                 </h3>
-                <div className="flex items-start gap-1 mt-1 text-[10px] text-gray-600 font-semibold max-w-xl">
-                  <span className="shrink-0">🤝</span>
+                <div className="flex items-start gap-1.5 mt-1 text-[10px] text-gray-600 font-semibold max-w-xl">
+                  <Users className="w-3.5 h-3.5 text-orange-600 shrink-0 mt-0.5" />
                   <p className="leading-tight">
                     Temanmu dapat diskon <span className="font-bold text-gray-800">Rp3.000</span>, kamu
                     mendapat <span className="font-bold text-orange-600">Poin / Voucher</span> reward menarik!
@@ -1226,12 +1350,16 @@ export default function StorefrontClient({
                   const isSoldOut = p.badge === 'sold-out';
                   const promo = getActivePromo(p);
                   const displayPrice = promo ? promo.promoPrice : p.price;
+                  const originalPrice = promo ? p.price : p.modifiers?.originalPrice || null;
+                  const discountAmount =
+                    originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
+                  const isFood = checkIsFood(p);
 
                   return (
                     <div
                       key={p.id}
                       onClick={() => handleProductClick(p)}
-                      className="w-[135px] md:w-[155px] shrink-0 bg-white border border-amber-100 rounded-2xl p-2.5 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer overflow-hidden relative group"
+                      className="w-[145px] md:w-[168px] shrink-0 bg-white border border-amber-100 rounded-2xl p-2.5 hover:border-orange-400 hover:shadow-md transition-all cursor-pointer overflow-hidden relative group flex flex-col justify-between"
                     >
                       {p.image && (
                         <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-amber-50 mb-2 border border-amber-100/60 shadow-sm">
@@ -1239,17 +1367,45 @@ export default function StorefrontClient({
                             src={p.image}
                             alt={p.name}
                             fill
-                            sizes="(max-width: 640px) 135px, 155px"
-                            className="object-cover group-hover:scale-103 transition-transform"
+                            sizes="(max-width: 640px) 145px, 168px"
+                            className="object-cover group-hover:scale-105 transition-transform duration-500"
                           />
+                          <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-gray-800 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-amber-100">
+                            {isFood ? (
+                              <>
+                                <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Makanan</span>
+                              </>
+                            ) : (
+                              <>
+                                <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                                <span>Minuman</span>
+                              </>
+                            )}
+                          </span>
                         </div>
                       )}
-                      <p className="font-serif font-black text-[11px] text-gray-900 line-clamp-1 leading-tight">
-                        {p.name}
-                      </p>
-                      <span className="font-bold text-[10px] text-amber-600 mt-1 block">
-                        {formatRupiah(displayPrice)}
-                      </span>
+                      <div>
+                        <p className="font-serif font-black text-[11px] text-gray-900 line-clamp-1 leading-tight group-hover:text-orange-600 transition-colors">
+                          {p.name}
+                        </p>
+                        {discountAmount > 0 && originalPrice && (
+                          <span className="text-[8px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1 py-0.5 rounded mt-1 inline-block leading-none">
+                            {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
+                            {formatRupiah(displayPrice)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-50">
+                        <span className="font-black text-[11px] text-orange-600">
+                          {formatRupiah(displayPrice)}
+                        </span>
+                        {!isSoldOut && (
+                          <div className="w-6 h-6 rounded-lg bg-orange-50 group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:to-amber-500 text-orange-600 group-hover:text-white flex items-center justify-center transition-all">
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1278,12 +1434,14 @@ export default function StorefrontClient({
                   const promo = getActivePromo(p);
                   const displayPrice = promo ? promo.promoPrice : p.price;
                   const originalPrice = promo ? p.price : p.modifiers?.originalPrice || null;
+                  const discountAmount =
+                    originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
 
                   return (
                     <div
                       key={p.id}
                       onClick={() => handleProductClick(p)}
-                      className={`w-[145px] md:w-[175px] shrink-0 bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden ${
+                      className={`w-[155px] md:w-[185px] shrink-0 bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden flex flex-col justify-between ${
                         isSoldOut
                           ? 'opacity-60 cursor-not-allowed'
                           : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1 cursor-pointer'
@@ -1295,7 +1453,7 @@ export default function StorefrontClient({
                             src={p.image}
                             alt={p.name}
                             fill
-                            sizes="(max-width: 640px) 145px, 175px"
+                            sizes="(max-width: 640px) 155px, 185px"
                             className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
                               isSoldOut ? 'grayscale brightness-50' : ''
                             }`}
@@ -1311,6 +1469,10 @@ export default function StorefrontClient({
                               <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-white/90 backdrop-blur-md text-amber-600 text-[8px] font-black shadow-sm flex items-center gap-0.5 leading-none">
                                 <Star className="w-3 h-3 fill-amber-500 stroke-none" /> 4.9
                               </span>
+                              <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-orange-700 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-orange-100">
+                                <Sparkles className="w-2.5 h-2.5 text-orange-500" />
+                                <span>Paket Hemat</span>
+                              </span>
                               {promo && (
                                 <div className="absolute top-1.5 left-1.5 z-20">
                                   <PromoCountdown endDate={promo.endDate} compact />
@@ -1322,18 +1484,33 @@ export default function StorefrontClient({
                       )}
 
                       <div className="flex-grow flex flex-col justify-between">
-                        <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
-                          {p.name}
-                        </p>
-                        <div className="flex flex-col mt-2">
-                          {originalPrice && originalPrice > displayPrice && (
-                            <span className="text-[10px] text-muted-foreground line-through leading-none mb-1">
-                              {formatRupiah(originalPrice)}
+                        <div>
+                          <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
+                            {p.name}
+                          </p>
+                          {discountAmount > 0 && originalPrice && (
+                            <span className="text-[8.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                              {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
+                              {formatRupiah(displayPrice)}
                             </span>
                           )}
-                          <p className="font-bold text-xs text-amber-600 leading-none">
-                            {formatRupiah(displayPrice)}
-                          </p>
+                        </div>
+                        <div className="flex items-end justify-between mt-2 pt-1.5 border-t border-amber-50/80">
+                          <div className="flex flex-col">
+                            {originalPrice && originalPrice > displayPrice && (
+                              <span className="text-[9px] text-gray-400 line-through leading-none mb-0.5">
+                                {formatRupiah(originalPrice)}
+                              </span>
+                            )}
+                            <p className="font-black text-xs text-orange-600 leading-none">
+                              {formatRupiah(displayPrice)}
+                            </p>
+                          </div>
+                          {!isSoldOut && (
+                            <div className="w-7 h-7 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1364,15 +1541,17 @@ export default function StorefrontClient({
                   originalPrice,
                   promo,
                   isRegularOut,
-                  sizeNotice,
                   isSoldOut,
                 } = getEffectiveProductDisplay(p, packagingStock);
+                const discountAmount =
+                  originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
+                const isFood = checkIsFood(p);
 
                 return (
                   <div
                     key={p.id}
                     onClick={() => handleProductClick(p)}
-                    className={`w-[145px] md:w-[175px] shrink-0 bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden ${
+                    className={`w-[155px] md:w-[185px] shrink-0 bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden flex flex-col justify-between ${
                       isSoldOut
                         ? 'opacity-60 cursor-not-allowed'
                         : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1 cursor-pointer'
@@ -1384,7 +1563,7 @@ export default function StorefrontClient({
                           src={p.image}
                           alt={p.name}
                           fill
-                          sizes="(max-width: 640px) 145px, 175px"
+                          sizes="(max-width: 640px) 155px, 185px"
                           className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
                             isSoldOut ? 'grayscale brightness-50' : ''
                           }`}
@@ -1400,6 +1579,19 @@ export default function StorefrontClient({
                             <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-white/90 backdrop-blur-md text-amber-600 text-[8px] font-black shadow-sm flex items-center gap-0.5 leading-none">
                               <Star className="w-3 h-3 fill-amber-500 stroke-none" /> 4.9
                             </span>
+                            <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-gray-800 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-amber-100">
+                              {isFood ? (
+                                <>
+                                  <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                                  <span>Makanan</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                                  <span>Minuman</span>
+                                </>
+                              )}
+                            </span>
                             {promo && (
                               <div className="absolute top-1.5 left-1.5 z-20">
                                 <PromoCountdown endDate={promo.endDate} compact />
@@ -1411,25 +1603,40 @@ export default function StorefrontClient({
                     )}
 
                     <div className="flex-grow flex flex-col justify-between">
-                      <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
-                        {p.name}
-                      </p>
-                      <div className="mt-2 flex flex-col items-baseline">
-                        {originalPrice && originalPrice > displayPrice && (
-                          <span className="text-[10px] text-muted-foreground line-through leading-none mb-1">
-                            {formatRupiah(originalPrice)}
-                          </span>
-                        )}
-                        <div className="flex items-baseline gap-1">
-                          <span className="font-bold text-xs text-amber-600">
+                      <div>
+                        <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
+                          {p.name}
+                        </p>
+                        {discountAmount > 0 && originalPrice && (
+                          <span className="text-[8.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                            {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
                             {formatRupiah(displayPrice)}
                           </span>
-                          {isRegularOut && (
-                            <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
-                              (Jumbo)
+                        )}
+                      </div>
+                      <div className="mt-2 pt-1.5 border-t border-amber-50/80 flex items-end justify-between">
+                        <div className="flex flex-col">
+                          {originalPrice && originalPrice > displayPrice && (
+                            <span className="text-[9px] text-gray-400 line-through leading-none mb-0.5">
+                              {formatRupiah(originalPrice)}
                             </span>
                           )}
+                          <div className="flex items-baseline gap-1">
+                            <span className="font-black text-xs text-orange-600">
+                              {formatRupiah(displayPrice)}
+                            </span>
+                            {isRegularOut && !isFood && (
+                              <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                                (Jumbo)
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        {!isSoldOut && (
+                          <div className="w-7 h-7 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1459,15 +1666,17 @@ export default function StorefrontClient({
                   originalPrice,
                   promo,
                   isRegularOut,
-                  sizeNotice,
                   isSoldOut,
                 } = getEffectiveProductDisplay(p, packagingStock);
+                const discountAmount =
+                  originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
+                const isFood = checkIsFood(p);
 
                 return (
                   <div
                     key={p.id}
                     onClick={() => handleProductClick(p)}
-                    className={`w-[145px] md:w-[175px] shrink-0 bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden ${
+                    className={`w-[155px] md:w-[185px] shrink-0 bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden flex flex-col justify-between ${
                       isSoldOut
                         ? 'opacity-60 cursor-not-allowed'
                         : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1 cursor-pointer'
@@ -1479,7 +1688,7 @@ export default function StorefrontClient({
                           src={p.image}
                           alt={p.name}
                           fill
-                          sizes="(max-width: 640px) 145px, 175px"
+                          sizes="(max-width: 640px) 155px, 185px"
                           className={`object-cover group-hover:scale-105 transition-transform duration-500 ease-out ${
                             isSoldOut ? 'grayscale brightness-50' : ''
                           }`}
@@ -1506,31 +1715,53 @@ export default function StorefrontClient({
                                 New
                               </span>
                             )}
+                            <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-gray-800 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-amber-100">
+                              {isFood ? (
+                                <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                              ) : (
+                                <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                              )}
+                            </span>
                           </>
                         )}
                       </div>
                     )}
 
                     <div className="flex-grow flex flex-col justify-between">
-                      <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
-                        {p.name}
-                      </p>
-                      <div className="flex flex-col mt-2">
-                        {originalPrice && originalPrice > displayPrice && (
-                          <span className="text-[10px] text-muted-foreground line-through leading-none mb-1">
-                            {formatRupiah(originalPrice)}
-                          </span>
-                        )}
-                        <div className="flex items-baseline gap-1">
-                          <span className="font-bold text-xs text-amber-600">
+                      <div>
+                        <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
+                          {p.name}
+                        </p>
+                        {discountAmount > 0 && originalPrice && (
+                          <span className="text-[8.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                            {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
                             {formatRupiah(displayPrice)}
                           </span>
-                          {isRegularOut && (
-                            <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
-                              (Jumbo)
+                        )}
+                      </div>
+                      <div className="flex items-end justify-between mt-2 pt-1.5 border-t border-amber-50/80">
+                        <div className="flex flex-col">
+                          {originalPrice && originalPrice > displayPrice && (
+                            <span className="text-[9px] text-gray-400 line-through leading-none mb-0.5">
+                              {formatRupiah(originalPrice)}
                             </span>
                           )}
+                          <div className="flex items-baseline gap-1">
+                            <span className="font-black text-xs text-orange-600">
+                              {formatRupiah(displayPrice)}
+                            </span>
+                            {isRegularOut && !isFood && (
+                              <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                                (Jumbo)
+                              </span>
+                            )}
+                          </div>
                         </div>
+                        {!isSoldOut && (
+                          <div className="w-7 h-7 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1543,13 +1774,16 @@ export default function StorefrontClient({
           <section className="bg-white rounded-[2rem] border border-amber-100/70 p-6 shadow-sm">
             <div className="flex items-center justify-between mb-5">
               <h3 className="font-serif font-black text-base md:text-lg text-gray-900 tracking-tight flex items-center gap-1.5">
-                <ShoppingBag className="w-5 h-5 text-amber-700" /> Cemilan & Roti
+                <UtensilsCrossed className="w-5 h-5 text-amber-700" /> Cemilan & Roti Pilihan
               </h3>
               <span
-                onClick={() => setSearchOpen(true)}
+                onClick={() => {
+                  setCatalogTypeFilter('food');
+                  setSearchOpen(true);
+                }}
                 className="text-[10px] md:text-xs text-amber-700 font-bold flex items-center gap-0.5 cursor-pointer hover:text-orange-600 transition-colors uppercase tracking-wider select-none"
               >
-                Semua Roti <ChevronRight className="w-3.5 h-3.5" />
+                Semua Cemilan <ChevronRight className="w-3.5 h-3.5" />
               </span>
             </div>
 
@@ -1559,12 +1793,14 @@ export default function StorefrontClient({
                 const promo = getActivePromo(p);
                 const displayPrice = promo ? promo.promoPrice : p.price;
                 const originalPrice = promo ? p.price : p.modifiers?.originalPrice || null;
+                const discountAmount =
+                  originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
 
                 return (
                   <div
                     key={p.id}
                     onClick={() => handleProductClick(p)}
-                    className={`bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3.5 relative group overflow-hidden ${
+                    className={`bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3.5 relative group overflow-hidden flex flex-col justify-between ${
                       isSoldOut
                         ? 'opacity-60 cursor-not-allowed'
                         : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1 cursor-pointer'
@@ -1589,6 +1825,10 @@ export default function StorefrontClient({
                           </div>
                         ) : (
                           <>
+                            <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-amber-800 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-amber-200/70">
+                              <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                              <span>Makanan</span>
+                            </span>
                             {promo && (
                               <div className="absolute top-1.5 left-1.5 z-20">
                                 <PromoCountdown endDate={promo.endDate} compact />
@@ -1600,24 +1840,466 @@ export default function StorefrontClient({
                     )}
 
                     <div className="flex-grow flex flex-col justify-between">
-                      <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
-                        {p.name}
-                      </p>
-                      <div className="flex flex-col mt-2">
-                        {originalPrice && originalPrice > displayPrice && (
-                          <span className="text-[10px] text-muted-foreground line-through leading-none mb-1">
-                            {formatRupiah(originalPrice)}
+                      <div>
+                        <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
+                          {p.name}
+                        </p>
+                        {discountAmount > 0 && originalPrice && (
+                          <span className="text-[8.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                            {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
+                            {formatRupiah(displayPrice)}
                           </span>
                         )}
-                        <p className="font-bold text-xs text-gray-800 leading-none">
-                          {formatRupiah(displayPrice)}
-                        </p>
+                      </div>
+                      <div className="flex items-end justify-between mt-2 pt-1.5 border-t border-amber-50/80">
+                        <div className="flex flex-col">
+                          {originalPrice && originalPrice > displayPrice && (
+                            <span className="text-[9px] text-gray-400 line-through leading-none mb-0.5">
+                              {formatRupiah(originalPrice)}
+                            </span>
+                          )}
+                          <p className="font-black text-xs text-orange-600 leading-none">
+                            {formatRupiah(displayPrice)}
+                          </p>
+                        </div>
+                        {!isSoldOut && (
+                          <div className="w-7 h-7 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
+          </section>
+
+          {/* Interactive Full Menu Explorer (Makanan & Minuman) */}
+          <section
+            id="katalog-menu"
+            className="bg-white rounded-[2rem] border border-amber-100/80 p-5 sm:p-6 shadow-sm"
+          >
+            {/* Header & Search Trigger */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-amber-100">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-sm">
+                    <Coffee className="w-4 h-4" />
+                  </div>
+                  <h3 className="font-serif font-black text-lg md:text-xl text-gray-950 tracking-tight">
+                    Eksplorasi Menu Makanan & Minuman
+                  </h3>
+                </div>
+                <p className="text-[11px] text-gray-500 font-medium">
+                  Pilih kategori minuman segar, kopi, matcha, atau hidangan makanan favoritmu
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(true)}
+                  className="flex-1 md:flex-initial flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-[#FAF8F5] hover:bg-orange-50/70 border border-amber-200/80 hover:border-orange-300 text-gray-600 text-xs font-bold transition-all cursor-pointer shadow-inner"
+                >
+                  <Search className="w-4 h-4 text-orange-500 shrink-0" />
+                  <span className="truncate">Cari nama makanan atau minuman...</span>
+                </button>
+
+                {/* View Mode Toggle (Grid vs List for Android & Desktop) */}
+                <div className="flex items-center bg-amber-50/90 p-1 rounded-xl border border-amber-200/70 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setCatalogViewMode('grid')}
+                    className={cn(
+                      'p-2 rounded-lg transition-all cursor-pointer flex items-center gap-1 text-[10px] font-black',
+                      catalogViewMode === 'grid'
+                        ? 'bg-white text-orange-600 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-700'
+                    )}
+                    title="Tampilan Grid"
+                    aria-label="Tampilan Grid"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Grid</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCatalogViewMode('list')}
+                    className={cn(
+                      'p-2 rounded-lg transition-all cursor-pointer flex items-center gap-1 text-[10px] font-black',
+                      catalogViewMode === 'list'
+                        ? 'bg-white text-orange-600 shadow-sm'
+                        : 'text-gray-400 hover:text-gray-700'
+                    )}
+                    title="Tampilan Daftar"
+                    aria-label="Tampilan Daftar"
+                  >
+                    <List className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">List</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Primary Type Filter Tabs: Semua / Minuman / Makanan / Combo */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pt-4 pb-2">
+              {[
+                {
+                  id: 'all' as const,
+                  label: 'Semua Menu',
+                  count: catalogTypeCounts.all,
+                  icon: Sparkles,
+                },
+                {
+                  id: 'drink' as const,
+                  label: 'Minuman Segar',
+                  count: catalogTypeCounts.drink,
+                  icon: Coffee,
+                },
+                {
+                  id: 'food' as const,
+                  label: 'Makanan & Cemilan',
+                  count: catalogTypeCounts.food,
+                  icon: UtensilsCrossed,
+                },
+                ...(catalogTypeCounts.combo > 0
+                  ? [
+                      {
+                        id: 'combo' as const,
+                        label: 'Paket Combo',
+                        count: catalogTypeCounts.combo,
+                        icon: ShoppingBag,
+                      },
+                    ]
+                  : []),
+              ].map((tab) => {
+                const Icon = tab.icon;
+                const isActive = catalogTypeFilter === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setCatalogTypeFilter(tab.id);
+                      setCatalogCategory('all');
+                    }}
+                    className={cn(
+                      'flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-black whitespace-nowrap transition-all cursor-pointer shrink-0 border',
+                      isActive
+                        ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20 scale-[1.01]'
+                        : 'bg-[#FAF8F5] text-gray-700 border-amber-200/70 hover:bg-orange-50 hover:border-orange-300'
+                    )}
+                  >
+                    <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-white' : 'text-orange-500')} />
+                    <span>{tab.label}</span>
+                    <span
+                      className={cn(
+                        'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold leading-none',
+                        isActive ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
+                      )}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Secondary Category Pills */}
+            {catalogCategories.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-2 mb-4">
+                {catalogCategories.map((cat) => {
+                  const isActive = catalogCategory === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setCatalogCategory(cat.id)}
+                      className={cn(
+                        'px-3.5 py-1.5 rounded-full text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 border',
+                        isActive
+                          ? 'bg-amber-950 text-amber-300 border-amber-900 shadow-sm'
+                          : 'bg-white text-gray-600 border-amber-100 hover:border-orange-200 hover:bg-amber-50/50'
+                      )}
+                    >
+                      {cat.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Catalog Product Grid / List */}
+            {catalogFilteredProducts.length === 0 ? (
+              <div className="py-12 text-center bg-[#FAF8F5] rounded-3xl border border-dashed border-amber-200">
+                <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center mx-auto mb-3 text-orange-500">
+                  <Coffee className="w-6 h-6" />
+                </div>
+                <p className="font-serif font-bold text-sm text-gray-800">
+                  Belum ada menu pada kategori ini
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCatalogTypeFilter('all');
+                    setCatalogCategory('all');
+                  }}
+                  className="mt-3 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black shadow-sm cursor-pointer"
+                >
+                  Tampilkan Semua Menu
+                </button>
+              </div>
+            ) : (
+              <div
+                className={cn(
+                  catalogViewMode === 'grid'
+                    ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4'
+                    : 'grid grid-cols-1 md:grid-cols-2 gap-3'
+                )}
+              >
+                {catalogFilteredProducts.map((p) => {
+                  const {
+                    displayPrice,
+                    originalPrice,
+                    promo,
+                    isRegularOut,
+                    isSoldOut,
+                  } = getEffectiveProductDisplay(p, packagingStock);
+                  const discountAmount =
+                    originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
+                  const isFood = checkIsFood(p);
+
+                  if (catalogViewMode === 'list') {
+                    return (
+                      <div
+                        key={p.id}
+                        onClick={() => handleProductClick(p)}
+                        className={cn(
+                          'bg-white border border-amber-100/90 rounded-2xl p-3 flex items-center gap-3.5 transition-all duration-200 relative group overflow-hidden',
+                          isSoldOut
+                            ? 'opacity-60 cursor-not-allowed'
+                            : 'hover:border-orange-400 hover:shadow-md cursor-pointer active:scale-[0.99]'
+                        )}
+                      >
+                        <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden bg-amber-50 shrink-0 border border-amber-100">
+                          {p.image ? (
+                            <Image
+                              src={p.image}
+                              alt={p.name}
+                              fill
+                              sizes="96px"
+                              className={cn(
+                                'object-cover group-hover:scale-105 transition-transform duration-500',
+                                isSoldOut && 'grayscale brightness-50'
+                              )}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-orange-300">
+                              {isFood ? (
+                                <UtensilsCrossed className="w-7 h-7" />
+                              ) : (
+                                <Coffee className="w-7 h-7" />
+                              )}
+                            </div>
+                          )}
+                          {isSoldOut && (
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                              <span className="bg-black/85 text-white text-[8px] font-black uppercase px-2 py-0.5 rounded">
+                                Habis
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex-1 min-w-0 flex flex-col justify-between">
+                          <div>
+                            <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                              <span
+                                className={cn(
+                                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border',
+                                  isFood
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200/70'
+                                    : 'bg-orange-50 text-orange-700 border-orange-200/70'
+                                )}
+                              >
+                                {isFood ? (
+                                  <>
+                                    <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                                    <span>Makanan</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                                    <span>Minuman</span>
+                                  </>
+                                )}
+                              </span>
+                              {p.badge === 'best-seller' && (
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-500 text-white text-[8px] font-black uppercase">
+                                  <Flame className="w-2.5 h-2.5 fill-white" /> Terlaris
+                                </span>
+                              )}
+                              {promo && <PromoCountdown endDate={promo.endDate} compact />}
+                            </div>
+
+                            <h4 className="font-serif font-bold text-sm text-gray-900 group-hover:text-orange-600 transition-colors truncate">
+                              {p.name}
+                            </h4>
+                            {p.description && (
+                              <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                                {p.description}
+                              </p>
+                            )}
+                            {discountAmount > 0 && originalPrice && (
+                              <span className="text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                                {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
+                                {formatRupiah(displayPrice)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-amber-50">
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-black text-sm text-orange-600">
+                                {formatRupiah(displayPrice)}
+                              </span>
+                              {originalPrice && originalPrice > displayPrice && (
+                                <span className="text-[10px] text-gray-400 line-through">
+                                  {formatRupiah(originalPrice)}
+                                </span>
+                              )}
+                              {isRegularOut && !isFood && (
+                                <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                  Cup Jumbo
+                                </span>
+                              )}
+                            </div>
+                            {!isSoldOut && (
+                              <div className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black flex items-center gap-1 shadow-sm group-hover:scale-105 transition-transform">
+                                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                                <span>Pilih</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div
+                      key={p.id}
+                      onClick={() => handleProductClick(p)}
+                      className={cn(
+                        'bg-white border border-amber-100 shadow-sm transition-all duration-300 rounded-3xl p-3 relative group overflow-hidden flex flex-col justify-between',
+                        isSoldOut
+                          ? 'opacity-60 cursor-not-allowed'
+                          : 'hover:border-orange-400 hover:shadow-md hover:-translate-y-1 cursor-pointer'
+                      )}
+                    >
+                      <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-amber-50 mb-2.5 border border-amber-100 shadow-sm">
+                        {p.image ? (
+                          <Image
+                            src={p.image}
+                            alt={p.name}
+                            fill
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                            className={cn(
+                              'object-cover group-hover:scale-105 transition-transform duration-500 ease-out',
+                              isSoldOut && 'grayscale brightness-50'
+                            )}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-orange-300">
+                            {isFood ? (
+                              <UtensilsCrossed className="w-8 h-8" />
+                            ) : (
+                              <Coffee className="w-8 h-8" />
+                            )}
+                          </div>
+                        )}
+                        {isSoldOut ? (
+                          <div className="absolute inset-0 bg-black/45 flex items-center justify-center z-20">
+                            <span className="bg-black/85 text-white font-extrabold text-[9px] px-2.5 py-1 rounded-lg tracking-wider uppercase">
+                              Habis
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <span className="absolute top-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-lg bg-white/90 backdrop-blur-md text-amber-600 text-[8px] font-black shadow-sm flex items-center gap-0.5 leading-none">
+                              <Star className="w-3 h-3 fill-amber-500 stroke-none" /> 4.9
+                            </span>
+                            <span className="absolute bottom-1.5 right-1.5 z-10 px-1.5 py-0.5 rounded-md bg-white/90 backdrop-blur-md text-gray-800 text-[7.5px] font-black shadow-sm flex items-center gap-0.5 leading-none border border-amber-100">
+                              {isFood ? (
+                                <>
+                                  <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                                  <span>Makanan</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                                  <span>Minuman</span>
+                                </>
+                              )}
+                            </span>
+                            {promo && (
+                              <div className="absolute top-1.5 left-1.5 z-20">
+                                <PromoCountdown endDate={promo.endDate} compact />
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+
+                      <div className="flex-grow flex flex-col justify-between">
+                        <div>
+                          <p className="font-serif font-bold text-xs text-gray-900 line-clamp-1 leading-snug group-hover:text-orange-600 transition-colors">
+                            {p.name}
+                          </p>
+                          {p.description && (
+                            <p className="text-[10px] text-gray-400 line-clamp-1 mt-0.5">
+                              {p.description}
+                            </p>
+                          )}
+                          {discountAmount > 0 && originalPrice && (
+                            <span className="text-[8.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                              {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
+                              {formatRupiah(displayPrice)}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-2 pt-1.5 border-t border-amber-50/80 flex items-end justify-between">
+                          <div className="flex flex-col">
+                            {originalPrice && originalPrice > displayPrice && (
+                              <span className="text-[9px] text-gray-400 line-through leading-none mb-0.5">
+                                {formatRupiah(originalPrice)}
+                              </span>
+                            )}
+                            <div className="flex items-baseline gap-1">
+                              <span className="font-black text-xs text-orange-600">
+                                {formatRupiah(displayPrice)}
+                              </span>
+                              {isRegularOut && !isFood && (
+                                <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
+                                  (Jumbo)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {!isSoldOut && (
+                            <div className="w-7 h-7 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </section>
 
           {/* Arum Moments - Featured Reviews Slideshow */}
@@ -1669,7 +2351,9 @@ export default function StorefrontClient({
                           />
                         ) : (
                           <div className="w-full h-full flex flex-col items-center justify-center bg-amber-50 relative p-4">
-                            <span className="text-3xl select-none">🍵</span>
+                            <div className="w-12 h-12 rounded-2xl bg-orange-100/80 border border-orange-200 flex items-center justify-center text-orange-600">
+                              <Coffee className="w-6 h-6" />
+                            </div>
                             <span className="text-[10px] font-black text-orange-600 mt-2 tracking-widest uppercase">
                               Momen Arum Seduh
                             </span>
@@ -1694,7 +2378,7 @@ export default function StorefrontClient({
                       <div className="p-4 flex-grow flex flex-col justify-between space-y-3">
                         <div className="space-y-1.5">
                           <p className="text-xs text-gray-700 font-semibold italic line-clamp-3 leading-relaxed text-left">
-                            "{review.comment || 'Enak banget, minuman terenak yang pernah kucoba! 🧡'}"
+                            "{review.comment || 'Enak banget, minuman dan cemilan favorit di Arum Seduh!'}"
                           </p>
                         </div>
 
@@ -1766,6 +2450,7 @@ export default function StorefrontClient({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         allProducts={products}
+        categories={categories}
         packagingStock={packagingStock}
       />
 
@@ -1775,6 +2460,7 @@ export default function StorefrontClient({
         onProductSelect={handleSearchSelect}
         products={products}
         categories={categories}
+        packagingStock={packagingStock}
       />
 
       <EasterEggOverlay

@@ -9,13 +9,13 @@ import {
   CreditCard, Banknote, CheckCircle, Loader2, ArrowRight, X, UtensilsCrossed, Lock, 
   ExternalLink, Download, MessageCircle, AlertCircle, ChefHat, Check, Grid, Sparkles,
   Flame, Clock, AlertTriangle, DoorOpen, Tv, Archive, Coffee, Flower2, Columns, Accessibility, Compass, Map,
-  Tag, Ticket
+  Tag, Ticket, Search, LayoutGrid, List, CupSoda
 } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
 import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
-import { formatRupiah, getActivePromo, getEffectiveProductDisplay } from '@/lib/utils';
+import { formatRupiah, getActivePromo, getEffectiveProductDisplay, cn } from '@/lib/utils';
 import { isFoodItem } from '@/lib/receipt-modifiers';
 import type { Product, Category } from '@/types';
 import { 
@@ -84,6 +84,9 @@ export default function SpmbClient({
 
   // UI State
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [menuSearch, setMenuSearch] = useState('');
+  const [menuTypeFilter, setMenuTypeFilter] = useState<'all' | 'drink' | 'food' | 'promo'>('all');
+  const [menuViewMode, setMenuViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -356,17 +359,78 @@ export default function SpmbClient({
     return diffMinutes >= 20 && !['READY', 'COMPLETED', 'CANCELLED'].includes(activeOrderStatus.status);
   }, [activeOrderStatus]);
 
-  const filteredProducts = useMemo(() => {
-    if (!selectedCategory || selectedCategory === 'all') return products;
-    const targetCat = categories.find(c => c.id === selectedCategory || c.slug === selectedCategory);
-    return products.filter((p: any) => {
+  const checkIsFood = useMemo(() => {
+    const foodKeywords = [
+      'roti', 'croissant', 'donut', 'cake', 'pastry', 'sweet', 'makanan',
+      'bread', 'bun', 'pie', 'chocolate', 'keju', 'snack', 'food', 'cemilan'
+    ];
+    return (p: Product) => {
+      const nameLower = p.name.toLowerCase();
+      const descLower = (p.description || '').toLowerCase();
+      const catObj = categories.find((c) => c.id === p.category || c.slug === p.category);
+      const catLower = `${p.category || ''} ${catObj?.name || ''} ${catObj?.slug || ''}`.toLowerCase();
       return (
+        isFoodItem(p.name) ||
+        (p.modifiers as any)?.productType === 'makanan' ||
+        foodKeywords.some((kw) => nameLower.includes(kw) || descLower.includes(kw) || catLower.includes(kw))
+      );
+    };
+  }, [categories]);
+
+  const menuTypeCounts = useMemo(() => {
+    let drink = 0;
+    let food = 0;
+    let promo = 0;
+    products.forEach((p) => {
+      if (checkIsFood(p)) {
+        food++;
+      } else {
+        drink++;
+      }
+      if (getActivePromo(p) || (p.modifiers?.originalPrice && p.modifiers.originalPrice > p.price)) {
+        promo++;
+      }
+    });
+    return { all: products.length, drink, food, promo };
+  }, [products, checkIsFood]);
+
+  const filteredProducts = useMemo(() => {
+    const targetCat =
+      selectedCategory && selectedCategory !== 'all'
+        ? categories.find((c) => c.id === selectedCategory || c.slug === selectedCategory)
+        : null;
+    const q = menuSearch.trim().toLowerCase();
+
+    return products.filter((p: any) => {
+      const matchesCat =
+        !selectedCategory ||
+        selectedCategory === 'all' ||
         p.category === selectedCategory ||
         p.categorySlug === selectedCategory ||
-        (targetCat && (p.category === targetCat.id || p.categorySlug === targetCat.slug))
-      );
+        (targetCat && (p.category === targetCat.id || p.categorySlug === targetCat.slug));
+
+      if (!matchesCat) return false;
+
+      if (menuTypeFilter === 'food' && !checkIsFood(p)) return false;
+      if (menuTypeFilter === 'drink' && checkIsFood(p)) return false;
+      if (
+        menuTypeFilter === 'promo' &&
+        !getActivePromo(p) &&
+        !(p.modifiers?.originalPrice && p.modifiers.originalPrice > p.price)
+      ) {
+        return false;
+      }
+
+      if (q) {
+        const matchesSearch =
+          p.name.toLowerCase().includes(q) ||
+          (p.description && p.description.toLowerCase().includes(q));
+        if (!matchesSearch) return false;
+      }
+
+      return true;
     });
-  }, [products, selectedCategory, categories]);
+  }, [products, selectedCategory, categories, menuTypeFilter, menuSearch, checkIsFood]);
 
   const handleProductClick = (product: Product) => {
     if (product.badge === 'sold-out') return;
@@ -828,41 +892,156 @@ export default function SpmbClient({
           </motion.div>
         )}
 
-        {/* Category Navigation Pills */}
-        <nav className="flex gap-2 overflow-x-auto pb-3 scrollbar-none select-none">
-          {categories.map((cat) => {
-            const isSelected = selectedCategory === cat.id || selectedCategory === cat.slug;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-4 py-2 rounded-full text-xs font-bold tracking-wide shrink-0 transition-all border cursor-pointer ${
-                  isSelected
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20'
-                    : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
-                }`}
-              >
-                {cat.name}
-              </button>
-            );
-          })}
-        </nav>
+        {/* Interactive Menu Explorer Header (Search + Type Filter + View Mode Toggle) */}
+        <div className="bg-white rounded-3xl border border-amber-200/70 p-4 sm:p-5 shadow-sm mb-4 space-y-3.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Search Input */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-orange-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={menuSearch}
+                onChange={(e) => setMenuSearch(e.target.value)}
+                placeholder="Cari menu minuman segar, kopi, matcha, atau cemilan..."
+                className="w-full pl-10 pr-9 py-2.5 rounded-2xl bg-[#FAF8F5] border border-amber-200/80 focus:border-orange-500 focus:bg-white text-xs sm:text-sm font-semibold text-stone-800 placeholder:text-stone-400 outline-none transition-all"
+              />
+              {menuSearch && (
+                <button
+                  type="button"
+                  onClick={() => setMenuSearch('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-stone-200 hover:bg-stone-300 text-stone-600 flex items-center justify-center cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
 
-        {/* Product Grid */}
+            {/* Grid vs List View Mode Toggle */}
+            <div className="flex items-center justify-between sm:justify-end gap-2">
+              <span className="text-[11px] font-bold text-stone-500 sm:hidden">
+                Menampilkan <strong className="text-orange-600">{filteredProducts.length}</strong> menu
+              </span>
+              <div className="flex items-center bg-amber-50/90 p-1 rounded-xl border border-amber-200/70 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMenuViewMode('grid')}
+                  className={cn(
+                    'px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 text-[10px] font-black',
+                    menuViewMode === 'grid'
+                      ? 'bg-white text-orange-600 shadow-sm'
+                      : 'text-stone-400 hover:text-stone-700'
+                  )}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Grid</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMenuViewMode('list')}
+                  className={cn(
+                    'px-2.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 text-[10px] font-black',
+                    menuViewMode === 'list'
+                      ? 'bg-white text-orange-600 shadow-sm'
+                      : 'text-stone-400 hover:text-stone-700'
+                  )}
+                >
+                  <List className="w-3.5 h-3.5" />
+                  <span>List</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Type Filter Tabs: Semua / Minuman / Makanan / Promo */}
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none pb-0.5 select-none">
+            {[
+              { id: 'all' as const, label: 'Semua Menu', count: menuTypeCounts.all, icon: Sparkles },
+              { id: 'drink' as const, label: 'Minuman Segar', count: menuTypeCounts.drink, icon: Coffee },
+              { id: 'food' as const, label: 'Makanan & Cemilan', count: menuTypeCounts.food, icon: UtensilsCrossed },
+              ...(menuTypeCounts.promo > 0
+                ? [{ id: 'promo' as const, label: 'Lagi Promo', count: menuTypeCounts.promo, icon: Flame }]
+                : []),
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = menuTypeFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setMenuTypeFilter(tab.id)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3.5 py-2 rounded-2xl text-xs font-black whitespace-nowrap transition-all cursor-pointer shrink-0 border',
+                    isActive
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-transparent shadow-md shadow-orange-500/20'
+                      : 'bg-[#FAF8F5] text-stone-700 border-amber-200/70 hover:bg-orange-50 hover:border-orange-300'
+                  )}
+                >
+                  <Icon className={cn('w-3.5 h-3.5', isActive ? 'text-white' : 'text-orange-500')} />
+                  <span>{tab.label}</span>
+                  <span
+                    className={cn(
+                      'px-1.5 py-0.5 rounded-full text-[9px] font-extrabold leading-none',
+                      isActive ? 'bg-white/25 text-white' : 'bg-amber-100 text-amber-800'
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Category Navigation Pills */}
+          <nav className="flex gap-2 overflow-x-auto pt-1 pb-1 scrollbar-none select-none border-t border-amber-100/70">
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat.id || selectedCategory === cat.slug;
+              return (
+                <button
+                  key={cat.id}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold tracking-wide shrink-0 transition-all border cursor-pointer ${
+                    isSelected
+                      ? 'bg-stone-900 text-amber-300 border-stone-900 shadow-sm'
+                      : 'bg-white text-stone-600 border-stone-200 hover:border-orange-300 hover:bg-amber-50/40'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* Product Grid / List */}
         {filteredProducts.length === 0 ? (
           <div className="text-center py-16 px-4 bg-white rounded-3xl border border-stone-200 mt-4 shadow-sm">
-            <UtensilsCrossed className="w-10 h-10 text-stone-300 mx-auto mb-3" />
-            <p className="text-stone-700 font-bold text-sm">Tidak ada menu dalam kategori ini</p>
-            <p className="text-stone-400 text-xs mt-1">Silakan pilih kategori menu lainnya</p>
+            <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center mx-auto mb-3 text-orange-500">
+              <UtensilsCrossed className="w-6 h-6" />
+            </div>
+            <p className="text-stone-800 font-bold text-sm">Tidak ada menu yang sesuai filter</p>
+            <p className="text-stone-400 text-xs mt-1">Coba kata kunci lain atau tampilkan semua kategori menu</p>
             <button
-              onClick={() => setSelectedCategory('all')}
-              className="mt-4 px-4 py-2 rounded-full bg-orange-50 text-orange-600 text-xs font-bold hover:bg-orange-100 transition-colors cursor-pointer"
+              type="button"
+              onClick={() => {
+                setSelectedCategory('all');
+                setMenuTypeFilter('all');
+                setMenuSearch('');
+              }}
+              className="mt-4 px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold shadow-sm hover:opacity-95 transition-all cursor-pointer"
             >
-              Lihat Semua Menu
+              Reset Filter & Lihat Semua Menu
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4 mt-4">
+          <div
+            className={cn(
+              'mt-4',
+              menuViewMode === 'grid'
+                ? 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 sm:gap-4'
+                : 'grid grid-cols-1 md:grid-cols-2 gap-3'
+            )}
+          >
             {filteredProducts.map((product) => {
               const {
                 displayPrice,
@@ -872,6 +1051,126 @@ export default function SpmbClient({
                 sizeNotice,
                 isSoldOut,
               } = getEffectiveProductDisplay(product, packagingStock);
+              const discountAmount =
+                originalPrice && originalPrice > displayPrice ? originalPrice - displayPrice : 0;
+              const isFood = checkIsFood(product);
+
+              if (menuViewMode === 'list') {
+                return (
+                  <motion.div
+                    key={product.id}
+                    whileHover={isSoldOut ? {} : { y: -2 }}
+                    transition={{ duration: 0.2 }}
+                    onClick={() => handleProductClick(product)}
+                    className={cn(
+                      'bg-white rounded-3xl border border-stone-200 p-3 flex items-center gap-3.5 shadow-sm relative group transition-all overflow-hidden',
+                      isSoldOut
+                        ? 'opacity-65 cursor-not-allowed'
+                        : 'cursor-pointer hover:shadow-md hover:border-orange-300'
+                    )}
+                  >
+                    <div className="relative w-24 h-24 rounded-2xl bg-[#FAF9F6] overflow-hidden shrink-0 border border-amber-100">
+                      {product.image ? (
+                        <Image
+                          src={product.image}
+                          alt={product.name}
+                          fill
+                          sizes="96px"
+                          className={cn(
+                            'object-cover group-hover:scale-105 transition-transform duration-300',
+                            isSoldOut && 'grayscale opacity-60'
+                          )}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-orange-300">
+                          {isFood ? <UtensilsCrossed className="w-7 h-7" /> : <Coffee className="w-7 h-7" />}
+                        </div>
+                      )}
+                      {isSoldOut && (
+                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                          <span className="bg-black/85 text-white text-[9px] font-black uppercase px-2 py-0.5 rounded">
+                            Habis
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0 flex flex-col justify-between text-left">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border',
+                              isFood
+                                ? 'bg-amber-50 text-amber-800 border-amber-200/70'
+                                : 'bg-orange-50 text-orange-700 border-orange-200/70'
+                            )}
+                          >
+                            {isFood ? (
+                              <>
+                                <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Makanan</span>
+                              </>
+                            ) : (
+                              <>
+                                <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                                <span>Minuman</span>
+                              </>
+                            )}
+                          </span>
+                          {product.badge === 'best-seller' && (
+                            <span className="px-2 py-0.5 rounded-md text-[8px] font-black uppercase bg-[#8C6239] text-white">
+                              Best Seller
+                            </span>
+                          )}
+                          {promo && !isSoldOut && <PromoCountdown endDate={promo.endDate} compact />}
+                        </div>
+
+                        <h3 className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-orange-600 transition-colors truncate">
+                          {product.name}
+                        </h3>
+                        {product.description && (
+                          <p className="text-[11px] text-stone-500 line-clamp-1 mt-0.5">
+                            {product.description}
+                          </p>
+                        )}
+                        {discountAmount > 0 && originalPrice && (
+                          <span className="text-[9px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                            {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
+                            {formatRupiah(displayPrice)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="font-black text-xs sm:text-sm text-orange-600">
+                            {formatRupiah(displayPrice)}
+                          </span>
+                          {originalPrice && originalPrice > displayPrice && (
+                            <span className="text-[10px] text-stone-400 line-through">
+                              {formatRupiah(originalPrice)}
+                            </span>
+                          )}
+                          {isRegularOut && !isFood && (
+                            <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-0.5">
+                              <CupSoda className="w-2.5 h-2.5" />
+                              <span>Jumbo</span>
+                            </span>
+                          )}
+                        </div>
+
+                        {!isSoldOut && (
+                          <span className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black flex items-center gap-1 shadow-sm">
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            <span>Pilih</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              }
 
               return (
                 <motion.div
@@ -880,7 +1179,9 @@ export default function SpmbClient({
                   transition={{ duration: 0.2 }}
                   onClick={() => handleProductClick(product)}
                   className={`bg-white rounded-3xl border border-stone-200 overflow-hidden shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col group relative transition-all ${
-                    isSoldOut ? 'opacity-65 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg hover:shadow-orange-500/5 hover:border-orange-300'
+                    isSoldOut
+                      ? 'opacity-65 cursor-not-allowed'
+                      : 'cursor-pointer hover:shadow-lg hover:shadow-orange-500/5 hover:border-orange-300'
                   }`}
                 >
                   {/* Promo Overlay */}
@@ -891,27 +1192,35 @@ export default function SpmbClient({
                   )}
 
                   {/* Size Notice Badge if Regular is Out */}
-                  {isRegularOut && !isSoldOut && (
-                    <span className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase bg-amber-500 text-white shadow-sm flex items-center gap-0.5">
-                      🥤 {sizeNotice}
+                  {isRegularOut && !isSoldOut && !isFood && (
+                    <span className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide uppercase bg-amber-500 text-white shadow-sm flex items-center gap-1">
+                      <CupSoda className="w-2.5 h-2.5" />
+                      <span>{sizeNotice}</span>
                     </span>
                   )}
 
                   {/* Badges */}
                   {promo && !isSoldOut ? (
-                    <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-600 text-white shadow-sm">
-                      Promo
+                    <span className="absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-rose-600 text-white shadow-sm flex items-center gap-0.5">
+                      <Flame className="w-2.5 h-2.5 fill-white" />
+                      <span>Promo</span>
                     </span>
-                  ) : product.badge && (
-                    <span className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm ${
-                      product.badge === 'best-seller' ? 'bg-[#8C6239] text-white' : ''
-                    }${product.badge === 'new' ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white' : ''}${
-                      product.badge === 'sold-out' ? 'bg-stone-400 text-white' : ''
-                    }`}>
-                      {product.badge === 'best-seller' && 'Best Seller'}
-                      {product.badge === 'new' && 'Baru'}
-                      {product.badge === 'sold-out' && 'Habis'}
-                    </span>
+                  ) : (
+                    product.badge && (
+                      <span
+                        className={`absolute top-3 left-3 z-10 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider shadow-sm ${
+                          product.badge === 'best-seller' ? 'bg-[#8C6239] text-white' : ''
+                        }${
+                          product.badge === 'new'
+                            ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white'
+                            : ''
+                        }${product.badge === 'sold-out' ? 'bg-stone-400 text-white' : ''}`}
+                      >
+                        {product.badge === 'best-seller' && 'Best Seller'}
+                        {product.badge === 'new' && 'Baru'}
+                        {product.badge === 'sold-out' && 'Habis'}
+                      </span>
+                    )
                   )}
 
                   {/* Product Image */}
@@ -927,8 +1236,29 @@ export default function SpmbClient({
                         }`}
                       />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center"><UtensilsCrossed className="w-8 h-8 text-stone-300" /></div>
+                      <div className="w-full h-full flex items-center justify-center">
+                        {isFood ? (
+                          <UtensilsCrossed className="w-8 h-8 text-stone-300" />
+                        ) : (
+                          <Coffee className="w-8 h-8 text-stone-300" />
+                        )}
+                      </div>
                     )}
+
+                    {/* Food vs Drink Type Badge on Image Bottom Right */}
+                    <span className="absolute bottom-2 right-2 z-10 px-2 py-0.5 rounded-lg bg-white/95 backdrop-blur-md text-stone-800 text-[8.5px] font-black shadow-sm flex items-center gap-1 leading-none border border-amber-100">
+                      {isFood ? (
+                        <>
+                          <UtensilsCrossed className="w-2.5 h-2.5 text-amber-600" />
+                          <span>Makanan</span>
+                        </>
+                      ) : (
+                        <>
+                          <Coffee className="w-2.5 h-2.5 text-orange-600" />
+                          <span>Minuman</span>
+                        </>
+                      )}
+                    </span>
                   </div>
 
                   {/* Product Info */}
@@ -940,8 +1270,14 @@ export default function SpmbClient({
                       <p className="text-[11px] text-stone-500 line-clamp-2 leading-relaxed">
                         {product.description}
                       </p>
+                      {discountAmount > 0 && originalPrice && (
+                        <span className="text-[8.5px] font-bold text-orange-700 bg-orange-50 border border-orange-200/70 px-1.5 py-0.5 rounded-md mt-1 inline-block leading-tight">
+                          {formatRupiah(originalPrice)} - {formatRupiah(discountAmount)} ={' '}
+                          {formatRupiah(displayPrice)}
+                        </span>
+                      )}
                     </div>
-                    
+
                     <div className="mt-3 pt-2.5 border-t border-stone-100 flex items-center justify-between">
                       <div className="flex flex-col text-left">
                         {originalPrice && originalPrice > displayPrice && (
@@ -950,20 +1286,20 @@ export default function SpmbClient({
                           </span>
                         )}
                         <div className="flex items-baseline gap-1">
-                          <span className="font-bold text-xs sm:text-sm text-orange-600">
+                          <span className="font-black text-xs sm:text-sm text-orange-600">
                             {formatRupiah(displayPrice)}
                           </span>
-                          {isRegularOut && (
+                          {isRegularOut && !isFood && (
                             <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1 rounded border border-amber-200">
                               (Jumbo)
                             </span>
                           )}
                         </div>
                       </div>
-                      
+
                       {!isSoldOut && (
-                        <span className="w-7 h-7 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center text-xs font-bold group-hover:bg-gradient-to-r group-hover:from-orange-500 group-hover:to-amber-500 group-hover:text-white transition-all shadow-sm">
-                          +
+                        <span className="w-7 h-7 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center text-xs font-bold group-hover:scale-105 transition-all shadow-sm">
+                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                         </span>
                       )}
                     </div>
@@ -1121,7 +1457,7 @@ export default function SpmbClient({
                                 </span>
                               )}
                               {!isFood && item.matchaLevel !== undefined && prod?.modifiers?.showMatcha === true && (
-                                <span className="inline-block text-[9px] font-semibold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                                <span className="inline-block text-[9px] font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
                                   Matcha Lvl {item.matchaLevel}
                                 </span>
                               )}
@@ -1740,6 +2076,7 @@ export default function SpmbClient({
           setSelectedProduct(null);
         }}
         allProducts={products}
+        categories={categories}
         packagingStock={packagingStock}
       />
 
