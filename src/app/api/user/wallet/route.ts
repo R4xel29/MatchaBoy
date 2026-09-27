@@ -7,71 +7,31 @@ import {
     buildFallbackQrisString,
     createDokuMcpQrisPayment,
     checkDokuMcpQrisPaymentStatus,
-    createDokuCheckoutSession,
 } from '@/lib/doku'
+import {
+    QRIS_EXPIRE_MINUTES,
+    parsePromoPackages,
+    isQrisTransactionExpired,
+    getQrisExpiresAt,
+    calculateTopUpBonus,
+} from '@/lib/wallet-utils'
+import sharp from 'sharp'
 
-interface PromoPackage {
-    amount: number
-    bonus: number
+// In-memory cache for client-rendered QRIS PNG downloads (TTL 10 minutes)
+const globalForQrisCache = globalThis as unknown as {
+    __qrisPngCache?: Map<string, { buffer: Buffer; createdAt: number }>
 }
+const qrisPngCache =
+    globalForQrisCache.__qrisPngCache ??
+    (globalForQrisCache.__qrisPngCache = new Map<string, { buffer: Buffer; createdAt: number }>())
 
-function parsePromoPackages(raw?: string | null): PromoPackage[] {
-    const fallback: PromoPackage[] = [
-        { amount: 50000, bonus: 5000 },
-        { amount: 200000, bonus: 10000 },
-    ]
-    if (!raw) return fallback
-    try {
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed.map((p: any) => ({
-                amount: Number(p.amount) || 0,
-                bonus: Number(p.bonus) || 0,
-            }))
-        }
-        return fallback
-    } catch {
-        return fallback
-    }
-}
-
-function calculateTopUpBonus(
-    amount: number,
-    isFirstTime: boolean,
-    settings: any
-): { bonusAmount: number; isPromoApplied: boolean; bonusType: 'FIRST_TIME' | 'REGULAR' | 'NONE' } {
-    const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000
-    const bonusPercent = settings?.walletBonusPercent ?? 10
-    const bonusMode = settings?.walletBonusMode ?? 'BOTH'
-    const firstTimePromoEnabled = settings?.walletFirstTimePromoEnabled ?? true
-    const promoPackages = parsePromoPackages(settings?.walletFirstTimePromoPackages)
-
-    const isFirstTimeMode = bonusMode === 'FIRST_TIME' || bonusMode === 'BOTH'
-    const isRegularMode = bonusMode === 'REGULAR' || bonusMode === 'BOTH'
-
-    if (isFirstTime && isFirstTimeMode && firstTimePromoEnabled) {
-        const matchedPackage = promoPackages.find((pkg) => Number(pkg.amount) === amount)
-        if (matchedPackage && matchedPackage.bonus > 0) {
-            return {
-                bonusAmount: matchedPackage.bonus,
-                isPromoApplied: true,
-                bonusType: 'FIRST_TIME',
-            }
+function cleanupQrisCache() {
+    const now = Date.now()
+    for (const [k, v] of qrisPngCache.entries()) {
+        if (now - v.createdAt > 10 * 60 * 1000) {
+            qrisPngCache.delete(k)
         }
     }
-
-    if (isRegularMode && bonusPercent > 0 && amount >= bonusMinAmount) {
-        const regularBonus = Math.floor(amount * (bonusPercent / 100))
-        if (regularBonus > 0) {
-            return {
-                bonusAmount: regularBonus,
-                isPromoApplied: false,
-                bonusType: 'REGULAR',
-            }
-        }
-    }
-
-    return { bonusAmount: 0, isPromoApplied: false, bonusType: 'NONE' }
 }
 
 async function completeTopUpTransaction(txId: string, settings: any) {
@@ -106,9 +66,13 @@ async function completeTopUpTransaction(txId: string, settings: any) {
         }
 
         const amount = currentTx.amount
-        const hasStoredBonus = currentTx.promoBonus !== null && currentTx.promoBonus !== undefined && currentTx.promoBonus > 0
+        const hasStoredBonus =
+            currentTx.promoBonus !== null &&
+            currentTx.promoBonus !== undefined &&
+            currentTx.promoBonus > 0
         const isPromoApplied = isPromoActiveMode && hasStoredBonus
-        const hasRegularBonus = isRegularActiveMode && bonusPercent > 0 && amount >= bonusMinAmount
+        const hasRegularBonus =
+            !hasStoredBonus && isRegularActiveMode && bonusPercent > 0 && amount >= bonusMinAmount
         const bonusAmount = hasStoredBonus
             ? currentTx.promoBonus!
             : hasRegularBonus
@@ -158,57 +122,149 @@ async function completeTopUpTransaction(txId: string, settings: any) {
     })
 }
 
+async function buildFallbackServerQrisPng(
+    code: string,
+    amount: number,
+    svgPath?: string | null,
+    viewBoxSize?: number
+): Promise<Buffer> {
+    const formattedAmount = `Rp ${amount.toLocaleString('id-ID')}`
+    const safeCode = (code || 'AS-TOPUP').replace(/[^A-Za-z0-9-_]/g, '')
+    const vb = viewBoxSize && viewBoxSize > 0 ? viewBoxSize : 37
+    const qrMarkup = svgPath
+        ? `<svg x="130" y="190" width="340" height="340" viewBox="0 0 ${vb} ${vb}" shape-rendering="crispEdges">
+             <rect width="${vb}" height="${vb}" fill="#FFFFFF"/>
+             <path d="${svgPath.replace(/[^MmLlHhVvZz0-9.,\s-]/g, '')}" fill="#111827"/>
+           </svg>`
+        : `<rect x="150" y="210" width="300" height="300" rx="16" fill="#FFF7ED" stroke="#F97316" stroke-width="4"/>`
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="760" viewBox="0 0 600 760">
+      <rect width="600" height="760" fill="#FFFBF5"/>
+      <rect x="24" y="24" width="552" height="712" rx="32" fill="#FFFFFF" stroke="#FDE68A" stroke-width="3"/>
+      <rect x="24" y="24" width="552" height="116" rx="32" fill="#24160E"/>
+      <text x="300" y="72" text-anchor="middle" fill="#FBBF24" font-family="sans-serif" font-size="16" font-weight="bold" letter-spacing="3">ARUM SEDUH • ARUS PAY</text>
+      <text x="300" y="108" text-anchor="middle" fill="#FFFFFF" font-family="sans-serif" font-size="26" font-weight="bold">QRIS PEMBAYARAN TOP UP</text>
+      <rect x="114" y="174" width="372" height="372" rx="24" fill="#FFFFFF" stroke="#FDBA74" stroke-width="3"/>
+      ${qrMarkup}
+      <text x="300" y="590" text-anchor="middle" fill="#6B7280" font-family="sans-serif" font-size="15" font-weight="bold">NOMINAL PEMBAYARAN</text>
+      <text x="300" y="632" text-anchor="middle" fill="#EA580C" font-family="sans-serif" font-size="36" font-weight="bold">${formattedAmount}</text>
+      <text x="300" y="676" text-anchor="middle" fill="#374151" font-family="monospace" font-size="16" font-weight="bold">Ref: ${safeCode}</text>
+      <text x="300" y="706" text-anchor="middle" fill="#9CA3AF" font-family="sans-serif" font-size="13">Berlaku 15 Menit sejak transaksi dibuat</text>
+    </svg>`
+
+    return sharp(Buffer.from(svg)).png().toBuffer()
+}
+
 export async function GET(req: Request) {
     try {
+        const { searchParams } = new URL(req.url)
+
+        // Binary PNG attachment download endpoint for QRIS image
+        if (searchParams.get('downloadQr') === '1') {
+            const code = (searchParams.get('code') || 'TOPUP').replace(/[^A-Za-z0-9-_]/g, '')
+            const txId = searchParams.get('transactionId') || code
+            const amount = parseInt(searchParams.get('amount') || '0', 10) || 50000
+            const svgPath = searchParams.get('path')
+            const vbSize = parseInt(searchParams.get('vb') || '37', 10) || 37
+            const fileName = `QRIS_ARUSPAY_${code || 'TOPUP'}.png`
+
+            cleanupQrisCache()
+            const cached = qrisPngCache.get(txId) || qrisPngCache.get(code)
+            let pngBuffer: Buffer
+            if (cached) {
+                pngBuffer = cached.buffer
+            } else {
+                pngBuffer = await buildFallbackServerQrisPng(code, amount, svgPath, vbSize)
+            }
+
+            return new NextResponse(new Uint8Array(pngBuffer), {
+                status: 200,
+                headers: {
+                    'Content-Type': 'image/png',
+                    'Content-Disposition': `attachment; filename="${fileName}"`,
+                    'Content-Length': String(pngBuffer.length),
+                    'Cache-Control': 'no-store, no-cache, must-revalidate',
+                },
+            })
+        }
+
         const session = await auth()
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
-        const { searchParams } = new URL(req.url)
         const transactionId = searchParams.get('transactionId')
 
         if (transactionId) {
-            let tx = await prisma.walletTransaction.findUnique({
-                where: { id: transactionId },
-            })
+            const [initialTx, settings, userDb] = await Promise.all([
+                prisma.walletTransaction.findUnique({
+                    where: { id: transactionId },
+                }),
+                prisma.paymentSettings.findFirst(),
+                prisma.user.findUnique({
+                    where: { id: session.user.id },
+                    select: { walletBalance: true },
+                }),
+            ])
+
+            let tx = initialTx
             if (!tx || tx.userId !== session.user.id) {
                 return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 })
             }
 
-            const settings = await prisma.paymentSettings.findFirst()
+            // Enforce 15-minute expiration on PENDING QRIS transactions
+            if (isQrisTransactionExpired(tx)) {
+                tx = await prisma.walletTransaction.update({
+                    where: { id: tx.id },
+                    data: { status: 'REJECTED' },
+                })
+                return NextResponse.json({
+                    success: true,
+                    status: 'REJECTED',
+                    expired: true,
+                    error: 'Batas waktu pembayaran QRIS (15 menit) telah habis. Transaksi dibatalkan otomatis.',
+                    amount: tx.amount,
+                    promoBonus: tx.promoBonus ?? 0,
+                    totalReceived: tx.amount + (tx.promoBonus ?? 0),
+                    paymentCode: tx.referenceId,
+                    paymentMethod: tx.paymentMethod,
+                    balance: userDb?.walletBalance ?? 0,
+                })
+            }
 
-            // If QRIS is still PENDING/VERIFYING and DOKU MCP is configured, check live status non-fatally
+            // If QRIS is still PENDING and DOKU MCP is configured, check live status with fast timeout (max 1500ms)
+            let currentBalance = userDb?.walletBalance ?? 0
             if (
                 tx.paymentMethod === 'QRIS' &&
-                (tx.status === 'PENDING' || tx.status === 'VERIFYING') &&
+                tx.status === 'PENDING' &&
                 settings?.dokuEnabled &&
                 settings.dokuClientId &&
                 settings.dokuSharedKey
             ) {
                 try {
-                    const dokuStatus = await checkDokuMcpQrisPaymentStatus(
-                        {
-                            clientId: settings.dokuClientId,
-                            sharedKey: settings.dokuSharedKey,
-                            isSandbox: settings.dokuSandbox ?? true,
-                        },
-                        { invoiceNumber: tx.referenceId || tx.id }
-                    )
+                    const dokuStatus = await Promise.race([
+                        checkDokuMcpQrisPaymentStatus(
+                            {
+                                clientId: settings.dokuClientId,
+                                sharedKey: settings.dokuSharedKey,
+                                isSandbox: settings.dokuSandbox ?? true,
+                            },
+                            { invoiceNumber: tx.referenceId || tx.id }
+                        ),
+                        new Promise<{ paid: false }>((resolve) =>
+                            setTimeout(() => resolve({ paid: false }), 1500)
+                        ),
+                    ])
 
                     if (dokuStatus.paid) {
                         const completed = await completeTopUpTransaction(tx.id, settings)
                         tx = completed.transaction
+                        currentBalance = completed.user?.walletBalance ?? currentBalance
                     }
                 } catch (err) {
                     console.warn('[WALLET QRIS STATUS CHECK FALLBACK]', err)
                 }
             }
-
-            const userDb = await prisma.user.findUnique({
-                where: { id: session.user.id },
-                select: { walletBalance: true },
-            })
 
             const bonusAmount = tx.promoBonus ?? 0
             const paymentQrContent = buildFallbackQrisString(tx.amount)
@@ -224,7 +280,8 @@ export async function GET(req: Request) {
                 paymentProofUrl: tx.paymentProofUrl,
                 paymentQrContent,
                 qrisImage: settings?.qrisImage || null,
-                balance: userDb?.walletBalance ?? 0,
+                expiresAt: tx.paymentMethod === 'QRIS' ? getQrisExpiresAt(tx.createdAt) : null,
+                balance: currentBalance,
             })
         }
 
@@ -257,10 +314,31 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: 'User tidak ditemukan' }, { status: 404 })
         }
 
+        // Auto-expire any PENDING QRIS transactions older than 15 minutes without slowing down response
+        const expiredQrisIds: string[] = []
+        const normalizedTransactions = user.walletTransactions.map((t) => {
+            if (t.type === 'TOP_UP' && isQrisTransactionExpired(t)) {
+                expiredQrisIds.push(t.id)
+                return { ...t, status: 'REJECTED' }
+            }
+            return t
+        })
+
+        if (expiredQrisIds.length > 0) {
+            Promise.resolve().then(() =>
+                prisma.walletTransaction
+                    .updateMany({
+                        where: { id: { in: expiredQrisIds }, status: 'PENDING' },
+                        data: { status: 'REJECTED' },
+                    })
+                    .catch((err) => console.error('[WALLET AUTO EXPIRE QRIS ERROR]', err))
+            )
+        }
+
         const isFirstTime = completedCount === 0
         const parsedPromoPackages = parsePromoPackages(settings?.walletFirstTimePromoPackages)
 
-        const pendingTransactions = user.walletTransactions
+        const pendingTransactions = normalizedTransactions
             .filter((t) => t.type === 'TOP_UP' && (t.status === 'PENDING' || t.status === 'VERIFYING'))
             .map((t) => ({
                 id: t.id,
@@ -273,11 +351,15 @@ export async function GET(req: Request) {
                 paymentProofUrl: t.paymentProofUrl,
                 paymentQrContent: buildFallbackQrisString(t.amount),
                 createdAt: t.createdAt,
+                expiresAt:
+                    (t.paymentMethod || 'QRIS') === 'QRIS'
+                        ? getQrisExpiresAt(t.createdAt)
+                        : null,
             }))
 
         return NextResponse.json({
             balance: user.walletBalance,
-            transactions: user.walletTransactions,
+            transactions: normalizedTransactions,
             pendingTransactions,
             banks,
             isFirstTime,
@@ -291,9 +373,10 @@ export async function GET(req: Request) {
                 firstTimePromoPackages: parsedPromoPackages,
                 qrisEnabled: settings?.qrisEnabled ?? true,
                 qrisImage: settings?.qrisImage ?? null,
-                transferEnabled: settings?.transferEnabled ?? true,
+                transferEnabled: (settings?.transferEnabled ?? true) && banks.length > 0,
                 dokuEnabled: settings?.dokuEnabled ?? false,
                 dokuSandbox: settings?.dokuSandbox ?? true,
+                qrisExpireMinutes: QRIS_EXPIRE_MINUTES,
             },
         })
     } catch (error) {
@@ -309,24 +392,40 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
     try {
         const session = await auth()
-        const requestHeaders = new Headers(req.headers)
-        const host = requestHeaders.get('x-forwarded-host') || requestHeaders.get('host') || 'localhost:3000'
-        const protocol = requestHeaders.get('x-forwarded-proto') || 'http'
-        const appUrl = `${protocol}://${host}`
-
         if (!session?.user?.id) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
         }
 
         const body = await req.json()
-        const amount = parseInt(body.amount)
-        const paymentMethod = body.paymentMethod // e.g. 'qris' | 'bank' | 'offline' | 'DIRECT'
+        const amount = parseInt(body.amount, 10)
+        const rawMethod = String(body.paymentMethod || 'QRIS').toUpperCase()
 
         if (isNaN(amount) || amount <= 0) {
             throw new ValidationError('Jumlah top-up harus berupa angka positif')
         }
 
-        const settings = await prisma.paymentSettings.findFirst()
+        // Block instant/direct simulation methods for security
+        if (rawMethod === 'DIRECT' || rawMethod === 'SIMULATE') {
+            throw new ValidationError('Metode pembayaran tidak valid.')
+        }
+
+        const normalizedMethod =
+            rawMethod === 'BANK' ? 'BANK' : rawMethod === 'OFFLINE' ? 'OFFLINE' : 'QRIS'
+
+        const [settings, completedCount, activeBankCount] = await Promise.all([
+            prisma.paymentSettings.findFirst(),
+            prisma.walletTransaction.count({
+                where: {
+                    userId: session.user.id,
+                    type: 'TOP_UP',
+                    status: 'COMPLETED',
+                },
+            }),
+            normalizedMethod === 'BANK'
+                ? prisma.bankAccount.count({ where: { isActive: true } })
+                : Promise.resolve(1),
+        ])
+
         const minTopUp = settings?.walletMinTopUp ?? 10000
         const topUpEnabled = settings?.walletTopUpEnabled ?? true
 
@@ -338,168 +437,95 @@ export async function POST(req: Request) {
             throw new ValidationError(`Jumlah pengisian minimal adalah Rp${minTopUp.toLocaleString('id-ID')}`)
         }
 
-        const completedCount = await prisma.walletTransaction.count({
-            where: {
+        if (normalizedMethod === 'BANK' && (activeBankCount === 0 || settings?.transferEnabled === false)) {
+            throw new ValidationError('Metode Transfer Bank belum tersedia saat ini. Silakan pilih metode lain.')
+        }
+
+        const isFirstTime = completedCount === 0
+        const { bonusAmount, bonusType } = calculateTopUpBonus(amount, isFirstTime, settings)
+
+        const paymentCode = `AS-TOPUP-${Math.floor(100000 + Math.random() * 900000)}`
+
+        const methodLabel =
+            normalizedMethod === 'QRIS'
+                ? 'QRIS'
+                : normalizedMethod === 'BANK'
+                ? 'Transfer Bank'
+                : 'Kasir Booth'
+
+        const bonusLabel =
+            bonusAmount > 0
+                ? bonusType === 'FIRST_TIME'
+                    ? ` (+Bonus Promo Pertama Rp${bonusAmount.toLocaleString('id-ID')})`
+                    : ` (+Bonus Rp${bonusAmount.toLocaleString('id-ID')})`
+                : ''
+
+        const transaction = await prisma.walletTransaction.create({
+            data: {
                 userId: session.user.id,
+                amount,
                 type: 'TOP_UP',
-                status: 'COMPLETED',
+                description: `Top Up Arus Pay Rp${amount.toLocaleString('id-ID')} via ${methodLabel}${bonusLabel}`,
+                status: 'PENDING',
+                paymentMethod: normalizedMethod,
+                referenceId: paymentCode,
+                promoBonus: bonusAmount > 0 ? bonusAmount : null,
             },
         })
-        const isFirstTime = completedCount === 0
 
-        const { bonusAmount, isPromoApplied, bonusType } = calculateTopUpBonus(amount, isFirstTime, settings)
+        let paymentQrContent = buildFallbackQrisString(amount)
 
-        // Interactive multi-method top-up flow (QRIS, BANK, OFFLINE)
-        if (paymentMethod && paymentMethod.toUpperCase() !== 'DIRECT') {
-            const normalizedMethod = paymentMethod.toUpperCase()
-            const paymentCode = `AS-TOPUP-${Math.floor(100000 + Math.random() * 900000)}`
+        // Non-blocking fast race (max 1200ms) for DOKU MCP QRIS so POST never loads slowly
+        if (
+            normalizedMethod === 'QRIS' &&
+            settings?.dokuEnabled &&
+            settings.dokuClientId &&
+            settings.dokuSharedKey
+        ) {
+            try {
+                const dokuCreds = {
+                    clientId: settings.dokuClientId,
+                    sharedKey: settings.dokuSharedKey,
+                    isSandbox: settings.dokuSandbox ?? true,
+                }
 
-            const methodLabel =
-                normalizedMethod === 'QRIS'
-                    ? 'QRIS'
-                    : normalizedMethod === 'BANK'
-                    ? 'Transfer Bank'
-                    : normalizedMethod === 'OFFLINE'
-                    ? 'Kasir Booth'
-                    : normalizedMethod
-
-            const bonusLabel =
-                bonusAmount > 0
-                    ? bonusType === 'FIRST_TIME'
-                        ? ` (+Bonus Promo Pertama Rp${bonusAmount.toLocaleString('id-ID')})`
-                        : ` (+Bonus Rp${bonusAmount.toLocaleString('id-ID')})`
-                    : ''
-
-            const transaction = await prisma.walletTransaction.create({
-                data: {
-                    userId: session.user.id,
-                    amount,
-                    type: 'TOP_UP',
-                    description: `Top Up Arus Pay Rp${amount.toLocaleString('id-ID')} via ${methodLabel}${bonusLabel}`,
-                    status: 'PENDING',
-                    paymentMethod: normalizedMethod,
-                    referenceId: paymentCode,
-                    promoBonus: bonusAmount > 0 ? bonusAmount : null,
-                },
-            })
-
-            let paymentQrContent = buildFallbackQrisString(amount)
-            let paymentUrl = ''
-
-            if (
-                (normalizedMethod === 'QRIS' || normalizedMethod === 'DOKU') &&
-                settings?.dokuEnabled &&
-                settings.dokuClientId &&
-                settings.dokuSharedKey
-            ) {
-                try {
-                    const dokuCreds = {
-                        clientId: settings.dokuClientId,
-                        sharedKey: settings.dokuSharedKey,
-                        isSandbox: settings.dokuSandbox ?? true,
-                    }
-
-                    const mcpResult = await createDokuMcpQrisPayment(dokuCreds, {
+                const mcpResult = await Promise.race([
+                    createDokuMcpQrisPayment(dokuCreds, {
                         invoiceNumber: paymentCode,
                         amount,
                         postalCode: '67215',
-                    })
+                    }),
+                    new Promise<{ qrContent?: undefined }>((resolve) =>
+                        setTimeout(() => resolve({}), 1200)
+                    ),
+                ])
 
-                    if (mcpResult.qrContent) {
-                        paymentQrContent = mcpResult.qrContent
-                    } else if (normalizedMethod === 'DOKU') {
-                        const userDb = await prisma.user.findUnique({
-                            where: { id: session.user.id },
-                            select: { phone: true, name: true, email: true },
-                        })
-                        const dokuResult = await createDokuCheckoutSession(dokuCreds, {
-                            invoiceNumber: paymentCode,
-                            amount,
-                            customerName: userDb?.name || session.user.name || 'Pelanggan Arum Seduh',
-                            customerPhone: userDb?.phone || '628123456789',
-                            customerEmail: userDb?.email || session.user.email || 'arumseduh@gmail.com',
-                            callbackUrl: `${appUrl}/profile`,
-                            notificationUrl: `${appUrl}/api/payment/doku-webhook`,
-                        })
-                        if (dokuResult.url) {
-                            paymentUrl = dokuResult.url
-                        }
-                    }
-                } catch (dokuErr) {
-                    console.warn('[WALLET TOPUP DOKU FALLBACK]', dokuErr)
+                if (mcpResult?.qrContent) {
+                    paymentQrContent = mcpResult.qrContent
                 }
+            } catch (dokuErr) {
+                console.warn('[WALLET TOPUP DOKU FALLBACK]', dokuErr)
             }
-
-            return NextResponse.json({
-                success: true,
-                transaction: {
-                    id: transaction.id,
-                    amount: transaction.amount,
-                    promoBonus: bonusAmount,
-                    totalReceived: transaction.amount + bonusAmount,
-                    paymentCode: transaction.referenceId,
-                    status: transaction.status,
-                    paymentMethod: transaction.paymentMethod,
-                    paymentQrContent,
-                    paymentUrl,
-                    qrisImage: settings?.qrisImage || null,
-                    createdAt: transaction.createdAt,
-                },
-            })
         }
 
-        // Direct / Instant credit flow (when paymentMethod is omitted or 'DIRECT')
-        const totalTopUp = amount + bonusAmount
-        const bonusPercent = settings?.walletBonusPercent ?? 10
-
-        const updatedUser = await prisma.$transaction(async (tx) => {
-            const user = await tx.user.update({
-                where: { id: session.user.id },
-                data: {
-                    walletBalance: { increment: totalTopUp },
-                },
-            })
-
-            await tx.walletTransaction.create({
-                data: {
-                    userId: session.user.id,
-                    amount,
-                    type: 'TOP_UP',
-                    description: isPromoApplied
-                        ? `Top Up Arus Pay Rp${amount.toLocaleString('id-ID')} (Promo Pertama)`
-                        : `Top Up Arus Pay Rp${amount.toLocaleString('id-ID')}`,
-                    status: 'COMPLETED',
-                    paymentMethod: 'DIRECT',
-                    promoBonus: bonusAmount > 0 ? bonusAmount : null,
-                },
-            })
-
-            if (bonusAmount > 0) {
-                await tx.walletTransaction.create({
-                    data: {
-                        userId: session.user.id,
-                        amount: bonusAmount,
-                        type: 'TOP_UP_BONUS',
-                        description: isPromoApplied
-                            ? `Bonus Top-Up Pertama Arus Pay +Rp${bonusAmount.toLocaleString('id-ID')}`
-                            : `Bonus Top-Up Arus Pay (${bonusPercent}%) +Rp${bonusAmount.toLocaleString('id-ID')}`,
-                        status: 'COMPLETED',
-                        paymentMethod: 'DIRECT',
-                    },
-                })
-            }
-
-            await incrementQuestProgress(session.user.id, 'TOP_UP_COUNT', 1, tx)
-
-            return user
-        })
+        const expiresAt =
+            normalizedMethod === 'QRIS' ? getQrisExpiresAt(transaction.createdAt) : null
 
         return NextResponse.json({
             success: true,
-            balance: updatedUser.walletBalance,
-            amount,
-            bonusAmount,
-            totalReceived: totalTopUp,
+            transaction: {
+                id: transaction.id,
+                amount: transaction.amount,
+                promoBonus: bonusAmount,
+                totalReceived: transaction.amount + bonusAmount,
+                paymentCode: transaction.referenceId,
+                status: transaction.status,
+                paymentMethod: transaction.paymentMethod,
+                paymentQrContent,
+                qrisImage: settings?.qrisImage || null,
+                createdAt: transaction.createdAt,
+                expiresAt,
+            },
         })
     } catch (error) {
         logError(error, { route: 'user/wallet-post' })
@@ -519,7 +545,28 @@ export async function PUT(req: Request) {
         }
 
         const body = await req.json()
-        const { transactionId, paymentProofUrl, action, paymentMethod } = body
+        const { transactionId, paymentProofUrl, action, qrImageBase64, paymentCode } = body
+
+        // Cache client-rendered QRIS PNG image for instant HTTP attachment download
+        if (action === 'prepare_qr_download' && qrImageBase64) {
+            const base64Clean = String(qrImageBase64).replace(/^data:image\/\w+;base64,/, '')
+            const buffer = Buffer.from(base64Clean, 'base64')
+            cleanupQrisCache()
+            if (transactionId) {
+                qrisPngCache.set(String(transactionId), { buffer, createdAt: Date.now() })
+            }
+            if (paymentCode) {
+                qrisPngCache.set(String(paymentCode), { buffer, createdAt: Date.now() })
+            }
+            return NextResponse.json({ success: true })
+        }
+
+        if (action === 'simulate') {
+            return NextResponse.json(
+                { error: 'Simulasi pembayaran instan telah dinonaktifkan demi keamanan.' },
+                { status: 403 }
+            )
+        }
 
         if (!transactionId) {
             return NextResponse.json({ error: 'transactionId diperlukan' }, { status: 400 })
@@ -533,28 +580,8 @@ export async function PUT(req: Request) {
             return NextResponse.json({ error: 'Transaksi tidak ditemukan' }, { status: 404 })
         }
 
-        // Action 1: Instant simulation / approval (Sandbox & Demo flow)
-        if (action === 'simulate') {
-            if (tx.status !== 'PENDING' && tx.status !== 'VERIFYING') {
-                return NextResponse.json({ error: 'Transaksi sudah selesai diproses' }, { status: 400 })
-            }
-
-            const settings = await prisma.paymentSettings.findFirst()
-            const completed = await completeTopUpTransaction(tx.id, settings)
-
-            return NextResponse.json({
-                success: true,
-                status: 'COMPLETED',
-                balance: completed.user?.walletBalance ?? 0,
-                amount: tx.amount,
-                bonusAmount: completed.bonusAmount,
-                totalReceived: completed.totalTopUp,
-                transaction: completed.transaction,
-            })
-        }
-
-        // Action 2: Cancel pending top-up transaction
-        if (action === 'cancel') {
+        // Cancel or expire pending top-up transaction
+        if (action === 'cancel' || action === 'expire') {
             if (tx.status !== 'PENDING' && tx.status !== 'VERIFYING') {
                 return NextResponse.json({ error: 'Transaksi sudah diproses' }, { status: 400 })
             }
@@ -570,43 +597,16 @@ export async function PUT(req: Request) {
             })
         }
 
-        // Action 3: Switch payment method on an active PENDING transaction
-        if (action === 'change_method' && paymentMethod) {
-            if (tx.status !== 'PENDING') {
-                return NextResponse.json({ error: 'Transaksi sudah diproses' }, { status: 400 })
-            }
-
-            const normalizedMethod = String(paymentMethod).toUpperCase()
-            const methodLabel =
-                normalizedMethod === 'QRIS'
-                    ? 'QRIS'
-                    : normalizedMethod === 'BANK'
-                    ? 'Transfer Bank'
-                    : normalizedMethod === 'OFFLINE'
-                    ? 'Kasir Booth'
-                    : normalizedMethod
-
-            const updatedTx = await prisma.walletTransaction.update({
-                where: { id: transactionId },
-                data: {
-                    paymentMethod: normalizedMethod,
-                    description: tx.description.replace(/via (QRIS|Transfer Bank|Kasir Booth|BANK|OFFLINE)/i, `via ${methodLabel}`),
-                },
-            })
-
-            return NextResponse.json({
-                success: true,
-                transaction: {
-                    id: updatedTx.id,
-                    status: updatedTx.status,
-                    paymentMethod: updatedTx.paymentMethod,
-                },
-            })
-        }
-
-        // Action 4: Submit payment proof image
+        // Submit payment proof image (ONLY allowed for Transfer Bank / BANK)
         if (!paymentProofUrl) {
             return NextResponse.json({ error: 'Bukti pembayaran (paymentProofUrl) diperlukan' }, { status: 400 })
+        }
+
+        if (String(tx.paymentMethod || '').toUpperCase() !== 'BANK') {
+            return NextResponse.json(
+                { error: 'Fitur unggah bukti pembayaran hanya tersedia untuk metode Transfer Bank.' },
+                { status: 400 }
+            )
         }
 
         if (tx.status !== 'PENDING' && tx.status !== 'VERIFYING') {
@@ -618,7 +618,6 @@ export async function PUT(req: Request) {
             data: {
                 paymentProofUrl,
                 status: 'VERIFYING',
-                ...(paymentMethod ? { paymentMethod: String(paymentMethod).toUpperCase() } : {}),
             },
         })
 
@@ -634,8 +633,8 @@ export async function PUT(req: Request) {
                     await sendNotification({
                         userId: admin.id,
                         type: 'system',
-                        title: 'Verifikasi Top Up Arus Pay',
-                        message: `${session.user?.name || 'Pelanggan'} mengunggah bukti top up Rp${tx.amount.toLocaleString('id-ID')} (${tx.referenceId}).`,
+                        title: 'Verifikasi Transfer Top Up Arus Pay',
+                        message: `${session.user?.name || 'Pelanggan'} mengunggah bukti transfer top up Rp${tx.amount.toLocaleString('id-ID')} (${tx.referenceId}).`,
                         linkUrl: '/admin/wallet',
                         data: { transactionId: tx.id },
                     })

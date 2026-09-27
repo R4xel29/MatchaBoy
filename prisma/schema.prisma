@@ -628,7 +628,7 @@ model PaymentSettings {
   walletBonusPercent          Int      @default(10)
   walletBonusMode             String   @default("BOTH")
   walletFirstTimePromoEnabled Boolean  @default(true)
-  walletFirstTimePromoPackages String  @default("[{\"amount\":50000,\"bonus\":5000},{\"amount\":200000,\"bonus\":10000}]")
+  walletFirstTimePromoPackages String  @default("[{\"amount\":50000,\"bonus\":3000},{\"amount\":100000,\"bonus\":5000},{\"amount\":200000,\"bonus\":10000}]")
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

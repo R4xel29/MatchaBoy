@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatRupiah } from '@/lib/utils';
-import { QRCodeCanvas } from 'qrcode.react';
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import {
   ChevronRight,
   Copy,
@@ -18,7 +18,6 @@ import {
   Upload,
   Gift,
   Flame,
-  Zap,
   ArrowLeft,
   Download,
   CheckCircle2,
@@ -28,8 +27,8 @@ import {
   Receipt,
   Info,
   Trash2,
-  ExternalLink,
   Plus,
+  AlertTriangle,
 } from 'lucide-react';
 
 export interface TopUpOverlayProps {
@@ -38,6 +37,23 @@ export interface TopUpOverlayProps {
   refreshWallet?: () => void;
   showToast?: (msg: string, type: 'success' | 'error') => void;
 }
+
+const DEFAULT_FIRST_TIME_PACKAGES = [
+  { amount: 50000, bonus: 3000 },
+  { amount: 100000, bonus: 5000 },
+  { amount: 200000, bonus: 10000 },
+];
+
+const QRIS_EXPIRE_SECONDS = 15 * 60; // 15 minutes
+
+// Module-level cache so opening TopUpOverlay is instant without slow loading
+let cachedWalletConfig: {
+  balance: number;
+  banks: any[];
+  isFirstTime: boolean;
+  pendingTransactions: any[];
+  settings: any;
+} | null = null;
 
 export function TopUpOverlay({
   isOpen,
@@ -52,14 +68,21 @@ export function TopUpOverlay({
   const [fetchingConfig, setFetchingConfig] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [activeTransaction, setActiveTransaction] = useState<any>(null);
-  const [pendingTransactions, setPendingTransactions] = useState<any[]>([]);
-  const [currentBalance, setCurrentBalance] = useState<number>(0);
+  const [pendingTransactions, setPendingTransactions] = useState<any[]>(
+    cachedWalletConfig?.pendingTransactions || []
+  );
+  const [currentBalance, setCurrentBalance] = useState<number>(
+    cachedWalletConfig?.balance ?? 0
+  );
   const [checkingStatus, setCheckingStatus] = useState(false);
-  const [simulating, setSimulating] = useState(false);
+  const [downloadingQr, setDownloadingQr] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
-  const [isFirstTime, setIsFirstTime] = useState<boolean>(false);
+  const [isFirstTime, setIsFirstTime] = useState<boolean>(
+    cachedWalletConfig?.isFirstTime ?? false
+  );
+  const [qrisSecondsLeft, setQrisSecondsLeft] = useState<number>(QRIS_EXPIRE_SECONDS);
 
-  // Upload and confirmation states for top-up
+  // Upload and confirmation states for Bank Transfer top-up
   const [preview, setPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState(false);
@@ -68,19 +91,98 @@ export function TopUpOverlay({
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Dynamic configurations from database
-  const [banks, setBanks] = useState<any[]>([]);
-  const [walletSettings, setWalletSettings] = useState<any>({
-    minTopUp: 10000,
-    bonusMinAmount: 100000,
-    bonusPercent: 10,
-    topUpEnabled: true,
-    bonusMode: 'BOTH',
-    firstTimePromoEnabled: true,
-    firstTimePromoPackages: [
-      { amount: 50000, bonus: 5000 },
-      { amount: 200000, bonus: 10000 },
-    ],
-  });
+  const [banks, setBanks] = useState<any[]>(cachedWalletConfig?.banks || []);
+  const [walletSettings, setWalletSettings] = useState<any>(
+    cachedWalletConfig?.settings || {
+      minTopUp: 10000,
+      bonusMinAmount: 100000,
+      bonusPercent: 10,
+      topUpEnabled: true,
+      bonusMode: 'BOTH',
+      firstTimePromoEnabled: true,
+      firstTimePromoPackages: DEFAULT_FIRST_TIME_PACKAGES,
+      qrisExpireMinutes: 15,
+    }
+  );
+
+  // Whether bank transfer option is available (automatically hidden when no bank accounts exist)
+  const hasBankOption = useMemo(() => {
+    return Array.isArray(banks) && banks.length > 0 && walletSettings?.transferEnabled !== false;
+  }, [banks, walletSettings?.transferEnabled]);
+
+  // Ensure payMethod never stays on 'bank' if bank accounts are empty
+  useEffect(() => {
+    if (step === 'select' && !hasBankOption && payMethod === 'bank') {
+      setPayMethod('qris');
+    }
+  }, [hasBankOption, payMethod, step]);
+
+  // 15-Minute QRIS Expiration Countdown Timer
+  useEffect(() => {
+    if (step !== 'payment' || payMethod !== 'qris' || !activeTransaction) {
+      return;
+    }
+
+    const computeRemaining = () => {
+      const expireMs = activeTransaction.expiresAt
+        ? new Date(activeTransaction.expiresAt).getTime()
+        : new Date(activeTransaction.createdAt || Date.now()).getTime() +
+          QRIS_EXPIRE_SECONDS * 1000;
+      const diffSec = Math.floor((expireMs - Date.now()) / 1000);
+      return Math.max(0, diffSec);
+    };
+
+    const initialRemaining = computeRemaining();
+    setQrisSecondsLeft(initialRemaining);
+
+    let expiredHandled = false;
+    const handleExpired = async () => {
+      if (expiredHandled) return;
+      expiredHandled = true;
+      const expiredTxId = activeTransaction?.id;
+      if (expiredTxId) {
+        try {
+          await fetch('/api/user/wallet', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ transactionId: expiredTxId, action: 'expire' }),
+          });
+        } catch {
+          // Ignore network error on auto-expire
+        }
+        setPendingTransactions((prev) => prev.filter((p) => p.id !== expiredTxId));
+      }
+      setActiveTransaction(null);
+      setStep('select');
+      showToast(
+        'Batas waktu pembayaran QRIS (15 menit) telah habis. Transaksi dianggap gagal dan dibatalkan.',
+        'error'
+      );
+      if (refreshWallet) refreshWallet();
+    };
+
+    if (initialRemaining <= 0) {
+      handleExpired();
+      return;
+    }
+
+    const timer = setInterval(() => {
+      const rem = computeRemaining();
+      setQrisSecondsLeft(rem);
+      if (rem <= 0) {
+        clearInterval(timer);
+        handleExpired();
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [step, payMethod, activeTransaction]);
+
+  const formatCountdown = (totalSec: number) => {
+    const mins = Math.floor(totalSec / 60);
+    const secs = totalSec % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   // Compress image to WebP on client before uploading to /api/upload
   const compressImage = (file: File): Promise<Blob> => {
@@ -155,7 +257,7 @@ export function TopUpOverlay({
         const data = await res.json();
         setPaymentProofUrl(data.url);
         setUploaded(true);
-        showToast('Bukti bayar berhasil dipilih. Klik Kirim Bukti Pembayaran.', 'success');
+        showToast('Bukti transfer berhasil dipilih. Klik Kirim Bukti Pembayaran.', 'success');
       } else {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Gagal unggah');
@@ -171,7 +273,7 @@ export function TopUpOverlay({
   };
 
   const handleSubmitProof = async () => {
-    if (!activeTransaction || !paymentProofUrl) return;
+    if (!activeTransaction || !paymentProofUrl || payMethod !== 'bank') return;
     setSubmittingProof(true);
     try {
       const res = await fetch('/api/user/wallet', {
@@ -180,7 +282,6 @@ export function TopUpOverlay({
         body: JSON.stringify({
           transactionId: activeTransaction.id,
           paymentProofUrl,
-          paymentMethod: payMethod.toUpperCase(),
         }),
       });
 
@@ -193,7 +294,7 @@ export function TopUpOverlay({
         }));
         setStep('verifying');
         showToast(
-          'Bukti pembayaran berhasil dikirim! Saldo akan masuk setelah kasir memverifikasi.',
+          'Bukti transfer berhasil dikirim! Saldo akan masuk setelah diverifikasi.',
           'success'
         );
         if (refreshWallet) refreshWallet();
@@ -208,36 +309,190 @@ export function TopUpOverlay({
     }
   };
 
-  const handleDownloadQr = () => {
+  // High-resolution QRIS Card builder + real HTTP Content-Disposition attachment download
+  const buildCompositeQrisCanvas = (qrCanvas: HTMLCanvasElement): HTMLCanvasElement => {
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = 600;
+    exportCanvas.height = 760;
+    const ctx = exportCanvas.getContext('2d');
+    if (!ctx) return qrCanvas;
+
+    // 1. Solid cream-white background so gallery viewers in dark mode never invert QR modules
+    ctx.fillStyle = '#FFFBF5';
+    ctx.fillRect(0, 0, 600, 760);
+
+    // 2. Main card container
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#FDE68A';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(24, 24, 552, 712, 28);
+    ctx.fill();
+    ctx.stroke();
+
+    // 3. Top Espresso Header Banner
+    ctx.fillStyle = '#24160E';
+    ctx.beginPath();
+    ctx.roundRect(24, 24, 552, 118, [28, 28, 0, 0]);
+    ctx.fill();
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#FBBF24';
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText('ARUM SEDUH • ARUS PAY', 300, 68);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = 'bold 26px serif';
+    ctx.fillText('QRIS PEMBAYARAN TOP UP', 300, 108);
+
+    // 4. QR Code Frame
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = '#FDBA74';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.roundRect(116, 172, 368, 368, 22);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(qrCanvas, 136, 192, 328, 328);
+
+    // 5. Nominal & Metadata Footer
+    ctx.fillStyle = '#6B7280';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('NOMINAL PEMBAYARAN', 300, 584);
+
+    ctx.fillStyle = '#EA580C';
+    ctx.font = 'bold 34px serif';
+    ctx.fillText(formatRupiah(displayAmount), 300, 626);
+
+    const codeText = activeTransaction?.paymentCode || 'AS-TOPUP';
+    ctx.fillStyle = '#374151';
+    ctx.font = 'bold 15px monospace';
+    ctx.fillText(`Ref: ${codeText}`, 300, 668);
+
+    ctx.fillStyle = '#9CA3AF';
+    ctx.font = '600 13px sans-serif';
+    ctx.fillText('Batas waktu pembayaran: 15 Menit sejak kode dibuat', 300, 702);
+
+    return exportCanvas;
+  };
+
+  const handleDownloadQr = async () => {
+    if (downloadingQr) return;
+    setDownloadingQr(true);
     try {
-      const canvas = document.getElementById('topup-qris-canvas') as HTMLCanvasElement;
-      if (!canvas) {
-        throw new Error('Canvas not found');
+      const qrCanvas = document.getElementById('topup-qris-canvas') as HTMLCanvasElement | null;
+      if (!qrCanvas) {
+        throw new Error('Canvas QRIS belum siap');
       }
-      const url = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `QRIS_ARUSPAY_${activeTransaction?.paymentCode || 'TOPUP'}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('Kode QRIS berhasil diunduh!', 'success');
+
+      const exportCanvas = buildCompositeQrisCanvas(qrCanvas);
+      const code = (activeTransaction?.paymentCode || 'TOPUP').replace(/[^A-Za-z0-9-_]/g, '');
+      const fileName = `QRIS_ARUSPAY_${code}.png`;
+
+      // Extract SVG path for server fallback rendering if needed
+      const svgEl = document.getElementById('topup-qris-svg');
+      const pathEl = svgEl?.querySelector('path:last-of-type');
+      const svgPath = pathEl?.getAttribute('d') || '';
+      const viewBoxAttr = svgEl?.getAttribute('viewBox') || '0 0 37 37';
+      const vbParts = viewBoxAttr.split(' ');
+      const vbSize = vbParts[2] || '37';
+
+      // Cache exact composite PNG on server (fast non-blocking timeout) so HTTP attachment download serves it
+      const pngDataUrl = exportCanvas.toDataURL('image/png', 1.0);
+      let serverReady = false;
+      try {
+        const prepRes = await fetch('/api/user/wallet', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'prepare_qr_download',
+            transactionId: activeTransaction?.id || code,
+            paymentCode: code,
+            qrImageBase64: pngDataUrl,
+          }),
+          signal: AbortSignal.timeout(1500),
+        });
+        serverReady = prepRes.ok;
+      } catch {
+        serverReady = false;
+      }
+
+      if (serverReady || svgPath) {
+        const params = new URLSearchParams({
+          downloadQr: '1',
+          transactionId: String(activeTransaction?.id || code),
+          code,
+          amount: String(displayAmount),
+          vb: vbSize,
+          t: String(Date.now()),
+        });
+        if (!serverReady && svgPath) {
+          params.set('path', svgPath);
+        }
+        const downloadUrl = `/api/user/wallet?${params.toString()}`;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = fileName;
+        link.rel = 'noopener';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        // Keep link in DOM for 60s so browser download confirmation dialog never loses reference
+        setTimeout(() => {
+          if (link.parentNode) {
+            link.parentNode.removeChild(link);
+          }
+        }, 60000);
+      } else {
+        // Offline Blob fallback with 60-second retention before revokeObjectURL
+        const blob = await new Promise<Blob | null>((resolve) =>
+          exportCanvas.toBlob(resolve, 'image/png', 1.0)
+        );
+        if (!blob) throw new Error('Gagal membuat file gambar QRIS');
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          if (link.parentNode) {
+            link.parentNode.removeChild(link);
+          }
+          window.URL.revokeObjectURL(blobUrl);
+        }, 60000);
+      }
+
+      showToast('Gambar QRIS berhasil diunduh ke perangkat Anda!', 'success');
     } catch (error) {
       console.error('Gagal mengunduh QRIS:', error);
-      showToast('Gagal mengunduh QRIS.', 'error');
+      showToast('Gagal mengunduh gambar QRIS.', 'error');
+    } finally {
+      setDownloadingQr(false);
     }
   };
 
   const loadWalletConfig = () => {
-    setFetchingConfig(true);
-    fetch('/api/user/wallet')
+    if (!cachedWalletConfig) {
+      setFetchingConfig(true);
+    }
+    fetch('/api/user/wallet', { signal: AbortSignal.timeout(4000) })
       .then((res) => res.json())
       .then((data) => {
         if (data && !data.error) {
-          setCurrentBalance(data.balance ?? 0);
-          setBanks(data.banks || []);
-          setIsFirstTime(!!data.isFirstTime);
-          setPendingTransactions(data.pendingTransactions || []);
+          const loadedBanks = data.banks || [];
+          const loadedPending = (data.pendingTransactions || []).filter((ptx: any) => {
+            if (String(ptx.paymentMethod || '').toUpperCase() === 'QRIS' && ptx.status === 'PENDING') {
+              const expMs = ptx.expiresAt
+                ? new Date(ptx.expiresAt).getTime()
+                : new Date(ptx.createdAt).getTime() + QRIS_EXPIRE_SECONDS * 1000;
+              return Date.now() < expMs;
+            }
+            return true;
+          });
           const loadedSettings = data.settings || {
             minTopUp: 10000,
             bonusMinAmount: 100000,
@@ -245,12 +500,24 @@ export function TopUpOverlay({
             topUpEnabled: true,
             bonusMode: 'BOTH',
             firstTimePromoEnabled: true,
-            firstTimePromoPackages: [
-              { amount: 50000, bonus: 5000 },
-              { amount: 200000, bonus: 10000 },
-            ],
+            firstTimePromoPackages: DEFAULT_FIRST_TIME_PACKAGES,
+            qrisExpireMinutes: 15,
           };
+
+          cachedWalletConfig = {
+            balance: data.balance ?? 0,
+            banks: loadedBanks,
+            isFirstTime: !!data.isFirstTime,
+            pendingTransactions: loadedPending,
+            settings: loadedSettings,
+          };
+
+          setCurrentBalance(data.balance ?? 0);
+          setBanks(loadedBanks);
+          setIsFirstTime(!!data.isFirstTime);
+          setPendingTransactions(loadedPending);
           setWalletSettings(loadedSettings);
+
           setAmount((prev) => {
             if (prev) return prev;
             if (
@@ -272,11 +539,25 @@ export function TopUpOverlay({
   useEffect(() => {
     if (isOpen) {
       setStep('select');
-      setAmount('');
       setActiveTransaction(null);
       setPreview(null);
       setUploaded(false);
       setPaymentProofUrl(null);
+      if (cachedWalletConfig) {
+        const s = cachedWalletConfig.settings;
+        if (
+          cachedWalletConfig.isFirstTime &&
+          (s?.bonusMode === 'FIRST_TIME' || s?.bonusMode === 'BOTH') &&
+          s?.firstTimePromoEnabled &&
+          s?.firstTimePromoPackages?.length > 0
+        ) {
+          setAmount(String(s.firstTimePromoPackages[0].amount));
+        } else {
+          setAmount(String(s?.minTopUp || 50000));
+        }
+      } else {
+        setAmount('50000');
+      }
       loadWalletConfig();
     }
   }, [isOpen]);
@@ -285,14 +566,33 @@ export function TopUpOverlay({
   const bonusAmt = walletSettings?.bonusMinAmount ?? 100000;
   const bonusPercent = walletSettings?.bonusPercent ?? 10;
   const bonusMode = walletSettings?.bonusMode ?? 'BOTH';
+  const promoPackages = useMemo(() => {
+    const raw = walletSettings?.firstTimePromoPackages;
+    if (Array.isArray(raw) && raw.length > 0) {
+      if (
+        raw.length === 2 &&
+        Number(raw[0].amount) === 50000 &&
+        Number(raw[0].bonus) === 5000 &&
+        Number(raw[1].amount) === 200000 &&
+        Number(raw[1].bonus) === 10000
+      ) {
+        return DEFAULT_FIRST_TIME_PACKAGES;
+      }
+      return raw;
+    }
+    return DEFAULT_FIRST_TIME_PACKAGES;
+  }, [walletSettings?.firstTimePromoPackages]);
+
   const isFirstTimePromoActive =
     isFirstTime &&
     (bonusMode === 'FIRST_TIME' || bonusMode === 'BOTH') &&
-    walletSettings?.firstTimePromoEnabled &&
-    Array.isArray(walletSettings?.firstTimePromoPackages) &&
-    walletSettings.firstTimePromoPackages.length > 0;
+    (walletSettings?.firstTimePromoEnabled ?? true) &&
+    promoPackages.length > 0;
+
   const isRegularBonusActive =
-    (bonusMode === 'REGULAR' || bonusMode === 'BOTH') && bonusPercent > 0;
+    !isFirstTimePromoActive &&
+    (bonusMode === 'REGULAR' || bonusMode === 'BOTH') &&
+    bonusPercent > 0;
 
   // Build clean 6-card preset grid
   const presets = useMemo(() => {
@@ -300,29 +600,33 @@ export function TopUpOverlay({
       minAmt,
       Math.max(minAmt, 25000),
       Math.max(minAmt * 2, 50000),
-      bonusAmt,
-      Math.max(bonusAmt + 50000, 150000),
-      bonusAmt * 2,
+      100000,
+      150000,
+      200000,
     ];
     return Array.from(new Set(raw)).sort((a, b) => a - b).slice(0, 6);
-  }, [minAmt, bonusAmt]);
+  }, [minAmt]);
 
   // Calculate bonus for any given nominal in real time
-  const getBonusForAmount = (val: number): { bonus: number; label: string; type: 'FIRST_TIME' | 'REGULAR' | 'NONE' } => {
+  const getBonusForAmount = (
+    val: number
+  ): { bonus: number; label: string; type: 'FIRST_TIME' | 'REGULAR' | 'NONE' } => {
     if (!val || isNaN(val) || val <= 0) {
       return { bonus: 0, label: '', type: 'NONE' };
     }
     if (isFirstTimePromoActive) {
-      const matchedPkg = walletSettings.firstTimePromoPackages.find(
-        (p: any) => Number(p.amount) === val
-      );
+      const sortedDesc = [...promoPackages].sort((a, b) => Number(b.amount) - Number(a.amount));
+      const matchedPkg =
+        promoPackages.find((p: any) => Number(p.amount) === val) ||
+        sortedDesc.find((p: any) => val >= Number(p.amount));
       if (matchedPkg && Number(matchedPkg.bonus) > 0) {
         return {
           bonus: Number(matchedPkg.bonus),
-          label: `Promo Perdana +${formatRupiah(Number(matchedPkg.bonus))}`,
+          label: `Bonus Isi Pertama +${formatRupiah(Number(matchedPkg.bonus))}`,
           type: 'FIRST_TIME',
         };
       }
+      return { bonus: 0, label: '', type: 'NONE' };
     }
     if (isRegularBonusActive && val >= bonusAmt) {
       const calc = Math.floor(val * (bonusPercent / 100));
@@ -347,6 +651,37 @@ export function TopUpOverlay({
     step === 'select' ? parsedAmount : activeTransaction?.amount ?? parsedAmount;
   const totalToReceive = displayAmount + activeBonus;
 
+  const availableMethods = useMemo(() => {
+    const list: Array<{
+      id: 'qris' | 'bank' | 'offline';
+      label: string;
+      sub: string;
+      icon: any;
+    }> = [
+      {
+        id: 'qris',
+        label: 'QRIS Instan',
+        sub: 'Batas 15 Menit',
+        icon: QrCode,
+      },
+    ];
+    if (hasBankOption) {
+      list.push({
+        id: 'bank',
+        label: 'Transfer Bank',
+        sub: `${banks.length} Rekening Aktif`,
+        icon: Building2,
+      });
+    }
+    list.push({
+      id: 'offline',
+      label: 'Kasir Booth',
+      sub: 'Bayar di Outlet',
+      icon: Store,
+    });
+    return list;
+  }, [hasBankOption, banks.length]);
+
   if (!isOpen) return null;
 
   const handleProceedToPayment = async (overrideAmount?: number) => {
@@ -355,13 +690,15 @@ export function TopUpOverlay({
       showToast(`Masukkan jumlah top up minimal ${formatRupiah(minAmt)}`, 'error');
       return;
     }
+    const chosenMethod = !hasBankOption && payMethod === 'bank' ? 'qris' : payMethod;
+    setPayMethod(chosenMethod);
     setAmount(String(finalAmount));
     setLoading(true);
     try {
       const res = await fetch('/api/user/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: finalAmount, paymentMethod: payMethod }),
+        body: JSON.stringify({ amount: finalAmount, paymentMethod: chosenMethod }),
       });
       const d = await res.json();
       if (res.ok && d.success && d.transaction) {
@@ -369,6 +706,7 @@ export function TopUpOverlay({
         setPreview(null);
         setUploaded(false);
         setPaymentProofUrl(null);
+        setQrisSecondsLeft(QRIS_EXPIRE_SECONDS);
         setStep('payment');
         if (refreshWallet) refreshWallet();
       } else {
@@ -382,37 +720,28 @@ export function TopUpOverlay({
     }
   };
 
-  const handleSwitchMethodInPayment = async (newMethod: 'qris' | 'bank' | 'offline') => {
-    setPayMethod(newMethod);
-    if (!activeTransaction?.id) return;
-    try {
-      await fetch('/api/user/wallet', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionId: activeTransaction.id,
-          action: 'change_method',
-          paymentMethod: newMethod.toUpperCase(),
-        }),
-      });
-      setActiveTransaction((prev: any) =>
-        prev ? { ...prev, paymentMethod: newMethod.toUpperCase() } : prev
-      );
-    } catch {
-      // Non-fatal UI tab switch
-    }
-  };
-
   const handleResumePending = (tx: any) => {
+    const methodLower = String(tx.paymentMethod || 'QRIS').toLowerCase();
+    if (methodLower === 'qris') {
+      const expMs = tx.expiresAt
+        ? new Date(tx.expiresAt).getTime()
+        : new Date(tx.createdAt).getTime() + QRIS_EXPIRE_SECONDS * 1000;
+      if (Date.now() >= expMs) {
+        handleCancelPending(tx.id, true);
+        return;
+      }
+    }
+
     setActiveTransaction(tx);
     setAmount(String(tx.amount));
-    const methodLower = String(tx.paymentMethod || 'QRIS').toLowerCase();
-    if (methodLower === 'bank' || methodLower === 'offline' || methodLower === 'qris') {
-      setPayMethod(methodLower as 'qris' | 'bank' | 'offline');
+    if (methodLower === 'bank' && hasBankOption) {
+      setPayMethod('bank');
+    } else if (methodLower === 'offline') {
+      setPayMethod('offline');
     } else {
       setPayMethod('qris');
     }
-    if (tx.paymentProofUrl) {
+    if (tx.paymentProofUrl && methodLower === 'bank') {
       setPreview(tx.paymentProofUrl);
       setPaymentProofUrl(tx.paymentProofUrl);
       setUploaded(true);
@@ -424,17 +753,25 @@ export function TopUpOverlay({
     setStep('payment');
   };
 
-  const handleCancelPending = async (txId: string) => {
+  const handleCancelPending = async (txId: string, isExpired = false) => {
     setCancellingId(txId);
     try {
       const res = await fetch('/api/user/wallet', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId: txId, action: 'cancel' }),
+        body: JSON.stringify({
+          transactionId: txId,
+          action: isExpired ? 'expire' : 'cancel',
+        }),
       });
       if (res.ok) {
         setPendingTransactions((prev) => prev.filter((p) => p.id !== txId));
-        showToast('Transaksi top up pending berhasil dibatalkan.', 'success');
+        showToast(
+          isExpired
+            ? 'Transaksi QRIS telah melewati batas 15 menit dan dibatalkan.'
+            : 'Transaksi top up berhasil dibatalkan.',
+          isExpired ? 'error' : 'success'
+        );
         if (refreshWallet) refreshWallet();
       }
     } catch {
@@ -458,10 +795,27 @@ export function TopUpOverlay({
             status: 'COMPLETED',
             promoBonus: d.promoBonus ?? prev?.promoBonus ?? 0,
           }));
+          setPendingTransactions((prev) =>
+            prev.filter((p) => p.id !== activeTransaction.id)
+          );
           setStep('success');
           showToast(
-            `Top Up berhasil! Saldo Arus Pay bertambah ${formatRupiah(d.totalReceived || d.amount)}`,
+            `Top Up berhasil! Saldo Arus Pay bertambah ${formatRupiah(
+              d.totalReceived || d.amount
+            )}`,
             'success'
+          );
+          if (refreshWallet) refreshWallet();
+        } else if (d.status === 'REJECTED' || d.expired) {
+          setPendingTransactions((prev) =>
+            prev.filter((p) => p.id !== activeTransaction.id)
+          );
+          setActiveTransaction(null);
+          setStep('select');
+          showToast(
+            d.error ||
+              'Transaksi telah melewati batas waktu atau dibatalkan.',
+            'error'
           );
           if (refreshWallet) refreshWallet();
         } else if (d.status === 'VERIFYING') {
@@ -472,7 +826,11 @@ export function TopUpOverlay({
           );
         } else {
           showToast(
-            'Pembayaran belum terkonfirmasi. Silakan selesaikan pembayaran atau unggah bukti bayar.',
+            payMethod === 'qris'
+              ? 'Pembayaran QRIS belum terdeteksi. Silakan scan kode QRIS sebelum batas waktu 15 menit berakhir.'
+              : payMethod === 'bank'
+              ? 'Silakan unggah foto bukti transfer bank Anda terlebih dahulu.'
+              : 'Silakan tunjukkan kode tiket ke Kasir Booth Arum Seduh untuk konfirmasi.',
             'error'
           );
         }
@@ -487,42 +845,6 @@ export function TopUpOverlay({
     }
   };
 
-  const handleSimulatePayment = async () => {
-    if (!activeTransaction) return;
-    setSimulating(true);
-    try {
-      const res = await fetch('/api/user/wallet', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transactionId: activeTransaction.id, action: 'simulate' }),
-      });
-      const d = await res.json();
-      if (res.ok && d.success) {
-        setCurrentBalance(d.balance ?? currentBalance + totalToReceive);
-        setActiveTransaction((prev: any) => ({
-          ...prev,
-          status: 'COMPLETED',
-          promoBonus: d.bonusAmount ?? prev?.promoBonus ?? 0,
-        }));
-        setStep('success');
-        showToast(
-          `Pembayaran berhasil! Saldo Arus Pay bertambah ${formatRupiah(
-            d.totalReceived || activeTransaction.amount
-          )}`,
-          'success'
-        );
-        if (refreshWallet) refreshWallet();
-      } else {
-        showToast(d.error || 'Gagal memproses simulasi pembayaran', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Koneksi terputus, coba lagi nanti', 'error');
-    } finally {
-      setSimulating(false);
-    }
-  };
-
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -531,6 +853,9 @@ export function TopUpOverlay({
   };
 
   const stepIndex = step === 'select' ? 1 : step === 'payment' ? 2 : 3;
+  const qrValueString =
+    activeTransaction?.paymentQrContent ||
+    `00020101021226670016ID.CO.ARUMSEDUH.WWW01189360091430000000005204581253033605802ID5910ARUM SEDUH6007JAKARTA62070703A016304ABCD`;
 
   return (
     <AnimatePresence>
@@ -544,7 +869,6 @@ export function TopUpOverlay({
         >
           {/* LUXURY ROASTED ESPRESSO & AMBER HEADER */}
           <div className="px-6 pt-5 pb-4 bg-gradient-to-br from-[#24160E] via-[#2F1D12] to-[#180E08] text-white relative overflow-hidden shrink-0 border-b border-amber-500/20">
-            {/* Decorative ambient glows */}
             <div className="absolute -top-16 -right-16 w-48 h-48 bg-orange-500/20 rounded-full blur-3xl pointer-events-none" />
             <div className="absolute -bottom-16 -left-12 w-44 h-44 bg-amber-400/15 rounded-full blur-2xl pointer-events-none" />
 
@@ -560,7 +884,11 @@ export function TopUpOverlay({
                     {step === 'select'
                       ? 'Isi Saldo Arus Pay'
                       : step === 'payment'
-                      ? 'Selesaikan Pembayaran'
+                      ? payMethod === 'qris'
+                        ? 'Pembayaran QRIS'
+                        : payMethod === 'bank'
+                        ? 'Transfer Bank'
+                        : 'Bayar di Kasir Booth'
                       : step === 'verifying'
                       ? 'Menunggu Verifikasi'
                       : 'Top Up Berhasil'}
@@ -585,7 +913,9 @@ export function TopUpOverlay({
                   Saldo Aktif:
                 </span>
                 <span className="text-xs font-black text-white bg-white/10 px-2.5 py-1 rounded-lg border border-white/10">
-                  {fetchingConfig ? 'Memuat...' : formatRupiah(currentBalance)}
+                  {fetchingConfig && !cachedWalletConfig
+                    ? 'Memuat...'
+                    : formatRupiah(currentBalance)}
                 </span>
                 {step === 'select' && parsedAmount >= minAmt && (
                   <span className="text-[10px] font-black text-amber-300 flex items-center gap-1">
@@ -620,7 +950,7 @@ export function TopUpOverlay({
             </div>
           </div>
 
-          {/* BODY CONTENT */}
+          {/* STEP 1: SELECT NOMINAL & PAYMENT METHOD */}
           {step === 'select' && (
             <>
               <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-left">
@@ -639,119 +969,137 @@ export function TopUpOverlay({
                       </span>
                     </div>
                     <div className="space-y-2 max-h-32 overflow-y-auto pr-1">
-                      {pendingTransactions.slice(0, 2).map((ptx) => (
-                        <div
-                          key={ptx.id}
-                          className="bg-white rounded-xl p-2.5 border border-amber-200/70 flex items-center justify-between gap-2"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-black text-gray-900">
-                                {formatRupiah(ptx.amount)}
-                              </span>
-                              {ptx.promoBonus > 0 && (
-                                <span className="text-[9px] font-extrabold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">
-                                  +Bonus {formatRupiah(ptx.promoBonus)}
+                      {pendingTransactions.slice(0, 2).map((ptx) => {
+                        const methodLabel =
+                          ptx.paymentMethod === 'BANK'
+                            ? 'Transfer Bank'
+                            : ptx.paymentMethod === 'OFFLINE'
+                            ? 'Kasir Booth'
+                            : 'QRIS';
+                        return (
+                          <div
+                            key={ptx.id}
+                            className="bg-white rounded-xl p-2.5 border border-amber-200/70 flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-black text-gray-900">
+                                  {formatRupiah(ptx.amount)}
                                 </span>
-                              )}
+                                {ptx.promoBonus > 0 && (
+                                  <span className="text-[9px] font-extrabold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded border border-orange-200">
+                                    +Bonus {formatRupiah(ptx.promoBonus)}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] font-semibold text-gray-500 truncate">
+                                {methodLabel} •{' '}
+                                {ptx.status === 'VERIFYING'
+                                  ? 'Menunggu Verifikasi'
+                                  : 'Menunggu Pembayaran'}
+                              </p>
                             </div>
-                            <p className="text-[10px] font-mono text-gray-500 truncate">
-                              {ptx.paymentCode} • {ptx.paymentMethod} •{' '}
-                              {ptx.status === 'VERIFYING' ? 'Menunggu Verifikasi' : 'Menunggu Bayar'}
-                            </p>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                disabled={cancellingId === ptx.id}
+                                onClick={() => handleCancelPending(ptx.id)}
+                                className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
+                                title="Batalkan"
+                              >
+                                {cancellingId === ptx.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleResumePending(ptx)}
+                                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm hover:from-orange-600 hover:to-amber-600 transition-all cursor-pointer flex items-center gap-1"
+                              >
+                                <span>Lanjutkan</span>
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              disabled={cancellingId === ptx.id}
-                              onClick={() => handleCancelPending(ptx.id)}
-                              className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-rose-600 hover:border-rose-200 transition-colors cursor-pointer"
-                              title="Batalkan"
-                            >
-                              {cancellingId === ptx.id ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-3.5 h-3.5" />
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleResumePending(ptx)}
-                              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm hover:from-orange-600 hover:to-amber-600 transition-all cursor-pointer flex items-center gap-1"
-                            >
-                              <span>Lanjutkan</span>
-                              <ChevronRight className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
-                {/* 1. FIRST-TIME PROMO PACKAGES (IF APPLICABLE) */}
+                {/* 1. FIRST-TIME PROMO PACKAGES (50rb -> 3.000, 100rb -> 5.000, 200rb -> 10.000) */}
                 {isFirstTimePromoActive && (
                   <div className="space-y-3">
-                    <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-300/60 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
-                        <Gift className="w-5 h-5" />
+                    <div className="bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/5 border border-orange-300/60 rounded-2xl p-3.5 flex items-start gap-3 relative overflow-hidden">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                        <Gift className="w-4.5 h-4.5" />
                       </div>
                       <div className="space-y-0.5 flex-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-black text-orange-800">
-                            Promo Spesial Top-Up Pertama!
+                            Bonus Spesial Pengisian Pertama!
                           </span>
                           <span className="px-1.5 py-0.5 text-[8.5px] font-black uppercase bg-orange-600 text-white rounded-full">
-                            Eksklusif
+                            Perdana
                           </span>
                         </div>
-                        <p className="text-[11px] text-gray-600 font-medium leading-relaxed">
-                          Pilih paket perdana di bawah ini untuk mendapatkan ekstra saldo Arus Pay langsung secara cuma-cuma.
+                        <p className="text-[10.5px] text-gray-600 font-medium leading-relaxed">
+                          Isi Rp 50.000 bonus Rp 3.000 • Rp 100.000 bonus Rp 5.000 • Rp 200.000 bonus Rp 10.000
                         </p>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      {walletSettings.firstTimePromoPackages.map((pkg: any, idx: number) => {
-                        const isSelected = parsedAmount === Number(pkg.amount);
+                    <div
+                      className={`grid gap-2.5 ${
+                        promoPackages.length === 3
+                          ? 'grid-cols-1 sm:grid-cols-3'
+                          : 'grid-cols-1 sm:grid-cols-2'
+                      }`}
+                    >
+                      {promoPackages.map((pkg: any, idx: number) => {
+                        const pkgAmt = Number(pkg.amount);
+                        const pkgBonus = Number(pkg.bonus);
+                        const isSelected = parsedAmount === pkgAmt;
                         return (
                           <button
                             key={idx}
                             type="button"
-                            onClick={() => setAmount(String(pkg.amount))}
-                            className={`relative p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-2 active:scale-[0.98] ${
+                            onClick={() => setAmount(String(pkgAmt))}
+                            className={`relative p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-2 active:scale-[0.98] ${
                               isSelected
-                                ? 'border-orange-500 bg-gradient-to-br from-orange-50/90 to-amber-50/60 shadow-md shadow-orange-500/10'
+                                ? 'border-orange-500 bg-gradient-to-br from-orange-50/95 to-amber-50/70 shadow-md shadow-orange-500/10'
                                 : 'border-amber-200/80 bg-white hover:border-orange-300'
                             }`}
                           >
-                            <div className="flex items-start justify-between w-full">
+                            <div className="flex items-start justify-between w-full gap-1">
                               <div>
-                                <span className="text-[9.5px] font-black uppercase tracking-wider text-orange-600 block">
-                                  Paket Perdana {idx + 1}
+                                <span className="text-[9px] font-black uppercase tracking-wider text-orange-600 block">
+                                  Paket {idx + 1}
                                 </span>
-                                <span className="text-base font-black text-gray-900 font-serif">
-                                  {formatRupiah(Number(pkg.amount))}
+                                <span className="text-sm font-black text-gray-900 font-serif">
+                                  {formatRupiah(pkgAmt)}
                                 </span>
                               </div>
                               <div
-                                className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${
+                                className={`w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0 ${
                                   isSelected
                                     ? 'bg-orange-500 border-orange-500 text-white'
                                     : 'border-gray-300 bg-white'
                                 }`}
                               >
-                                {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                                {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                               </div>
                             </div>
 
-                            <div className="pt-2 border-t border-amber-200/50 flex items-center justify-between w-full">
-                              <span className="inline-flex items-center gap-1 text-[10px] font-extrabold text-orange-700 bg-orange-100/80 px-2 py-0.5 rounded-md">
-                                <Sparkles className="w-2.5 h-2.5" />
-                                +Bonus {formatRupiah(Number(pkg.bonus))}
+                            <div className="pt-1.5 border-t border-amber-200/50 flex flex-col gap-0.5 w-full">
+                              <span className="inline-flex items-center gap-1 text-[9.5px] font-extrabold text-orange-700 bg-orange-100/80 px-1.5 py-0.5 rounded-md w-fit">
+                                <Sparkles className="w-2.5 h-2.5 shrink-0" />
+                                <span>+{formatRupiah(pkgBonus)}</span>
                               </span>
-                              <span className="text-[10.5px] font-black text-gray-700">
-                                Terima {formatRupiah(Number(pkg.amount) + Number(pkg.bonus))}
+                              <span className="text-[10px] font-black text-gray-700 mt-0.5">
+                                Terima {formatRupiah(pkgAmt + pkgBonus)}
                               </span>
                             </div>
                           </button>
@@ -761,7 +1109,7 @@ export function TopUpOverlay({
                   </div>
                 )}
 
-                {/* 2. REGULAR BONUS INTERACTIVE PROGRESS BANNER */}
+                {/* 2. REGULAR BONUS INTERACTIVE BANNER (FOR REPEAT TOP-UPS) */}
                 {isRegularBonusActive && (
                   <div
                     className={`rounded-2xl p-3.5 border transition-all ${
@@ -864,7 +1212,7 @@ export function TopUpOverlay({
                           <span className="text-[9.5px] font-semibold text-gray-400 mt-1">
                             {presetBonus.bonus > 0
                               ? `Terima ${formatRupiah(val + presetBonus.bonus)}`
-                              : 'Saldo Instan'}
+                              : 'Saldo Arus Pay'}
                           </span>
                         </button>
                       );
@@ -918,39 +1266,24 @@ export function TopUpOverlay({
                   </div>
                 </div>
 
-                {/* 5. PAYMENT METHOD SELECTION */}
+                {/* 5. PAYMENT METHOD SELECTION (Bank automatically hidden if no active bank accounts) */}
                 <div className="space-y-2.5">
                   <label className="text-[10.5px] font-black text-gray-500 uppercase tracking-wider block">
                     Pilih Metode Pembayaran
                   </label>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {[
-                      {
-                        id: 'qris',
-                        label: 'QRIS Instan',
-                        sub: 'E-Wallet & M-Bank',
-                        icon: QrCode,
-                      },
-                      {
-                        id: 'bank',
-                        label: 'Transfer Bank',
-                        sub: banks.length > 0 ? `${banks.length} Rekening` : 'Rekening Toko',
-                        icon: Building2,
-                      },
-                      {
-                        id: 'offline',
-                        label: 'Kasir Booth',
-                        sub: 'Bayar di Outlet',
-                        icon: Store,
-                      },
-                    ].map((m) => {
+                  <div
+                    className={`grid gap-2.5 ${
+                      availableMethods.length === 2 ? 'grid-cols-2' : 'grid-cols-3'
+                    }`}
+                  >
+                    {availableMethods.map((m) => {
                       const Icon = m.icon;
                       const isActive = payMethod === m.id;
                       return (
                         <button
                           key={m.id}
                           type="button"
-                          onClick={() => setPayMethod(m.id as 'qris' | 'bank' | 'offline')}
+                          onClick={() => setPayMethod(m.id)}
                           className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5 active:scale-[0.98] ${
                             isActive
                               ? 'border-orange-500 bg-gradient-to-br from-orange-50 to-amber-50/70 text-orange-900 shadow-sm'
@@ -997,9 +1330,7 @@ export function TopUpOverlay({
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500 font-bold flex items-center gap-1">
                       <Sparkles className="w-3.5 h-3.5 text-orange-500" />
-                      <span>
-                        {currentBonusInfo.label || 'Bonus Promo Arus Pay'}
-                      </span>
+                      <span>{currentBonusInfo.label || 'Bonus Promo Arus Pay'}</span>
                     </span>
                     <span
                       className={`font-black ${
@@ -1046,9 +1377,7 @@ export function TopUpOverlay({
                     <span>Top Up Sedang Dinonaktifkan</span>
                   ) : (
                     <>
-                      <span>
-                        Lanjutkan Pembayaran • {formatRupiah(parsedAmount)}
-                      </span>
+                      <span>Lanjutkan Pembayaran • {formatRupiah(parsedAmount)}</span>
                       <ChevronRight className="w-4 h-4" />
                     </>
                   )}
@@ -1057,10 +1386,11 @@ export function TopUpOverlay({
             </>
           )}
 
+          {/* STEP 2: SINGLE SELECTED PAYMENT METHOD VIEW */}
           {step === 'payment' && (
             <>
               <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-left">
-                {/* Back & Summary Card */}
+                {/* Back & Selected Method Summary Card */}
                 <div className="bg-white rounded-2xl border border-amber-200/80 p-4 space-y-3 shadow-sm">
                   <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                     <button
@@ -1069,23 +1399,27 @@ export function TopUpOverlay({
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 text-[11px] font-black text-gray-700 hover:bg-gray-50 transition-all cursor-pointer"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
-                      <span>Ubah Nominal</span>
+                      <span>Kembali</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleCopy(activeTransaction?.paymentCode || '', 'ref-code')
-                      }
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 border border-amber-200/80 text-[10.5px] font-mono font-bold text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer"
-                    >
-                      <span>{activeTransaction?.paymentCode || 'AS-TOPUP'}</span>
-                      {copiedKey === 'ref-code' ? (
-                        <Check className="w-3 h-3 text-emerald-600" />
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 text-[10.5px] font-black uppercase tracking-wider text-orange-800">
+                      {payMethod === 'qris' ? (
+                        <>
+                          <QrCode className="w-3.5 h-3.5 text-orange-600" />
+                          <span>Metode: QRIS Instan</span>
+                        </>
+                      ) : payMethod === 'bank' ? (
+                        <>
+                          <Building2 className="w-3.5 h-3.5 text-orange-600" />
+                          <span>Metode: Transfer Bank</span>
+                        </>
                       ) : (
-                        <Copy className="w-3 h-3 text-amber-700" />
+                        <>
+                          <Store className="w-3.5 h-3.5 text-orange-600" />
+                          <span>Metode: Kasir Booth</span>
+                        </>
                       )}
-                    </button>
+                    </span>
                   </div>
 
                   <div className="flex items-center justify-between">
@@ -1097,18 +1431,6 @@ export function TopUpOverlay({
                         <span className="text-xl font-serif font-black text-gray-900">
                           {formatRupiah(displayAmount)}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(String(displayAmount), 'amount')}
-                          className="p-1 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors cursor-pointer"
-                          title="Salin Nominal"
-                        >
-                          {copiedKey === 'amount' ? (
-                            <Check className="w-3 h-3 text-emerald-600" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
                       </div>
                     </div>
 
@@ -1128,36 +1450,41 @@ export function TopUpOverlay({
                   </div>
                 </div>
 
-                {/* Payment Method Switcher Tabs */}
-                <div className="grid grid-cols-3 gap-1.5 p-1.5 bg-amber-100/50 border border-amber-200/70 rounded-2xl select-none">
-                  {[
-                    { id: 'qris', label: 'Scan QRIS', icon: QrCode },
-                    { id: 'bank', label: 'Transfer Bank', icon: Building2 },
-                    { id: 'offline', label: 'Kasir Booth', icon: Store },
-                  ].map((m) => {
-                    const Icon = m.icon;
-                    const isActive = payMethod === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => handleSwitchMethodInPayment(m.id as any)}
-                        className={`py-2.5 px-2 text-[10.5px] font-black uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                          isActive
-                            ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
-                            : 'text-gray-600 hover:bg-white/70'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{m.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* METHOD 1: QRIS */}
+                {/* SELECTED METHOD 1: QRIS (WITH 15-MINUTE EXPIRY TIMER & DOWNLOAD ONLY) */}
                 {payMethod === 'qris' && (
                   <div className="space-y-4">
+                    {/* 15-Minute Expiry Countdown Bar */}
+                    <div
+                      className={`rounded-2xl p-3.5 border flex items-center justify-between gap-3 ${
+                        qrisSecondsLeft <= 180
+                          ? 'bg-rose-50 border-rose-200 text-rose-900'
+                          : 'bg-amber-50/90 border-amber-200 text-amber-950'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                            qrisSecondsLeft <= 180
+                              ? 'bg-rose-500 text-white'
+                              : 'bg-gradient-to-br from-orange-500 to-amber-500 text-white'
+                          }`}
+                        >
+                          <Clock className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wider">
+                            Batas Waktu Pembayaran QRIS
+                          </p>
+                          <p className="text-[10px] text-gray-600 font-semibold">
+                            Otomatis batal jika melewati 15 menit
+                          </p>
+                        </div>
+                      </div>
+                      <div className="px-3 py-1.5 rounded-xl bg-white border border-amber-200/80 font-mono text-sm font-black text-orange-600 shrink-0 shadow-2xs">
+                        {formatCountdown(qrisSecondsLeft)}
+                      </div>
+                    </div>
+
                     <div className="bg-white border border-amber-200/80 rounded-3xl p-5 flex flex-col items-center shadow-sm">
                       <div className="w-full flex items-center justify-between border-b border-dashed border-gray-200 pb-3 mb-4 select-none">
                         <div className="flex items-center gap-2">
@@ -1169,24 +1496,31 @@ export function TopUpOverlay({
                           </span>
                         </div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
-                          GPN • Instan
+                          GPN • 15 Menit
                         </span>
                       </div>
 
-                      {/* QR Code Canvas */}
+                      {/* QR Code Canvas & Hidden SVG for Server PNG Generation */}
                       <div className="relative p-3.5 bg-white rounded-2xl border-2 border-amber-200 shadow-sm flex items-center justify-center">
                         <QRCodeCanvas
                           id="topup-qris-canvas"
-                          value={
-                            activeTransaction?.paymentQrContent ||
-                            `00020101021226670016ID.CO.ARUMSEDUH.WWW01189360091430000000005204581253033605802ID5910ARUM SEDUH6007JAKARTA62070703A016304ABCD`
-                          }
-                          size={190}
+                          value={qrValueString}
+                          size={220}
                           level="M"
                           includeMargin={true}
                           marginSize={2}
                           className="block rounded-lg"
                         />
+                        <div className="hidden" aria-hidden="true">
+                          <QRCodeSVG
+                            id="topup-qris-svg"
+                            value={qrValueString}
+                            size={220}
+                            level="M"
+                            includeMargin={true}
+                            marginSize={2}
+                          />
+                        </div>
                       </div>
 
                       <div className="text-center mt-3.5 space-y-0.5 w-full">
@@ -1201,101 +1535,75 @@ export function TopUpOverlay({
                         </p>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2.5 w-full mt-4 pt-3.5 border-t border-gray-100">
+                      {/* Single full-width Download QRIS button (No Salin Kode here) */}
+                      <div className="w-full mt-4 pt-3.5 border-t border-gray-100">
                         <button
                           type="button"
+                          disabled={downloadingQr}
                           onClick={handleDownloadQr}
-                          className="py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-xs cursor-pointer"
+                          className="w-full py-3 px-4 bg-amber-50 hover:bg-amber-100 text-amber-950 border border-amber-200 font-extrabold rounded-xl transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs cursor-pointer"
                         >
-                          <Download className="w-3.5 h-3.5 text-orange-600" />
-                          <span>Unduh QRIS</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            handleCopy(
-                              activeTransaction?.paymentCode || 'AS-TOPUP',
-                              'qris-code'
-                            )
-                          }
-                          className="py-2.5 px-3 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-xs cursor-pointer"
-                        >
-                          <Copy className="w-3.5 h-3.5 text-gray-500" />
-                          <span>Salin Kode</span>
+                          {downloadingQr ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin text-orange-600" />
+                              <span>Menyiapkan File Gambar QRIS...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-4 h-4 text-orange-600" />
+                              <span>Unduh Gambar QRIS</span>
+                            </>
+                          )}
                         </button>
                       </div>
-
-                      {activeTransaction?.paymentUrl && (
-                        <a
-                          href={activeTransaction.paymentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full mt-2.5 py-2.5 px-3 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 font-extrabold rounded-xl transition-all flex items-center justify-center gap-1.5 text-xs"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Buka Halaman Checkout DOKU</span>
-                        </a>
-                      )}
                     </div>
                   </div>
                 )}
 
-                {/* METHOD 2: BANK TRANSFER */}
+                {/* SELECTED METHOD 2: BANK TRANSFER (WITH PAYMENT PROOF UPLOADER) */}
                 {payMethod === 'bank' && (
-                  <div className="space-y-3">
-                    {banks.length === 0 ? (
-                      <div className="p-5 bg-white border border-amber-200/80 rounded-2xl text-center space-y-2">
-                        <Building2 className="w-8 h-8 text-amber-500 mx-auto" />
-                        <p className="text-xs font-extrabold text-gray-800">
-                          Rekening Bank Sedang Diperbarui
-                        </p>
-                        <p className="text-[11px] text-gray-500">
-                          Silakan gunakan metode Scan QRIS atau bayar langsung di Kasir Booth Arum Seduh.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {banks.map((bank, idx) => (
-                          <div
-                            key={bank.id || idx}
-                            className="bg-white border border-amber-200/80 p-4 rounded-2xl shadow-sm flex items-center justify-between gap-3"
-                          >
-                            <div className="space-y-1 min-w-0">
-                              <span className="inline-flex items-center gap-1 text-[9.5px] font-black uppercase bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-amber-900">
-                                <Building2 className="w-3 h-3 text-orange-600" />
-                                <span>Bank {bank.bankName}</span>
-                              </span>
-                              <p className="text-base font-mono font-black tracking-wider text-gray-900 pt-0.5">
-                                {bank.accountNumber}
-                              </p>
-                              <p className="text-[11px] text-gray-500 font-bold truncate">
-                                a.n. {bank.accountName}
-                              </p>
-                            </div>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleCopy(bank.accountNumber, `bank-${bank.id || idx}`)
-                              }
-                              className="px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-[10.5px] font-black uppercase tracking-wider rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0"
-                            >
-                              {copiedKey === `bank-${bank.id || idx}` ? (
-                                <>
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Tersalin</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="w-3.5 h-3.5" />
-                                  <span>Salin</span>
-                                </>
-                              )}
-                            </button>
+                  <div className="space-y-4">
+                    <div className="space-y-2.5">
+                      {banks.map((bank, idx) => (
+                        <div
+                          key={bank.id || idx}
+                          className="bg-white border border-amber-200/80 p-4 rounded-2xl shadow-sm flex items-center justify-between gap-3"
+                        >
+                          <div className="space-y-1 min-w-0">
+                            <span className="inline-flex items-center gap-1 text-[9.5px] font-black uppercase bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-amber-900">
+                              <Building2 className="w-3 h-3 text-orange-600" />
+                              <span>Bank {bank.bankName}</span>
+                            </span>
+                            <p className="text-base font-mono font-black tracking-wider text-gray-900 pt-0.5">
+                              {bank.accountNumber}
+                            </p>
+                            <p className="text-[11px] text-gray-500 font-bold truncate">
+                              a.n. {bank.accountName}
+                            </p>
                           </div>
-                        ))}
-                      </div>
-                    )}
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCopy(bank.accountNumber, `bank-${bank.id || idx}`)
+                            }
+                            className="px-3.5 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-[10.5px] font-black uppercase tracking-wider rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 shrink-0"
+                          >
+                            {copiedKey === `bank-${bank.id || idx}` ? (
+                              <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Tersalin</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Salin No. Rek</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
 
                     <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5 flex items-start gap-2.5">
                       <Info className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
@@ -1304,41 +1612,142 @@ export function TopUpOverlay({
                         <span className="text-orange-700 font-black">
                           {formatRupiah(displayAmount)}
                         </span>{' '}
-                        lalu unggah foto struk/bukti transfer pada kotak di bawah ini.
+                        lalu unggah foto struk/bukti transfer bank pada kotak di bawah ini.
                       </p>
+                    </div>
+
+                    {/* PAYMENT PROOF UPLOADER (EXCLUSIVE TO BANK TRANSFER) */}
+                    <div className="bg-white border border-amber-200/80 rounded-3xl p-4 space-y-3 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-black text-gray-800 flex items-center gap-1.5">
+                          <Upload className="w-4 h-4 text-orange-600" />
+                          <span>Unggah Bukti Pembayaran</span>
+                        </h4>
+                        <span className="text-[9.5px] font-bold text-gray-400">
+                          Khusus Transfer Bank
+                        </span>
+                      </div>
+
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+
+                      {!preview ? (
+                        <button
+                          type="button"
+                          onClick={() => fileRef.current?.click()}
+                          className="w-full py-5 border-2 border-dashed border-amber-300 rounded-2xl flex flex-col items-center justify-center gap-1.5 hover:border-orange-500 hover:bg-orange-50/30 transition-all active:scale-[0.99] cursor-pointer text-gray-500"
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-amber-50 text-orange-600 flex items-center justify-center">
+                            <Upload className="w-4.5 h-4.5" />
+                          </div>
+                          <span className="text-xs font-extrabold text-gray-700">
+                            Klik untuk pilih foto bukti transfer bank
+                          </span>
+                          <span className="text-[10px] text-gray-400">
+                            JPG / PNG / WebP • Otomatis dikompresi
+                          </span>
+                        </button>
+                      ) : (
+                        <div className="relative rounded-2xl overflow-hidden border border-amber-200 bg-gray-50">
+                          <img
+                            src={preview}
+                            alt="Bukti Transfer Bank"
+                            className="w-full h-36 object-cover"
+                          />
+                          {uploading && (
+                            <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1.5 text-white">
+                              <Loader2 className="w-6 h-6 animate-spin" />
+                              <span className="text-[10px] font-bold">Mengunggah...</span>
+                            </div>
+                          )}
+                          {uploaded && !uploading && (
+                            <div className="absolute top-2.5 right-2.5 bg-emerald-600 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
+                              <Check className="w-3 h-3" />
+                              <span>Siap Dikirim</span>
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            disabled={uploading}
+                            onClick={() => {
+                              setPreview(null);
+                              setUploaded(false);
+                              setPaymentProofUrl(null);
+                            }}
+                            className="absolute top-2.5 left-2.5 w-7 h-7 bg-white/95 rounded-full flex items-center justify-center border border-gray-200 text-gray-700 hover:text-rose-600 shadow-sm cursor-pointer"
+                            aria-label="Hapus bukti"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+
+                      {uploaded && (
+                        <button
+                          type="button"
+                          disabled={submittingProof || uploading}
+                          onClick={handleSubmitProof}
+                          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                          {submittingProof ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Mengirim Bukti Transfer...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span>Kirim Bukti Pembayaran</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
 
-                {/* METHOD 3: KASIR BOOTH (OFFLINE) */}
+                {/* SELECTED METHOD 3: KASIR BOOTH / OFFLINE (WITH EXCLUSIVE SALIN KODE) */}
                 {payMethod === 'offline' && (
                   <div className="bg-white border-2 border-dashed border-amber-300 rounded-3xl p-5 text-center space-y-4 shadow-sm">
                     <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center mx-auto shadow-md">
                       <Store className="w-6 h-6" />
                     </div>
 
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">
-                        Kode Tiket Top Up Kasir
+                        Kode Tiket Top Up Kasir Booth
                       </p>
-                      <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 px-4 py-2 rounded-2xl">
+                      <div className="inline-flex items-center gap-2.5 bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-2xl">
                         <span className="text-lg font-mono font-black text-orange-600 tracking-widest">
                           {activeTransaction?.paymentCode || 'AS-TOPUP'}
                         </span>
+                      </div>
+                      <div>
                         <button
                           type="button"
                           onClick={() =>
                             handleCopy(
-                              activeTransaction?.paymentCode || '',
+                              activeTransaction?.paymentCode || 'AS-TOPUP',
                               'ticket-code'
                             )
                           }
-                          className="p-1.5 rounded-lg bg-white border border-amber-200 text-amber-800 hover:bg-amber-100 cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-sm transition-all active:scale-95 cursor-pointer"
                         >
                           {copiedKey === 'ticket-code' ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <>
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Kode Tersalin</span>
+                            </>
                           ) : (
-                            <Copy className="w-3.5 h-3.5" />
+                            <>
+                              <Copy className="w-3.5 h-3.5" />
+                              <span>Salin Kode</span>
+                            </>
                           )}
                         </button>
                       </div>
@@ -1358,7 +1767,7 @@ export function TopUpOverlay({
                       <p className="font-black text-gray-900 text-xs">
                         Cara Top Up di Kasir Booth:
                       </p>
-                      <p>1. Tunjukkan kode tiket di atas kepada Kasir Arum Seduh.</p>
+                      <p>1. Salin atau tunjukkan kode tiket di atas kepada Kasir Arum Seduh.</p>
                       <p>
                         2. Serahkan pembayaran tunai sebesar{' '}
                         <span className="font-black text-orange-600">
@@ -1376,137 +1785,6 @@ export function TopUpOverlay({
                     </div>
                   </div>
                 )}
-
-                {/* SHARED PAYMENT PROOF UPLOADER (FOR QRIS & BANK) */}
-                {(payMethod === 'qris' || payMethod === 'bank') && (
-                  <div className="bg-white border border-amber-200/80 rounded-3xl p-4 space-y-3 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-black text-gray-800 flex items-center gap-1.5">
-                        <Upload className="w-4 h-4 text-orange-600" />
-                        <span>Unggah Bukti Pembayaran</span>
-                      </h4>
-                      <span className="text-[9.5px] font-bold text-gray-400">
-                        JPG / PNG / WebP
-                      </span>
-                    </div>
-
-                    <input
-                      ref={fileRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="hidden"
-                    />
-
-                    {!preview ? (
-                      <button
-                        type="button"
-                        onClick={() => fileRef.current?.click()}
-                        className="w-full py-5 border-2 border-dashed border-amber-300 rounded-2xl flex flex-col items-center justify-center gap-1.5 hover:border-orange-500 hover:bg-orange-50/30 transition-all active:scale-[0.99] cursor-pointer text-gray-500"
-                      >
-                        <div className="w-9 h-9 rounded-xl bg-amber-50 text-orange-600 flex items-center justify-center">
-                          <Upload className="w-4.5 h-4.5" />
-                        </div>
-                        <span className="text-xs font-extrabold text-gray-700">
-                          Klik untuk pilih foto bukti bayar / struk
-                        </span>
-                        <span className="text-[10px] text-gray-400">
-                          Otomatis dikompresi agar cepat diunggah
-                        </span>
-                      </button>
-                    ) : (
-                      <div className="relative rounded-2xl overflow-hidden border border-amber-200 bg-gray-50">
-                        <img
-                          src={preview}
-                          alt="Bukti Pembayaran"
-                          className="w-full h-36 object-cover"
-                        />
-                        {uploading && (
-                          <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex flex-col items-center justify-center gap-1.5 text-white">
-                            <Loader2 className="w-6 h-6 animate-spin" />
-                            <span className="text-[10px] font-bold">Mengunggah...</span>
-                          </div>
-                        )}
-                        {uploaded && !uploading && (
-                          <div className="absolute top-2.5 right-2.5 bg-emerald-600 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow">
-                            <Check className="w-3 h-3" />
-                            <span>Siap Dikirim</span>
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          disabled={uploading}
-                          onClick={() => {
-                            setPreview(null);
-                            setUploaded(false);
-                            setPaymentProofUrl(null);
-                          }}
-                          className="absolute top-2.5 left-2.5 w-7 h-7 bg-white/95 rounded-full flex items-center justify-center border border-gray-200 text-gray-700 hover:text-rose-600 shadow-sm cursor-pointer"
-                          aria-label="Hapus bukti"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-
-                    {uploaded && (
-                      <button
-                        type="button"
-                        disabled={submittingProof || uploading}
-                        onClick={handleSubmitProof}
-                        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs uppercase tracking-wider shadow-md transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        {submittingProof ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Mengirim Bukti Pembayaran...</span>
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle2 className="w-4 h-4" />
-                            <span>Kirim Bukti Pembayaran</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* SANDBOX / INSTANT SIMULATION BUTTON */}
-                <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                  <div className="flex items-center gap-2 text-left">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-orange-600 flex items-center justify-center shrink-0">
-                      <Zap className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-[11px] font-black text-gray-900">
-                        Mode Simulasi Instan
-                      </p>
-                      <p className="text-[9.5px] text-gray-500 font-medium">
-                        Uji coba tambah saldo langsung tanpa menunggu antrean kasir
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleSimulatePayment}
-                    disabled={simulating || checkingStatus}
-                    className="w-full sm:w-auto px-3.5 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-[10.5px] uppercase tracking-wider rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
-                  >
-                    {simulating ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Memproses...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>Simulasi Lunas Instan</span>
-                      </>
-                    )}
-                  </button>
-                </div>
               </div>
 
               {/* STICKY FOOTER STEP 2 */}
@@ -1514,7 +1792,7 @@ export function TopUpOverlay({
                 <button
                   type="button"
                   onClick={handleCheckStatus}
-                  disabled={checkingStatus || simulating}
+                  disabled={checkingStatus}
                   className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs sm:text-sm tracking-wide rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
                 >
                   {checkingStatus ? (
@@ -1562,7 +1840,7 @@ export function TopUpOverlay({
                 <p className="text-xs text-gray-500 font-medium mt-1 max-w-xs mx-auto leading-relaxed">
                   {step === 'success'
                     ? 'Saldo dompet digital Anda telah diperbarui dan siap digunakan untuk transaksi instan di Arum Seduh.'
-                    : 'Tim Kasir Arum Seduh sedang memverifikasi bukti pembayaran Anda. Saldo akan otomatis bertambah setelah disetujui.'}
+                    : 'Tim Kasir Arum Seduh sedang memverifikasi bukti transfer Anda. Saldo akan otomatis bertambah setelah disetujui.'}
                 </p>
               </div>
 

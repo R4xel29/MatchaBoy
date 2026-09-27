@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
+import { parsePromoPackages } from '@/lib/wallet-utils';
 
 // GET — fetch payment settings (singleton)
 export async function GET() {
@@ -13,6 +14,16 @@ export async function GET() {
   
   if (!settings) {
     settings = await prisma.paymentSettings.create({ data: {} });
+  }
+
+  const normalizedPackages = JSON.stringify(
+    parsePromoPackages(settings.walletFirstTimePromoPackages)
+  );
+  if (settings.walletFirstTimePromoPackages !== normalizedPackages) {
+    settings = await prisma.paymentSettings.update({
+      where: { id: settings.id },
+      data: { walletFirstTimePromoPackages: normalizedPackages },
+    });
   }
 
   const banks = await prisma.bankAccount.findMany({

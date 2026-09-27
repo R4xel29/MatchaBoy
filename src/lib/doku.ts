@@ -188,7 +188,7 @@ export async function createDokuCheckoutSession(
         'Signature': signature,
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(3500),
+      signal: AbortSignal.timeout(2500),
     });
 
     const data = await response.json();
@@ -405,7 +405,7 @@ export async function createDokuMcpQrisPayment(
         'Accept': 'application/json, text/event-stream'
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(3000)
+      signal: AbortSignal.timeout(2500)
     });
 
     if (!response.ok) {
@@ -496,7 +496,7 @@ export async function checkDokuMcpQrisPaymentStatus(
         'Accept': 'application/json, text/event-stream',
       },
       body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(2500),
     });
 
     if (!response.ok) {

@@ -2,6 +2,13 @@ import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { incrementQuestProgress } from '@/lib/loyalty-utils';
+import {
+  QRIS_EXPIRE_MINUTES,
+  QRIS_EXPIRE_MS,
+  getQrisExpiresAt,
+  isQrisTransactionExpired,
+  parsePromoPackages,
+} from '@/lib/wallet-utils';
 
 export async function GET() {
   try {
@@ -10,71 +17,107 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all users with wallet balance > 0, wallet history, or customer role
-    const users = await prisma.user.findMany({
+    const qrisCutoff = new Date(Date.now() - QRIS_EXPIRE_MS);
+
+    // Auto-expire stale QRIS PENDING transactions (> 15 minutes) before fetching pending list
+    await prisma.walletTransaction.updateMany({
       where: {
-        OR: [
-          { walletBalance: { gt: 0 } },
-          { walletTransactions: { some: {} } },
-          { role: 'CUSTOMER' },
-        ],
+        type: 'TOP_UP',
+        paymentMethod: 'QRIS',
+        status: 'PENDING',
+        createdAt: { lt: qrisCutoff },
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        image: true,
-        walletBalance: true,
-        walletTransactions: {
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-        },
-      },
-      orderBy: { walletBalance: 'desc' },
+      data: { status: 'REJECTED' },
     });
 
-    // Get pending top-up requests
-    const pendingTransactions = await prisma.walletTransaction.findMany({
-      where: {
-        status: { in: ['PENDING', 'VERIFYING'] },
-        type: 'TOP_UP',
-      },
-      include: {
-        user: {
+    // Execute all admin wallet queries in parallel so API responds rapidly
+    const [users, rawPendingTransactions, totalBalance, totalTopUps, totalPayments, settings, banks] =
+      await Promise.all([
+        prisma.user.findMany({
+          where: {
+            OR: [
+              { walletBalance: { gt: 0 } },
+              { walletTransactions: { some: {} } },
+              { role: 'CUSTOMER' },
+            ],
+          },
           select: {
             id: true,
             name: true,
             email: true,
             phone: true,
             image: true,
+            walletBalance: true,
+            walletTransactions: {
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+            },
           },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+          orderBy: { walletBalance: 'desc' },
+        }),
+        prisma.walletTransaction.findMany({
+          where: {
+            status: { in: ['PENDING', 'VERIFYING'] },
+            type: 'TOP_UP',
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                phone: true,
+                image: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.user.aggregate({
+          _sum: { walletBalance: true },
+        }),
+        prisma.walletTransaction.aggregate({
+          where: { amount: { gt: 0 }, status: 'COMPLETED' },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        prisma.walletTransaction.aggregate({
+          where: { amount: { lt: 0 }, status: 'COMPLETED' },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        prisma.paymentSettings.findFirst(),
+        prisma.bankAccount.findMany({
+          where: { isActive: true },
+          orderBy: { order: 'asc' },
+        }),
+      ]);
 
-    // Total wallet balance across all users
-    const totalBalance = await prisma.user.aggregate({
-      _sum: { walletBalance: true },
-    });
+    const pendingTransactions = rawPendingTransactions.map((tx) => ({
+      ...tx,
+      expiresAt:
+        String(tx.paymentMethod || '').toUpperCase() === 'QRIS'
+          ? getQrisExpiresAt(tx.createdAt)
+          : null,
+    }));
 
-    // Transaction stats (completed topups)
-    const totalTopUps = await prisma.walletTransaction.aggregate({
-      where: { amount: { gt: 0 }, status: 'COMPLETED' },
-      _sum: { amount: true },
-      _count: true,
-    });
-
-    const totalPayments = await prisma.walletTransaction.aggregate({
-      where: { amount: { lt: 0 }, status: 'COMPLETED' },
-      _sum: { amount: true },
-      _count: true,
-    });
+    const parsedPromoPackages = parsePromoPackages(settings?.walletFirstTimePromoPackages);
 
     return NextResponse.json({
       users,
       pendingTransactions,
+      banks,
+      walletSettings: {
+        topUpEnabled: settings?.walletTopUpEnabled ?? true,
+        minTopUp: settings?.walletMinTopUp ?? 10000,
+        bonusMinAmount: settings?.walletBonusMinAmount ?? 100000,
+        bonusPercent: settings?.walletBonusPercent ?? 10,
+        bonusMode: settings?.walletBonusMode ?? 'BOTH',
+        firstTimePromoEnabled: settings?.walletFirstTimePromoEnabled ?? true,
+        firstTimePromoPackages: parsedPromoPackages,
+        transferEnabled: (settings?.transferEnabled ?? true) && banks.length > 0,
+        qrisExpireMinutes: QRIS_EXPIRE_MINUTES,
+      },
       stats: {
         totalBalance: totalBalance._sum.walletBalance ?? 0,
         totalTopUps: totalTopUps._sum.amount ?? 0,
@@ -109,7 +152,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: 'Amount must be a non-zero number' }, { status: 400 });
     }
 
-    // Get current user
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, walletBalance: true, name: true },
@@ -121,10 +163,9 @@ export async function PATCH(req: Request) {
 
     const newBalance = user.walletBalance + adjustAmount;
     if (newBalance < 0) {
-      return NextResponse.json({ error: 'Insufficient balance for deduction' }, { status: 400 });
+      return NextResponse.json({ error: 'Saldo tidak mencukupi untuk pengurangan ini' }, { status: 400 });
     }
 
-    // Update balance and create transaction in a transaction
     const [updatedUser, transaction] = await prisma.$transaction([
       prisma.user.update({
         where: { id: userId },
@@ -146,7 +187,7 @@ export async function PATCH(req: Request) {
           type: adjustAmount > 0 ? 'ADMIN_TOPUP' : 'ADMIN_DEDUCT',
           description: `[Admin] ${reason}`,
           status: 'COMPLETED',
-          paymentMethod: 'DIRECT',
+          paymentMethod: 'ADMIN',
         },
       }),
     ]);
@@ -193,23 +234,43 @@ export async function POST(req: Request) {
     }
 
     if (action === 'approve') {
+      // Enforce 15-minute expiration check for PENDING QRIS transactions
+      if (isQrisTransactionExpired(tx)) {
+        await prisma.walletTransaction.update({
+          where: { id: transactionId },
+          data: { status: 'REJECTED' },
+        });
+        return NextResponse.json(
+          {
+            error:
+              'Transaksi QRIS sudah melewati batas waktu 15 menit dan otomatis dibatalkan.',
+          },
+          { status: 400 }
+        );
+      }
+
       const amount = tx.amount;
-      
       const settings = await prisma.paymentSettings.findFirst();
       const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
       const bonusPercent = settings?.walletBonusPercent ?? 10;
-      const bonusMode = settings?.walletBonusMode ?? "BOTH";
+      const bonusMode = settings?.walletBonusMode ?? 'BOTH';
 
-      const isPromoActiveMode = bonusMode === "FIRST_TIME" || bonusMode === "BOTH";
-      const isRegularActiveMode = bonusMode === "REGULAR" || bonusMode === "BOTH";
+      const isPromoActiveMode = bonusMode === 'FIRST_TIME' || bonusMode === 'BOTH';
+      const isRegularActiveMode = bonusMode === 'REGULAR' || bonusMode === 'BOTH';
 
-      const isPromoApplied = isPromoActiveMode && tx.promoBonus !== null && tx.promoBonus > 0;
-      const hasBonus = isPromoApplied || (isRegularActiveMode && amount >= bonusMinAmount);
-      const bonusAmount = isPromoApplied ? tx.promoBonus! : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0);
+      const hasStoredBonus =
+        tx.promoBonus !== null && tx.promoBonus !== undefined && tx.promoBonus > 0;
+      const isPromoApplied = isPromoActiveMode && hasStoredBonus;
+      const hasRegularBonus =
+        !hasStoredBonus && isRegularActiveMode && bonusPercent > 0 && amount >= bonusMinAmount;
+      const bonusAmount = hasStoredBonus
+        ? tx.promoBonus!
+        : hasRegularBonus
+        ? Math.floor(amount * (bonusPercent / 100))
+        : 0;
       const totalTopUp = amount + bonusAmount;
 
       const [updatedUser, updatedTx] = await prisma.$transaction(async (prismaTx) => {
-        // Increment user's wallet balance
         const user = await prismaTx.user.update({
           where: { id: tx.userId },
           data: { walletBalance: { increment: totalTopUp } },
@@ -224,13 +285,14 @@ export async function POST(req: Request) {
           },
         });
 
-        // Mark transaction as COMPLETED
         const completedTx = await prismaTx.walletTransaction.update({
           where: { id: transactionId },
-          data: { status: 'COMPLETED' },
+          data: {
+            status: 'COMPLETED',
+            promoBonus: bonusAmount > 0 ? bonusAmount : tx.promoBonus,
+          },
         });
 
-        // If there's a bonus, create a COMPLETED TOP_UP_BONUS transaction
         if (bonusAmount > 0) {
           await prismaTx.walletTransaction.create({
             data: {
@@ -238,16 +300,15 @@ export async function POST(req: Request) {
               amount: bonusAmount,
               type: 'TOP_UP_BONUS',
               description: isPromoApplied
-                ? `Bonus Top-up Pertama sebesar Rp${bonusAmount.toLocaleString('id-ID')}`
-                : `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+                ? `Bonus Top-Up Pertama Arus Pay +Rp${bonusAmount.toLocaleString('id-ID')}`
+                : `Bonus Top-Up Arus Pay (${bonusPercent}%) +Rp${bonusAmount.toLocaleString('id-ID')}`,
               status: 'COMPLETED',
               paymentMethod: tx.paymentMethod,
-              referenceId: tx.referenceId
+              referenceId: tx.referenceId,
             },
           });
         }
 
-        // C1 Gamification Quests: Atomically increment top-up count quest progress
         await incrementQuestProgress(tx.userId, 'TOP_UP_COUNT', 1, prismaTx);
 
         return [user, completedTx];

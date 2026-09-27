@@ -54,14 +54,31 @@ export default function PaymentSettingsClient() {
 
   // Helper to get parsed promo packages from settings
   const getPromoPackages = (): PromoPackage[] => {
+    const defaultPkgs: PromoPackage[] = [
+      { amount: 50000, bonus: 3000 },
+      { amount: 100000, bonus: 5000 },
+      { amount: 200000, bonus: 10000 },
+    ];
     try {
       if (settings?.walletFirstTimePromoPackages) {
-        return JSON.parse(settings.walletFirstTimePromoPackages);
+        const parsed = JSON.parse(settings.walletFirstTimePromoPackages);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          if (
+            parsed.length === 2 &&
+            Number(parsed[0].amount) === 50000 &&
+            Number(parsed[0].bonus) === 5000 &&
+            Number(parsed[1].amount) === 200000 &&
+            Number(parsed[1].bonus) === 10000
+          ) {
+            return defaultPkgs;
+          }
+          return parsed;
+        }
       }
     } catch (e) {
       console.error(e);
     }
-    return [];
+    return defaultPkgs;
   };
 
   // Helper to update promo packages list
