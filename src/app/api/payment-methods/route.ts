@@ -24,9 +24,13 @@ export async function GET() {
     : [];
 
   return NextResponse.json({
+    wallet: {
+      enabled: settings.walletTopUpEnabled ?? true,
+    },
     cod: {
       enabled: settings.codEnabled,
       whatsapp: settings.codWhatsApp,
+      whatsApp: settings.codWhatsApp,
     },
     qris: {
       enabled: settings.qrisEnabled,
@@ -35,11 +39,11 @@ export async function GET() {
       label: settings.qrisLabel,
     },
     transfer: {
-      enabled: false, // temporarily disabled
-      banks: [],
+      enabled: Boolean(settings.transferEnabled && banks.length > 0),
+      banks,
     },
     doku: {
-      enabled: false, // temporarily disabled
+      enabled: Boolean(settings.dokuEnabled),
       clientId: settings.dokuClientId,
       sandbox: settings.dokuSandbox,
     },

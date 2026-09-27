@@ -1,5 +1,5 @@
 import { formatRupiah } from './utils';
-import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes } from './receipt-modifiers';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes, formatReceiptPaymentMethod } from './receipt-modifiers';
 import { isBluetoothPrinterConnected, printDirectBluetooth } from './bluetooth-printer';
 
 /**
@@ -36,6 +36,7 @@ export interface ThermalPrintOrder {
   deliveryFee?: number;
   discount?: number;
   tumblerDiscount?: number;
+  pointsDiscount?: number;
   voucherDiscount?: number;
   voucherCode?: string;
   voucherTitle?: string;
@@ -377,6 +378,12 @@ export async function printThermalReceipt(
               <span>-${formatRupiah(summary.tumblerDiscount)}</span>
             </div>
           ` : ''}
+          ${summary.pointsDiscount > 0 ? `
+            <div class="row">
+              <span>Diskon Tukar Poin</span>
+              <span>-${formatRupiah(summary.pointsDiscount)}</span>
+            </div>
+          ` : ''}
           ${summary.deliveryFee > 0 ? `
             <div class="row">
               <span>Ongkos Kirim</span>
@@ -391,7 +398,7 @@ export async function printThermalReceipt(
             <span>${formatRupiah(summary.finalTotal)}</span>
           </div>
           <div class="row">
-            <span>Metode (${order.paymentMethod})</span>
+            <span>Metode (${formatReceiptPaymentMethod(order.paymentMethod, order.notes)})</span>
             <span>${formatRupiah(order.total)}</span>
           </div>
           ${order.cashPaid ? `

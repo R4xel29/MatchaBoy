@@ -9,6 +9,10 @@ import {
   QRIS_EXPIRE_MINUTES,
   QRIS_EXPIRE_MS,
 } from '../src/lib/wallet-utils';
+import {
+  formatReceiptPaymentMethod,
+  calculateGrossReceiptSummary,
+} from '../src/lib/receipt-modifiers';
 
 describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () => {
   const walletRoutePath = path.join(process.cwd(), 'src/app/api/user/wallet/route.ts');
@@ -22,6 +26,8 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
   const storefrontClientPath = path.join(process.cwd(), 'src/app/(storefront)/StorefrontClient.tsx');
   const profileClientPath = path.join(process.cwd(), 'src/app/(storefront)/profile/ProfileClient.tsx');
   const checkoutPagePath = path.join(process.cwd(), 'src/app/(storefront)/checkout/page.tsx');
+  const paymentMethodsRoutePath = path.join(process.cwd(), 'src/app/api/payment-methods/route.ts');
+  const orderTrackingClientPath = path.join(process.cwd(), 'src/app/(storefront)/orders/[id]/OrderTrackingClient.tsx');
 
   it('T1.19.1: First-time top-up bonus packages give 50k->3k, 100k->5k, 200k->10k and migrate legacy 2-tier defaults', () => {
     const defaultPkgs = parsePromoPackages(null);
@@ -162,5 +168,39 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(profile).toContain('TopUpOverlay');
     expect(checkout).toContain('TopUpOverlay');
   });
+
+  it('T1.19.5: Checkout UI/UX & Receipt (Struk) integrate Arus Pay (SALDO) and transparent discount breakdown', () => {
+    expect(formatReceiptPaymentMethod('WALLET')).toBe('ARUS PAY (SALDO)');
+    expect(formatReceiptPaymentMethod('CASH')).toBe('TUNAI');
+    expect(formatReceiptPaymentMethod('COD')).toBe('BAYAR DI TEMPAT (COD)');
+    expect(formatReceiptPaymentMethod('DOKU', '[Kanal DOKU: QRIS]')).toBe('DOKU (QRIS)');
+
+    const summary = calculateGrossReceiptSummary({
+      total: 18000,
+      items: [{ price: 22000, qty: 1 }],
+      voucherDiscount: 2000,
+      pointsDiscount: 1000,
+      hasTumbler: true,
+      tumblerDiscount: 1000,
+    });
+    expect(summary.grossSubtotal).toBe(22000);
+    expect(summary.voucherDiscount).toBe(2000);
+    expect(summary.pointsDiscount).toBe(1000);
+    expect(summary.tumblerDiscount).toBe(1000);
+    expect(summary.finalTotal).toBe(18000);
+
+    const paymentMethodsRoute = fs.readFileSync(paymentMethodsRoutePath, 'utf-8');
+    expect(paymentMethodsRoute).toContain('wallet:');
+
+    const checkout = fs.readFileSync(checkoutPagePath, 'utf-8');
+    expect(checkout).toContain('Rincian Potongan Harga');
+    expect(checkout).toContain('Sisa saldo setelah bayar:');
+
+    const orderTracking = fs.readFileSync(orderTrackingClientPath, 'utf-8');
+    expect(orderTracking).toContain('Struk & Rincian Pesanan');
+    expect(orderTracking).toContain('Cetak Struk');
+    expect(orderTracking).toContain('formatReceiptPaymentMethod');
+  });
 });
+
 

@@ -1,6 +1,6 @@
 import { prisma } from './prisma';
 import { sendWhatsAppMessage } from './whatsapp-service';
-import { parseItemModifiers, getReceiptModifierLines } from './receipt-modifiers';
+import { parseItemModifiers, getReceiptModifierLines, formatReceiptPaymentMethod } from './receipt-modifiers';
 
 /**
  * Mengirimkan nota/struk digital pesanan kepada pelanggan melalui gateway WhatsApp secara asinkron.
@@ -97,7 +97,7 @@ ${itemsText}----------------------------------------
 Subtotal: ${formatPrice(order.subtotal)}
 ${order.deliveryFee > 0 ? `Ongkir: ${formatPrice(order.deliveryFee)}\n` : ''}${voucherText}----------------------------------------
 *TOTAL AKHIR:* *${formatPrice(order.total)}*
-Metode Bayar: *${order.paymentMethod}*
+Metode Bayar: *${formatReceiptPaymentMethod(order.paymentMethod, order.notes)}*
 ----------------------------------------
 Poin Didapat: *+${order.pointsEarned} Poin*
 ----------------------------------------

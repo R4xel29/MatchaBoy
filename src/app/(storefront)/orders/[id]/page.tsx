@@ -50,11 +50,29 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     reviewedProductIds = new Set(existingReviews.map(r => r.productId))
   }
 
-  const settings = await prisma.storeSettings.findFirst()
+  const [settings, paymentSettings, loyaltySettings, redeemPointRecord] = await Promise.all([
+    prisma.storeSettings.findFirst(),
+    prisma.paymentSettings.findFirst(),
+    prisma.loyaltySettings.findFirst(),
+    prisma.pointHistory.findFirst({
+      where: {
+        orderId: id,
+        type: 'REDEEM_ORDER',
+      },
+      select: {
+        amount: true,
+      },
+    }),
+  ])
   const cancellationTimeLimit = settings?.cancellationTimeLimit ?? 15
-
-  const paymentSettings = await prisma.paymentSettings.findFirst()
   const adminWhatsApp = paymentSettings?.codWhatsApp || ''
+  const pointValue = loyaltySettings?.pointValue ?? 1000
+  const pointsUsed = redeemPointRecord ? Math.abs(redeemPointRecord.amount) : 0
+  const pointsDiscount = pointsUsed * pointValue
+  const tumblerDiscount =
+    order.hasTumbler && loyaltySettings?.tumblerBonusEnabled && loyaltySettings.tumblerDiscountPct > 0
+      ? Math.round(order.subtotal * (loyaltySettings.tumblerDiscountPct / 100))
+      : 0
 
   // Map to the shape expected by the frontend
   const mappedOrder = {
@@ -70,6 +88,7 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
       name: item.product.name,
       qty: item.qty,
       price: item.price,
+      originalPrice: item.product.price,
       image: item.product.image || undefined,
       mods: item.modifiers || undefined,
       reviewed: reviewedProductIds.has(item.productId),
@@ -77,6 +96,12 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     subtotal: order.subtotal,
     deliveryFee: order.deliveryFee,
     total: order.total,
+    voucherCode: order.voucherCode || undefined,
+    tumblerDiscount,
+    pointsDiscount,
+    pointsEarned: order.pointsEarned || 0,
+    tableNumber: order.tableNumber || null,
+    notes: order.notes || undefined,
     createdAt: new Date(order.createdAt).toLocaleString('id-ID', {
       day: 'numeric', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit'

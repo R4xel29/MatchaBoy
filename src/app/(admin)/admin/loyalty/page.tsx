@@ -3,6 +3,8 @@ import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import LoyaltySettingsClient from './LoyaltySettingsClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function LoyaltySettingsPage() {
   const session = await auth();
   if (session?.user?.role !== 'ADMIN') redirect('/login');

@@ -422,6 +422,7 @@ export interface ReceiptPricingSummary {
   voucherTitle?: string;
   voucherLabel: string;
   tumblerDiscount: number;
+  pointsDiscount: number;
   deliveryFee: number;
   finalTotal: number;
   items: Array<{
@@ -439,23 +440,35 @@ export interface ReceiptPricingSummary {
 }
 
 /**
- * Kalkulator universal ringkasan harga struk untuk menjamin transparansi perhitungan:
- * `Gross Subtotal - Diskon Flash Sale - Diskon Voucher - Diskon Tumbler + Ongkir = Total Akhir`.
- *
- * Sesuai aturan **AGENTS.md Bagian 8 (TRANSPARANSI POTONGAN HARGA)**:
- * Pada struk cetak maupun rincian online, potongan harga WAJIB ditampilkan secara eksplisit
- * dan transparan (harga semula, besaran potongan, dan harga akhir), bukan hanya harga bersih.
- *
- * @param {object} order - Data pesanan kotor beserta daftar item dan diskon
- * @returns {ReceiptPricingSummary} Rincian kalkulasi harga transparan untuk struk kasir dan digital
- *
- * @example
- * ```typescript
- * const summary = calculateGrossReceiptSummary(orderData);
- * console.log('Subtotal Kotor:', summary.grossSubtotal);
- * console.log('Total Hemat:', summary.totalFlashSaleDiscount + summary.voucherDiscount);
- * ```
+ * Memformat nama metode pembayaran untuk ditampilkan secara jelas pada struk kasir maupun nota digital.
  */
+export function formatReceiptPaymentMethod(method?: string | null, notes?: string | null): string {
+  const m = (method || 'TUNAI').trim().toUpperCase();
+  if (m === 'WALLET' || m === 'ARUS_PAY' || m === 'ARUS PAY') {
+    return 'ARUS PAY (SALDO)';
+  }
+  if (m === 'CASH' || m === 'TUNAI') {
+    return 'TUNAI';
+  }
+  if (m === 'QRIS' || m === 'QRIS_INSTAN') {
+    return 'QRIS';
+  }
+  if (m === 'COD') {
+    return 'BAYAR DI TEMPAT (COD)';
+  }
+  if (m === 'TRANSFER') {
+    return 'TRANSFER BANK';
+  }
+  if (m === 'DOKU') {
+    const channelMatch = (notes || '').match(/\[(?:CHANNEL|Kanal DOKU):\s*([^\]]+)\]/i);
+    if (channelMatch && channelMatch[1]) {
+      return `DOKU (${channelMatch[1].trim().toUpperCase()})`;
+    }
+    return 'DOKU PAYMENT';
+  }
+  return m;
+}
+
 /**
  * Membersihkan catatan pesanan dari tag sistem internal (seperti [POS QRIS Order],
  * [DOKU Webhook]..., atau [CHANNEL:...]) sehingga hanya menampilkan pesan asli dari pembeli/kasir.
@@ -538,6 +551,8 @@ export function calculateGrossReceiptSummary(order: {
   discount?: number;
   voucherDiscount?: number;
   tumblerDiscount?: number;
+  pointsDiscount?: number;
+  hasTumbler?: boolean;
   voucherCode?: string | null;
   voucherTitle?: string | null;
   items?: Array<{
@@ -597,7 +612,8 @@ export function calculateGrossReceiptSummary(order: {
   // Ensure grossSubtotal is at least order.subtotal if DB already stored gross
   const grossSubtotal = Math.max(calculatedGrossSubtotal, Number(order.subtotal) || calculatedGrossSubtotal);
   const deliveryFee = Number(order.deliveryFee) || 0;
-  const tumblerDiscount = Number(order.tumblerDiscount) || 0;
+  const tumblerDiscount = Number(order.tumblerDiscount) || (order.hasTumbler ? 2000 : 0);
+  const pointsDiscount = Number(order.pointsDiscount) || 0;
   const finalTotal = Number(order.total) || 0;
 
   // Compute remaining voucher discount
@@ -605,12 +621,12 @@ export function calculateGrossReceiptSummary(order: {
   if (!voucherDiscount || isNaN(voucherDiscount)) {
     // If order has discount field, check if it was voucher
     if (order.discount && order.discount > 0) {
-      voucherDiscount = Math.max(0, order.discount - calculatedTotalFlashSale - tumblerDiscount);
+      voucherDiscount = Math.max(0, order.discount - calculatedTotalFlashSale - tumblerDiscount - pointsDiscount);
     } else {
       // Calculate from gross subtotal and final total
       voucherDiscount = Math.max(
         0,
-        grossSubtotal - calculatedTotalFlashSale - tumblerDiscount + deliveryFee - finalTotal
+        grossSubtotal - calculatedTotalFlashSale - tumblerDiscount - pointsDiscount + deliveryFee - finalTotal
       );
     }
   }
@@ -639,6 +655,7 @@ export function calculateGrossReceiptSummary(order: {
     voucherTitle,
     voucherLabel,
     tumblerDiscount,
+    pointsDiscount,
     deliveryFee,
     finalTotal,
     items: processedItems,

@@ -12,7 +12,8 @@ import {
   ArrowLeft, Phone, User, CreditCard, Banknote,
   ChevronDown, ChevronUp, ChevronRight, Trash2, Plus, Minus,
   ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle, MapPin,
-  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet, Check, Coffee, Utensils, Users
+  Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet, Check, Coffee, Utensils, Users,
+  Sparkles, ShieldCheck, Receipt
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const MapPicker = dynamic(() => import('@/components/checkout/MapPicker').then(m => m.MapPicker), { ssr: false });
@@ -129,7 +130,7 @@ export default function CheckoutPage() {
   const isScrollingProgrammatically = useRef<boolean>(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('WALLET');
   const [paymentChannel, setPaymentChannel] = useState('');
   const [showPickupWarning, setShowPickupWarning] = useState(false);
   const [showTumblerWarning, setShowTumblerWarning] = useState(false);
@@ -226,6 +227,12 @@ export default function CheckoutPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (session?.user?.id) {
+      refreshCheckoutWallet();
+    }
+  }, [session?.user?.id, refreshCheckoutWallet]);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isAllPaymentsOpen, setIsAllPaymentsOpen] = useState(false);
   const [isOvoSheetOpen, setIsOvoSheetOpen] = useState(false);
@@ -1259,6 +1266,17 @@ export default function CheckoutPage() {
   const onSubmit = (data: CheckoutFormData) => {
     if (!canSubmit) return;
     setTempFormData(data);
+
+    // If Arus Pay is selected but balance is insufficient, prompt Top Up directly
+    if (paymentMethod === 'WALLET' && walletBalance < grandTotal) {
+      const shortfall = Math.max(0, grandTotal - walletBalance);
+      setToast({
+        message: `Saldo Arus Pay kurang ${formatRupiah(shortfall)}. Silakan Top Up terlebih dahulu atau pilih metode lain.`,
+        type: 'error',
+      });
+      setIsTopUpOpen(true);
+      return;
+    }
     
     // Intercept OVO to ask for phone number if not present
     if (paymentMethod === 'DOKU' && paymentChannel === 'OVO' && !ovoPhone) {
@@ -1430,20 +1448,39 @@ export default function CheckoutPage() {
     }
     return (
       <div className="min-h-dvh bg-[#FFFBF5] flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-20 h-20 rounded-full bg-orange-50 flex items-center justify-center mb-6 shadow-inner border border-orange-100/50">
-          <ShoppingBag className="w-8 h-8 text-[#B48A5E]" />
+        <div className="w-20 h-20 rounded-full bg-orange-50 flex items-center justify-center mb-6 shadow-inner border border-orange-100">
+          <ShoppingBag className="w-8 h-8 text-orange-600" />
         </div>
         <h2 className="font-serif font-bold text-xl text-gray-900 mb-2">Keranjang Kosong</h2>
-        <p className="text-sm text-gray-500 mb-6 max-w-xs">Yuk, jelajahi menu artisanal matcha terbaik kami dan tambahkan minuman favoritmu!</p>
-        <button onClick={() => router.push('/')} className="px-8 py-4 rounded-2xl bg-[#B48A5E] text-white font-bold text-sm shadow-lg shadow-[#B48A5E]/20 hover:bg-[#946F48] transition-all active:scale-[0.98]">
+        <p className="text-sm text-gray-500 mb-6 max-w-xs">Yuk, jelajahi menu terbaik Arum Seduh dan tambahkan minuman atau camilan favoritmu!</p>
+        <button onClick={() => router.push('/')} className="px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-sm shadow-lg shadow-orange-500/20 hover:from-orange-600 hover:to-amber-600 transition-all active:scale-[0.98]">
           Kembali ke Menu
         </button>
       </div>
     );
   }
 
+  const totalDiscountAmount = voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount;
+  const grossBeforeDiscount = subtotal + shippingFee;
+  const isWalletShortfall = paymentMethod === 'WALLET' && walletBalance < grandTotal;
+  const walletShortfallAmount = Math.max(0, grandTotal - walletBalance);
+  const walletRemainingAfterPay = Math.max(0, walletBalance - grandTotal);
+
+  const activePaymentLabel =
+    paymentMethod === 'WALLET'
+      ? 'Arus Pay (Saldo)'
+      : paymentMethod === 'COD'
+      ? 'Bayar di Tempat (COD)'
+      : paymentMethod === 'QRIS'
+      ? paymentConfig?.qris?.label || 'QRIS Manual'
+      : paymentMethod === 'TRANSFER'
+      ? 'Transfer Bank'
+      : paymentMethod === 'DOKU'
+      ? `DOKU · ${paymentChannel || 'Instan'}`
+      : 'Belum Dipilih';
+
   return (
-    <div className="min-h-dvh bg-[#FFFBF5] pb-safe noise relative">
+    <div className="min-h-dvh bg-[#FFFBF5] pb-28 md:pb-16 noise relative">
       {/* Pickup Warning Modal */}
       <AnimatePresence>
         {showPickupWarning && (
@@ -1511,45 +1548,84 @@ export default function CheckoutPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-[#FFFBF5]/90 backdrop-blur-md border-b border-gray-100">
-        <div className="flex items-center gap-4 px-6 py-4 max-w-6xl mx-auto">
-          <button onClick={() => router.back()} className="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm border border-gray-100 hover:bg-gray-50 transition-colors" aria-label="Back">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="font-serif font-bold text-xl text-gray-900">Checkout</h1>
+      <header className="sticky top-0 z-40 bg-[#FFFBF5]/90 backdrop-blur-md border-b border-orange-100/80">
+        <div className="flex items-center justify-between gap-4 px-4 sm:px-6 py-3.5 max-w-6xl mx-auto">
+          <div className="flex items-center gap-3.5">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white shadow-sm border border-orange-100 text-gray-800 hover:bg-orange-50/50 transition-colors cursor-pointer"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div>
+              <h1 className="font-serif font-black text-lg sm:text-xl text-gray-900 leading-tight">Checkout Pesanan</h1>
+              <p className="text-[11px] font-semibold text-gray-500">Arum Seduh · {itemCount} Item di Keranjang</p>
+            </div>
+          </div>
+
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-orange-50 border border-orange-200/70 text-orange-700 text-[11px] font-bold">
+            <ShieldCheck className="w-3.5 h-3.5 text-orange-600" />
+            <span>Transaksi Aman</span>
+          </div>
         </div>
       </header>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col lg:flex-row gap-8 items-start relative z-10">
-        {/* LEFT COLUMN */}
+      <form onSubmit={handleSubmit(onSubmit)} className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 flex flex-col lg:flex-row gap-6 lg:gap-8 items-start relative z-10">
+        {/* ══════════════════════════════════════════════════════════════════
+            LEFT COLUMN: Order Type, Table, Customer Info, Eco Tumbler, Items
+            ══════════════════════════════════════════════════════════════════ */}
         <div className="w-full lg:flex-1 space-y-6">
           {/* ── 1. Order Type Selector ────────────────────────── */}
-          <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm">
-            <h2 className="font-serif font-bold text-base text-gray-900 mb-4 flex items-center gap-2">
-              <Store className="w-4.5 h-4.5 text-[#B48A5E]" /> Metode Pengambilan
-            </h2>
+          <section className="bg-white rounded-[2rem] border border-orange-100/80 p-6 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                  <Store className="w-4 h-4" />
+                </div>
+                <span>Metode Pengambilan</span>
+              </h2>
+              <span className="text-[10px] font-black uppercase tracking-wider text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-100">
+                Langkah 1
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setOrderType('PICKUP')}
-                className={`flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-center
+                className={`flex items-center gap-3 px-4 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-left cursor-pointer
                   ${orderType === 'PICKUP'
-                    ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm shadow-[#B48A5E]/5'
-                    : 'border-gray-150 bg-white hover:border-gray-300'}`}
+                    ? 'border-orange-500 bg-gradient-to-br from-orange-50/90 to-amber-50/50 shadow-sm shadow-orange-500/10'
+                    : 'border-gray-100 bg-gray-50/50 hover:border-orange-200 hover:bg-white'}`}
               >
-                <Store className={`w-5 h-5 shrink-0 ${orderType === 'PICKUP' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
-                <span className="text-xs font-bold text-gray-900">Pickup</span>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                  orderType === 'PICKUP' ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-400'
+                }`}>
+                  <Store className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-xs font-black text-gray-900">Pickup</span>
+                  <span className="block text-[10px] font-semibold text-gray-500 truncate">Ambil di Booth</span>
+                </div>
               </button>
               <button
                 type="button"
                 onClick={() => setOrderType('DINE_IN')}
-                className={`flex flex-col items-center justify-center gap-2 px-3 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-center
+                className={`flex items-center gap-3 px-4 py-4 rounded-2xl border-2 transition-all active:scale-[0.98] text-left cursor-pointer
                   ${orderType === 'DINE_IN'
-                    ? 'border-[#B48A5E] bg-[#B48A5E]/5 shadow-sm shadow-[#B48A5E]/5'
-                    : 'border-gray-150 bg-white hover:border-gray-300'}`}
+                    ? 'border-orange-500 bg-gradient-to-br from-orange-50/90 to-amber-50/50 shadow-sm shadow-orange-500/10'
+                    : 'border-gray-100 bg-gray-50/50 hover:border-orange-200 hover:bg-white'}`}
               >
-                <Coffee className={`w-5 h-5 shrink-0 ${orderType === 'DINE_IN' ? 'text-[#B48A5E]' : 'text-gray-400'}`} />
-                <span className="text-xs font-bold text-gray-900">Dine In</span>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                  orderType === 'DINE_IN' ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-400'
+                }`}>
+                  <Coffee className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <span className="block text-xs font-black text-gray-900">Dine In</span>
+                  <span className="block text-[10px] font-semibold text-gray-500 truncate">Minum di Tempat</span>
+                </div>
               </button>
             </div>
 
@@ -1568,20 +1644,24 @@ export default function CheckoutPage() {
 
           {/* ── Dine-In Table Selection ────────────────────────── */}
           {orderType === 'DINE_IN' && (
-            <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
+            <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-[2rem] border border-orange-100/80 p-6 shadow-sm space-y-4">
               <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
-                <Coffee className="w-4.5 h-4.5 text-[#B48A5E]" /> Informasi Meja Dine-In
+                <div className="w-7 h-7 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                  <Coffee className="w-4 h-4" />
+                </div>
+                <span>Informasi Meja Dine-In</span>
               </h2>
               
               <div className="space-y-3">
-                {/* Table Selection Dropdown */}
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Nomor Meja</label>
                   {tableNumber ? (
                     <div className="flex items-center justify-between p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-emerald-800">Meja Terkunci: Meja {tableNumber}</span>
-                        <span className="text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full mt-0.5 self-start">Scan QR ✓</span>
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-emerald-700 bg-emerald-100 border border-emerald-200 px-2 py-0.5 rounded-full mt-0.5 self-start">
+                          <Check className="w-2.5 h-2.5" /> Scan QR
+                        </span>
                       </div>
                       <button
                         type="button"
@@ -1589,7 +1669,7 @@ export default function CheckoutPage() {
                           useCartStore.getState().setTableNumber(null);
                           setSelectedTable('');
                         }}
-                        className="px-3.5 py-2 bg-white border border-emerald-200 hover:border-amber-450 text-xs font-black text-emerald-800 hover:text-amber-800 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                        className="px-3.5 py-2 bg-white border border-emerald-200 hover:border-amber-400 text-xs font-black text-emerald-800 hover:text-amber-800 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
                       >
                         Pindah Meja
                       </button>
@@ -1598,7 +1678,7 @@ export default function CheckoutPage() {
                     <select
                       value={selectedTable}
                       onChange={(e) => setSelectedTable(e.target.value)}
-                      className="w-full px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner"
+                      className="w-full px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-orange-500 transition-all shadow-inner"
                     >
                       <option value="">Pilih Nomor Meja</option>
                       {dbTables.map(t => {
@@ -1627,7 +1707,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setShowFloorPlanModal(true)}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#F9F8F6] border border-gray-200 hover:bg-orange-50/10 hover:border-[#B48A5E] text-gray-700 hover:text-[#B48A5E] text-xs font-bold transition-all shadow-sm cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-orange-50/40 border border-orange-200/70 hover:bg-orange-50 hover:border-orange-400 text-orange-700 text-xs font-bold transition-all shadow-sm cursor-pointer"
                 >
                   <MapPin className="w-4 h-4" />
                   <span>Lihat Denah Meja Ruangan</span>
@@ -1636,17 +1716,24 @@ export default function CheckoutPage() {
             </motion.section>
           )}
 
-
-          {/* ── 3. Customer Details ───────────────────────────── */}
-          <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
-            <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
-              <User className="w-4.5 h-4.5 text-[#B48A5E]" /> Detail Pemesan
-            </h2>
-            <div className="space-y-4">
+          {/* ── 2. Customer Details ───────────────────────────── */}
+          <section className="bg-white rounded-[2rem] border border-orange-100/80 p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                  <User className="w-4 h-4" />
+                </div>
+                <span>Detail Pemesan</span>
+              </h2>
+              <span className="text-[10px] font-black uppercase tracking-wider text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-100">
+                Langkah 2
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Nama Lengkap</label>
                 <input {...register('name')} placeholder="Nama Anda"
-                  className="w-full px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner" />
+                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-orange-500 transition-all shadow-inner" />
                 {errors.name && <p className="text-xs text-red-500 mt-1 pl-1">{errors.name.message}</p>}
               </div>
               <div>
@@ -1654,21 +1741,21 @@ export default function CheckoutPage() {
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input {...register('phone')} placeholder="08123456789" type="tel"
-                    className="w-full pl-11 pr-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner" />
+                    className="w-full pl-11 pr-4 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-orange-500 transition-all shadow-inner" />
                 </div>
                 {errors.phone && <p className="text-xs text-red-500 mt-1 pl-1">{errors.phone.message}</p>}
               </div>
-              <div>
+              <div className="sm:col-span-2">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5 pl-1">Catatan Pesanan (opsional)</label>
-                <input {...register('notes')} placeholder="Contoh: Es sedikit, gula 50%, patokan rumah depan pagar hitam"
-                  className="w-full px-4.5 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all shadow-inner" />
+                <input {...register('notes')} placeholder="Contoh: Es dipisah, ekstra sedotan, atau catatan pengambilan"
+                  className="w-full px-4 py-3.5 rounded-2xl border border-gray-200 bg-[#F9F8F6] text-sm focus:outline-none focus:bg-white focus:border-orange-500 transition-all shadow-inner" />
               </div>
             </div>
           </section>
 
-          {/* ── 3b. Tumbler Toggle (Eco Card Glassmorphic) ──────────────────── */}
+          {/* ── 3. Tumbler Toggle (Eco Card) ──────────────────── */}
           {tumblerEnabled && (orderType === 'PICKUP' || orderType === 'DINE_IN') && (
-            <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
               <button
                 type="button"
                 onClick={() => {
@@ -1678,45 +1765,41 @@ export default function CheckoutPage() {
                     setShowTumblerWarning(true);
                   }
                 }}
-                className={`w-full relative overflow-hidden rounded-[2rem] border-2 p-5 transition-all duration-300 text-left active:scale-[0.98] ${
+                className={`w-full relative overflow-hidden rounded-[2rem] border-2 p-5 transition-all duration-300 text-left active:scale-[0.99] cursor-pointer ${
                   hasTumbler
-                    ? 'border-emerald-300 bg-gradient-to-r from-emerald-50 to-green-50 shadow-md shadow-emerald-100/50'
-                    : 'border-gray-100 bg-white hover:border-emerald-200'
+                    ? 'border-amber-400 bg-gradient-to-r from-amber-50/90 to-orange-50/70 shadow-md shadow-orange-100/50'
+                    : 'border-orange-100/80 bg-white hover:border-amber-300'
                 }`}
               >
-                {hasTumbler && (
-                  <div className="absolute -top-6 -right-6 w-24 h-24 rounded-full bg-emerald-400/10 blur-xl" />
-                )}
-
                 <div className="relative z-10 flex items-start gap-4">
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300 ${
-                    hasTumbler ? 'bg-emerald-500 shadow-md shadow-emerald-400/10 text-white' : 'bg-gray-50 border border-gray-100 text-gray-400'
+                    hasTumbler ? 'bg-gradient-to-br from-orange-500 to-amber-500 shadow-md shadow-orange-500/20 text-white' : 'bg-orange-50 border border-orange-100 text-orange-500'
                   }`}>
                     <Leaf className="w-5.5 h-5.5" />
                   </div>
 
                   <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <p className={`text-sm font-bold transition-colors ${hasTumbler ? 'text-emerald-800' : 'text-gray-900'}`}>
+                    <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                      <p className={`text-sm font-bold transition-colors ${hasTumbler ? 'text-gray-900' : 'text-gray-900'}`}>
                         Saya Bawa Tumbler Sendiri
                       </p>
                       
                       {/* Tooltip Info Popover */}
                       <div className="relative group inline-block z-30">
-                        <span className="w-4 h-4 rounded-full bg-emerald-100/80 text-emerald-700 flex items-center justify-center text-[10px] font-black cursor-help hover:bg-emerald-250 transition-colors">
+                        <span className="w-4 h-4 rounded-full bg-amber-100 text-orange-700 flex items-center justify-center text-[10px] font-black cursor-help hover:bg-amber-200 transition-colors">
                           ?
                         </span>
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 bg-gray-900 text-white rounded-xl text-[10px] font-medium leading-relaxed opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 shadow-xl pointer-events-none">
                           <div className="space-y-1">
-                            <p className="font-black text-emerald-400 flex items-center gap-1 uppercase tracking-wider text-[9px]">
-                              🌱 Eco-Friendly Impact
+                            <p className="font-black text-amber-400 flex items-center gap-1 uppercase tracking-wider text-[9px]">
+                              <Leaf className="w-3 h-3" /> Eco-Friendly Impact
                             </p>
                             <p className="text-gray-200">Dengan menggunakan reusable cup:</p>
-                            <p className="pl-2 border-l border-emerald-500/50 text-gray-300">
+                            <p className="pl-2 border-l border-amber-500/50 text-gray-300">
                               • Hemat: <span className="font-bold text-amber-300">Diskon {tumblerDiscountPct}%</span> ({formatRupiah(tumblerDiscount)})
                             </p>
-                            <p className="pl-2 border-l border-emerald-500/50 text-gray-300">
-                              • Eco-Points: <span className="font-bold text-emerald-300">+{tumblerBonusPoints} Poin</span>
+                            <p className="pl-2 border-l border-amber-500/50 text-gray-300">
+                              • Eco-Points: <span className="font-bold text-amber-300">+{tumblerBonusPoints} Poin</span>
                             </p>
                           </div>
                           <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
@@ -1724,20 +1807,20 @@ export default function CheckoutPage() {
                       </div>
 
                       {hasTumbler && (
-                        <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-600 bg-emerald-100/80 px-2 py-0.5 rounded-full">
-                          Aktif ✓
+                        <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-orange-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                          <Check className="w-2.5 h-2.5" /> Aktif
                         </span>
                       )}
                     </div>
-                    <p className={`text-xs leading-relaxed transition-colors ${hasTumbler ? 'text-emerald-650' : 'text-gray-400 font-medium'}`}>
-                      Mendukung gerakan kurangi sampah plastik, dapatkan <strong>+{tumblerBonusPoints} bonus poin</strong>
-                      {tumblerDiscountPct > 0 && <> + <strong>diskon {tumblerDiscountPct}%</strong></>} pada pesanan ini! 🌍
+                    <p className={`text-xs leading-relaxed transition-colors ${hasTumbler ? 'text-orange-900/80 font-medium' : 'text-gray-500 font-medium'}`}>
+                      Kurangi sampah gelas sekali pakai dan dapatkan <strong>+{tumblerBonusPoints} bonus poin</strong>
+                      {tumblerDiscountPct > 0 && <> serta <strong>diskon {tumblerDiscountPct}%</strong></>} pada pesanan ini.
                     </p>
                   </div>
 
                   {/* Micro toggle switch */}
                   <div className={`w-11 h-6 rounded-full transition-colors duration-300 shrink-0 mt-1 relative border ${
-                    hasTumbler ? 'bg-emerald-500 border-emerald-500' : 'bg-gray-100 border-gray-250'
+                    hasTumbler ? 'bg-orange-500 border-orange-500' : 'bg-gray-100 border-gray-200'
                   }`}>
                     <motion.div
                       initial={false}
@@ -1750,71 +1833,95 @@ export default function CheckoutPage() {
             </motion.section>
           )}
 
-          {/* ── 4. Order Summary ──────────────────────────────── */}
-          <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-4">
-            <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
-              <ShoppingBag className="w-4.5 h-4.5 text-[#B48A5E]" /> Pesanan ({itemCount} Item)
-            </h2>
+          {/* ── 4. Order Items List ──────────────────────────────── */}
+          <section className="bg-white rounded-[2rem] border border-orange-100/80 p-6 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
+                <span>Daftar Pesanan ({itemCount} Item)</span>
+              </h2>
+              {!groupCartId && (
+                <button
+                  type="button"
+                  onClick={() => router.push('/?openMenu=true')}
+                  className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Tambah Menu</span>
+                </button>
+              )}
+            </div>
             <div className="space-y-3">
               {checkoutItems.map((item: any) => (
-                <div key={item.id} className="flex items-center gap-4 px-4 py-3.5 rounded-2xl bg-gray-50/50 border border-gray-100/30 hover:border-gray-200 transition-colors">
+                <div key={item.id} className="flex items-center gap-3.5 px-4 py-3.5 rounded-2xl bg-[#FFFBF5]/70 border border-orange-100/60 hover:border-orange-200 transition-colors">
                   {item.image ? (
-                    <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-white relative border border-gray-150 shadow-sm">
+                    <div className="w-14 h-14 rounded-xl overflow-hidden shrink-0 bg-white relative border border-orange-100 shadow-sm">
                       <Image src={item.image} alt={item.name} fill className="object-cover" sizes="56px" />
                     </div>
                   ) : (
-                    <div className="w-14 h-14 rounded-xl shrink-0 bg-white border border-gray-150 flex items-center justify-center shadow-sm">
-                      <ShoppingBag className="w-5.5 h-5.5 text-gray-350" />
+                    <div className="w-14 h-14 rounded-xl shrink-0 bg-orange-50/50 border border-orange-100 flex items-center justify-center shadow-sm">
+                      <Coffee className="w-5.5 h-5.5 text-orange-400" />
                     </div>
                   )}
                   
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-gray-900 flex items-center flex-wrap gap-1.5 truncate">
                       {item.memberName && (
-                        <span className="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-emerald-805 bg-emerald-50 border border-emerald-150">
+                        <span className="inline-block px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-orange-800 bg-orange-50 border border-orange-200">
                           {item.memberName}
                         </span>
                       )}
                       <span>{item.name}</span>
                       {hasTumbler && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-emerald-700 bg-emerald-50 border border-emerald-150">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase text-amber-800 bg-amber-50 border border-amber-200">
                           <Leaf className="w-2.5 h-2.5" /> Tumbler
                         </span>
                       )}
                     </p>
-                    <p className="text-[11px] text-gray-400 font-medium leading-relaxed truncate mt-0.5">
+                    <p className="text-[11px] text-gray-500 font-medium leading-relaxed truncate mt-0.5">
                       {item.isBundle && item.bundleSelections
                         ? item.bundleSelections.map((s: any) => `${s.productName}`).join(' · ')
-                        : `${item.size || 'Normal'} · ${item.iceLevel} · ${item.sugarLevel}${item.matchaLevel !== undefined ? ` · Matcha Lvl: ${item.matchaLevel}/10${item.matchaLevel >= 9 ? ' (+Rp2.000)' : (item.matchaLevel >= 7 ? ' (+Rp1.000)' : '')}` : ''}${item.addOns ? (item.addOns.length > 0 ? ` · +${item.addOns.map((a: any) => a.name).join(', ')}` : '') : ''}`
+                        : [
+                            item.size || 'Normal',
+                            item.iceLevel && item.sugarLevel
+                              ? `${item.iceLevel} → ${item.sugarLevel}`
+                              : item.iceLevel || item.sugarLevel || null,
+                            item.espressoShot ? `${item.espressoShot}` : null,
+                            item.addOns && item.addOns.length > 0 ? `+${item.addOns.map((a: any) => a.name).join(', ')}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')
                       }
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xs font-bold text-[#B48A5E]">{formatRupiah(item.totalPrice)}</p>
+                    <div className="flex items-center gap-2.5 mt-1">
+                      <p className="text-xs font-black text-orange-600">{formatRupiah(item.totalPrice)}</p>
                       {!groupCartId && (
                         <button 
                           type="button" 
                           onClick={() => handleEditOrAdd(item, true)} 
-                          className="text-[10px] text-amber-600 font-bold hover:underline"
+                          className="text-[10px] text-amber-700 font-bold hover:underline cursor-pointer"
                         >
-                          Edit
+                          Ubah Opsi
                         </button>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {groupCartId ? (
-                      <span className="text-xs font-bold text-gray-450 bg-gray-50 border border-gray-200/50 px-3 py-1.5 rounded-xl">
+                      <span className="text-xs font-bold text-gray-600 bg-white border border-gray-200 px-3 py-1.5 rounded-xl">
                         x{item.quantity}
                       </span>
                     ) : (
-                      <div className="flex items-center gap-2 bg-white rounded-xl p-1 border border-gray-150 shadow-sm">
+                      <div className="flex items-center gap-1.5 bg-white rounded-xl p-1 border border-orange-100 shadow-sm">
                         <button type="button" onClick={() => item.quantity <= 1 ? removeItem(item.id) : updateQuantity(item.id, item.quantity - 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors">
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-500 hover:text-red-500 transition-colors cursor-pointer">
                           {item.quantity <= 1 ? <Trash2 className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
                         </button>
-                        <span className="w-5 text-center text-xs font-bold text-gray-800">{item.quantity}</span>
+                        <span className="w-5 text-center text-xs font-bold text-gray-900">{item.quantity}</span>
                         <button type="button" onClick={() => handleEditOrAdd(item, false)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-50 text-gray-800 transition-colors">
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-orange-50 text-orange-600 transition-colors cursor-pointer">
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -1828,140 +1935,265 @@ export default function CheckoutPage() {
               <button
                 type="button"
                 onClick={() => router.push('/?openMenu=true')}
-                className="w-full py-4 rounded-2xl border-2 border-dashed border-[#B48A5E]/20 text-[#B48A5E] font-bold text-xs hover:bg-[#B48A5E]/5 hover:border-[#B48A5E]/40 transition-all text-center flex items-center justify-center gap-2"
+                className="w-full py-3.5 rounded-2xl border-2 border-dashed border-orange-200 text-orange-600 font-bold text-xs hover:bg-orange-50/50 hover:border-orange-300 transition-all text-center flex items-center justify-center gap-2 cursor-pointer"
               >
-                + Tambah Menu Lain
+                <Plus className="w-4 h-4" />
+                <span>Tambah Menu Lain</span>
               </button>
             )}
           </section>
+        </div>
 
-          {/* ── Voucher Trigger Section matching screenshot 1 ── */}
-          <div className="space-y-0 select-none">
-            {hasUnusableVouchers && (
-              <div className="bg-[#FFF4E6] text-[#D97706] text-xs font-semibold px-4 py-3.5 rounded-t-2xl border border-b-0 border-[#FAD9C1] flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Plus className="w-4 h-4 shrink-0 text-[#D97706]" />
-                  <span>Tambah pesanan untuk pakai voucher</span>
-                </div>
-                <button type="button" onClick={() => setIsVoucherModalOpen(true)} className="text-gray-400 font-bold hover:text-gray-600 text-lg leading-none pb-1">
-                  •••
-                </button>
-              </div>
-            )}
-            
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsVoucherModalOpen(true)}
-                className={`w-full bg-[#FFFBF4] border border-[#F5E3D0] pl-5 pr-12 py-4 flex items-center justify-between hover:bg-[#FFF8EE] active:scale-[0.99] transition-all text-left
-                  ${hasUnusableVouchers ? 'rounded-b-2xl border-t-0' : 'rounded-2xl'}`}
-              >
-                <div className="flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-xl bg-[#FDF0DF] border border-[#F6D2B1] flex items-center justify-center text-[#C05621] shrink-0">
-                    <span className="font-extrabold text-base">%</span>
+        {/* ══════════════════════════════════════════════════════════════════
+            RIGHT STICKY COLUMN: Promo/Points, Arus Pay & Payment, Receipt Summary
+            ══════════════════════════════════════════════════════════════════ */}
+        <div className="w-full lg:w-[420px] xl:w-[440px] space-y-6 lg:sticky lg:top-24">
+          {/* ── 5. Voucher & Loyalty Points ── */}
+          <div className="space-y-4">
+            <div className="space-y-0 select-none">
+              {hasUnusableVouchers && (
+                <div className="bg-[#FFF4E6] text-[#D97706] text-xs font-semibold px-4 py-3 rounded-t-2xl border border-b-0 border-[#FAD9C1] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 shrink-0 text-[#D97706]" />
+                    <span>Tambah pesanan untuk pakai voucher hemat</span>
                   </div>
-                  <div>
-                    <p className="font-bold text-sm text-[#5C3D2E]">
-                      {appliedVoucher ? appliedVoucher.description : 'Pakai Kode Voucher'}
-                    </p>
-                    {appliedVoucher && (
-                      <p className="text-[10px] text-[#C05621] font-extrabold uppercase tracking-widest mt-0.5">
-                        Kode: {appliedVoucher.code}
-                      </p>
-                    )}
-                  </div>
+                  <button type="button" onClick={() => setIsVoucherModalOpen(true)} className="text-orange-600 font-bold hover:underline text-[11px]">
+                    Lihat
+                  </button>
                 </div>
-                {!appliedVoucher && <ArrowRight className="w-5 h-5 text-[#8C7864]" />}
-              </button>
-              {appliedVoucher && (
+              )}
+              
+              <div className="relative">
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setAppliedVoucher(null);
-                    setToast({ message: 'Voucher dibatalkan', type: 'success' });
-                  }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition-colors"
+                  onClick={() => setIsVoucherModalOpen(true)}
+                  className={`w-full bg-white border border-orange-200/80 pl-5 pr-12 py-4 flex items-center justify-between hover:bg-orange-50/40 active:scale-[0.99] transition-all text-left shadow-sm cursor-pointer
+                    ${hasUnusableVouchers ? 'rounded-b-2xl border-t-0' : 'rounded-2xl'}`}
                 >
-                  <X className="w-4 h-4" />
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+                      <Ticket className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-sm text-gray-900">
+                        {appliedVoucher ? String(appliedVoucher.description || appliedVoucher.code || 'Voucher Aktif') : 'Pakai Promo / Kode Voucher'}
+                      </p>
+                      {appliedVoucher ? (
+                        <p className="text-[10px] text-orange-600 font-extrabold uppercase tracking-widest mt-0.5">
+                          Kode Aktif: {String(appliedVoucher.code || '')} (-{formatRupiah(voucherDiscount + ongkirDiscount)})
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                          Klik untuk memilih atau memasukkan kode promo
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  {!appliedVoucher && <ArrowRight className="w-5 h-5 text-orange-500" />}
                 </button>
-              )}
+                {appliedVoucher && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAppliedVoucher(null);
+                      setToast({ message: 'Voucher dibatalkan', type: 'success' });
+                    }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-100 flex items-center justify-center transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Points Section */}
+            {userPoints > 0 && (
+              <section className="bg-white rounded-2xl border border-orange-100/80 p-4 shadow-sm space-y-3">
+                <button
+                  type="button"
+                  disabled={maxPointsAllowed === 0 && !usePoints}
+                  onClick={() => { setUsePoints(!usePoints); if (!usePoints) setPointsToUse(maxPointsAllowed); }}
+                  className={`w-full flex items-center gap-3.5 p-3 rounded-xl border transition-all text-left active:scale-[0.99] cursor-pointer ${
+                    maxPointsAllowed === 0 && !usePoints
+                      ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
+                      : usePoints ? 'border-amber-400 bg-amber-50/40' : 'border-gray-100 bg-white hover:border-amber-200'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    usePoints ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-sm' : 'bg-amber-50 border border-amber-100 text-amber-600'
+                  }`}>
+                    <Coins className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-gray-900">Tukar Arus Poin</p>
+                    <p className={`text-[11px] leading-tight mt-0.5 ${usePoints ? 'text-orange-700 font-bold' : 'text-gray-500 font-medium'}`}>
+                      {usePoints ? `${pointsToUse} poin = hemat ${formatRupiah(pointsToUse * pointValue)}` : `Punya ${userPoints} poin (1 poin = ${formatRupiah(pointValue)})`}
+                    </p>
+                  </div>
+                  <div className={`w-11 h-6 rounded-full transition-colors duration-300 shrink-0 relative border ${
+                    usePoints ? 'bg-orange-500 border-orange-500' : 'bg-gray-100 border-gray-200'
+                  }`}>
+                    <motion.div initial={false} animate={{ x: usePoints ? 20 : 0 }} className="absolute left-0.5 top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-sm" />
+                  </div>
+                </button>
+                {usePoints && (
+                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
+                    {maxPointsAllowed === 0 ? (
+                      <p className="text-xs text-amber-600 font-semibold px-1 pt-1">
+                        Semua tagihan sudah tercover oleh diskon lain.
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-3 px-2 pt-1">
+                        <span className="text-[10px] font-bold text-gray-400">1p</span>
+                        <input
+                          type="range"
+                          min={1}
+                          max={maxPointsAllowed}
+                          value={pointsToUse > maxPointsAllowed ? maxPointsAllowed : pointsToUse}
+                          onChange={(e) => setPointsToUse(Math.min(maxPointsAllowed, parseInt(e.target.value)))}
+                          className="flex-1 accent-orange-500 h-1.5 bg-gray-100 rounded-lg cursor-pointer"
+                        />
+                        <span className="text-[10px] font-bold text-gray-400">{maxPointsAllowed}p</span>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </section>
+            )}
           </div>
 
-          {/* ── 5. Payment Selector (Brutal Premium Upgraded) ─────────────────── */}
-          <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-5">
-            {/* A. ARUS PAY (Eksklusif & Utama) - Only show if enabled */}
-            {paymentConfig?.wallet?.enabled && (
-            <div className="space-y-2">
-              <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 pl-1 select-none">Metode Pembayaran Utama</span>
-              <div
-                onClick={() => { setPaymentMethod('WALLET'); setPaymentChannel(''); }}
-                className={`w-full text-left rounded-[2rem] p-5 shadow-md flex flex-col relative overflow-hidden transition-all active:scale-[0.99] cursor-pointer border-2
-                  ${paymentMethod === 'WALLET'
-                    ? 'border-amber-400 bg-gradient-to-br from-[#24160E] via-[#2F1D12] to-[#180E08] text-white shadow-amber-900/15'
-                    : 'border-gray-150 bg-white hover:border-amber-200 text-gray-800'}`}
-              >
-                <div className="absolute -top-12 -right-12 w-36 h-36 bg-orange-500/15 rounded-full blur-2xl pointer-events-none select-none" />
+          {/* ── 6. Metode Pembayaran (Arus Pay Utama + Metode Lainnya) ─────────────────── */}
+          <section className="bg-white rounded-[2rem] border border-orange-100/80 p-6 shadow-sm space-y-5">
+            <div className="flex items-center justify-between">
+              <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                  <Wallet className="w-4 h-4" />
+                </div>
+                <span>Metode Pembayaran</span>
+              </h2>
+              <span className="text-[10px] font-black uppercase tracking-wider text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full border border-orange-100">
+                Langkah 3
+              </span>
+            </div>
 
-                <div className="flex justify-between items-center w-full relative z-10">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm
-                      ${paymentMethod === 'WALLET' ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white' : 'bg-amber-50 text-orange-600 border border-amber-200'}`}>
-                      <Wallet className="w-5 h-5" />
-                    </div>
-                    <div className="flex items-center gap-3 flex-wrap">
-                      <div>
-                        <p className={`text-xs font-black uppercase tracking-wider ${paymentMethod === 'WALLET' ? 'text-amber-300' : 'text-gray-400'}`}>
-                          Arus Pay
-                        </p>
-                        <h4 className={`text-lg font-serif font-black tracking-tight mt-0.5 ${paymentMethod === 'WALLET' ? 'text-white' : 'text-gray-900'}`}>
+            {/* A. ARUS PAY (Eksklusif & Utama) */}
+            {(paymentConfig?.wallet?.enabled ?? true) && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between pl-1">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-orange-700 flex items-center gap-1 select-none">
+                    <Sparkles className="w-3 h-3 text-orange-500" /> Rekomendasi Utama · Bebas Biaya Admin
+                  </span>
+                  {paymentMethod === 'WALLET' && (
+                    <span className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                      walletBalance >= grandTotal
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {walletBalance >= grandTotal ? 'Saldo Cukup' : 'Saldo Kurang'}
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  onClick={() => { setPaymentMethod('WALLET'); setPaymentChannel(''); }}
+                  className={`w-full text-left rounded-[1.75rem] p-5 shadow-md flex flex-col relative overflow-hidden transition-all active:scale-[0.99] cursor-pointer border-2
+                    ${paymentMethod === 'WALLET'
+                      ? 'border-amber-400 bg-gradient-to-br from-[#24160E] via-[#2F1D12] to-[#180E08] text-white shadow-orange-950/15'
+                      : 'border-orange-100 bg-[#FFFBF5] hover:border-amber-300 text-gray-800'}`}
+                >
+                  <div className="absolute -top-12 -right-12 w-36 h-36 bg-orange-500/20 rounded-full blur-2xl pointer-events-none select-none" />
+
+                  <div className="flex justify-between items-start w-full relative z-10 gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm
+                        ${paymentMethod === 'WALLET' ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white' : 'bg-gradient-to-br from-orange-100 to-amber-50 text-orange-600 border border-orange-200'}`}>
+                        <Wallet className="w-6 h-6" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className={`text-xs font-black uppercase tracking-wider ${paymentMethod === 'WALLET' ? 'text-amber-300' : 'text-orange-700'}`}>
+                            Arus Pay
+                          </p>
+                          <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${
+                            paymentMethod === 'WALLET' ? 'bg-amber-400/20 text-amber-300' : 'bg-orange-100 text-orange-700'
+                          }`}>
+                            Instan
+                          </span>
+                        </div>
+                        <h4 className={`text-xl font-serif font-black tracking-tight mt-0.5 ${paymentMethod === 'WALLET' ? 'text-white' : 'text-gray-900'}`}>
                           {formatRupiah(walletBalance)}
                         </h4>
                       </div>
-                      
-                      {/* Open TopUpOverlay button */}
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setIsTopUpOpen(true);
                         }}
-                        className={`ml-1 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl border transition-all active:scale-95 flex items-center gap-1 select-none cursor-pointer
+                        className={`px-3 py-2 text-[10px] font-black uppercase tracking-wider rounded-xl border transition-all active:scale-95 flex items-center gap-1 select-none cursor-pointer
                           ${paymentMethod === 'WALLET'
                             ? 'bg-gradient-to-r from-orange-500 to-amber-500 border-amber-400/40 text-white shadow-sm hover:from-orange-600 hover:to-amber-600'
-                            : 'bg-amber-50 border-amber-200 text-orange-700 hover:bg-amber-100'}`}
+                            : 'bg-white border-orange-200 text-orange-700 hover:bg-orange-50'}`}
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Top Up Saldo</span>
+                        <span>Top Up</span>
                       </button>
+
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors
+                        ${paymentMethod === 'WALLET' ? 'border-amber-400 bg-amber-400 text-[#24160E]' : 'border-gray-300 bg-white'}`}>
+                        {paymentMethod === 'WALLET' && <Check className="w-3 h-3 stroke-[3]" />}
+                      </div>
                     </div>
                   </div>
-                  
-                  {/* Custom Checkbox/Radio Indicator */}
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors
-                    ${paymentMethod === 'WALLET' ? 'border-amber-400 bg-amber-400 text-[#24160E]' : 'border-gray-300'}`}>
-                    {paymentMethod === 'WALLET' && <Check className="w-3 h-3 stroke-[3]" />}
+
+                  {/* Live Balance vs Bill Calculation Strip */}
+                  <div className={`mt-4 pt-3 border-t border-dashed w-full text-[11px] flex items-center justify-between gap-2 relative z-10
+                    ${paymentMethod === 'WALLET' ? 'border-white/15' : 'border-orange-200/60'}`}>
+                    {walletBalance >= grandTotal ? (
+                      <>
+                        <span className={paymentMethod === 'WALLET' ? 'text-amber-100/80 font-medium' : 'text-gray-600 font-medium'}>
+                          Sisa saldo setelah bayar:
+                        </span>
+                        <span className={`font-black ${paymentMethod === 'WALLET' ? 'text-emerald-300' : 'text-emerald-700'}`}>
+                          {formatRupiah(walletRemainingAfterPay)}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className={paymentMethod === 'WALLET' ? 'text-amber-200 font-semibold' : 'text-amber-800 font-semibold'}>
+                          Kurang {formatRupiah(walletShortfallAmount)} untuk bayar pesanan ini
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsTopUpOpen(true);
+                          }}
+                          className={`font-black underline cursor-pointer shrink-0 ${
+                            paymentMethod === 'WALLET' ? 'text-amber-300 hover:text-white' : 'text-orange-600 hover:text-orange-800'
+                          }`}
+                        >
+                          Isi Saldo
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
-
-                <div className={`mt-3.5 pt-3.5 border-t border-dashed w-full text-[10px] font-semibold flex items-center gap-1.5 relative z-10
-                  ${paymentMethod === 'WALLET' ? 'border-white/15 text-amber-200/90' : 'border-gray-100 text-orange-700'}`}>
-                  <span className="inline-block px-1.5 py-0.5 rounded bg-orange-500/20 text-amber-400 font-extrabold uppercase text-[8px] tracking-wider shrink-0">PROMO</span>
-                  <span>Bayar instan & dapatkan bonus saldo ekstra saat Top Up!</span>
-                </div>
               </div>
-            </div>
             )}
 
-            {/* B. PEMBAYARAN LANGSUNG (Horizontal Carousel) */}
-            <div className="space-y-2">
+            {/* B. PEMBAYARAN LAINNYA (Horizontal Carousel) */}
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between pl-1">
-                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 select-none">Pembayaran Langsung</span>
+                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 select-none">Metode Pembayaran Lainnya</span>
                 <button
                   type="button"
                   onClick={() => setIsAllPaymentsOpen(true)}
-                  className="text-[10px] font-black uppercase tracking-widest text-[#B48A5E] hover:text-[#946F48] transition-colors flex items-center gap-0.5 cursor-pointer touch-target select-none"
+                  className="text-[10px] font-black uppercase tracking-widest text-orange-600 hover:text-orange-700 transition-colors flex items-center gap-0.5 cursor-pointer touch-target select-none"
                 >
                   <span>Lihat Semua</span>
                   <ArrowRight className="w-3 h-3" />
@@ -1970,339 +2202,246 @@ export default function CheckoutPage() {
 
               {/* CAROUSEL CONTAINER */}
               <div 
-                className="flex gap-3 overflow-x-auto pb-3 pt-1 scrollbar-none"
+                className="flex gap-2.5 overflow-x-auto pb-2 pt-0.5 scrollbar-none"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
-                {/* 1. OVO */}
-                {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('OVO'); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'OVO'
-                        ? 'border-[#4C2A86] bg-[#4C2A86]/5 text-[#4C2A86] shadow-sm shadow-[#4C2A86]/5'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-150 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
-                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-ovo.png" alt="OVO" className="object-contain max-h-full max-w-full" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">OVO</p>
-                      <p className="text-[8px] font-bold text-[#B48A5E] uppercase tracking-wide leading-none truncate w-full">Cashback 60%</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'OVO' ? 'border-[#4C2A86] bg-[#4C2A86] text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'OVO' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 2. QRIS */}
-                {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('QRIS'); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS'
-                        ? 'border-purple-600 bg-purple-50/20 text-purple-900 shadow-sm shadow-purple-50'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-150 flex items-center justify-center shrink-0 p-1 shadow-sm">
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Logo_QRIS.svg/200px-Logo_QRIS.svg.png" alt="QRIS" className="object-contain max-h-full max-w-full" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">QRIS Instan</p>
-                      <p className="text-[8px] font-bold text-purple-600 uppercase tracking-wide leading-none truncate w-full">Scan & Pay</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'QRIS' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 3. GoPay */}
-                {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('GOPAY'); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'GOPAY'
-                        ? 'border-[#00AED6] bg-[#00AED6]/5 text-[#00AED6] shadow-sm shadow-cyan-50'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-150 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
-                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-gopay.png" alt="GoPay" className="object-contain max-h-full max-w-full" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">GoPay</p>
-                      <p className="text-[8px] font-bold text-[#00AED6] uppercase tracking-wide leading-none truncate w-full">Aplikasi Gojek</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'GOPAY' ? 'border-[#00AED6] bg-[#00AED6] text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'GOPAY' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 4. ShopeePay */}
-                {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('SHOPEEPAY'); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY'
-                        ? 'border-[#EE4D2D] bg-[#EE4D2D]/5 text-[#EE4D2D] shadow-sm'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-150 flex items-center justify-center shrink-0 p-1 shadow-sm">
-                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-shopeepay.png" alt="ShopeePay" className="object-contain max-h-full max-w-full" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">ShopeePay</p>
-                      <p className="text-[8px] font-bold text-[#EE4D2D] uppercase tracking-wide leading-none truncate w-full">Koin Shopee</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY' ? 'border-[#EE4D2D] bg-[#EE4D2D] text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 5. DANA */}
-                {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('DANA'); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'DANA'
-                        ? 'border-[#108EE9] bg-[#108EE9]/5 text-[#108EE9] shadow-sm shadow-sky-50'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-150 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
-                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-dana.png" alt="DANA" className="object-contain max-h-full max-w-full" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">DANA</p>
-                      <p className="text-[8px] font-bold text-[#108EE9] uppercase tracking-wide leading-none truncate w-full">Dompet DANA</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'DANA' ? 'border-[#108EE9] bg-[#108EE9] text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'DANA' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 6. blu by BCA Digital */}
-                {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('BLU'); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'BLU'
-                        ? 'border-cyan-500 bg-cyan-50/20 text-cyan-850 shadow-sm shadow-cyan-50'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-150 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
-                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-blu.png" alt="blu" className="object-contain max-h-full max-w-full" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">blu by BCA</p>
-                      <p className="text-[8px] font-bold text-cyan-600 uppercase tracking-wide leading-none truncate w-full">Cashback 40%</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'BLU' ? 'border-cyan-500 bg-cyan-500 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'BLU' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 7. BCA Virtual Account */}
-                {paymentConfig?.doku?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('BCA_VA'); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'DOKU' && paymentChannel === 'BCA_VA'
-                        ? 'border-blue-500 bg-blue-50/20 text-blue-900 shadow-sm'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-150 flex items-center justify-center shrink-0 p-1 shadow-sm">
-                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Bank_Central_Asia.svg/200px-Bank_Central_Asia.svg.png" alt="BCA VA" className="object-contain max-h-full max-w-full" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10px] font-extrabold tracking-tight truncate w-full">BCA VA</p>
-                      <p className="text-[8px] font-bold text-blue-500 uppercase tracking-wide leading-none truncate w-full">Transfer Otomatis</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'BCA_VA' ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'DOKU' && paymentChannel === 'BCA_VA' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 8. COD (Bayar di Tempat) - Added in Carousel! */}
+                {/* 1. COD (Bayar di Tempat) */}
                 {paymentConfig?.cod?.enabled && (
                   <button
                     type="button"
                     onClick={() => { setPaymentMethod('COD'); setPaymentChannel(''); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
                       ${paymentMethod === 'COD'
-                        ? 'border-emerald-500 bg-emerald-50/20 text-emerald-900 shadow-sm'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
                   >
-                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
                       <Banknote className="w-5 h-5" />
                     </div>
                     <div className="space-y-0.5 w-full">
-                      <p className="text-[10px] font-extrabold tracking-tight truncate w-full">COD</p>
-                      <p className="text-[8px] font-bold text-emerald-600 uppercase tracking-wide leading-none truncate w-full">Bayar di Toko/Kurir</p>
+                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">Bayar Tunai</p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase tracking-wide leading-none truncate w-full">Di Kasir / COD</p>
                     </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'COD' ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'COD' && <div className="w-1 h-1 rounded-full bg-white" />}
-                    </div>
-                  </button>
-                )}
-
-                {/* 9. Transfer Manual - Added in Carousel! */}
-                {paymentConfig?.transfer?.enabled && (
-                  <button
-                    type="button"
-                    onClick={() => { setPaymentMethod('TRANSFER'); setPaymentChannel(''); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
-                      ${paymentMethod === 'TRANSFER'
-                        ? 'border-blue-500 bg-blue-50/20 text-blue-900 shadow-sm'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
-                      <Building2 className="w-5 h-5" />
-                    </div>
-                    <div className="space-y-0.5 w-full">
-                      <p className="text-[10px] font-extrabold tracking-tight truncate w-full">Manual Transfer</p>
-                      <p className="text-[8px] font-bold text-blue-600 uppercase tracking-wide leading-none truncate w-full">Konfirmasi Admin</p>
-                    </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'TRANSFER' ? 'border-blue-500 bg-blue-500 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'TRANSFER' && <div className="w-1 h-1 rounded-full bg-white" />}
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'COD' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'COD' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
                   </button>
                 )}
 
-                {/* 10. QRIS Mandiri / Manual - Added in Carousel! */}
+                {/* 2. QRIS Mandiri / Manual */}
                 {paymentConfig?.qris?.enabled && (
                   <button
                     type="button"
                     onClick={() => { setPaymentMethod('QRIS'); setPaymentChannel(''); }}
-                    className={`w-[115px] min-w-[115px] h-[135px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer text-left relative overflow-hidden
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
                       ${paymentMethod === 'QRIS'
-                        ? 'border-purple-600 bg-purple-50/20 text-purple-900 shadow-sm shadow-purple-50'
-                        : 'border-gray-150 bg-white text-gray-700 hover:border-gray-250'}`}
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
                   >
-                    <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
                       <QrCode className="w-5 h-5" />
                     </div>
                     <div className="space-y-0.5 w-full">
                       <p className="text-[10px] font-extrabold tracking-tight truncate w-full">{paymentConfig?.qris?.label || 'QRIS'}</p>
-                      <p className="text-[8px] font-bold text-purple-600 uppercase tracking-wide leading-none truncate w-full">Scan & Upload</p>
+                      <p className="text-[8px] font-bold text-amber-700 uppercase tracking-wide leading-none truncate w-full">Scan & Upload</p>
                     </div>
-                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'QRIS' ? 'border-purple-600 bg-purple-600 text-white' : 'border-gray-300'}`}>
-                      {paymentMethod === 'QRIS' && <div className="w-1 h-1 rounded-full bg-white" />}
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'QRIS' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'QRIS' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )}
+
+                {/* 3. Transfer Manual */}
+                {paymentConfig?.transfer?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod('TRANSFER'); setPaymentChannel(''); }}
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
+                      ${paymentMethod === 'TRANSFER'
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-0.5 w-full">
+                      <p className="text-[10px] font-extrabold tracking-tight truncate w-full">Transfer Bank</p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase tracking-wide leading-none truncate w-full">Cek Manual</p>
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'TRANSFER' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'TRANSFER' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )}
+
+                {/* 4. DOKU QRIS */}
+                {paymentConfig?.doku?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('QRIS'); }}
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
+                      ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS'
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Logo_QRIS.svg/200px-Logo_QRIS.svg.png" alt="QRIS" className="object-contain max-h-full max-w-full" />
+                    </div>
+                    <div className="space-y-0.5 w-full">
+                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">QRIS Instan</p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase tracking-wide leading-none truncate w-full">Otomatis</p>
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'QRIS' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'DOKU' && paymentChannel === 'QRIS' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )}
+
+                {/* 5. OVO */}
+                {paymentConfig?.doku?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('OVO'); }}
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
+                      ${paymentMethod === 'DOKU' && paymentChannel === 'OVO'
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
+                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-ovo.png" alt="OVO" className="object-contain max-h-full max-w-full" />
+                    </div>
+                    <div className="space-y-0.5 w-full">
+                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">OVO</p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase tracking-wide leading-none truncate w-full">Instan</p>
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'OVO' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'DOKU' && paymentChannel === 'OVO' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )}
+
+                {/* 6. GoPay */}
+                {paymentConfig?.doku?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('GOPAY'); }}
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
+                      ${paymentMethod === 'DOKU' && paymentChannel === 'GOPAY'
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
+                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-gopay.png" alt="GoPay" className="object-contain max-h-full max-w-full" />
+                    </div>
+                    <div className="space-y-0.5 w-full">
+                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">GoPay</p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase tracking-wide leading-none truncate w-full">Aplikasi Gojek</p>
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'GOPAY' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'DOKU' && paymentChannel === 'GOPAY' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )}
+
+                {/* 7. ShopeePay */}
+                {paymentConfig?.doku?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('SHOPEEPAY'); }}
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
+                      ${paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY'
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center shrink-0 p-1 shadow-sm">
+                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-shopeepay.png" alt="ShopeePay" className="object-contain max-h-full max-w-full" />
+                    </div>
+                    <div className="space-y-0.5 w-full">
+                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">ShopeePay</p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase tracking-wide leading-none truncate w-full">Shopee</p>
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'DOKU' && paymentChannel === 'SHOPEEPAY' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                    </div>
+                  </button>
+                )}
+
+                {/* 8. DANA */}
+                {paymentConfig?.doku?.enabled && (
+                  <button
+                    type="button"
+                    onClick={() => { setPaymentMethod('DOKU'); setPaymentChannel('DANA'); }}
+                    className={`w-[112px] min-w-[112px] h-[128px] p-3 rounded-2xl border-2 flex flex-col justify-between items-center text-center transition-all active:scale-[0.96] cursor-pointer relative overflow-hidden
+                      ${paymentMethod === 'DOKU' && paymentChannel === 'DANA'
+                        ? 'border-orange-500 bg-orange-50/40 text-orange-950 shadow-sm'
+                        : 'border-gray-100 bg-gray-50/50 text-gray-700 hover:border-orange-200 hover:bg-white'}`}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center shrink-0 p-1.5 shadow-sm">
+                      <img src="https://images.tokopedia.net/img/toppay/partnership/logo-dana.png" alt="DANA" className="object-contain max-h-full max-w-full" />
+                    </div>
+                    <div className="space-y-0.5 w-full">
+                      <p className="text-[10.5px] font-extrabold tracking-tight truncate w-full">DANA</p>
+                      <p className="text-[8px] font-bold text-orange-600 uppercase tracking-wide leading-none truncate w-full">Dompet DANA</p>
+                    </div>
+                    <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${paymentMethod === 'DOKU' && paymentChannel === 'DANA' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
+                      {paymentMethod === 'DOKU' && paymentChannel === 'DANA' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
                   </button>
                 )}
               </div>
             </div>
-            <div className="bg-[#FFFDF9]/60 border border-[#EADFC9]/25 rounded-2xl p-4 text-[11px] text-[#8C7864] font-medium leading-relaxed select-none">
-              💡 {paymentMethod === 'COD' 
-                ? 'Bayar langsung di tempat saat pesanan kamu diserahkan kurir atau diambil di toko.' 
-                : paymentMethod === 'WALLET'
-                ? `Bayar instan menggunakan saldo Arus Pay Anda. Saldo saat ini: ${formatRupiah(walletBalance)}.`
-                : paymentMethod === 'DOKU'
-                ? 'Selesaikan pembayaran Anda menggunakan pilihan instan otomatis via gerbang DOKU.'
-                : 'Selesaikan transaksi dengan mudah lewat sistem pembayaran premium kami setelah checkout.'}
+
+            <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-3.5 text-[11px] text-gray-600 font-medium leading-relaxed select-none flex items-start gap-2.5">
+              <Sparkles className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+              <span>
+                {paymentMethod === 'COD' 
+                  ? 'Bayar tunai langsung di kasir saat pesanan diambil atau diserahkan.' 
+                  : paymentMethod === 'WALLET'
+                  ? `Pembayaran otomatis memotong saldo Arus Pay Anda tanpa antre konfirmasi manual.`
+                  : paymentMethod === 'DOKU'
+                  ? 'Pembayaran terverifikasi otomatis melalui gerbang pembayaran instan DOKU.'
+                  : 'Unggah bukti pembayaran pada halaman struk pesanan setelah checkout.'}
+              </span>
             </div>
           </section>
 
-
-
-          {/* ── 5b. Points Section ──────────────────────────── */}
-          {userPoints > 0 && (
-            <section className="bg-white rounded-[2rem] border border-gray-100 p-6 shadow-sm space-y-3">
-              <h2 className="font-serif font-bold text-base text-gray-900 flex items-center gap-2">
-                <Coins className="w-4.5 h-4.5 text-[#B48A5E]" /> Tukar Arus Poin
-              </h2>
-              <button
-                type="button"
-                disabled={maxPointsAllowed === 0 && !usePoints}
-                onClick={() => { setUsePoints(!usePoints); if (!usePoints) setPointsToUse(maxPointsAllowed); }}
-                className={`w-full flex items-center gap-3.5 p-4.5 rounded-2xl border-2 transition-all text-left active:scale-[0.98] ${
-                  maxPointsAllowed === 0 && !usePoints
-                    ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
-                    : usePoints ? 'border-amber-400 bg-amber-50/20 shadow-sm' : 'border-gray-150 bg-white hover:border-gray-250'
-                }`}
-              >
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
-                  usePoints ? 'bg-amber-500 shadow-md shadow-amber-400/20 text-white' : 'bg-gray-50 border border-gray-100 text-gray-400'
-                }`}>
-                  <Coins className="w-5.5 h-5.5" />
-                </div>
-                <div className="flex-1">
-                  <p className={`text-sm font-bold ${usePoints ? 'text-amber-800' : 'text-gray-900'}`}>Tukarkan Poin</p>
-                  <p className={`text-xs leading-none mt-1 ${usePoints ? 'text-amber-600' : 'text-gray-400 font-medium'}`}>
-                    {usePoints ? `${pointsToUse} poin = diskon ${formatRupiah(pointsToUse * pointValue)}` : `Miliki ${userPoints} poin (1 poin = ${formatRupiah(pointValue)})`}
-                  </p>
-                </div>
-                <div className={`w-11 h-6 rounded-full transition-colors duration-300 shrink-0 relative border ${
-                  usePoints ? 'bg-amber-500 border-amber-500' : 'bg-gray-100 border-gray-250'
-                }`}>
-                  <motion.div initial={false} animate={{ x: usePoints ? 20 : 0 }} className="absolute left-0.5 top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-sm" />
-                </div>
-              </button>
-              {usePoints && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="overflow-hidden">
-                  {maxPointsAllowed === 0 ? (
-                    <p className="text-xs text-amber-600 font-semibold px-1 pt-2">
-                      Semua tagihan sudah tercover oleh diskon lain.
-                    </p>
-                  ) : (
-                    <div className="flex items-center gap-3 px-1 pt-2">
-                      <span className="text-[10px] font-bold text-gray-400">1p</span>
-                      <input
-                        type="range"
-                        min={1}
-                        max={maxPointsAllowed}
-                        value={pointsToUse > maxPointsAllowed ? maxPointsAllowed : pointsToUse}
-                        onChange={(e) => setPointsToUse(Math.min(maxPointsAllowed, parseInt(e.target.value)))}
-                        className="flex-1 accent-amber-500 h-1.5 bg-gray-150 rounded-lg cursor-pointer"
-                      />
-                      <span className="text-[10px] font-bold text-gray-400">{maxPointsAllowed}p</span>
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </section>
-          )}
-
-          {/* ── 6. Price Summary Receipt Card ─────────────────── */}
-          <section className="rounded-[2.5rem] bg-white border border-gray-100 shadow-sm overflow-hidden ticket-card">
+          {/* ── 7. Price Summary Receipt Card (Struk Tagihan Preview) ─────────────────── */}
+          <section className="rounded-[2rem] bg-white border border-orange-100/90 shadow-sm overflow-hidden ticket-card">
             <div className="px-6 py-6 space-y-4">
-              <h2 className="font-serif font-black text-lg text-gray-900 border-b border-gray-50 pb-3">Ringkasan Tagihan</h2>
-              <div className="space-y-3 text-xs font-semibold text-gray-500">
+              <div className="flex items-center justify-between border-b border-dashed border-gray-200 pb-3.5">
+                <div className="flex items-center gap-2">
+                  <Receipt className="w-4.5 h-4.5 text-orange-600" />
+                  <h2 className="font-serif font-black text-base text-gray-900">Ringkasan Struk</h2>
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200/60">
+                  {activePaymentLabel}
+                </span>
+              </div>
+
+              <div className="space-y-2.5 text-xs font-semibold text-gray-500">
                 <div className="flex justify-between">
-                  <span className="font-medium">Subtotal</span>
-                  <span className="text-gray-800">{formatRupiah(subtotal)}</span>
+                  <span className="font-medium">Subtotal ({itemCount} item)</span>
+                  <span className="text-gray-900 font-bold">{formatRupiah(subtotal)}</span>
                 </div>
                 {toppingTotal > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium">Total Topping/Add-on</span>
-                    <span className="text-gray-800">{formatRupiah(toppingTotal)}</span>
+                  <div className="flex justify-between text-[11px] text-gray-400 pl-2 border-l-2 border-orange-100">
+                    <span>Termasuk Topping / Add-on</span>
+                    <span>{formatRupiah(toppingTotal)}</span>
                   </div>
                 )}
                 {sizeUpgradeTotal > 0 && (
-                  <div className="flex justify-between text-xs">
-                    <span className="font-medium">Total Upgrade Ukuran</span>
-                    <span className="text-gray-850">{formatRupiah(sizeUpgradeTotal)}</span>
+                  <div className="flex justify-between text-[11px] text-gray-400 pl-2 border-l-2 border-orange-100">
+                    <span>Termasuk Upgrade Ukuran</span>
+                    <span>{formatRupiah(sizeUpgradeTotal)}</span>
                   </div>
                 )}
                 {pickupTime && (pickupTime !== 'Sekarang' || orderType === 'PICKUP') && (
-                  <div className="flex justify-between items-center bg-[#FFFDF9] border border-[#EADFC9]/20 p-2.5 rounded-xl">
-                    <span className="flex items-center gap-1.5 text-gray-500"><Clock className="w-4 h-4 text-[#B48A5E]" /> {orderType === 'PICKUP' ? 'Waktu Ambil' : 'Waktu Kirim'}</span>
-                    <span className="font-bold text-[#B48A5E]">
+                  <div className="flex justify-between items-center bg-[#FFFBF5] border border-orange-100/80 p-2.5 rounded-xl">
+                    <span className="flex items-center gap-1.5 text-gray-600"><Clock className="w-3.5 h-3.5 text-orange-600" /> {orderType === 'PICKUP' ? 'Waktu Ambil' : 'Waktu Saji'}</span>
+                    <span className="font-bold text-orange-700 text-[11px]">
                       {(() => {
                         if (pickupTime === 'Sekarang') {
-                          return 'Pickup Sekarang (~15 mnt)';
+                          return 'Sekarang (~15 mnt)';
                         }
                         const matchedDate = availableDates.find(d => d.value === pickupDate);
                         const dayLabel = matchedDate ? `${matchedDate.dayLabel}, ${matchedDate.label}` : pickupDate;
@@ -2314,18 +2453,18 @@ export default function CheckoutPage() {
                 {orderType === 'DELIVERY' && deliveryAddress && (
                   <div className="flex justify-between">
                     <span className="flex items-center gap-1.5"><Truck className="w-4 h-4" /> Ongkir ({deliveryAddress.distance.toFixed(1)} km)</span>
-                    <span className="text-gray-850 font-bold">{formatRupiah(deliveryAddress.deliveryFee)}</span>
+                    <span className="text-gray-900 font-bold">{formatRupiah(deliveryAddress.deliveryFee)}</span>
                   </div>
                 )}
                 {hasTumbler && tumblerDiscount > 0 && (
                   <div className="flex justify-between text-emerald-600">
-                    <span className="flex items-center gap-1.5"><Leaf className="w-4 h-4" /> Diskon Tumbler</span>
+                    <span className="flex items-center gap-1.5"><Leaf className="w-4 h-4" /> » Potongan Tumbler</span>
                     <span className="font-bold">-{formatRupiah(tumblerDiscount)}</span>
                   </div>
                 )}
                 {appliedVoucher && voucherDiscount > 0 && (
-                  <div className="flex justify-between text-purple-600">
-                    <span className="flex items-center gap-1.5"><Ticket className="w-4 h-4" /> Diskon Voucher</span>
+                  <div className="flex justify-between text-orange-600">
+                    <span className="flex items-center gap-1.5"><Ticket className="w-4 h-4" /> » Potongan Voucher ({appliedVoucher.code})</span>
                     <span className="font-bold">-{formatRupiah(voucherDiscount)}</span>
                   </div>
                 )}
@@ -2333,57 +2472,65 @@ export default function CheckoutPage() {
                   <div className="flex justify-between text-emerald-600">
                     <span className="flex items-center gap-1.5">
                       <Truck className="w-4 h-4" />
-                      Potongan Ongkos Kirim {hasFreeShippingBundle && <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full font-bold ml-1">Combo</span>}
+                      » Potongan Ongkir {hasFreeShippingBundle && <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded-full font-bold ml-1">Combo</span>}
                     </span>
                     <span className="font-bold">-{formatRupiah(ongkirDiscount)}</span>
                   </div>
                 )}
                 {usePoints && pointsDiscount > 0 && (
                   <div className="flex justify-between text-amber-600">
-                    <span className="flex items-center gap-1.5"><Coins className="w-4 h-4" /> Diskon Poin ({pointsToUse})</span>
+                    <span className="flex items-center gap-1.5"><Coins className="w-4 h-4" /> » Potongan Poin ({pointsToUse} poin)</span>
                     <span className="font-bold">-{formatRupiah(pointsDiscount)}</span>
                   </div>
                 )}
                 {hasTumbler && (
-                  <div className="flex justify-between text-emerald-600 bg-emerald-50/20 border border-emerald-100/25 p-2 rounded-xl text-[10px]">
-                    <span className="flex items-center gap-1">🌿 Bonus Arus Poin</span>
-                    <span className="font-bold">+{tumblerBonusPoints} poin</span>
+                  <div className="flex justify-between text-orange-700 bg-amber-50/60 border border-amber-200/50 p-2 rounded-xl text-[10px]">
+                    <span className="flex items-center gap-1.5 font-bold"><Leaf className="w-3.5 h-3.5 text-orange-600" /> Bonus Eco Arus Poin</span>
+                    <span className="font-black">+{tumblerBonusPoints} poin</span>
                   </div>
                 )}
               </div>
+
+              {/* Rule 8: Explicit Discount Breakdown Formula */}
+              {totalDiscountAmount > 0 && (
+                <div className="rounded-2xl bg-amber-50/70 border border-amber-200/80 p-3 space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-extrabold uppercase tracking-wider text-orange-700">
+                    <span>Rincian Potongan Harga</span>
+                    <span>Hemat {formatRupiah(totalDiscountAmount)}</span>
+                  </div>
+                  <p className="text-xs font-black text-gray-900 font-mono">
+                    {formatRupiah(grossBeforeDiscount)} - {formatRupiah(totalDiscountAmount)} = <span className="text-orange-600">{formatRupiah(grandTotal)}</span>
+                  </p>
+                </div>
+              )}
               
               <div className="border-t border-dashed border-gray-200 pt-4 flex flex-col gap-1">
                 <div className="flex items-baseline justify-between">
                   <span className="font-serif font-black text-gray-900 text-sm">Total Pembayaran</span>
-                  <span className="font-serif font-black text-2xl text-[#B48A5E] tracking-tight">{formatRupiah(grandTotal)}</span>
+                  <span className="font-serif font-black text-2xl text-orange-600 tracking-tight">{formatRupiah(grandTotal)}</span>
                 </div>
-                {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
-                  <p className="text-right text-[11px] font-bold text-emerald-600">
-                    (Kamu hemat {formatRupiah(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount)})
-                  </p>
-                )}
               </div>
             </div>
 
-            <div className="px-6 pb-6 pt-3 bg-gray-50/40 border-t border-gray-50">
+            <div className="px-6 pb-6 pt-3 bg-[#FFFBF5] border-t border-orange-100/60 space-y-3">
               <button
                 type="button"
                 onClick={() => setIsScheduleModalOpen(true)}
-                className="w-full mb-3.5 py-4 rounded-2xl border-2 border-[#946F48] text-[#946F48] font-bold text-xs bg-white hover:bg-[#FAF6EE]/50 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3.5 rounded-2xl border-2 border-orange-200 text-orange-700 font-bold text-xs bg-white hover:bg-orange-50/50 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Clock className="w-4.5 h-4.5 text-[#946F48]" />
+                <Clock className="w-4 h-4 text-orange-600" />
                 {(() => {
                   if (pickupTime === 'Sekarang') {
-                    return orderType === 'PICKUP' ? 'Ambil Sekarang' : 'Kirim Sekarang';
+                    return orderType === 'PICKUP' ? 'Ambil Sekarang (~15 mnt)' : 'Sajikan Sekarang';
                   }
                   if (!pickupDate || !pickupTime) {
-                    return orderType === 'PICKUP' ? 'Jadwalkan Waktu Ambil' : 'Jadwalkan Waktu Kirim';
+                    return orderType === 'PICKUP' ? 'Jadwalkan Waktu Ambil' : 'Jadwalkan Waktu Saji';
                   }
                   const matchedDate = availableDates.find(d => d.value === pickupDate);
                   const dayLabel = matchedDate ? `${matchedDate.dayLabel}, ${matchedDate.label}` : pickupDate;
                   return orderType === 'PICKUP'
                     ? `Jadwal Ambil: ${dayLabel} @ ${pickupTime} - ${getEndTime(pickupTime)}`
-                    : `Jadwal Kirim: ${dayLabel} @ ${pickupTime} - ${getEndTime(pickupTime)}`;
+                    : `Jadwal Saji: ${dayLabel} @ ${pickupTime} - ${getEndTime(pickupTime)}`;
                 })()}
               </button>
 
@@ -2391,31 +2538,33 @@ export default function CheckoutPage() {
                 type="submit"
                 disabled={!canSubmit || isSubmitting}
                 whileTap={canSubmit ? { scale: 0.98 } : {}}
-                className={`w-full py-4.5 font-bold text-sm tracking-wide transition-all rounded-2xl hidden md:block
+                className={`w-full py-4 font-bold text-sm tracking-wide transition-all rounded-2xl hidden md:flex items-center justify-center gap-2 cursor-pointer
                   ${canSubmit && !isSubmitting
-                    ? 'bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white shadow-xl shadow-[#946F48]/15 hover:opacity-95'
-                    : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-250/20'}`}
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-lg shadow-orange-500/20'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-200'}`}
               >
                 {isSubmitting ? (
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 className="w-4.5 h-4.5 animate-spin" />
-                    <span>Memproses...</span>
+                    <span>Memproses Pesanan...</span>
                   </div>
                 ) : (!pickupDate || !pickupTime) ? (
-                  orderType === 'PICKUP' ? 'Tentukan Waktu Pengambilan' : 'Tentukan Waktu Pengiriman'
+                  orderType === 'PICKUP' ? 'Tentukan Waktu Pengambilan' : 'Tentukan Waktu Penyajian'
                 ) : orderType === 'DELIVERY' && isStoreClosedToday ? (
                   'Toko Tutup Hari Ini'
                 ) : orderType === 'DELIVERY' && !deliveryAddress ? (
                   'Tentukan Alamat Kirim'
                 ) : !paymentMethod ? (
                   'Pilih Metode Pembayaran'
+                ) : isWalletShortfall ? (
+                  `Top Up Arus Pay (+${formatRupiah(walletShortfallAmount)})`
                 ) : (
-                  `Buat Pesanan · ${formatRupiah(grandTotal)}`
+                  `Bayar dengan ${paymentMethod === 'WALLET' ? 'Arus Pay' : activePaymentLabel} · ${formatRupiah(grandTotal)}`
                 )}
               </motion.button>
             </div>
           </section>
-        </div> {/* END RIGHT COLUMN */}
+        </div>
       </form>
 
       {/* Product Modal for Editing / Adding */}
@@ -2450,7 +2599,7 @@ export default function CheckoutPage() {
                   />
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-gray-400">
-                    <Ticket className="w-12 h-12 stroke-1 text-[#B48A5E]" />
+                    <Ticket className="w-12 h-12 stroke-1 text-orange-500" />
                     <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Arum Seduh Promo</span>
                   </div>
                 )}
@@ -2511,7 +2660,7 @@ export default function CheckoutPage() {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Berlaku untuk Produk</span>
                     <div className="flex flex-wrap gap-1.5">
                       {voucherDetail.validProductNames.map((name: string, idx: number) => (
-                        <span key={idx} className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-150 text-emerald-800 text-[10px] font-bold">
+                        <span key={idx} className="px-2.5 py-1 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-bold">
                           {name}
                         </span>
                       ))}
@@ -2520,27 +2669,20 @@ export default function CheckoutPage() {
                 )}
 
                 {/* S&K */}
-                <div className="bg-[#FFFBF5] rounded-2xl p-4 border border-[#EADFC9]/30 space-y-2">
+                <div className="bg-[#FFFBF5] rounded-2xl p-4 border border-orange-100 space-y-2">
                   <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Syarat & Ketentuan</h4>
                   <ul className="list-disc pl-4 space-y-1 text-xs text-gray-650 font-medium leading-relaxed">
-                    {/* Custom Terms from Template */}
                     {voucherDetail.terms && voucherDetail.terms.split('\n').filter((t: string) => t.trim().length > 0).map((term: string, idx: number) => (
                       <li key={`custom-${idx}`}>{term}</li>
                     ))}
-                    
-                    {/* Min Purchase */}
                     <li>
                       Minimum nilai pembelanjaan subtotal keranjang belanja adalah <span className="font-bold text-gray-800">{voucherDetail.minPurchase > 0 ? formatRupiah(voucherDetail.minPurchase) : 'tanpa minimum belanja'}</span>.
                     </li>
-
-                    {/* Max Discount */}
                     {voucherDetail.maxDiscount && (
                       <li>
-                        Maksimum potongan potongan belanja yang bisa didapatkan dari voucher ini adalah <span className="font-bold text-gray-800">{formatRupiah(voucherDetail.maxDiscount)}</span>.
+                        Maksimum potongan belanja yang bisa didapatkan dari voucher ini adalah <span className="font-bold text-gray-800">{formatRupiah(voucherDetail.maxDiscount)}</span>.
                       </li>
                     )}
-
-                    {/* Valid Products Rule */}
                     {voucherDetail.validProductNames && voucherDetail.validProductNames.length > 0 ? (
                       <li>
                         Voucher ini hanya berlaku untuk produk-produk pilihan berikut: <span className="font-bold text-gray-800">{voucherDetail.validProductNames.join(', ')}</span>.
@@ -2552,16 +2694,12 @@ export default function CheckoutPage() {
                         </li>
                       )
                     )}
-
-                    {/* General Rules */}
                     <li>
                       Voucher hanya dapat digunakan satu kali saja per transaksi dan tidak dapat digabungkan dengan kode kupon promo lainnya.
                     </li>
-
                     <li>
                       Masa kedaluwarsa voucher adalah sampai <span className="font-bold text-gray-800">{voucherDetail.expiresAt ? new Date(voucherDetail.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'selamanya'}</span>. Jika melewati batas waktu tersebut, voucher otomatis hangus.
                     </li>
-
                     <li>
                       Apabila transaksi dibatalkan atau kedaluwarsa sebelum pembayaran berhasil diproses penuh, voucher akan otomatis dipulihkan kembali menjadi aktif pada profil Anda.
                     </li>
@@ -2574,7 +2712,7 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setIsDetailModalOpen(false)}
-                  className="w-full py-3.5 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold rounded-2xl text-xs shadow-md shadow-[#B48A5E]/10 transition-all text-center cursor-pointer"
+                  className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-2xl text-xs shadow-md shadow-orange-500/15 transition-all text-center cursor-pointer"
                 >
                   Tutup
                 </button>
@@ -2605,46 +2743,51 @@ export default function CheckoutPage() {
       </AnimatePresence>
 
       {/* Sticky Bottom Bar for Mobile Checkout */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-150 md:hidden pb-safe flex flex-col shadow-[0_-8px_24px_rgba(0,0,0,0.035)]">
-        {/* Green Discount Notification Banner */}
-        {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
-          <div className="bg-[#E8F8F0] border-b border-[#D1F0DB] px-4 py-2.5 text-xs font-bold text-[#1E7D44] flex items-center gap-2">
-            <span className="w-5 h-5 rounded-full bg-[#1E7D44] text-white flex items-center justify-center font-extrabold text-[10px] shrink-0">%</span>
-            <span>Kamu dapat diskon {formatRupiah(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount)}!</span>
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-orange-100 md:hidden pb-safe flex flex-col shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
+        {/* Discount Notification Banner */}
+        {totalDiscountAmount > 0 && (
+          <div className="bg-amber-50 border-b border-amber-200/70 px-4 py-2 text-[11px] font-bold text-orange-800 flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+              <span>Hemat {formatRupiah(totalDiscountAmount)}</span>
+            </div>
+            <span className="font-mono text-[10px] font-extrabold text-orange-700">
+              {formatRupiah(grossBeforeDiscount)} - {formatRupiah(totalDiscountAmount)} = {formatRupiah(grandTotal)}
+            </span>
           </div>
         )}
 
-        <div className="p-4 flex items-center justify-between gap-3">
-          <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total</span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-serif font-black text-lg text-gray-900 leading-none">
+        <div className="p-3.5 sm:p-4 flex items-center justify-between gap-3">
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Total</span>
+              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200/60 truncate">
+                {paymentMethod === 'WALLET' ? 'Arus Pay' : activePaymentLabel}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="font-serif font-black text-lg text-orange-600 leading-none">
                 {formatRupiah(grandTotal)}
               </span>
-              {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
+              {totalDiscountAmount > 0 && (
                 <span className="text-[10px] text-gray-400 line-through">
-                  {formatRupiah(subtotal + shippingFee)}
+                  {formatRupiah(grossBeforeDiscount)}
                 </span>
               )}
             </div>
-            {(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount) > 0 && (
-              <span className="text-[9px] font-extrabold text-[#1E7D44] mt-0.5">
-                (Kamu hemat {formatRupiah(voucherDiscount + tumblerDiscount + pointsDiscount + ongkirDiscount)})
-              </span>
-            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setIsScheduleModalOpen(true)}
-              className="flex items-center justify-center gap-1 px-3 py-3.5 rounded-xl border border-gray-200 text-[#8C7864] font-bold text-xs bg-white active:scale-95 transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1 px-3 py-3.5 rounded-xl border border-orange-200 text-orange-700 font-bold text-xs bg-orange-50/40 active:scale-95 transition-all cursor-pointer"
             >
-              <Clock className="w-4 h-4 text-[#8C7864]" />
+              <Clock className="w-4 h-4 text-orange-600" />
               <span>
                 {!pickupTime || pickupTime === 'Sekarang'
                   ? 'Jadwal'
-                  : `${pickupTime} - ${getEndTime(pickupTime)}`}
+                  : `${pickupTime}`}
               </span>
             </button>
             
@@ -2656,27 +2799,29 @@ export default function CheckoutPage() {
                 }
               }}
               disabled={!canSubmit || isSubmitting}
-              className={`px-6 py-3.5 rounded-xl font-bold text-xs tracking-wider text-center transition-all flex items-center justify-center gap-2 active:scale-[0.98] ${
+              className={`px-5 py-3.5 rounded-xl font-bold text-xs tracking-wide text-center transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] cursor-pointer ${
                 canSubmit && !isSubmitting
-                  ? 'bg-[#B82B32] text-white shadow-md shadow-[#B82B32]/10 hover:bg-[#9B2026]'
-                  : 'bg-gray-250 text-gray-400 cursor-not-allowed border border-gray-300/10'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md shadow-orange-500/20'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed border border-gray-300/20'
               }`}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="w-4.5 h-4.5 animate-spin" />
-                  <span>Memproses...</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Proses...</span>
                 </>
               ) : (!pickupDate || !pickupTime) ? (
-                orderType === 'PICKUP' ? 'Jadwalkan Ambil' : 'Jadwalkan Kirim'
+                orderType === 'PICKUP' ? 'Jadwalkan Ambil' : 'Jadwalkan Saji'
               ) : orderType === 'DELIVERY' && isStoreClosedToday ? (
                 'Toko Tutup'
               ) : orderType === 'DELIVERY' && !deliveryAddress ? (
-                'Tentukan Alamat'
+                'Pilih Alamat'
               ) : !paymentMethod ? (
-                'Pilih Pembayaran'
+                'Pilih Bayar'
+              ) : isWalletShortfall ? (
+                'Top Up & Bayar'
               ) : (
-                'Bayar'
+                'Bayar Sekarang'
               )}
             </button>
           </div>
@@ -2761,7 +2906,7 @@ export default function CheckoutPage() {
                 <div className="flex justify-center items-center h-[180px] py-2 relative">
                   {modalTimeSlots.length === 0 ? (
                     <p className="text-xs text-amber-800 font-bold py-6 text-center w-full">
-                      Toko sudah tutup. Silakan pesan lagi besok pagi! ☕
+                      Toko sudah tutup. Silakan pesan lagi besok pagi.
                     </p>
                   ) : (
                     <>
@@ -2783,7 +2928,7 @@ export default function CheckoutPage() {
                               onClick={() => handleHourSelect(hour)}
                               className={`flex justify-center items-center py-1.5 px-4 rounded-xl transition-all duration-300 w-full max-w-[80px] shrink-0 snap-center ${
                                 isSelected
-                                  ? 'scale-115 font-serif font-black text-xl text-[#946F48]'
+                                  ? 'scale-115 font-serif font-black text-xl text-orange-600'
                                   : 'text-gray-350 text-sm hover:text-gray-600 font-bold opacity-60'
                               }`}
                             >
@@ -2794,7 +2939,7 @@ export default function CheckoutPage() {
                       </div>
 
                       {/* Divider */}
-                      <span className="text-xl font-black text-[#946F48]/60 px-3 shrink-0 animate-pulse">:</span>
+                      <span className="text-xl font-black text-orange-500/60 px-3 shrink-0 animate-pulse">:</span>
 
                       {/* Minute Picker */}
                       <div 
@@ -2814,7 +2959,7 @@ export default function CheckoutPage() {
                               onClick={() => handleMinSelect(min)}
                               className={`flex justify-center items-center py-1.5 px-4 rounded-xl transition-all duration-300 w-full max-w-[80px] shrink-0 snap-center ${
                                 isSelected
-                                  ? 'scale-115 font-serif font-black text-xl text-[#946F48]'
+                                  ? 'scale-115 font-serif font-black text-xl text-orange-600'
                                   : 'text-gray-350 text-sm hover:text-gray-600 font-bold opacity-60'
                               }`}
                             >
@@ -2838,7 +2983,7 @@ export default function CheckoutPage() {
                       setTempPickupTime('Sekarang');
                       setIsScheduleModalOpen(false);
                     }}
-                    className="w-full py-4 rounded-2xl border-2 border-[#946F48] text-[#946F48] font-bold text-xs hover:bg-[#FAF6EE]/50 active:scale-95 transition-all text-center cursor-pointer"
+                    className="w-full py-4 rounded-2xl border-2 border-orange-200 text-orange-700 font-bold text-xs hover:bg-orange-50 active:scale-95 transition-all text-center cursor-pointer"
                   >
                     Pickup Sekarang
                   </button>
@@ -2856,7 +3001,7 @@ export default function CheckoutPage() {
                     }
                     setIsScheduleModalOpen(false);
                   }}
-                  className="w-full py-4 rounded-2xl bg-[#946F48] text-white font-bold text-xs hover:bg-[#745432] active:scale-[0.98] transition-all text-center disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-[#946F48]/15 cursor-pointer"
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white font-bold text-xs hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] transition-all text-center disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-orange-500/15 cursor-pointer"
                 >
                   Gunakan Jadwal Ini
                 </button>
@@ -3284,10 +3429,10 @@ export default function CheckoutPage() {
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-white w-full max-w-sm rounded-[2.5rem] border border-gray-100 p-6 shadow-2xl space-y-4"
+              className="bg-white w-full max-w-sm rounded-[2.5rem] border border-orange-100 p-6 shadow-2xl space-y-4"
             >
-              <div className="mx-auto w-14 h-14 rounded-2xl bg-[#FFFDF0] border border-[#EADFC9]/30 flex items-center justify-center">
-                <AlertTriangle className="w-7 h-7 text-[#B48A5E]" />
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center">
+                <AlertTriangle className="w-7 h-7 text-orange-600" />
               </div>
 
               <div className="text-center space-y-1.5">
@@ -3297,17 +3442,28 @@ export default function CheckoutPage() {
                 <p className="text-xs text-gray-500 leading-relaxed font-semibold">
                   {orderType === 'PICKUP' ? (
                     <>
-                      Harap diingat bahwa untuk pickup, lokasi pengambilan pesanan Anda berada di <strong className="text-[#B48A5E] font-black">sekolah / ASD (sebelah BC)</strong>.
+                      Harap diingat bahwa untuk pickup, lokasi pengambilan pesanan Anda berada di <strong className="text-orange-600 font-black">sekolah / ASD (sebelah BC)</strong>.
                     </>
                   ) : (
                     <>
-                      Harap diingat bahwa layanan pengiriman (delivery) hanya berlaku untuk lokasi <strong className="text-red-650 font-black">selain SMKN 1 Probolinggo</strong>.
+                      Harap diingat bahwa layanan pengiriman (delivery) hanya berlaku untuk lokasi <strong className="text-red-600 font-black">selain SMKN 1 Probolinggo</strong>.
                     </>
                   )}
                 </p>
               </div>
 
-              <div className="flex gap-3 pt-2.5">
+              <div className="rounded-2xl bg-[#FFFBF5] border border-orange-100 p-3.5 space-y-1.5 text-xs">
+                <div className="flex justify-between items-center text-gray-500">
+                  <span>Metode Pembayaran</span>
+                  <span className="font-black text-orange-700">{activePaymentLabel}</span>
+                </div>
+                <div className="flex justify-between items-center text-gray-900 pt-1 border-t border-dashed border-orange-200/70">
+                  <span className="font-bold">Total Tagihan</span>
+                  <span className="font-serif font-black text-sm text-orange-600">{formatRupiah(grandTotal)}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-1">
                 <button
                   type="button"
                   onClick={() => setShowPaymentConfirmation(false)}
@@ -3318,9 +3474,9 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={confirmAndSubmitOrder}
-                  className="flex-1 py-3.5 bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white rounded-2xl text-xs font-extrabold hover:opacity-95 shadow-md shadow-[#946F48]/10 transition-all active:scale-[0.98] cursor-pointer text-center animate-pulse"
+                  className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-orange-500/20 transition-all active:scale-[0.98] cursor-pointer text-center"
                 >
-                  Bayar
+                  Konfirmasi & Bayar
                 </button>
               </div>
             </motion.div>
@@ -3360,10 +3516,10 @@ export default function CheckoutPage() {
               {/* Content List Scrollable */}
               <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
                 
-                {/* 1. ARUS PAY - Only show if enabled */}
-                {paymentConfig?.wallet?.enabled && (
+                {/* 1. ARUS PAY - Always visible when wallet enabled */}
+                {(paymentConfig?.wallet?.enabled ?? true) && (
                 <div className="space-y-2.5">
-                  <span className="block text-[9.5px] font-black uppercase tracking-wider text-gray-400 pl-1">Arus Pay (Pilihan Utama)</span>
+                  <span className="block text-[9.5px] font-black uppercase tracking-wider text-orange-600 pl-1">Arus Pay (Pilihan Utama)</span>
                   <button
                     type="button"
                     onClick={() => {
@@ -3373,18 +3529,18 @@ export default function CheckoutPage() {
                     }}
                     className={`w-full text-left rounded-2xl p-4.5 border-2 flex items-center justify-between transition-all active:scale-[0.98] cursor-pointer
                       ${paymentMethod === 'WALLET'
-                        ? 'border-amber-400 bg-amber-50/15 shadow-sm shadow-amber-900/5'
-                        : 'border-gray-150 bg-white text-gray-800 hover:border-gray-200'}`}
+                        ? 'border-amber-400 bg-amber-50/30 shadow-sm shadow-amber-900/5'
+                        : 'border-orange-100 bg-[#FFFBF5] text-gray-800 hover:border-amber-300'}`}
                   >
                     <div className="flex items-center gap-3.5">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm
-                        ${paymentMethod === 'WALLET' ? 'bg-amber-400 text-[#1E2D1F]' : 'bg-[#B48A5E]/10 text-[#B48A5E]'}`}>
+                        ${paymentMethod === 'WALLET' ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white' : 'bg-orange-100 text-orange-600'}`}>
                         <Wallet className="w-5 h-5" />
                       </div>
                       <div>
-                        <p className="text-xs font-black uppercase tracking-wider text-gray-400">Arus Pay</p>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-sm font-black text-gray-900 mt-0.5">{formatRupiah(walletBalance)}</h4>
+                        <p className="text-xs font-black uppercase tracking-wider text-orange-700">Arus Pay (Saldo)</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <h4 className="text-sm font-black text-gray-900">{formatRupiah(walletBalance)}</h4>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -3398,10 +3554,15 @@ export default function CheckoutPage() {
                             <span>Top Up</span>
                           </button>
                         </div>
+                        <p className={`text-[10px] font-bold mt-1 ${walletBalance >= grandTotal ? 'text-emerald-600' : 'text-amber-700'}`}>
+                          {walletBalance >= grandTotal
+                            ? `Sisa saldo setelah bayar: ${formatRupiah(walletRemainingAfterPay)}`
+                            : `Kurang ${formatRupiah(walletShortfallAmount)} untuk pesanan ini`}
+                        </p>
                       </div>
                     </div>
                     <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors
-                      ${paymentMethod === 'WALLET' ? 'border-amber-400 bg-amber-400 text-[#1E2D1F]' : 'border-gray-300'}`}>
+                      ${paymentMethod === 'WALLET' ? 'border-orange-500 bg-orange-500 text-white' : 'border-gray-300'}`}>
                       {paymentMethod === 'WALLET' && <Check className="w-2.5 h-2.5 stroke-[3]" />}
                     </div>
                   </button>

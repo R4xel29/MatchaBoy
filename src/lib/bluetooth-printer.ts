@@ -4,7 +4,7 @@
  */
 
 import { formatRupiah } from './utils';
-import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes } from './receipt-modifiers';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes, formatReceiptPaymentMethod } from './receipt-modifiers';
 import html2canvas from 'html2canvas';
 
 export interface BluetoothPrinterDevice {
@@ -398,6 +398,9 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   if (summary.tumblerDiscount > 0) {
     writeText(padLine('Diskon Bawa Tumbler:', `-${formatRupiah(summary.tumblerDiscount)}`, maxCols));
   }
+  if (summary.pointsDiscount > 0) {
+    writeText(padLine('Diskon Tukar Poin:', `-${formatRupiah(summary.pointsDiscount)}`, maxCols));
+  }
   if (summary.deliveryFee > 0) {
     writeText(padLine('Ongkos Kirim:', formatRupiah(summary.deliveryFee), maxCols));
   }
@@ -413,7 +416,7 @@ export function buildCustomerReceiptEscPos(order: any, settings: any): Uint8Arra
   reverseOff();
   alignLeft();
 
-  writeText(`Metode Pembayaran: ${order.paymentMethod || 'TUNAI'} (LUNAS)\n`);
+  writeText(`Metode Pembayaran: ${formatReceiptPaymentMethod(order.paymentMethod, order.notes)} (LUNAS)\n`);
   if (order.cashPaid) {
     writeText(padLine('Tunai Diterima:', formatRupiah(order.cashPaid), maxCols));
     boldOn();
@@ -892,6 +895,14 @@ export function renderCgvTicketCanvas(
       y += 16;
     }
 
+    if (summary.pointsDiscount > 0) {
+      ctx.textAlign = 'left';
+      ctx.fillText('Diskon Tukar Poin:', paddingX, y + 11);
+      ctx.textAlign = 'right';
+      ctx.fillText(`-${formatRupiah(summary.pointsDiscount)}`, width - paddingX, y + 11);
+      y += 16;
+    }
+
     if (summary.deliveryFee > 0) {
       ctx.textAlign = 'left';
       ctx.fillText('Ongkos Kirim:', paddingX, y + 11);
@@ -923,7 +934,7 @@ export function renderCgvTicketCanvas(
     ctx.font = 'bold 10.5px monospace, sans-serif';
     ctx.fillText('Metode Pembayaran:', paddingX, y + 10);
     ctx.textAlign = 'right';
-    ctx.fillText(`${order.paymentMethod || 'TUNAI'} (LUNAS)`, width - paddingX, y + 10);
+    ctx.fillText(`${formatReceiptPaymentMethod(order.paymentMethod, order.notes)} (LUNAS)`, width - paddingX, y + 10);
     y += 16;
 
     if (order.cashPaid) {

@@ -15,7 +15,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { formatRupiah } from '@/lib/utils';
-import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes } from '@/lib/receipt-modifiers';
+import { parseItemModifiers, getReceiptModifierLines, calculateGrossReceiptSummary, cleanOrderNotes, formatReceiptPaymentMethod } from '@/lib/receipt-modifiers';
 import { BluetoothPrinterPill } from './BluetoothPrinterPill';
 import { isBluetoothPrinterConnected, printDirectBluetooth, printCgvTicketRasterBluetooth } from '@/lib/bluetooth-printer';
 
@@ -50,6 +50,7 @@ export interface ReceiptData {
   deliveryFee?: number;
   discount?: number;
   tumblerDiscount?: number;
+  pointsDiscount?: number;
   voucherDiscount?: number;
   voucherCode?: string;
   voucherTitle?: string;
@@ -492,6 +493,12 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
               <span class="bold">-${formatRupiah(summary.tumblerDiscount)}</span>
             </div>
           ` : ''}
+          ${summary.pointsDiscount > 0 ? `
+            <div class="row">
+              <span>Diskon Tukar Poin:</span>
+              <span class="bold">-${formatRupiah(summary.pointsDiscount)}</span>
+            </div>
+          ` : ''}
           ${summary.deliveryFee > 0 ? `
             <div class="row">
               <span>Ongkos Kirim:</span>
@@ -506,7 +513,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
 
           <div class="row" style="font-size: 9.5px;">
             <span>Metode Pembayaran:</span>
-            <span class="bold">${order.paymentMethod} (LUNAS)</span>
+            <span class="bold">${formatReceiptPaymentMethod(order.paymentMethod, order.notes)} (LUNAS)</span>
           </div>
           ${order.cashPaid ? `
             <div class="row">
@@ -777,11 +784,14 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
     if (summary.tumblerDiscount > 0) {
       receiptText += `${'Diskon Tumbler'.padEnd(20)} -${formatRupiah(summary.tumblerDiscount).padStart(9)}\n`;
     }
+    if (summary.pointsDiscount > 0) {
+      receiptText += `${'Diskon Tukar Poin'.padEnd(20)} -${formatRupiah(summary.pointsDiscount).padStart(9)}\n`;
+    }
     if (summary.deliveryFee > 0) {
       receiptText += `${'Ongkos Kirim'.padEnd(20)}  ${formatRupiah(summary.deliveryFee).padStart(9)}\n`;
     }
     receiptText += `TOTAL AKHIR             ${formatRupiah(summary.finalTotal).padStart(10)}\n`;
-    receiptText += `METODE: ${order.paymentMethod.padEnd(12)} (LUNAS)\n`;
+    receiptText += `METODE: ${formatReceiptPaymentMethod(order.paymentMethod, order.notes).padEnd(12)} (LUNAS)\n`;
     if (order.cashPaid) {
       receiptText += `DITERIMA                ${formatRupiah(order.cashPaid).padStart(10)}\n`;
       receiptText += `KEMBALIAN               ${formatRupiah(order.change || 0).padStart(10)}\n`;
@@ -1016,6 +1026,12 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
                           <span className="font-bold text-emerald-600">-{formatRupiah(summary.tumblerDiscount)}</span>
                         </div>
                       )}
+                      {summary.pointsDiscount > 0 && (
+                        <div className="flex justify-between text-slate-800">
+                          <span>Diskon Tukar Poin:</span>
+                          <span className="font-bold text-amber-700">-{formatRupiah(summary.pointsDiscount)}</span>
+                        </div>
+                      )}
                       {summary.deliveryFee > 0 && (
                         <div className="flex justify-between text-slate-800">
                           <span>Ongkos Kirim:</span>
@@ -1031,7 +1047,7 @@ export function ThermalReceiptModal({ isOpen, onClose, order, customSettings }: 
 
                       <div className="flex justify-between text-[10px]">
                         <span>Metode Pembayaran:</span>
-                        <span className="font-bold">{order.paymentMethod} (LUNAS)</span>
+                        <span className="font-bold">{formatReceiptPaymentMethod(order.paymentMethod, order.notes)} (LUNAS)</span>
                       </div>
 
                       {order.cashPaid !== undefined && order.cashPaid > 0 && (

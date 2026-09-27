@@ -23,9 +23,15 @@ import {
   CreditCard,
   UtensilsCrossed,
   Download,
+  Printer,
+  Receipt,
+  Wallet,
+  Camera,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { formatRupiah } from '@/lib/utils';
+import { calculateGrossReceiptSummary, formatReceiptPaymentMethod, cleanOrderNotes } from '@/lib/receipt-modifiers';
+import { printThermalReceipt } from '@/lib/thermal-printer';
 import { QRCodeCanvas } from 'qrcode.react';
 import dynamic from 'next/dynamic';
 
@@ -39,10 +45,16 @@ export type TrackingOrderShape = {
   address: string;
   paymentMethod: string;
   orderType: string;
-  items: Array<{ productId?: string; name: string; qty: number; price: number; image?: string; mods?: string }>;
+  items: Array<{ productId?: string; name: string; qty: number; price: number; originalPrice?: number; image?: string; mods?: string }>;
   subtotal: number;
   deliveryFee: number;
   total: number;
+  voucherCode?: string;
+  tumblerDiscount?: number;
+  pointsDiscount?: number;
+  pointsEarned?: number;
+  tableNumber?: string | null;
+  notes?: string;
   createdAt: string;
   createdAtRaw?: string;
   cancellationTimeLimit?: number;
@@ -282,7 +294,7 @@ function ProductReviewForm({
           <div>
             <p className="text-xs font-bold text-gray-805">{item.name}</p>
             <p className="text-[10px] text-orange-600 font-semibold flex items-center gap-1">
-              ✓ Ulasan berhasil dikirim
+              <Check className="w-3 h-3" /> Ulasan berhasil dikirim
             </p>
           </div>
         </div>
@@ -374,7 +386,8 @@ function ProductReviewForm({
                 </>
               ) : (
                 <>
-                  <span>📸 Unggah Foto Matcha</span>
+                  <Camera className="w-3.5 h-3.5 text-orange-600" />
+                  <span>Unggah Foto Produk</span>
                 </>
               )}
               <input
@@ -839,7 +852,7 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
               <div className="bg-card border border-border/50 rounded-2xl p-5 text-center space-y-3">
                 <h3 className="font-heading font-bold text-sm text-foreground">Ulas Produk</h3>
                 <p className="text-xs text-muted-foreground leading-normal">
-                  Berikan ulasan dan unggah foto matcha-mu untuk mendapatkan reward 1 poin loyalitas!
+                  Berikan ulasan dan unggah foto pesananmu untuk mendapatkan reward 1 poin loyalitas!
                 </p>
                 <button
                   type="button"
@@ -866,44 +879,228 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
 
         {/* Right Column */}
         <div className="w-full lg:w-[400px] space-y-6 lg:sticky lg:top-24">
-        {/* Order Items */}
+        {/* Order Items & Digital Receipt (Struk) */}
         <section>
-          <h2 className="font-heading font-bold text-base mb-3">Detail Pesanan</h2>
-          <div className="rounded-2xl bg-card border border-border/50 overflow-hidden divide-y divide-border/30">
-            {order.items.map((item, i) => (
-              <div key={i} className="px-4 py-3">
-                <div className="flex justify-between">
-                  <p className="text-sm font-semibold text-foreground">
-                    {item.qty}× {item.name}
-                  </p>
-                  <p className="text-sm font-medium text-foreground">
-                    {formatRupiah(item.price * item.qty)}
-                  </p>
-                </div>
-                {item.mods && (
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{item.mods}</p>
-                )}
-              </div>
-            ))}
+          {(() => {
+            const receiptSummary = calculateGrossReceiptSummary({
+              subtotal: order.subtotal,
+              total: order.total,
+              deliveryFee: order.deliveryFee,
+              voucherCode: order.voucherCode,
+              tumblerDiscount: order.tumblerDiscount,
+              pointsDiscount: order.pointsDiscount,
+              hasTumbler: order.hasTumbler,
+              items: order.items.map((it) => ({
+                name: it.name,
+                qty: it.qty,
+                price: it.price,
+                originalPrice: it.originalPrice,
+                modifiersString: it.mods,
+              })),
+            });
+            const totalDiscounts =
+              receiptSummary.totalFlashSaleDiscount +
+              receiptSummary.voucherDiscount +
+              receiptSummary.tumblerDiscount +
+              receiptSummary.pointsDiscount;
+            const grossWithShipping = receiptSummary.grossSubtotal + (order.orderType === 'DELIVERY' ? receiptSummary.deliveryFee : 0);
+            const isWalletMethod = (order.paymentMethod || '').toUpperCase() === 'WALLET';
+            const paymentLabel = formatReceiptPaymentMethod(order.paymentMethod, order.notes);
+            const isPaidStatus = !['PENDING_PAYMENT', 'CANCELLED'].includes(currentStatus) && (order.paymentMethod || '').toUpperCase() !== 'COD';
+            const cleanedNotes = cleanOrderNotes(order.notes);
 
-            {/* Totals */}
-            <div className="px-4 py-3 space-y-1.5">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>{formatRupiah(order.subtotal)}</span>
-              </div>
-              {order.orderType === 'DELIVERY' && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Ongkir</span>
-                  <span>{formatRupiah(order.deliveryFee)}</span>
+            return (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-orange-600" />
+                    <h2 className="font-heading font-bold text-base">Struk & Rincian Pesanan</h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      printThermalReceipt({
+                        id: order.id,
+                        queueNumber: order.queueNumber,
+                        customerName: order.customerName,
+                        customerPhone: order.customerPhone,
+                        orderType: order.orderType,
+                        tableNumber: order.tableNumber,
+                        paymentMethod: order.paymentMethod,
+                        createdAt: order.createdAtRaw || new Date(),
+                        items: order.items.map((it) => ({
+                          name: it.name,
+                          qty: it.qty,
+                          price: it.price,
+                          originalPrice: it.originalPrice,
+                          modifiersString: it.mods,
+                        })),
+                        subtotal: order.subtotal,
+                        deliveryFee: order.deliveryFee,
+                        tumblerDiscount: receiptSummary.tumblerDiscount,
+                        pointsDiscount: receiptSummary.pointsDiscount,
+                        voucherDiscount: receiptSummary.voucherDiscount,
+                        voucherCode: order.voucherCode,
+                        hasTumbler: order.hasTumbler,
+                        total: order.total,
+                        pointsEarned: order.pointsEarned,
+                        notes: order.notes,
+                      })
+                    }
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 text-[11px] font-bold transition-all active:scale-95"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Cetak Struk</span>
+                  </button>
                 </div>
-              )}
-              <div className="flex justify-between text-sm font-bold pt-1.5 border-t border-border/30">
-                <span>Total</span>
-                <span className="text-orange-600">{formatRupiah(order.total)}</span>
-              </div>
-            </div>
-          </div>
+
+                <div className="rounded-2xl bg-card border border-border/60 shadow-xs overflow-hidden divide-y divide-border/40">
+                  {/* Receipt Header Info */}
+                  <div className="px-4 py-3 bg-gradient-to-r from-orange-50/70 to-amber-50/50 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground font-medium">Waktu Transaksi</span>
+                      <span className="font-bold text-foreground">{order.createdAt}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground font-medium">Metode Pembayaran</span>
+                      <span className={`inline-flex items-center gap-1.5 font-extrabold px-2 py-0.5 rounded-md text-[11px] ${
+                        isWalletMethod
+                          ? 'bg-gradient-to-r from-[#24160E] to-[#3A2314] text-amber-300 border border-amber-500/30'
+                          : 'bg-orange-100/80 text-orange-800'
+                      }`}>
+                        {isWalletMethod && <Wallet className="w-3 h-3 text-amber-400" />}
+                        {paymentLabel}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-muted-foreground font-medium">Status Pembayaran</span>
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                        currentStatus === 'CANCELLED'
+                          ? 'bg-red-100 text-red-700'
+                          : isPaidStatus
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : (order.paymentMethod || '').toUpperCase() === 'COD'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}>
+                        {currentStatus === 'CANCELLED'
+                          ? 'DIBATALKAN'
+                          : isPaidStatus
+                          ? 'LUNAS'
+                          : (order.paymentMethod || '').toUpperCase() === 'COD'
+                          ? 'BAYAR DI TEMPAT'
+                          : 'MENUNGGU PEMBAYARAN'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  {receiptSummary.items.map((item, i) => (
+                    <div key={i} className="px-4 py-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <p className="text-sm font-semibold text-foreground">
+                          {item.qty}× {item.name}
+                        </p>
+                        <div className="text-right shrink-0">
+                          {item.hasDiscount && (
+                            <span className="text-[11px] text-muted-foreground line-through mr-1.5">
+                              {formatRupiah(item.totalOriginalPrice)}
+                            </span>
+                          )}
+                          <span className="text-sm font-bold text-foreground">
+                            {formatRupiah(item.totalFinalPrice)}
+                          </span>
+                        </div>
+                      </div>
+                      {item.modifiersString && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {item.modifiersString.replace(/,\s*(?=(?:biasa|normal|less|sedikit|lumayan|manis|\d+%))/gi, ' → ')}
+                        </p>
+                      )}
+                      {item.hasDiscount && (
+                        <p className="text-[10px] font-bold text-orange-600 mt-1">
+                          » POTONGAN: -{formatRupiah(item.unitDiscount * item.qty)} ({formatRupiah(item.totalOriginalPrice)} - {formatRupiah(item.unitDiscount * item.qty)} = {formatRupiah(item.totalFinalPrice)})
+                        </p>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Customer Notes */}
+                  {cleanedNotes && (
+                    <div className="px-4 py-2.5 bg-amber-50/40 text-xs">
+                      <span className="font-bold text-stone-700">Catatan: </span>
+                      <span className="text-stone-600">{cleanedNotes}</span>
+                    </div>
+                  )}
+
+                  {/* Transparent Totals & Discounts (Rule 8) */}
+                  <div className="px-4 py-3.5 space-y-2 bg-stone-50/40">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground font-medium">Harga Semula (Subtotal)</span>
+                      <span className="font-semibold text-foreground">{formatRupiah(receiptSummary.grossSubtotal)}</span>
+                    </div>
+
+                    {receiptSummary.totalFlashSaleDiscount > 0 && (
+                      <div className="flex justify-between text-xs text-orange-600 font-semibold">
+                        <span>» Potongan Promo Menu</span>
+                        <span>-{formatRupiah(receiptSummary.totalFlashSaleDiscount)}</span>
+                      </div>
+                    )}
+
+                    {receiptSummary.voucherDiscount > 0 && (
+                      <div className="flex justify-between text-xs text-orange-600 font-semibold">
+                        <span>» {receiptSummary.voucherLabel}</span>
+                        <span>-{formatRupiah(receiptSummary.voucherDiscount)}</span>
+                      </div>
+                    )}
+
+                    {receiptSummary.tumblerDiscount > 0 && (
+                      <div className="flex justify-between text-xs text-emerald-600 font-semibold">
+                        <span>» Potongan Eco Tumbler</span>
+                        <span>-{formatRupiah(receiptSummary.tumblerDiscount)}</span>
+                      </div>
+                    )}
+
+                    {receiptSummary.pointsDiscount > 0 && (
+                      <div className="flex justify-between text-xs text-amber-600 font-semibold">
+                        <span>» Potongan Tukar Poin</span>
+                        <span>-{formatRupiah(receiptSummary.pointsDiscount)}</span>
+                      </div>
+                    )}
+
+                    {order.orderType === 'DELIVERY' && (
+                      <div className="flex justify-between text-xs">
+                        <span className="text-muted-foreground font-medium">Ongkos Kirim</span>
+                        <span className="font-semibold text-foreground">{formatRupiah(order.deliveryFee)}</span>
+                      </div>
+                    )}
+
+                    {totalDiscounts > 0 && (
+                      <div className="px-2.5 py-1.5 rounded-lg bg-orange-50 border border-orange-200/70 text-[11px] font-bold text-orange-800 flex items-center justify-between">
+                        <span>Rincian Potongan:</span>
+                        <span>
+                          {formatRupiah(grossWithShipping)} - {formatRupiah(totalDiscounts)} = {formatRupiah(order.total)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center text-sm font-black pt-2 border-t border-border/50">
+                      <span>Total Akhir</span>
+                      <span className="text-base text-orange-600">{formatRupiah(order.total)}</span>
+                    </div>
+
+                    {order.pointsEarned && order.pointsEarned > 0 ? (
+                      <div className="pt-1.5 text-center">
+                        <span className="inline-block px-2.5 py-0.5 rounded-full bg-amber-100/80 text-amber-900 text-[10px] font-extrabold">
+                          Estimasi Poin Loyalitas: +{order.pointsEarned} Poin
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </>
+            );
+          })()}
         </section>
 
         {/* Delivery Address - only for delivery orders or SPMB orders */}

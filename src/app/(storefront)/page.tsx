@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { getOrSetCache, CACHE_KEYS, CACHE_TTL } from "@/lib/redis-cache"
 import StorefrontClient from "./StorefrontClient"
 
+export const dynamic = 'force-dynamic'
 export const revalidate = 10 // Revalidate page cache at most every 10 seconds (ISR)
 
 export default async function StorefrontPage() {

@@ -2,14 +2,26 @@ import { ReactNode } from 'react';
 import { prisma } from '@/lib/prisma';
 import { AdminLayoutClient } from '@/components/admin/AdminLayoutClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const storeSettings = await prisma.storeSettings.findFirst({
-    select: {
-      alarmSoundUrl: true,
-      alarmVolumeBoost: true,
-      pickupAlarmLeadTime: true,
-    },
-  });
+  let storeSettings: {
+    alarmSoundUrl: string | null;
+    alarmVolumeBoost: number | null;
+    pickupAlarmLeadTime: number | null;
+  } | null = null;
+
+  try {
+    storeSettings = await prisma.storeSettings.findFirst({
+      select: {
+        alarmSoundUrl: true,
+        alarmVolumeBoost: true,
+        pickupAlarmLeadTime: true,
+      },
+    });
+  } catch {
+    storeSettings = null;
+  }
 
   return (
     <AdminLayoutClient
@@ -21,4 +33,5 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     </AdminLayoutClient>
   );
 }
+
 

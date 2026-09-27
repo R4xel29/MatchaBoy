@@ -673,14 +673,20 @@ export async function POST(req: Request) {
         }
 
         const requestedMethod = body.paymentMethod?.toUpperCase()
-        if (requestedMethod !== 'COD' && requestedMethod !== 'QRIS' && requestedMethod !== 'WALLET' && requestedMethod !== 'DOKU') {
+        if (requestedMethod !== 'COD' && requestedMethod !== 'QRIS' && requestedMethod !== 'WALLET' && requestedMethod !== 'DOKU' && requestedMethod !== 'TRANSFER') {
             return NextResponse.json({ error: 'Metode pembayaran ini sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
+        }
+        if (requestedMethod === 'WALLET' && paymentSettings.walletTopUpEnabled === false) {
+            return NextResponse.json({ error: 'Pembayaran Arus Pay sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
         if (requestedMethod === 'COD' && !paymentSettings.codEnabled) {
             return NextResponse.json({ error: 'Metode pembayaran COD sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
         if (requestedMethod === 'QRIS' && !paymentSettings.qrisEnabled) {
             return NextResponse.json({ error: 'Metode pembayaran QRIS sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
+        }
+        if (requestedMethod === 'TRANSFER' && !paymentSettings.transferEnabled) {
+            return NextResponse.json({ error: 'Metode pembayaran Transfer Bank sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
 
         const isDoku = requestedMethod === 'DOKU'
@@ -1077,7 +1083,7 @@ export async function POST(req: Request) {
             await sendNotification({
                 userId: session.user.id,
                 type: 'order',
-                title: 'Pesanan Diterima! 🍵',
+                title: 'Pesanan Diterima',
                 message: `Pesanan ${order.id.slice(0, 8).toUpperCase()} berhasil dibuat. ${orderType === 'PICKUP' ? `Ambil pada ${body.pickupTime} tanggal ${body.pickupDate}` : 'Akan segera diproses.'}`,
                 linkUrl: `/orders/${order.id}`,
                 data: { orderId: order.id },
