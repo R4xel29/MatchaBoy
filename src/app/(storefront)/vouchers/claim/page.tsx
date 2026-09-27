@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { notFound } from "next/navigation"
+import { AlertTriangle, XCircle } from "lucide-react"
 import ClaimVoucherClient from "./ClaimVoucherClient"
 
 export const dynamic = 'force-dynamic'
@@ -14,10 +14,10 @@ export default async function VoucherClaimPage({ searchParams }: PageProps) {
 
   if (!code) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-md border border-gray-100 space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-xl">
-            ⚠️
+      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-md border border-orange-100 space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-100">
+            <AlertTriangle className="w-6 h-6" />
           </div>
           <h1 className="font-serif font-black text-gray-900 text-lg">Kode Voucher Diperlukan</h1>
           <p className="text-xs text-gray-500 leading-relaxed">
@@ -25,7 +25,7 @@ export default async function VoucherClaimPage({ searchParams }: PageProps) {
           </p>
           <a
             href="/"
-            className="block w-full py-3 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold text-xs rounded-xl transition-colors text-center"
+            className="block w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs rounded-2xl transition-all text-center shadow-sm"
           >
             Kembali ke Beranda
           </a>
@@ -43,10 +43,10 @@ export default async function VoucherClaimPage({ searchParams }: PageProps) {
 
   if (!template) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-md border border-gray-100 space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto text-xl font-bold">
-            ✕
+      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-md border border-orange-100 space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto border border-red-100">
+            <XCircle className="w-6 h-6" />
           </div>
           <h1 className="font-serif font-black text-gray-900 text-lg">Voucher Tidak Valid</h1>
           <p className="text-xs text-gray-500 leading-relaxed">
@@ -54,7 +54,7 @@ export default async function VoucherClaimPage({ searchParams }: PageProps) {
           </p>
           <a
             href="/"
-            className="block w-full py-3 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold text-xs rounded-xl transition-colors text-center"
+            className="block w-full py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black text-xs rounded-2xl transition-all text-center shadow-sm"
           >
             Kembali ke Beranda
           </a>

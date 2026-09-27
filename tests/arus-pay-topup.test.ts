@@ -206,6 +206,67 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(orderTracking).toContain('Cetak Struk');
     expect(orderTracking).toContain('formatReceiptPaymentMethod');
   });
+
+  it('T1.19.6: User Vouchers UI/UX Overhaul eliminates Voucher Pack confusion, supports allVouchers history, 1-click Klaim & Pakai, and Arum Seduh Orange/Amber compliance', () => {
+    const userVouchersRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/user/vouchers/route.ts'),
+      'utf-8'
+    );
+    const claimVoucherRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/user/vouchers/claim/route.ts'),
+      'utf-8'
+    );
+    const voucherDetailClient = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/(storefront)/vouchers/[id]/VoucherDetailClient.tsx'),
+      'utf-8'
+    );
+    const claimPage = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/(storefront)/vouchers/claim/page.tsx'),
+      'utf-8'
+    );
+    const claimClient = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/(storefront)/vouchers/claim/ClaimVoucherClient.tsx'),
+      'utf-8'
+    );
+    const profile = fs.readFileSync(profileClientPath, 'utf-8');
+    const checkout = fs.readFileSync(checkoutPagePath, 'utf-8');
+
+    // 1. API returns allVouchers and filters out system/quota-exhausted templates
+    expect(userVouchersRoute).toContain('allVouchers');
+    expect(userVouchersRoute).toContain('systemCodes');
+    expect(userVouchersRoute).toContain('t.usageLimit > 0 && t.usageCount >= t.usageLimit');
+    expect(claimVoucherRoute).toContain('template: true');
+
+    // 2. Profile VouchersSection replaces "Voucher Pack" with "Klaim Promo Gratis" & 1-click "Klaim & Pakai"
+    expect(profile).toContain('Klaim Promo Gratis');
+    expect(profile).toContain('Klaim & Pakai');
+    expect(profile).toContain('data.allVouchers || data.vouchers');
+    expect(profile.includes('Tidak Ada Voucher Pack')).toBe(false);
+
+    // 3. Checkout passes items & subtotal to validate-voucher and supports 1-click Klaim & Pakai
+    expect(checkout).toContain('Klaim Promo Gratis');
+    expect(checkout).toContain('Klaim & Pakai');
+    expect(checkout).toContain('items: checkoutItems');
+    expect(checkout.includes('Tidak ada voucher pack baru untuk diklaim')).toBe(false);
+
+    // 4. VoucherDetailClient & ClaimVoucherClient adhere to Arum Seduh Orange/Amber & Lucide icons (zero green, zero OS emojis)
+    expect(voucherDetailClient).toContain('Pakai Voucher Sekarang');
+    expect(voucherDetailClient).toContain('Salin Kode');
+    expect(voucherDetailClient.includes('#1E3A1A')).toBe(false);
+    expect(voucherDetailClient.includes('#2E5A44')).toBe(false);
+    expect(voucherDetailClient.includes('🍃')).toBe(false);
+    expect(voucherDetailClient.includes('📋')).toBe(false);
+    expect(voucherDetailClient.includes('🍵')).toBe(false);
+
+    expect(claimPage).toContain('AlertTriangle');
+    expect(claimPage).toContain('XCircle');
+    expect(claimPage.includes('⚠️')).toBe(false);
+    expect(claimPage.includes('✕')).toBe(false);
+
+    expect(claimClient).toContain('Pakai Voucher Sekarang');
+    expect(claimClient.includes('💡')).toBe(false);
+  });
 });
+
 
 

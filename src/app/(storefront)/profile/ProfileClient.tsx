@@ -103,11 +103,20 @@ type VoucherShape = {
   code: string;
   type: string;
   description: string;
+  discountAmount?: number;
   isUsed: boolean;
   expiresAt: string | null;
   template?: {
+    id?: string;
+    title?: string;
+    description?: string;
+    type?: string;
+    discountValue?: number;
+    minPurchase?: number;
+    maxDiscount?: number | null;
     bannerImage?: string | null;
     validProductIds?: string | null;
+    applicableProducts?: string | null;
   } | null;
 };
 
@@ -3513,15 +3522,18 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
 
 function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: VoucherShape[] }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const [vouchers, setVouchers] = useState<VoucherShape[]>(profileCache.vouchers || initialVouchers);
   const [claimableTemplates, setClaimableTemplates] = useState<any[]>(profileCache.claimableTemplates || []);
   const [loading, setLoading] = useState(!profileCache.vouchers);
   const [claimCode, setClaimCode] = useState('');
   const [claiming, setClaiming] = useState(false);
+  const [claimingCode, setClaimingCode] = useState<string | null>(null);
   const [claimError, setClaimError] = useState('');
   const [claimSuccess, setClaimSuccess] = useState('');
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   
-  // Main Voucher Tabs: 'my-vouchers' | 'voucher-pack'
+  // Main Voucher Tabs: 'my-vouchers' | 'voucher-pack' (Klaim Promo Gratis)
   const [activeTab, setActiveTab] = useState<'my-vouchers' | 'voucher-pack'>('my-vouchers');
 
   // Tab Filter States: 'AVAILABLE' | 'USED' | 'EXPIRED'
@@ -3532,7 +3544,7 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
       const res = await fetch('/api/user/vouchers');
       if (res.ok) {
         const data = await res.json();
-        const vcs = data.vouchers || [];
+        const vcs = data.allVouchers || data.vouchers || [];
         const tps = data.templates || [];
         setVouchers(vcs);
         setClaimableTemplates(tps);
@@ -3550,22 +3562,71 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
     fetchVouchers();
   }, []);
 
-  const getVoucherIcon = (type: string) => {
+  const renderVoucherIcon = (type: string, className = 'w-6 h-6') => {
     switch (type) {
-      case 'FREE_TOPPING': return '🧋';
-      case 'UPGRADE_SIZE': return '📐';
-      case 'FREE_DRINK': return '🍵';
+      case 'FREE_DRINK':
+        return <Coffee className={className} />;
+      case 'FREE_TOPPING':
+      case 'UPGRADE_SIZE':
+        return <Sparkles className={className} />;
+      case 'B2G1':
+        return <Gift className={className} />;
       case 'DISCOUNT_PCT':
-      case 'DISCOUNT_RP': return '💸';
-      case 'GRATIS_ONGKIR': return '🚚';
-      default: return '🎁';
+      case 'DISCOUNT_RP':
+      case 'GRATIS_ONGKIR':
+      default:
+        return <Ticket className={className} />;
     }
   };
 
-  const handleClaim = async (codeToClaim: string) => {
+  const getVoucherTypeBadge = (type: string, discountValue?: number, discountAmount?: number) => {
+    const val = discountValue ?? discountAmount ?? 0;
+    switch (type) {
+      case 'DISCOUNT_RP':
+        return val > 0 ? `Hemat ${formatRupiah(val)}` : 'Potongan Harga';
+      case 'DISCOUNT_PCT':
+        return val > 0 ? `Diskon ${val}%` : 'Diskon Persen';
+      case 'B2G1':
+        return 'Beli 2 Gratis 1';
+      case 'FREE_DRINK':
+        return 'Gratis Minuman';
+      case 'FREE_TOPPING':
+        return 'Gratis Topping';
+      case 'UPGRADE_SIZE':
+        return 'Gratis Upsize';
+      case 'GRATIS_ONGKIR':
+        return 'Gratis Ongkir';
+      default:
+        return 'Promo Spesial';
+    }
+  };
+
+  const handleCopyCode = (code: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    showToast('Kode voucher berhasil disalin', 'success');
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
+
+  const handleUseVoucher = (v: VoucherShape, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    useCartStore.getState().setAppliedVoucher(v as any);
+    const cartItems = useCartStore.getState().items || [];
+    if (cartItems.length > 0) {
+      showToast('Voucher dipilih! Mengarahkan ke halaman Checkout...', 'success');
+      router.push('/checkout');
+    } else {
+      showToast('Voucher siap digunakan! Silakan pilih menu favorit Anda.', 'success');
+      router.push('/');
+    }
+  };
+
+  const handleClaim = async (codeToClaim: string, autoUseAfterClaim = false) => {
     if (!codeToClaim.trim()) return;
 
     setClaiming(true);
+    setClaimingCode(codeToClaim);
     setClaimError('');
     setClaimSuccess('');
 
@@ -3579,20 +3640,31 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
 
       if (!res.ok) {
         setClaimError(data.error || 'Gagal mengklaim voucher');
+        showToast(data.error || 'Gagal mengklaim voucher', 'error');
       } else {
-        setClaimSuccess(data.message || 'Voucher berhasil diklaim!');
+        const msg = data.message || 'Voucher berhasil diklaim ke akun Anda!';
+        setClaimSuccess(msg);
         setClaimCode('');
-        fetchVouchers(); // refetch to update both lists
-        router.refresh(); // Refresh parent route context if needed
+        showToast(msg, 'success');
+        await fetchVouchers();
+        router.refresh();
+        if (autoUseAfterClaim && data.voucher) {
+          handleUseVoucher(data.voucher);
+        }
       }
     } catch (err) {
       setClaimError('Terjadi kesalahan jaringan');
+      showToast('Terjadi kesalahan jaringan', 'error');
     } finally {
       setClaiming(false);
+      setClaimingCode(null);
     }
   };
 
   const now = new Date();
+  const availableCount = vouchers.filter(v => !v.isUsed && (!v.expiresAt || new Date(v.expiresAt) >= now)).length;
+  const usedCount = vouchers.filter(v => v.isUsed).length;
+  const expiredCount = vouchers.filter(v => !v.isUsed && v.expiresAt && new Date(v.expiresAt) < now).length;
   
   const filteredVouchers = vouchers.filter(v => {
     const isExpired = v.expiresAt ? new Date(v.expiresAt) < now : false;
@@ -3611,236 +3683,490 @@ function VouchersSection({ vouchers: initialVouchers = [] }: { vouchers?: Vouche
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="space-y-6"
+      className="space-y-5"
     >
-      {/* Main Tabs: Voucher Saya vs Voucher Pack */}
-      <div className="flex border-b border-gray-100 bg-white/40 rounded-t-3xl p-1">
+      {/* Main Tabs: Voucher Saya vs Klaim Promo Gratis */}
+      <div className="flex bg-white border border-orange-100 rounded-2xl p-1.5 shadow-sm gap-1.5">
         <button
           onClick={() => setActiveTab('my-vouchers')}
-          className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all cursor-pointer ${
+          className={`flex-1 py-3 px-3 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
             activeTab === 'my-vouchers'
-              ? 'bg-[#B48A5E] text-white shadow-md'
-              : 'text-gray-500 hover:text-gray-800'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+              : 'text-gray-500 hover:text-gray-800 hover:bg-orange-50/50'
           }`}
         >
-          Voucher Saya
+          <Ticket className="w-4 h-4 shrink-0" />
+          <span>Voucher Saya</span>
+          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+            activeTab === 'my-vouchers' ? 'bg-white/25 text-white' : 'bg-orange-100 text-orange-700'
+          }`}>
+            {availableCount}
+          </span>
         </button>
         <button
           onClick={() => setActiveTab('voucher-pack')}
-          className={`flex-1 py-3 text-xs font-black rounded-2xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+          className={`flex-1 py-3 px-3 text-xs font-black rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer relative ${
             activeTab === 'voucher-pack'
-              ? 'bg-[#B48A5E] text-white shadow-md'
-              : 'text-gray-500 hover:text-gray-800'
+              ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+              : 'text-gray-500 hover:text-gray-800 hover:bg-orange-50/50'
           }`}
         >
-          <Gift className="w-4 h-4" />
-          Voucher Pack
+          <Gift className="w-4 h-4 shrink-0" />
+          <span>Klaim Promo Gratis</span>
+          {claimableTemplates.length > 0 && (
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+              activeTab === 'voucher-pack'
+                ? 'bg-white/25 text-white'
+                : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white animate-pulse'
+            }`}>
+              {claimableTemplates.length} Baru
+            </span>
+          )}
         </button>
       </div>
 
       {activeTab === 'my-vouchers' ? (
-        <div className="space-y-6">
-          {/* Input Klaim Voucher */}
-          <div className="bg-white/80 border border-[#D4A574]/15 shadow-sm rounded-3xl p-5 space-y-4">
-            <h3 className="font-serif text-sm font-bold text-gray-800 flex items-center gap-2">
-              <Ticket className="w-4 h-4 text-[#B48A5E]" />
-              Punya Kode Voucher?
-            </h3>
+        <div className="space-y-5">
+          {/* Input Klaim Kode Promo */}
+          <div className="bg-white border border-orange-100 shadow-sm rounded-3xl p-5 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                <div className="w-7 h-7 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center border border-orange-100">
+                  <Ticket className="w-4 h-4" />
+                </div>
+                Punya Kode Promo atau Voucher?
+              </h3>
+              <span className="text-[11px] font-bold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-full">
+                Klaim Instan
+              </span>
+            </div>
             <form onSubmit={(e) => { e.preventDefault(); handleClaim(claimCode); }} className="flex gap-2">
               <input
                 type="text"
                 value={claimCode}
                 onChange={(e) => setClaimCode(e.target.value)}
-                placeholder="Contoh: ARUMSEDUHBARU"
-                className="flex-1 min-w-0 px-3.5 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E]/60 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
+                placeholder="Masukkan kode promo (contoh: HEMAT10K)"
+                className="flex-1 min-w-0 px-4 py-3.5 bg-orange-50/40 border border-orange-200/70 rounded-2xl focus:bg-white focus:border-orange-500 focus:ring-2 focus:ring-orange-500/15 outline-none text-sm font-black uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all"
                 disabled={claiming}
               />
               <button
                 type="submit"
                 disabled={claiming || !claimCode.trim()}
-                className="px-4.5 py-3.5 bg-[#B48A5E] hover:bg-[#946F48] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md shadow-[#B48A5E]/10 cursor-pointer"
+                className="px-5 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-100 disabled:to-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-xs uppercase tracking-wider shadow-md shadow-orange-500/15 cursor-pointer"
               >
-                {claiming ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Klaim'}
+                {claiming && claimingCode === claimCode ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Klaim Kode'}
               </button>
             </form>
 
             {claimError && (
-              <p className="text-xs text-red-500 font-bold px-1">{claimError}</p>
+              <div className="flex items-center gap-2 text-xs text-red-600 font-bold bg-red-50 border border-red-100 px-3.5 py-2.5 rounded-xl">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{claimError}</span>
+              </div>
             )}
             {claimSuccess && (
-              <p className="text-xs text-emerald-600 font-bold px-1">{claimSuccess}</p>
+              <div className="flex items-center gap-2 text-xs text-emerald-700 font-bold bg-emerald-50 border border-emerald-100 px-3.5 py-2.5 rounded-xl">
+                <Check className="w-4 h-4 shrink-0" />
+                <span>{claimSuccess}</span>
+              </div>
             )}
           </div>
 
-          {/* Pill Filter Tabs */}
-          <div className="flex gap-1.5 p-1.5 bg-[#FFFBF5]/85 border border-[#D4A574]/15 rounded-2xl shadow-inner">
+          {/* Spotlight Banner when there are unclaimed free promos */}
+          {claimableTemplates.length > 0 && (
+            <div className="bg-gradient-to-r from-orange-500 via-orange-500 to-amber-500 rounded-3xl p-4 text-white shadow-md shadow-orange-500/15 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0 border border-white/25">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div className="min-w-0">
+                  <h4 className="text-sm font-black leading-tight">
+                    Ada {claimableTemplates.length} Promo Gratis Siap Diklaim!
+                  </h4>
+                  <p className="text-xs text-orange-50 font-medium truncate mt-0.5">
+                    Klaim gratis sekarang agar bisa langsung dipakai saat Checkout.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('voucher-pack')}
+                className="px-3.5 py-2.5 bg-white text-orange-600 hover:bg-orange-50 rounded-xl text-xs font-black shrink-0 shadow-sm transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <span>Klaim Gratis</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Pill Filter Tabs: Tersedia, Terpakai, Kedaluwarsa */}
+          <div className="flex gap-1.5 p-1.5 bg-orange-50/70 border border-orange-100 rounded-2xl">
             <button
               onClick={() => setFilter('AVAILABLE')}
-              className={`flex-1 py-2.5 text-center text-xs rounded-xl transition-all ${
+              className={`flex-1 py-2.5 text-center text-xs rounded-xl transition-all cursor-pointer ${
                 filter === 'AVAILABLE'
-                  ? 'bg-gradient-to-br from-[#B48A5E] to-[#946F48] text-white shadow-md font-black'
-                  : 'text-gray-500 hover:text-gray-800 font-bold hover:bg-white/40'
+                  ? 'bg-white text-orange-600 shadow-sm border border-orange-200/60 font-black'
+                  : 'text-gray-500 hover:text-gray-800 font-bold hover:bg-white/50'
               }`}
             >
-              Tersedia ({vouchers.filter(v => !v.isUsed && (!v.expiresAt || new Date(v.expiresAt) >= now)).length})
+              Tersedia ({availableCount})
             </button>
             <button
               onClick={() => setFilter('USED')}
-              className={`flex-1 py-2.5 text-center text-xs rounded-xl transition-all ${
+              className={`flex-1 py-2.5 text-center text-xs rounded-xl transition-all cursor-pointer ${
                 filter === 'USED'
-                  ? 'bg-gradient-to-br from-[#B48A5E] to-[#946F48] text-white shadow-md font-black'
-                  : 'text-gray-500 hover:text-gray-800 font-bold hover:bg-white/40'
+                  ? 'bg-white text-orange-600 shadow-sm border border-orange-200/60 font-black'
+                  : 'text-gray-500 hover:text-gray-800 font-bold hover:bg-white/50'
               }`}
             >
-              Terpakai ({vouchers.filter(v => v.isUsed).length})
+              Terpakai ({usedCount})
             </button>
             <button
               onClick={() => setFilter('EXPIRED')}
-              className={`flex-1 py-2.5 text-center text-xs rounded-xl transition-all ${
+              className={`flex-1 py-2.5 text-center text-xs rounded-xl transition-all cursor-pointer ${
                 filter === 'EXPIRED'
-                  ? 'bg-gradient-to-br from-[#B48A5E] to-[#946F48] text-white shadow-md font-black'
-                  : 'text-gray-500 hover:text-gray-800 font-bold hover:bg-white/40'
+                  ? 'bg-white text-orange-600 shadow-sm border border-orange-200/60 font-black'
+                  : 'text-gray-500 hover:text-gray-800 font-bold hover:bg-white/50'
               }`}
             >
-              Kedaluwarsa ({vouchers.filter(v => !v.isUsed && v.expiresAt && new Date(v.expiresAt) < now).length})
+              Kedaluwarsa ({expiredCount})
             </button>
           </div>
 
-          {/* Active Vouchers List */}
-          <div className="space-y-3">
-            {filteredVouchers.length === 0 ? (
-              <div className="text-center py-12 px-6 bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm">
-                <Gift className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <h4 className="font-serif text-base text-gray-800 mb-1 font-bold">
-                  {filter === 'AVAILABLE' ? 'Belum Ada Voucher Aktif' : filter === 'USED' ? 'Belum Ada Voucher Terpakai' : 'Belum Ada Voucher Kedaluwarsa'}
-                </h4>
-                <p className="text-[12px] text-gray-500 max-w-xs mx-auto leading-relaxed font-semibold">
-                  {filter === 'AVAILABLE'
-                    ? 'Kumpulkan poin pesanan Anda atau klaim kode promo di atas untuk mendapatkan voucher!'
-                    : 'Voucher yang telah sukses digunakan untuk transaksi akan tercantum di sini.'}
-                </p>
+          {/* Vouchers List */}
+          <div className="space-y-3.5">
+            {loading ? (
+              <SectionSkeleton type="vouchers" />
+            ) : filteredVouchers.length === 0 ? (
+              <div className="text-center py-10 px-6 bg-white rounded-3xl border border-orange-100 shadow-sm space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto border border-orange-100">
+                  <Ticket className="w-7 h-7" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-base text-gray-900 font-black">
+                    {filter === 'AVAILABLE'
+                      ? 'Belum Ada Voucher Aktif di Dompetmu'
+                      : filter === 'USED'
+                      ? 'Belum Ada Riwayat Voucher Terpakai'
+                      : 'Tidak Ada Voucher Kedaluwarsa'}
+                  </h4>
+                  <p className="text-xs text-gray-500 max-w-xs mx-auto leading-relaxed font-medium">
+                    {filter === 'AVAILABLE'
+                      ? claimableTemplates.length > 0
+                        ? `Terdapat ${claimableTemplates.length} promo gratis yang siap Anda klaim sekarang!`
+                        : 'Masukkan kode promo di atas atau tukarkan poin pesanan Anda untuk mendapatkan voucher diskon.'
+                      : filter === 'USED'
+                      ? 'Voucher yang sudah Anda gunakan saat transaksi di Arum Seduh akan tercatat di sini.'
+                      : 'Semua voucher Anda masih aktif atau sudah digunakan.'}
+                  </p>
+                </div>
+                {filter === 'AVAILABLE' && claimableTemplates.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('voucher-pack')}
+                    className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black rounded-2xl shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+                  >
+                    <Gift className="w-4 h-4" />
+                    <span>Lihat {claimableTemplates.length} Promo Gratis</span>
+                  </button>
+                )}
               </div>
             ) : (
               <div className="space-y-3.5">
-                {filteredVouchers.map((v, i) => (
-                  <motion.div
-                    key={v.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    onClick={() => filter === 'AVAILABLE' && router.push(`/vouchers/${v.id}`)}
-                    className={`ticket-card rounded-2xl border border-[#D4A574]/20 shadow-sm overflow-hidden flex items-stretch transition-all relative min-h-[105px] ${
-                      filter === 'AVAILABLE' ? 'cursor-pointer hover:border-[#B48A5E]/40 hover:shadow-md active:scale-[0.99] group' : 'opacity-70'
-                    }`}
-                  >
-                    {/* Punch Holes */}
-                    <div className="absolute left-[52px] -top-2.5 w-5 h-5 bg-[#FDFBF7] rounded-full border border-gray-150/80 z-10" />
-                    <div className="absolute left-[52px] -bottom-2.5 w-5 h-5 bg-[#FDFBF7] rounded-full border border-gray-150/80 z-10" />
+                {filteredVouchers.map((v, i) => {
+                  const title = v.template?.title || v.description;
+                  const subtitle = v.template?.title ? v.description : null;
+                  const minPurchase = v.template?.minPurchase || 0;
+                  const maxDiscount = v.template?.maxDiscount || 0;
+                  const badgeLabel = getVoucherTypeBadge(v.type, v.template?.discountValue, v.discountAmount);
 
-                    {/* Left Stub */}
-                    <div className="w-14 relative border-r border-dashed border-[#D4A574]/30 shrink-0 overflow-hidden flex items-center justify-center">
-                      {v.template?.bannerImage ? (
-                        <img 
-                          src={v.template.bannerImage} 
-                          alt="Banner" 
-                          className="absolute inset-0 w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-[#1E3F20] to-[#2E5A44] flex flex-col items-center justify-center text-2xl text-[#D4A574]">
-                          {getVoucherIcon(v.type)}
-                        </div>
-                      )}
-                    </div>
-                    
-                    {/* Details */}
-                    <div className="flex-1 p-4 pl-5 relative overflow-hidden flex flex-col justify-between">
-                      <Coffee className="absolute right-2 -bottom-4 w-20 h-20 text-[#2E5A44] opacity-[0.03] pointer-events-none rotate-12" />
-                      
-                      <div>
-                        <h4 className="text-[14px] font-black text-gray-900 leading-snug">{v.description}</h4>
-                        <span className="text-[9px] font-mono font-bold text-[#B48A5E] bg-[#B48A5E]/5 px-2 py-0.5 rounded border border-[#B48A5E]/15 mt-1.5 inline-block uppercase">
-                          Kode: {v.code.slice(0, 8).toUpperCase()}
-                        </span>
+                  return (
+                    <motion.div
+                      key={v.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.04 }}
+                      onClick={() => router.push(`/vouchers/${v.id}`)}
+                      className={`bg-white rounded-3xl border shadow-sm overflow-hidden flex items-stretch transition-all relative ${
+                        filter === 'AVAILABLE'
+                          ? 'border-orange-200/80 hover:border-orange-400 hover:shadow-md cursor-pointer group'
+                          : 'border-gray-200 opacity-75 cursor-pointer'
+                      }`}
+                    >
+                      {/* Ticket Perforation Cutouts */}
+                      <div className="absolute left-[68px] -top-2.5 w-5 h-5 bg-[#FDFBF7] rounded-full border border-orange-200/60 z-10" />
+                      <div className="absolute left-[68px] -bottom-2.5 w-5 h-5 bg-[#FDFBF7] rounded-full border border-orange-200/60 z-10" />
+
+                      {/* Left Stub */}
+                      <div className="w-[78px] relative border-r border-dashed border-orange-200 shrink-0 overflow-hidden flex flex-col items-center justify-center p-2 text-center">
+                        {v.template?.bannerImage ? (
+                          <img
+                            src={v.template.bannerImage}
+                            alt={title}
+                            className="absolute inset-0 w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className={`w-full h-full rounded-2xl flex flex-col items-center justify-center gap-1 p-1.5 ${
+                              filter === 'AVAILABLE'
+                                ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white'
+                                : 'bg-gray-100 text-gray-400'
+                            }`}
+                          >
+                            {renderVoucherIcon(v.type, 'w-6 h-6')}
+                            <span className="text-[9px] font-black uppercase tracking-tighter leading-tight line-clamp-2">
+                              {v.type === 'DISCOUNT_PCT' && v.template?.discountValue
+                                ? `${v.template.discountValue}%`
+                                : 'PROMO'}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      
-                      {v.expiresAt && (
-                        <p className={`text-[10px] font-semibold mt-2 ${filter === 'AVAILABLE' ? 'text-amber-600' : 'text-gray-400'}`}>
-                          Berlaku s/d {new Date(v.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                        </p>
-                      )}
-                    </div>
 
-                    {/* Badge */}
-                    <div className="flex flex-col items-center justify-center px-4 border-l border-gray-50 bg-[#FFFBF5]/35 shrink-0 select-none">
-                      {filter === 'AVAILABLE' ? (
-                        <span className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-[#B48A5E] to-[#D4A574] text-white text-[10px] font-extrabold uppercase tracking-wider shadow-sm group-hover:from-[#946F48] group-hover:to-[#B48A5E] transition-all">
-                          Gunakan
-                        </span>
-                      ) : filter === 'USED' ? (
-                        <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
-                          Terpakai
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-                          Hangus
-                        </span>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
+                      {/* Middle Details */}
+                      <div className="flex-1 p-4 pl-5 min-w-0 flex flex-col justify-between gap-2">
+                        <div className="space-y-1">
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                filter === 'AVAILABLE'
+                                  ? 'bg-orange-100 text-orange-700'
+                                  : 'bg-gray-100 text-gray-500'
+                              }`}
+                            >
+                              {badgeLabel}
+                            </span>
+                            {minPurchase > 0 ? (
+                              <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                                Min. {formatRupiah(minPurchase)}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                Tanpa Min. Belanja
+                              </span>
+                            )}
+                            {maxDiscount > 0 && v.type === 'DISCOUNT_PCT' && (
+                              <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
+                                Maks. {formatRupiah(maxDiscount)}
+                              </span>
+                            )}
+                          </div>
+
+                          <h4 className="text-sm font-black text-gray-900 leading-snug line-clamp-1">
+                            {title}
+                          </h4>
+                          {subtitle && (
+                            <p className="text-xs text-gray-500 font-medium line-clamp-1">
+                              {subtitle}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between flex-wrap gap-2 pt-1 border-t border-gray-100">
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyCode(v.code, e)}
+                            className="inline-flex items-center gap-1.5 text-[10px] font-mono font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200/60 transition-colors cursor-pointer"
+                            title="Salin kode voucher"
+                          >
+                            {copiedCode === v.code ? (
+                              <>
+                                <Check className="w-3 h-3 text-emerald-600" />
+                                <span className="text-emerald-700">Tersalin</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="w-3 h-3" />
+                                <span>{v.code}</span>
+                              </>
+                            )}
+                          </button>
+
+                          {v.expiresAt && (
+                            <span
+                              className={`text-[10px] font-bold flex items-center gap-1 ${
+                                filter === 'AVAILABLE' ? 'text-amber-600' : 'text-gray-400'
+                              }`}
+                            >
+                              <Clock className="w-3 h-3" />
+                              s/d{' '}
+                              {new Date(v.expiresAt).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Right Action Column */}
+                      <div className="flex flex-col items-center justify-center px-3.5 border-l border-gray-100 bg-orange-50/30 shrink-0 gap-1.5">
+                        {filter === 'AVAILABLE' ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => handleUseVoucher(v, e)}
+                              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-[11px] font-black uppercase tracking-wider shadow-sm shadow-orange-500/20 transition-all cursor-pointer"
+                            >
+                              Pakai
+                            </button>
+                            <span className="text-[10px] font-bold text-orange-600 hover:underline">
+                              Detail
+                            </span>
+                          </>
+                        ) : filter === 'USED' ? (
+                          <span className="px-2.5 py-1 rounded-full bg-gray-100 text-gray-500 text-[10px] font-black uppercase tracking-wider">
+                            Terpakai
+                          </span>
+                        ) : (
+                          <span className="px-2.5 py-1 rounded-full bg-red-50 text-red-500 text-[10px] font-black uppercase tracking-wider">
+                            Kedaluwarsa
+                          </span>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       ) : (
-        /* Voucher Pack (Templates list) */
+        /* Klaim Promo Gratis (Claimable Templates List) */
         <div className="space-y-4">
+          <div className="bg-orange-50/80 border border-orange-200/70 rounded-2xl p-4 flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="text-xs text-gray-700 leading-relaxed">
+              <p className="font-black text-gray-900">Pusat Klaim Promo Gratis Arum Seduh</p>
+              <p className="font-medium text-gray-600 mt-0.5">
+                Pilih promo di bawah lalu tekan <strong className="text-orange-600">Klaim Gratis</strong> untuk menyimpannya ke Voucher Saya, atau <strong className="text-orange-600">Klaim & Pakai</strong> untuk langsung menggunakannya di pesanan Anda.
+              </p>
+            </div>
+          </div>
+
           {loading ? (
             <SectionSkeleton type="vouchers" />
           ) : claimableTemplates.length === 0 ? (
-            <div className="text-center py-12 px-6 bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm">
-              <Gift className="w-12 h-12 text-[#B48A5E] mx-auto mb-3" />
-              <h4 className="font-serif text-base text-gray-800 mb-1 font-bold">Tidak Ada Voucher Pack</h4>
-              <p className="text-sm text-[#A69F94] font-medium leading-relaxed">Saat ini semua voucher pack yang tersedia telah Anda klaim.</p>
+            <div className="text-center py-12 px-6 bg-white rounded-3xl border border-orange-100 shadow-sm space-y-3">
+              <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto border border-orange-100">
+                <Check className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-base text-gray-900 font-black">Semua Promo Gratis Sudah Diklaim!</h4>
+                <p className="text-xs text-gray-500 font-medium max-w-xs mx-auto leading-relaxed">
+                  Seluruh promo gratis yang tersedia saat ini sudah masuk ke tab Voucher Saya. Yuk gunakan untuk memesan minuman favoritmu!
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('my-vouchers')}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                <Ticket className="w-4 h-4" />
+                <span>Lihat Voucher Saya ({availableCount})</span>
+              </button>
             </div>
           ) : (
             <div className="space-y-3.5">
-              {claimableTemplates.map((t, i) => (
-                <motion.div
-                  key={t.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05 }}
-                  className="relative border border-dashed border-[#B48A5E]/30 rounded-2xl bg-white p-5 shadow-sm overflow-hidden flex flex-col justify-between"
-                >
-                  <div className="absolute left-[-8px] top-[70%] -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF7] border-r border-[#B48A5E]/20 z-10" />
-                  <div className="absolute right-[-8px] top-[70%] -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF7] border-l border-[#B48A5E]/20 z-10" />
+              {claimableTemplates.map((t, i) => {
+                const badgeLabel = getVoucherTypeBadge(t.type, t.discountValue);
+                const hasQuotaLimit = t.usageLimit > 0;
+                const remainingQuota = hasQuotaLimit ? Math.max(0, t.usageLimit - (t.usageCount || 0)) : null;
+                const quotaPercent = hasQuotaLimit
+                  ? Math.min(100, Math.round(((t.usageCount || 0) / t.usageLimit) * 100))
+                  : 0;
+                const isThisClaiming = claiming && claimingCode === t.code;
 
-                  <div className="pb-3.5 border-b border-dashed border-gray-150 flex items-start justify-between gap-4">
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-[#B48A5E] bg-[#B48A5E]/5">
-                        {t.type}
-                      </span>
-                      <h4 className="font-serif font-black text-base text-gray-900 leading-snug truncate">{t.title}</h4>
-                      <p className="text-xs text-gray-500 line-clamp-1">{t.description}</p>
-                      <p className="text-[11px] text-[#B48A5E] font-bold">Min. Belanja {formatRupiah(t.minPurchase)}</p>
+                return (
+                  <motion.div
+                    key={t.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.05 }}
+                    className="relative border border-orange-200 rounded-3xl bg-white p-5 shadow-sm hover:border-orange-300 hover:shadow-md transition-all overflow-hidden flex flex-col justify-between gap-4"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex flex-col items-center justify-center shrink-0 shadow-sm shadow-orange-500/20">
+                        {renderVoucherIcon(t.type, 'w-6 h-6')}
+                      </div>
+
+                      <div className="flex-1 min-w-0 space-y-1.5">
+                        <div className="flex items-center flex-wrap gap-1.5">
+                          <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-orange-700 bg-orange-100">
+                            {badgeLabel}
+                          </span>
+                          {t.targetNewUserOnly && (
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-amber-700 bg-amber-100">
+                              Khusus Pengguna Baru
+                            </span>
+                          )}
+                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold text-gray-600 bg-gray-100">
+                            {t.minPurchase > 0 ? `Min. Belanja ${formatRupiah(t.minPurchase)}` : 'Tanpa Min. Belanja'}
+                          </span>
+                        </div>
+
+                        <h4 className="font-black text-base text-gray-900 leading-snug">{t.title}</h4>
+                        <p className="text-xs text-gray-600 leading-relaxed">{t.description}</p>
+
+                        {hasQuotaLimit && remainingQuota !== null && (
+                          <div className="pt-1 space-y-1">
+                            <div className="flex justify-between text-[10px] font-bold">
+                              <span className="text-orange-600">Sisa kuota: {remainingQuota} voucher</span>
+                              <span className="text-gray-400">{quotaPercent}% diklaim</span>
+                            </div>
+                            <div className="w-full h-1.5 bg-orange-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full transition-all"
+                                style={{ width: `${Math.max(8, quotaPercent)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => handleClaim(t.code)}
-                        disabled={claiming}
-                        className="px-4 py-2 bg-[#B48A5E] text-white rounded-xl font-bold text-xs hover:bg-[#946F48] transition-all disabled:opacity-50"
-                      >
-                        {claiming ? 'Loading' : 'Klaim'}
-                      </button>
+
+                    <div className="pt-3.5 border-t border-dashed border-orange-100 flex items-center justify-between flex-wrap gap-3">
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-500">
+                        <Clock className="w-3.5 h-3.5 text-orange-500" />
+                        <span>
+                          Berlaku s/d{' '}
+                          {t.expiresAt
+                            ? new Date(t.expiresAt).toLocaleDateString('id-ID', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                              })
+                            : '30 Hari setelah klaim'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleClaim(t.code, false)}
+                          disabled={claiming}
+                          className="px-4 py-2.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl font-black text-xs transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                        >
+                          {isThisClaiming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                          <span>Klaim Gratis</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleClaim(t.code, true)}
+                          disabled={claiming}
+                          className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-black text-xs shadow-sm shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                        >
+                          {isThisClaiming ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                          <span>Klaim & Pakai</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400">
-                    <span>Masa Berlaku hingga {t.expiresAt ? new Date(t.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '30 Hari'}</span>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>

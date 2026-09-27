@@ -13,7 +13,8 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { useSession } from 'next-auth/react';
-import { formatRupiah } from '@/lib/utils';
+import { formatRupiah, cn } from '@/lib/utils';
+import { useCartStore } from '@/stores/cart-store';
 
 interface ActiveOrder {
   id: string;
@@ -33,6 +34,12 @@ export function ActiveOrderPopup() {
   const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
   const [isDismissed, setIsDismissed] = useState(false);
   const [lastSeenStatus, setLastSeenStatus] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const totalCartItems = useCartStore((s) => s.totalItems);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Poll for active orders every 10 seconds
   useEffect(() => {
@@ -203,6 +210,14 @@ export function ActiveOrderPopup() {
     }
   };
 
+  const isFloatingCartVisible =
+    mounted &&
+    totalCartItems() > 0 &&
+    !pathname?.startsWith('/profile') &&
+    !pathname?.startsWith('/checkout') &&
+    !pathname?.startsWith('/orders') &&
+    !pathname?.startsWith('/spmb');
+
   return (
     <AnimatePresence>
       <motion.div
@@ -210,7 +225,10 @@ export function ActiveOrderPopup() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 30, scale: 0.95 }}
         transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-        className="fixed bottom-20 md:bottom-6 left-3 right-3 sm:left-auto sm:right-6 sm:w-[390px] z-[88]"
+        className={cn(
+          'fixed left-3 right-3 sm:left-auto sm:right-6 sm:w-[390px] z-[88] transition-[bottom] duration-300',
+          isFloatingCartVisible ? 'bottom-[168px] md:bottom-6' : 'bottom-[92px] md:bottom-6'
+        )}
       >
         <div className="relative bg-[#16100C]/95 backdrop-blur-xl border border-[#D4A574]/30 rounded-[1.75rem] shadow-[0_20px_50px_rgba(0,0,0,0.5),0_0_0_1px_rgba(212,165,116,0.15)] text-[#FFFBF5] overflow-hidden">
           {/* Subtle Ambient Glow */}

@@ -16,12 +16,14 @@ const QROverlay = dynamic(() => import('@/components/storefront/QROverlay').then
 const LoginBottomSheet = dynamic(() => import('@/components/auth/LoginBottomSheet').then(m => ({ default: m.LoginBottomSheet })), { ssr: false });
 const ActiveOrderPopup = dynamic(() => import('@/components/storefront/ActiveOrderPopup').then(m => ({ default: m.ActiveOrderPopup })), { ssr: false });
 
-// Context to pass search control down to page
+// Context to pass search and QR control down to storefront components
 interface StorefrontContextType {
   openSearch: () => void;
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
   openQR: () => void;
+  qrOpen: boolean;
+  setQrOpen: (open: boolean) => void;
   openLogin: () => void;
 }
 
@@ -30,6 +32,8 @@ const StorefrontContext = createContext<StorefrontContextType>({
   searchOpen: false,
   setSearchOpen: () => {},
   openQR: () => {},
+  qrOpen: false,
+  setQrOpen: () => {},
   openLogin: () => {},
 });
 
@@ -128,22 +132,28 @@ export default function StorefrontLayout({
   return (
     <StorefrontContext.Provider
       value={{
-        openSearch: () => setSearchOpen(true),
+        openSearch: () => {
+          setQrOpen(false);
+          setSearchOpen(true);
+        },
         searchOpen,
         setSearchOpen,
         openQR: () => {
+          setSearchOpen(false);
           if (status === 'unauthenticated') {
             setLoginOpen(true);
           } else {
             setQrOpen(true);
           }
         },
+        qrOpen,
+        setQrOpen,
         openLogin: () => setLoginOpen(true),
       }}
     >
       <div className="min-h-dvh bg-background">
         <AppHeader onSearchClick={() => setSearchOpen(true)} />
-        <main className={pathname === '/spmb' ? "pb-0" : "pb-20 md:pb-0"}>{children}</main>
+        <main className={pathname === '/spmb' ? "pb-0" : "pb-24 md:pb-0"}>{children}</main>
         {pathname !== '/spmb' && <FloatingCart />}
         <ActiveOrderPopup />
         {pathname !== '/spmb' && !pathname?.startsWith('/spmb') && <PromoPopup />}

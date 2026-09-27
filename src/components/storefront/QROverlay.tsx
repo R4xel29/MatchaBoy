@@ -189,17 +189,21 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] bg-black flex flex-col pt-safe"
+          className="fixed inset-0 z-[100] bg-gradient-to-b from-[#1A120B] via-[#120C08] to-[#0D0906] flex flex-col pt-safe"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-4">
+          <div className="flex items-center justify-between px-4 py-4 max-w-md mx-auto w-full">
             <button
               onClick={onClose}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white"
+              className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/10 hover:bg-white/15 border border-amber-300/20 text-white transition-colors cursor-pointer"
+              aria-label="Tutup QR Arum Seduh"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
-            <h2 className="text-white font-bold text-lg">QR Arus</h2>
+            <div className="text-center">
+              <h2 className="text-white font-serif font-black text-base tracking-tight">QR Arum Seduh</h2>
+              <p className="text-[10px] font-bold text-amber-300/80 uppercase tracking-widest">Member & Scan Meja</p>
+            </div>
             <div className="w-10" /> {/* Spacer */}
           </div>
 
@@ -215,39 +219,39 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
                   className="w-full max-w-sm flex flex-col items-center"
                 >
                   {/* Info Box */}
-                  <div className="w-full bg-white/10 rounded-2xl p-4 mb-8 text-center border border-white/10 backdrop-blur-md">
-                    <p className="text-white text-sm font-medium mb-1">Tunjukkan QR Code ke kasir</p>
-                    <p className="text-white/60 text-xs">Dapatkan potensi cashback Arus Points</p>
+                  <div className="w-full bg-gradient-to-r from-orange-500/15 via-amber-500/10 to-orange-500/15 rounded-2xl p-4 mb-6 text-center border border-amber-400/25 backdrop-blur-md">
+                    <p className="text-amber-100 text-sm font-bold mb-0.5">Tunjukkan QR Code ke Kasir</p>
+                    <p className="text-amber-200/70 text-xs">Dapatkan potensi cashback Poin Arum Seduh</p>
                   </div>
 
                   {/* QR Card */}
-                  <div className="bg-white rounded-[32px] p-8 shadow-2xl w-full aspect-square flex flex-col items-center justify-center">
+                  <div className="bg-[#FFFDF9] rounded-[32px] p-7 shadow-[0_24px_60px_rgba(0,0,0,0.6),0_0_25px_rgba(234,88,12,0.15)] border border-amber-200/80 w-full aspect-square flex flex-col items-center justify-center">
                     {referralCode ? (
                       <>
                         <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(referralCode)}&bgcolor=ffffff&color=18442D`}
-                          alt="Your QR Code"
-                          className="w-full h-auto"
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(referralCode)}&bgcolor=FFFDF9&color=2A1F16`}
+                          alt="QR Member Arum Seduh"
+                          className="w-full h-auto rounded-2xl"
                         />
-                        <p className="mt-6 font-mono font-bold text-brand-700 tracking-[0.2em]">
+                        <p className="mt-5 font-mono font-extrabold text-orange-700 bg-orange-50 border border-orange-200/80 px-4 py-1.5 rounded-full text-xs tracking-[0.2em]">
                           {referralCode}
                         </p>
                       </>
                     ) : (
                       <div className="flex flex-col items-center gap-3">
-                        <QrCode className="w-12 h-12 text-brand-100 animate-pulse" />
-                        <p className="text-sm text-brand-300 font-medium text-center">
+                        <QrCode className="w-12 h-12 text-amber-300 animate-pulse" />
+                        <p className="text-sm text-stone-600 font-medium text-center">
                           {error || "Menyiapkan QR Code..."}
                         </p>
                         {error && (
                           <button 
                             onClick={() => window.location.reload()}
-                            className="mt-2 text-xs text-brand-600 font-bold underline"
+                            className="mt-2 text-xs text-orange-600 font-bold underline cursor-pointer"
                           >
                             Refresh Halaman
                           </button>
                         )}
-                        <p className="text-[10px] text-gray-300 mt-4 opacity-50">{debugInfo}</p>
+                        <p className="text-[10px] text-stone-400 mt-4 opacity-50">{debugInfo}</p>
                       </div>
                     )}
                   </div>
@@ -260,25 +264,25 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
                   exit={{ opacity: 0 }}
                   className="w-full flex flex-col items-center"
                 >
-                  <p className="text-white/80 text-sm text-center mb-8 px-8">
-                    Scan kode QR di meja (dine-in), QR di struk (join komunitas), ATAU QR di merchandise
+                  <p className="text-amber-100/80 text-xs sm:text-sm text-center mb-6 px-6 max-w-sm">
+                    Scan kode QR di meja (Dine-In), QR di struk kasir, atau QR promo Arum Seduh
                   </p>
 
                   {/* Scanner Frame */}
-                  <div className="relative w-72 h-72 rounded-3xl overflow-hidden bg-black flex items-center justify-center border-2 border-white/20">
+                  <div className="relative w-72 h-72 rounded-3xl overflow-hidden bg-black flex items-center justify-center border-2 border-amber-400/30 shadow-[0_0_30px_rgba(234,88,12,0.15)]">
                     <div ref={scannerRef} className="w-full h-full [&_video]:!object-cover [&_video]:!rounded-3xl" />
                     
                     {cameraActive && (
                       <div className="absolute inset-0 pointer-events-none">
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-56 h-56">
-                          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white rounded-tl-2xl" />
-                          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white rounded-tr-2xl" />
-                          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white rounded-bl-2xl" />
-                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white rounded-br-2xl" />
+                          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-amber-400 rounded-tl-2xl" />
+                          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-amber-400 rounded-tr-2xl" />
+                          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-amber-400 rounded-bl-2xl" />
+                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-amber-400 rounded-br-2xl" />
                           
                           {/* Animated Scanning Line */}
                           <motion.div 
-                            className="absolute left-2 right-2 h-0.5 bg-brand-400 shadow-[0_0_15px_#34d399]"
+                            className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-orange-500 via-amber-300 to-orange-500 shadow-[0_0_15px_#f97316]"
                             animate={{ top: ['0%', '100%', '0%'] }}
                             transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                           />
@@ -291,13 +295,13 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
                     )}
 
                     {!cameraActive && !cameraError && !isStartingCamera && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                        <div className="text-center text-white px-4">
-                          <Camera className="w-12 h-12 mx-auto mb-4 text-white/40" />
-                          <p className="text-sm text-white/80 mb-6">Klik tombol di bawah untuk memberikan izin kamera</p>
+                      <div className="absolute inset-0 flex items-center justify-center bg-[#18110B]">
+                        <div className="text-center text-white px-5">
+                          <Camera className="w-12 h-12 mx-auto mb-4 text-amber-400/60" />
+                          <p className="text-xs text-amber-100/80 mb-5">Klik tombol di bawah untuk mengaktifkan kamera pemindai QR</p>
                           <button 
                             onClick={startCamera}
-                            className="bg-brand-600 hover:bg-brand-500 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-lg active:scale-95"
+                            className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold text-xs py-3 px-6 rounded-2xl transition-all shadow-lg shadow-orange-500/25 active:scale-95 cursor-pointer"
                           >
                             Buka Kamera
                           </button>
@@ -306,22 +310,22 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
                     )}
 
                     {isStartingCamera && !cameraActive && !cameraError && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                        <div className="text-center text-white">
-                          <Camera className="w-8 h-8 mx-auto mb-4 animate-pulse text-brand-400" />
-                          <p className="text-sm font-medium">Meminta izin kamera...</p>
-                          <p className="text-xs text-white/60 mt-2">Pilih "Allow" / "Izinkan" pada pop-up browser</p>
+                      <div className="absolute inset-0 flex items-center justify-center bg-[#18110B]">
+                        <div className="text-center text-white px-4">
+                          <Camera className="w-8 h-8 mx-auto mb-4 animate-pulse text-orange-400" />
+                          <p className="text-sm font-bold">Meminta izin kamera...</p>
+                          <p className="text-xs text-amber-200/60 mt-2">Pilih &quot;Allow&quot; / &quot;Izinkan&quot; pada pop-up browser</p>
                         </div>
                       </div>
                     )}
 
                     {cameraError && (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 p-6">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#18110B] p-6">
                         <CameraOff className="w-10 h-10 mx-auto mb-4 text-red-400" />
                         <p className="text-sm text-center text-red-300 mb-6">{cameraError}</p>
                         <button 
                           onClick={startCamera}
-                          className="bg-white/10 hover:bg-white/20 text-white py-2 px-6 rounded-xl text-sm transition-colors"
+                          className="bg-white/10 hover:bg-white/20 text-white py-2.5 px-6 rounded-2xl text-xs font-bold transition-colors cursor-pointer"
                         >
                           Coba Lagi
                         </button>
@@ -331,12 +335,13 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
 
                   {/* Camera Controls */}
                   {cameraActive && (
-                    <div className="mt-8 flex gap-4">
+                    <div className="mt-6 flex gap-4">
                       <button 
                         onClick={flipCamera}
-                        className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20 transition-colors"
+                        className="w-12 h-12 rounded-full bg-white/10 border border-amber-300/20 flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20 transition-colors cursor-pointer"
+                        aria-label="Balik Kamera"
                       >
-                        <FlipHorizontal2 className="w-6 h-6" />
+                        <FlipHorizontal2 className="w-5 h-5" />
                       </button>
                     </div>
                   )}
@@ -345,32 +350,44 @@ export function QROverlay({ isOpen, onClose }: QROverlayProps) {
             </AnimatePresence>
           </div>
 
-          {/* Bottom Tabs */}
-          <div className="bg-white/5 border-t border-white/10 pb-safe">
-            <div className="flex h-16">
+          {/* Sculpted Floating Bottom Switcher Dock */}
+          <div className="px-4 pb-4 pt-2 pb-safe">
+            <div className="max-w-sm mx-auto p-1.5 rounded-[24px] bg-white/8 backdrop-blur-2xl border border-amber-400/20 flex items-center gap-1.5 shadow-2xl">
               <button
+                type="button"
                 onClick={() => setActiveTab('my-qr')}
                 className={cn(
-                  "flex-1 text-sm font-bold transition-all relative",
-                  activeTab === 'my-qr' ? "text-gold" : "text-white/40"
+                  "flex-1 py-3 rounded-2xl text-xs font-extrabold transition-all relative flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'my-qr' ? "text-white" : "text-amber-100/50 hover:text-amber-100/80"
                 )}
               >
-                My QR
                 {activeTab === 'my-qr' && (
-                  <motion.div layoutId="tab-indicator" className="absolute top-0 left-0 right-0 h-1 bg-gold" />
+                  <motion.div
+                    layoutId="qr-tab-pill"
+                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                    className="absolute inset-0 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 shadow-md shadow-orange-500/25"
+                  />
                 )}
+                <QrCode className="w-4 h-4 relative z-10" />
+                <span className="relative z-10">QR Member Saya</span>
               </button>
               <button
+                type="button"
                 onClick={() => setActiveTab('scan')}
                 className={cn(
-                  "flex-1 text-sm font-bold transition-all relative",
-                  activeTab === 'scan' ? "text-gold" : "text-white/40"
+                  "flex-1 py-3 rounded-2xl text-xs font-extrabold transition-all relative flex items-center justify-center gap-2 cursor-pointer",
+                  activeTab === 'scan' ? "text-white" : "text-amber-100/50 hover:text-amber-100/80"
                 )}
               >
-                Scan QR
                 {activeTab === 'scan' && (
-                  <motion.div layoutId="tab-indicator" className="absolute top-0 left-0 right-0 h-1 bg-gold" />
+                  <motion.div
+                    layoutId="qr-tab-pill"
+                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                    className="absolute inset-0 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 shadow-md shadow-orange-500/25"
+                  />
                 )}
+                <Camera className="w-4 h-4 relative z-10" />
+                <span className="relative z-10">Scan QR Meja</span>
               </button>
             </div>
           </div>

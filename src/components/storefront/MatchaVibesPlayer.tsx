@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, SkipForward, Volume2, Music, X, Disc } from 'lucide-react';
+import { Play, Pause, SkipForward, Volume2, Music, X, Disc, Coffee, Sparkles } from 'lucide-react';
 
 interface Track {
   id: string;
@@ -184,20 +184,21 @@ export function MatchaVibesPlayer() {
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-24 left-4 z-40 p-3 rounded-full bg-gradient-to-tr from-[#1E3F20] to-[#2E5A44] border-2 border-[#FEF08A]/60 text-white shadow-2xl flex items-center justify-center cursor-pointer select-none"
+            className="fixed bottom-[96px] md:bottom-6 left-4 z-40 p-3 rounded-full bg-gradient-to-tr from-[#2A1F16] via-[#3E2A1B] to-[#54391C] border-2 border-amber-400/70 text-white shadow-2xl flex items-center justify-center cursor-pointer select-none"
             style={{
-              boxShadow: '0 8px 24px rgba(46,90,68,0.35), 0 0 10px rgba(254,240,138,0.15)'
+              boxShadow: '0 10px 26px rgba(42,31,22,0.38), 0 0 12px rgba(245,158,11,0.2)'
             }}
+            aria-label="Buka Arum Seduh Vibes Player"
           >
             {/* Visual Vinyl Disc */}
             <div className="relative w-8 h-8 flex items-center justify-center">
               <Disc 
-                className={`w-8 h-8 text-yellow-100/90`} 
+                className="w-8 h-8 text-amber-200/95" 
                 style={{
                   animation: isPlaying ? 'disc-spin 4s linear infinite' : 'none',
                 }}
               />
-              <span className="absolute text-[8px] leading-none select-none">🍵</span>
+              <Coffee className="absolute w-3 h-3 text-orange-400" strokeWidth={2.5} />
               
               {/* Steaming Lofi Indicator */}
               {isPlaying && (
@@ -205,7 +206,7 @@ export function MatchaVibesPlayer() {
                   {[1, 2].map(n => (
                     <div
                       key={n}
-                      className="w-1 h-3 rounded-full bg-white/40 blur-[0.8px]"
+                      className="w-1 h-3 rounded-full bg-amber-200/50 blur-[0.8px]"
                       style={{
                         animation: `tea-steam-lofi 1.2s ease-in-out infinite`,
                         animationDelay: `${n * 0.4}s`
@@ -231,9 +232,9 @@ export function MatchaVibesPlayer() {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-              className="relative w-full max-w-sm rounded-[2.5rem] bg-gradient-to-b from-[#1E3F20]/95 via-[#1E3F20]/90 to-[#102411]/95 text-white p-6 shadow-2xl border-2 border-[#FEF08A]/20 backdrop-blur-md overflow-hidden z-10"
+              className="relative w-full max-w-sm rounded-[2.5rem] bg-gradient-to-b from-[#2A1F16]/95 via-[#1F160F]/95 to-[#16100B]/95 text-white p-6 shadow-2xl border-2 border-amber-400/25 backdrop-blur-md overflow-hidden z-10"
               style={{
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 20px rgba(46,90,68,0.2)'
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.55), 0 0 24px rgba(234,88,12,0.18)'
               }}
             >
               {/* Close Button */}
@@ -246,16 +247,18 @@ export function MatchaVibesPlayer() {
 
               {/* Title & Info */}
               <div className="text-center mt-3 mb-6 space-y-1">
-                <span className="bg-[#FEF08A]/10 border border-[#FEF08A]/25 text-[#FEF08A] text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-widest leading-none">
-                  ✦ Arum Seduh Vibes Player ✦
+                <span className="inline-flex items-center gap-1 bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[8px] font-black uppercase px-2.5 py-0.5 rounded-full tracking-widest leading-none">
+                  <Sparkles className="w-2.5 h-2.5 text-orange-400" />
+                  <span>Arum Seduh Vibes Player</span>
+                  <Sparkles className="w-2.5 h-2.5 text-orange-400" />
                 </span>
                 <h3 className="font-serif text-lg font-black text-white mt-1.5 leading-snug tracking-wide">
                   {currentTrack.title}
                 </h3>
-                <p className="text-[10px] text-gray-300 font-bold uppercase tracking-wider">
+                <p className="text-[10px] text-amber-100/75 font-bold uppercase tracking-wider">
                   {currentTrack.artist}
                 </p>
-                <p className="text-[9px] text-[#FEF08A]/70 font-semibold italic">
+                <p className="text-[9px] text-amber-300/80 font-semibold italic">
                   "{currentTrack.mood}"
                 </p>
               </div>
@@ -275,7 +278,7 @@ export function MatchaVibesPlayer() {
                   {/* Metal arm bar */}
                   <svg width="48" height="80" viewBox="0 0 48 80" fill="none">
                     <path d="M40 5 L10 5 L10 65 L20 72" stroke="#E5E2DD" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <rect x="16" y="68" width="8" height="10" rx="1.5" fill="#FEF08A" />
+                    <rect x="16" y="68" width="8" height="10" rx="1.5" fill="#F59E0B" />
                   </svg>
                 </div>
 
@@ -315,7 +318,7 @@ export function MatchaVibesPlayer() {
                   return (
                     <div
                       key={i}
-                      className="w-1.5 rounded-full bg-gradient-to-t from-[#2E5A44] to-[#FEF08A]"
+                      className="w-1.5 rounded-full bg-gradient-to-t from-orange-600 to-amber-300"
                       style={{
                         animation: isPlaying ? 'vinyl-wave 1.2s ease-in-out infinite' : 'none',
                         animationDelay: `${delay}s`,
@@ -342,11 +345,11 @@ export function MatchaVibesPlayer() {
                   <button
                     onClick={handlePlayPause}
                     style={{
-                      boxShadow: isPlaying ? '0 0 16px rgba(254, 240, 138, 0.35)' : 'none'
+                      boxShadow: isPlaying ? '0 0 18px rgba(249, 115, 22, 0.45)' : 'none'
                     }}
                     className={`w-16 h-16 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 border-2 ${
                       isPlaying 
-                        ? 'bg-gradient-to-tr from-[#FEF08A] to-[#D4A574] border-[#FEF08A] text-[#1E3F20]'
+                        ? 'bg-gradient-to-tr from-orange-500 to-amber-400 border-amber-300 text-white'
                         : 'bg-white/10 border-white/20 text-white hover:bg-white/15'
                     }`}
                   >

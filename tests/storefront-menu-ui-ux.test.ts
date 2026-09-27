@@ -153,4 +153,26 @@ describe('Tier 1.18: Storefront Food & Beverage Menu UI/UX Compliance (Desktop &
     expect(searchContent.includes('productMatchesCategory')).toBeTruthy();
     expect(searchContent.includes('className="flex-1 overflow-y-auto pb-28 relative"')).toBeTruthy();
   });
+
+  it('T1.18.7: BottomNav and FloatingCart implement Arum Seduh Floating Glass Dock UX, Live Badges, and Rule 8 Discount Transparency', () => {
+    const bottomNavContent = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/components/storefront/BottomNav.tsx'),
+      'utf8'
+    );
+    expect(bottomNavContent.includes('Navigasi Utama Arum Seduh')).toBeTruthy();
+    expect(bottomNavContent.includes('arum-bottom-nav-pill')).toBeTruthy();
+    expect(bottomNavContent.includes('arum-bottom-nav-indicator')).toBeTruthy();
+    expect(bottomNavContent.includes('from-orange-500 to-amber-500')).toBeTruthy();
+    expect(bottomNavContent.includes('unusedVoucherCount')).toBeTruthy();
+    expect(bottomNavContent.includes('cartCount')).toBeTruthy();
+    expect(bottomNavContent.includes('Matchaboy')).toBeFalsy();
+
+    const floatingCartContent = fs.readFileSync(
+      path.resolve(process.cwd(), 'src/components/storefront/FloatingCart.tsx'),
+      'utf8'
+    );
+    expect(floatingCartContent.includes('{formatRupiah(price)} - {formatRupiah(discount)} = {formatRupiah(finalPrice)}')).toBeTruthy();
+    expect(floatingCartContent.includes('bottom-[92px]')).toBeTruthy();
+    expect(floatingCartContent.includes('Matchaboy')).toBeFalsy();
+  });
 });

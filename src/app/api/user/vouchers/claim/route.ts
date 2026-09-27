@@ -144,7 +144,7 @@ export async function POST(req: Request) {
       // Generate a unique voucher instance code with a longer suffix to prevent collisions (M9)
       const userVoucherCode = `${lockedTemplate.code}-${Math.random().toString(36).substring(2, 12).toUpperCase()}`
 
-      // Create personal voucher
+      // Create personal voucher with template metadata included
       return tx.voucher.create({
         data: {
           userId: session.user.id,
@@ -155,6 +155,9 @@ export async function POST(req: Request) {
           expiresAt: voucherExpiresAt,
           templateId: lockedTemplate.id,
           isUsed: false
+        },
+        include: {
+          template: true
         }
       })
     }, {

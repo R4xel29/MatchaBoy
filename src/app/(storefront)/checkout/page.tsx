@@ -1208,7 +1208,11 @@ export default function CheckoutPage() {
       const res = await fetch('/api/checkout/validate-voucher', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: voucherCode.trim() }),
+        body: JSON.stringify({
+          code: voucherCode.trim(),
+          items: checkoutItems,
+          subtotal,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -1947,45 +1951,78 @@ export default function CheckoutPage() {
           {/* ── 5. Voucher & Loyalty Points ── */}
           <div className="space-y-4">
             <div className="space-y-0 select-none">
-              {hasUnusableVouchers && (
+              {!appliedVoucher && claimableTemplates.length > 0 ? (
+                <div className="bg-gradient-to-r from-orange-50 to-amber-50 text-orange-800 text-xs font-bold px-4 py-2.5 rounded-t-2xl border border-b-0 border-orange-200/80 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Gift className="w-4 h-4 shrink-0 text-orange-600" />
+                    <span>Ada {claimableTemplates.length} promo gratis siap diklaim & dipakai!</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVoucherModalTab('pack');
+                      setIsVoucherModalOpen(true);
+                    }}
+                    className="text-orange-600 font-black hover:underline text-[11px] cursor-pointer"
+                  >
+                    Klaim Gratis
+                  </button>
+                </div>
+              ) : hasUnusableVouchers && !appliedVoucher ? (
                 <div className="bg-[#FFF4E6] text-[#D97706] text-xs font-semibold px-4 py-3 rounded-t-2xl border border-b-0 border-[#FAD9C1] flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 shrink-0 text-[#D97706]" />
                     <span>Tambah pesanan untuk pakai voucher hemat</span>
                   </div>
-                  <button type="button" onClick={() => setIsVoucherModalOpen(true)} className="text-orange-600 font-bold hover:underline text-[11px]">
+                  <button type="button" onClick={() => setIsVoucherModalOpen(true)} className="text-orange-600 font-bold hover:underline text-[11px] cursor-pointer">
                     Lihat
                   </button>
                 </div>
-              )}
+              ) : null}
               
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setIsVoucherModalOpen(true)}
+                  onClick={() => {
+                    setVoucherModalTab('vouchers');
+                    setIsVoucherModalOpen(true);
+                  }}
                   className={`w-full bg-white border border-orange-200/80 pl-5 pr-12 py-4 flex items-center justify-between hover:bg-orange-50/40 active:scale-[0.99] transition-all text-left shadow-sm cursor-pointer
-                    ${hasUnusableVouchers ? 'rounded-b-2xl border-t-0' : 'rounded-2xl'}`}
+                    ${(!appliedVoucher && (claimableTemplates.length > 0 || hasUnusableVouchers)) ? 'rounded-b-2xl border-t-0' : 'rounded-2xl'}`}
                 >
-                  <div className="flex items-center gap-3.5">
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center text-white shrink-0 shadow-sm">
                       <Ticket className="w-5 h-5" />
                     </div>
-                    <div>
-                      <p className="font-bold text-sm text-gray-900">
-                        {appliedVoucher ? String(appliedVoucher.description || appliedVoucher.code || 'Voucher Aktif') : 'Pakai Promo / Kode Voucher'}
-                      </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-sm text-gray-900 truncate">
+                          {appliedVoucher
+                            ? String((appliedVoucher as any).template?.title || appliedVoucher.description || appliedVoucher.code || 'Voucher Aktif')
+                            : 'Pakai Promo / Kode Voucher'}
+                        </p>
+                        {!appliedVoucher && (usableVouchers.length > 0 || claimableTemplates.length > 0) && (
+                          <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-black">
+                            {usableVouchers.length > 0
+                              ? `${usableVouchers.length} Siap Pakai`
+                              : `${claimableTemplates.length} Promo Gratis`}
+                          </span>
+                        )}
+                      </div>
                       {appliedVoucher ? (
-                        <p className="text-[10px] text-orange-600 font-extrabold uppercase tracking-widest mt-0.5">
-                          Kode Aktif: {String(appliedVoucher.code || '')} (-{formatRupiah(voucherDiscount + ongkirDiscount)})
+                        <p className="text-[11px] text-emerald-700 font-extrabold mt-0.5">
+                          Hemat {formatRupiah(voucherDiscount + ongkirDiscount)} · Kode: {String(appliedVoucher.code || '')}
                         </p>
                       ) : (
-                        <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                          Klik untuk memilih atau memasukkan kode promo
+                        <p className="text-[11px] text-gray-500 font-medium mt-0.5">
+                          {usableVouchers.length > 0
+                            ? `Tersedia ${usableVouchers.length} voucher yang langsung bisa menghemat pesananmu`
+                            : 'Pilih voucher, klaim promo gratis, atau masukkan kode promo'}
                         </p>
                       )}
                     </div>
                   </div>
-                  {!appliedVoucher && <ArrowRight className="w-5 h-5 text-orange-500" />}
+                  {!appliedVoucher && <ArrowRight className="w-5 h-5 text-orange-500 shrink-0" />}
                 </button>
                 {appliedVoucher && (
                   <button
@@ -2887,381 +2924,628 @@ export default function CheckoutPage() {
         {isVoucherModalOpen && (
           <div className="fixed inset-0 z-[100] flex flex-col bg-[#FFFBF5] select-none">
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-100 flex items-center justify-between px-6 py-4 shadow-sm">
+            <div className="sticky top-0 z-10 bg-white border-b border-orange-100 flex items-center justify-between px-6 py-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <button 
                   type="button" 
                   onClick={() => setIsVoucherModalOpen(false)}
-                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 text-gray-700 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-orange-50 text-gray-700 transition-colors cursor-pointer"
                 >
                   <ArrowLeft className="w-6 h-6" />
                 </button>
-                <h2 className="font-serif font-black text-xl text-gray-900">Vouchers</h2>
+                <div>
+                  <h2 className="font-serif font-black text-lg text-gray-900 leading-tight">Promo & Voucher</h2>
+                  <p className="text-[11px] text-gray-500 font-medium">Pilih voucher aktif atau klaim promo gratis Arum Seduh</p>
+                </div>
               </div>
-              <button type="button" className="p-2 hover:bg-gray-50 rounded-full text-gray-700 transition-colors">
-                <Ticket className="w-6 h-6" />
-              </button>
+              <div className="w-10 h-10 rounded-2xl bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600">
+                <Ticket className="w-5 h-5" />
+              </div>
             </div>
 
-            {/* Tabs: Vouchers vs Voucher Pack */}
-            <div className="p-4 bg-gray-50 flex gap-2 border-b border-gray-100">
-              <button
-                type="button"
-                onClick={() => setVoucherModalTab('vouchers')}
-                className={`flex-1 py-3 text-center rounded-2xl font-bold text-sm transition-all ${
-                  voucherModalTab === 'vouchers'
-                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50'
-                    : 'text-gray-500 hover:bg-white/50'
-                }`}
-              >
-                Vouchers
-              </button>
-              <button
-                type="button"
-                onClick={() => setVoucherModalTab('pack')}
-                className={`flex-1 py-3 text-center rounded-2xl font-bold text-sm transition-all ${
-                  voucherModalTab === 'pack'
-                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200/50'
-                    : 'text-gray-500 hover:bg-white/50'
-                }`}
-              >
-                Voucher Pack
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-              {/* Search input */}
-              <div className="relative">
-                <Ticket className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#B48A5E]" />
-                <input
-                  value={voucherSearchQuery}
-                  onChange={(e) => setVoucherSearchQuery(e.target.value)}
-                  placeholder="Masukkan kode voucher ..."
-                  className="w-full pl-12 pr-32 py-4 rounded-2xl border border-gray-200 bg-white text-sm focus:outline-none focus:border-[#B48A5E] shadow-sm"
-                />
-                {voucherSearchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setVoucherSearchQuery('')}
-                    className="absolute right-20 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+            {/* Tabs: Voucher Saya vs Klaim Promo Gratis */}
+            <div className="px-6 py-3 bg-white border-b border-orange-100">
+              <div className="flex gap-1.5 p-1.5 bg-orange-50/70 border border-orange-100 rounded-2xl max-w-2xl mx-auto">
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (!voucherSearchQuery.trim()) return;
-                    setVoucherLoading(true);
-                    try {
-                      const res = await fetch('/api/checkout/validate-voucher', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ code: voucherSearchQuery.trim() })
-                      });
-                      const d = await res.json();
-                      if (!res.ok) throw new Error(d.error);
-                      setAppliedVoucher(d.voucher);
-                      setIsVoucherModalOpen(false);
-                      setToast({ message: 'Voucher berhasil diterapkan!', type: 'success' });
-                    } catch (err: any) {
-                      setToast({ message: err.message || 'Gagal menggunakan voucher', type: 'error' });
-                    } finally {
-                      setVoucherLoading(false);
-                    }
-                  }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-5 py-2.5 bg-[#B48A5E] text-white rounded-xl font-bold text-xs hover:bg-[#946F48] transition-all"
+                  onClick={() => setVoucherModalTab('vouchers')}
+                  className={`flex-1 py-2.5 px-3 text-center rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    voucherModalTab === 'vouchers'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                      : 'text-gray-600 hover:bg-white/60'
+                  }`}
                 >
-                  Pakai
+                  <Ticket className="w-4 h-4 shrink-0" />
+                  <span>Voucher Saya</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                    voucherModalTab === 'vouchers' ? 'bg-white/25 text-white' : 'bg-orange-100 text-orange-700'
+                  }`}>
+                    {usableVouchers.length + unusableVouchers.length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVoucherModalTab('pack')}
+                  className={`flex-1 py-2.5 px-3 text-center rounded-xl font-black text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    voucherModalTab === 'pack'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-sm'
+                      : 'text-gray-600 hover:bg-white/60'
+                  }`}
+                >
+                  <Gift className="w-4 h-4 shrink-0" />
+                  <span>Klaim Promo Gratis</span>
+                  {claimableTemplates.length > 0 && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      voucherModalTab === 'pack'
+                        ? 'bg-white/25 text-white'
+                        : 'bg-gradient-to-r from-orange-500 to-amber-500 text-white animate-pulse'
+                    }`}>
+                      {claimableTemplates.length} Baru
+                    </span>
+                  )}
                 </button>
               </div>
+            </div>
 
-              {/* Filters bar */}
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {(['semua', 'diskon', 'cashback', 'delivery'] as const).map((f) => (
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 max-w-2xl w-full mx-auto">
+              {/* Manual Promo Code Input */}
+              <div className="bg-white p-3.5 rounded-2xl border border-orange-200/80 shadow-sm space-y-2">
+                <label className="text-[11px] font-black uppercase tracking-wider text-orange-700 flex items-center gap-1.5 px-1">
+                  <Sparkles className="w-3.5 h-3.5 text-orange-500" />
+                  Punya Kode Promo Khusus?
+                </label>
+                <div className="relative flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Ticket className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-500" />
+                    <input
+                      value={voucherSearchQuery}
+                      onChange={(e) => setVoucherSearchQuery(e.target.value)}
+                      placeholder="Ketik kode promo atau cari voucher..."
+                      className="w-full pl-10 pr-9 py-3 rounded-xl border border-orange-200/70 bg-orange-50/30 text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 focus:outline-none focus:bg-white focus:border-orange-500 transition-all"
+                    />
+                    {voucherSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setVoucherSearchQuery('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                   <button
-                    key={f}
                     type="button"
-                    onClick={() => setSelectedVoucherFilter(f)}
-                    className={`px-4.5 py-2 rounded-full border text-xs font-bold capitalize transition-all whitespace-nowrap ${
-                      selectedVoucherFilter === f
-                        ? 'border-[#B48A5E] text-[#B48A5E] bg-[#FFF8F0]'
-                        : 'border-gray-200 text-gray-500 bg-white hover:bg-gray-50'
-                    }`}
+                    disabled={voucherLoading || !voucherSearchQuery.trim()}
+                    onClick={async () => {
+                      if (!voucherSearchQuery.trim()) return;
+                      setVoucherLoading(true);
+                      try {
+                        const res = await fetch('/api/checkout/validate-voucher', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            code: voucherSearchQuery.trim(),
+                            items: checkoutItems,
+                            subtotal,
+                          }),
+                        });
+                        const d = await res.json();
+                        if (!res.ok) throw new Error(d.error);
+                        setAppliedVoucher(d.voucher);
+                        setIsVoucherModalOpen(false);
+                        setToast({ message: 'Kode promo berhasil diterapkan!', type: 'success' });
+                      } catch (err: any) {
+                        setToast({ message: err.message || 'Gagal menggunakan kode voucher', type: 'error' });
+                      } finally {
+                        setVoucherLoading(false);
+                      }
+                    }}
+                    className="px-5 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-100 disabled:to-gray-100 disabled:text-gray-400 text-white rounded-xl font-black text-xs uppercase tracking-wider shadow-sm transition-all shrink-0 cursor-pointer"
                   >
-                    {f === 'semua' ? 'Semua' : f === 'delivery' ? 'Delivery' : f}
+                    {voucherLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Pakai Kode'}
                   </button>
-                ))}
+                </div>
               </div>
 
+              {/* Category Filters Bar */}
+              {voucherModalTab === 'vouchers' && (
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                  {([
+                    { id: 'semua', label: 'Semua Promo' },
+                    { id: 'diskon', label: 'Diskon Menu' },
+                    { id: 'delivery', label: 'Gratis Ongkir' },
+                    { id: 'cashback', label: 'Cashback' },
+                  ] as const).map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setSelectedVoucherFilter(f.id)}
+                      className={`px-4 py-2 rounded-full border text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                        selectedVoucherFilter === f.id
+                          ? 'border-orange-500 text-orange-700 bg-orange-50 font-black shadow-xs'
+                          : 'border-gray-200 text-gray-500 bg-white hover:bg-orange-50/40'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               {loadingVouchers ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E]" />
+                <div className="flex flex-col items-center justify-center py-14 gap-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+                  <p className="text-xs font-bold text-gray-500">Memuat daftar promo terbaik untukmu...</p>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-6 pb-8">
                   {voucherModalTab === 'vouchers' ? (
                     <>
-                      {/* Available & Usable Vouchers */}
+                      {/* 1. Available & Usable Vouchers */}
                       {usableVouchers.length > 0 && (
                         <div className="space-y-3">
-                          <h3 className="font-serif font-black text-sm text-gray-800 flex items-center gap-1.5">
-                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
-                            Diskon & Cashback
-                          </h3>
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-black text-sm text-gray-900 flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                              Siap Digunakan ({usableVouchers.length})
+                            </h3>
+                            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full">
+                              Memenuhi Syarat Keranjang
+                            </span>
+                          </div>
                           <div className="space-y-3.5">
-                            {usableVouchers.map((v) => (
-                              <div
-                                key={v.id}
-                                className="relative border border-emerald-150 rounded-2xl bg-white p-5 shadow-sm overflow-hidden"
-                              >
-                                <div className="absolute left-0 top-[70%] -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-r border-emerald-150 z-10" />
-                                <div className="absolute right-0 top-[70%] translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-l border-emerald-150 z-10" />
-                                
-                                <div className="pb-3.5 border-b border-dashed border-gray-150 flex items-start justify-between gap-4">
-                                  <div className="space-y-1 flex-1 min-w-0">
-                                    <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-50">
-                                      {v.type}
-                                    </span>
-                                    <h4 className="font-serif font-black text-base text-gray-900 leading-snug truncate">{v.description}</h4>
-                                    <div className="flex flex-wrap gap-2 mt-1">
-                                      <span className="text-[10px] font-bold text-gray-500">
-                                        Min. Belanja: {formatRupiah(v.template?.minPurchase || v.minPurchase || 0)}
-                                      </span>
-                                      {(v.type === 'DISCOUNT_PCT' || v.template?.type === 'DISCOUNT_PCT') && (v.maxDiscount || v.template?.maxDiscount) && (
-                                        <span className="text-[10px] font-bold text-[#D97706]">
-                                          Maks. Potongan: {formatRupiah(v.maxDiscount || v.template?.maxDiscount || 0)}
+                            {usableVouchers.map((v) => {
+                              const isCurrentlyApplied = appliedVoucher?.id === v.id || appliedVoucher?.code === v.code;
+                              const title = v.template?.title || v.description;
+                              const subtitle = v.template?.title ? v.description : null;
+                              const minReq = v.template?.minPurchase || v.minPurchase || 0;
+                              const maxDisc = v.maxDiscount || v.template?.maxDiscount || 0;
+                              const val = v.template?.discountValue || v.discountAmount || 0;
+                              const badgeText =
+                                v.type === 'DISCOUNT_RP'
+                                  ? val > 0 ? `Potongan ${formatRupiah(val)}` : 'Potongan Harga'
+                                  : v.type === 'DISCOUNT_PCT'
+                                  ? `Diskon ${val}%`
+                                  : v.type === 'B2G1'
+                                  ? 'Beli 2 Gratis 1'
+                                  : v.type === 'FREE_DRINK'
+                                  ? 'Gratis Minuman'
+                                  : v.type === 'FREE_TOPPING'
+                                  ? 'Gratis Topping'
+                                  : v.type === 'UPGRADE_SIZE'
+                                  ? 'Gratis Upsize'
+                                  : v.type === 'GRATIS_ONGKIR'
+                                  ? 'Gratis Ongkir'
+                                  : 'Promo Spesial';
+
+                              return (
+                                <div
+                                  key={v.id}
+                                  className={`relative border-2 rounded-3xl bg-white p-5 shadow-sm transition-all overflow-hidden ${
+                                    isCurrentlyApplied
+                                      ? 'border-orange-500 bg-orange-50/20 ring-2 ring-orange-500/15'
+                                      : 'border-orange-200/80 hover:border-orange-400'
+                                  }`}
+                                >
+                                  <div className="pb-3.5 border-b border-dashed border-orange-100 flex items-start justify-between gap-4">
+                                    <div className="space-y-1.5 flex-1 min-w-0">
+                                      <div className="flex items-center flex-wrap gap-1.5">
+                                        <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-orange-700 bg-orange-100">
+                                          {badgeText}
                                         </span>
-                                      )}
-                                    </div>
-                                    <p className="text-[11px] text-gray-400 mt-1">Kode: {v.code}</p>
-                                    {(() => {
-                                      const rawProductIds = v.validProductIds || v.template?.validProductIds || null;
-                                      let validIds: string[] | null = null;
-                                      if (rawProductIds) {
-                                        if (Array.isArray(rawProductIds)) {
-                                          validIds = rawProductIds;
-                                        } else {
-                                          try {
-                                            const parsed = JSON.parse(rawProductIds);
-                                            if (Array.isArray(parsed)) validIds = parsed;
-                                          } catch {}
-                                        }
-                                      }
-                                      if (validIds && validIds.length > 0 && allProducts.length > 0) {
-                                        const names = allProducts.filter(p => validIds?.includes(p.id)).map(p => p.name);
-                                        if (names.length > 0) {
-                                          return (
-                                            <div className="mt-1 flex flex-wrap gap-1">
-                                              <span className="text-[9px] font-bold text-[#2E5A44] bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
-                                                Berlaku untuk: {names.join(', ')}
-                                              </span>
-                                            </div>
-                                          );
-                                        }
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
-                                  <div className="flex flex-col items-end gap-2.5 shrink-0">
-                                    {v.template?.bannerImage && (
-                                      <div className="relative w-16 h-12 rounded-xl overflow-hidden border border-gray-100">
-                                        <Image src={v.template.bannerImage} alt={v.description} fill className="object-cover" sizes="64px" />
+                                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold text-gray-600 bg-gray-100">
+                                          {minReq > 0 ? `Min. Belanja ${formatRupiah(minReq)}` : 'Tanpa Min. Belanja'}
+                                        </span>
+                                        {maxDisc > 0 && (v.type === 'DISCOUNT_PCT' || v.template?.type === 'DISCOUNT_PCT') && (
+                                          <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold text-amber-700 bg-amber-50">
+                                            Maks. {formatRupiah(maxDisc)}
+                                          </span>
+                                        )}
                                       </div>
-                                    )}
+
+                                      <h4 className="font-black text-base text-gray-900 leading-snug">{title}</h4>
+                                      {subtitle && (
+                                        <p className="text-xs text-gray-500 font-medium leading-relaxed">{subtitle}</p>
+                                      )}
+                                      <p className="text-[11px] font-mono font-bold text-orange-700 pt-0.5">
+                                        Kode: {v.code}
+                                      </p>
+
+                                      {(() => {
+                                        const rawProductIds = v.validProductIds || v.template?.validProductIds || null;
+                                        let validIds: string[] | null = null;
+                                        if (rawProductIds) {
+                                          if (Array.isArray(rawProductIds)) {
+                                            validIds = rawProductIds;
+                                          } else {
+                                            try {
+                                              const parsed = JSON.parse(rawProductIds);
+                                              if (Array.isArray(parsed)) validIds = parsed;
+                                            } catch {}
+                                          }
+                                        }
+                                        if (validIds && validIds.length > 0 && allProducts.length > 0) {
+                                          const names = allProducts.filter(p => validIds?.includes(p.id)).map(p => p.name);
+                                          if (names.length > 0) {
+                                            return (
+                                              <div className="pt-1 flex flex-wrap gap-1">
+                                                <span className="text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 px-2.5 py-0.5 rounded-full">
+                                                  Khusus menu: {names.join(', ')}
+                                                </span>
+                                              </div>
+                                            );
+                                          }
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+
+                                    <div className="flex flex-col items-end gap-2.5 shrink-0">
+                                      {v.template?.bannerImage && (
+                                        <div className="relative w-16 h-12 rounded-xl overflow-hidden border border-orange-100">
+                                          <Image src={v.template.bannerImage} alt={title} fill className="object-cover" sizes="64px" />
+                                        </div>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setAppliedVoucher(v);
+                                          setIsVoucherModalOpen(false);
+                                          setToast({ message: `Voucher "${title}" berhasil diterapkan!`, type: 'success' });
+                                        }}
+                                        className={`px-4 py-2.5 rounded-xl font-black text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                                          isCurrentlyApplied
+                                            ? 'bg-emerald-600 text-white shadow-sm'
+                                            : 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-sm shadow-orange-500/20'
+                                        }`}
+                                      >
+                                        {isCurrentlyApplied ? (
+                                          <>
+                                            <Check className="w-3.5 h-3.5" />
+                                            <span>Dipakai</span>
+                                          </>
+                                        ) : (
+                                          <span>Gunakan</span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="pt-3 flex justify-between items-center text-[11px] text-gray-500 font-medium">
+                                    <span>
+                                      Berlaku s/d{' '}
+                                      {v.expiresAt
+                                        ? new Date(v.expiresAt).toLocaleDateString('id-ID', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            year: 'numeric',
+                                          })
+                                        : 'Selamanya'}
+                                    </span>
                                     <button
                                       type="button"
-                                      onClick={() => {
-                                        setAppliedVoucher(v);
-                                        setIsVoucherModalOpen(false);
-                                        setToast({ message: 'Voucher berhasil diterapkan!', type: 'success' });
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVoucherDetail(v.template || v);
+                                        setIsDetailModalOpen(true);
                                       }}
-                                      className="px-4 py-2 bg-[#B48A5E] text-white rounded-xl font-bold text-xs hover:bg-[#946F48] transition-all"
+                                      className="text-orange-600 font-black hover:underline cursor-pointer"
                                     >
-                                      Gunakan
+                                      Lihat Syarat & Detail
                                     </button>
                                   </div>
                                 </div>
-                                <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400">
-                                  <span>Berlaku hingga {v.expiresAt ? new Date(v.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Selamanya'}</span>
-                                  <span 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedVoucherDetail(v.template || v);
-                                      setIsDetailModalOpen(true);
-                                    }}
-                                    className="text-[#B48A5E] font-bold hover:underline cursor-pointer"
-                                  >
-                                    Detail
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}
 
-                      {/* Voucher Belum Bisa Dipakai (Unusable Vouchers) */}
-                      {unusableVouchers.length > 0 && (
+                      {/* 2. Quick Claimable Free Promos right inside Voucher Saya so users never miss them */}
+                      {claimableTemplates.length > 0 && (
                         <div className="space-y-3">
-                          <h3 className="font-serif font-black text-sm text-gray-500">
-                            Voucher Belum Bisa dipakai
-                          </h3>
-                          <div className="space-y-3.5 opacity-70">
-                            {unusableVouchers.map((v) => (
-                              <div
-                                key={v.id}
-                                className="relative border border-gray-200 rounded-2xl bg-white p-5 shadow-sm overflow-hidden"
-                              >
-                                <div className="absolute left-0 top-[70%] -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-r border-gray-250 z-10" />
-                                <div className="absolute right-0 top-[70%] translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-l border-gray-250 z-10" />
-                                
-                                <div className="pb-3.5 border-b border-dashed border-gray-150 flex items-start justify-between gap-4">
-                                  <div className="space-y-1 flex-1 min-w-0">
-                                    <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100">
-                                      {v.type}
-                                    </span>
-                                    <h4 className="font-serif font-black text-base text-gray-700 leading-snug truncate">{v.description}</h4>
-                                    <p className="text-[11px] text-red-500 font-bold">Min. Belanja {formatRupiah(v.template?.minPurchase || v.minPurchase || 0)}</p>
-                                    {(v.type === 'DISCOUNT_PCT' || v.template?.type === 'DISCOUNT_PCT') && (v.maxDiscount || v.template?.maxDiscount) && (
-                                      <p className="text-[10px] font-bold text-gray-400">
-                                        Maks. Potongan: {formatRupiah(v.maxDiscount || v.template?.maxDiscount || 0)}
+                          <div className="flex items-center justify-between">
+                            <h3 className="font-black text-sm text-gray-900 flex items-center gap-2">
+                              <Gift className="w-4 h-4 text-orange-500" />
+                              Promo Gratis Siap Klaim & Pakai ({claimableTemplates.length})
+                            </h3>
+                            <span className="text-[11px] font-bold text-orange-700 bg-orange-100 px-2.5 py-0.5 rounded-full">
+                              1-Klik Klaim
+                            </span>
+                          </div>
+                          <div className="space-y-3">
+                            {claimableTemplates.map((t) => {
+                              const minReq = t.minPurchase || 0;
+                              const isCartEligible = subtotal >= minReq;
+                              const shortfall = Math.max(0, minReq - subtotal);
+                              return (
+                                <div
+                                  key={t.id}
+                                  className="relative border border-orange-200 rounded-3xl bg-gradient-to-br from-white to-orange-50/40 p-4 shadow-sm flex items-center justify-between gap-4"
+                                >
+                                  <div className="space-y-1 min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-orange-100 text-orange-700">
+                                        Promo Gratis
+                                      </span>
+                                      <span className="text-[10px] font-bold text-gray-500">
+                                        {minReq > 0 ? `Min. ${formatRupiah(minReq)}` : 'Tanpa Min. Belanja'}
+                                      </span>
+                                    </div>
+                                    <h4 className="font-black text-sm text-gray-900 truncate">{t.title}</h4>
+                                    <p className="text-xs text-gray-600 line-clamp-1">{t.description}</p>
+                                    {!isCartEligible && (
+                                      <p className="text-[11px] font-bold text-amber-700">
+                                        Tambah belanja {formatRupiah(shortfall)} lagi untuk langsung pakai
                                       </p>
                                     )}
-                                    <p className="text-[11px] text-gray-455 mt-0.5">Kode: {v.code}</p>
-                                    {(() => {
-                                      const rawProductIds = v.validProductIds || v.template?.validProductIds || null;
-                                      let validIds: string[] | null = null;
-                                      if (rawProductIds) {
-                                        if (Array.isArray(rawProductIds)) {
-                                          validIds = rawProductIds;
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const res = await fetch('/api/user/vouchers/claim', {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ code: t.code }),
+                                        });
+                                        const d = await res.json();
+                                        if (!res.ok) throw new Error(d.error);
+                                        await fetchVouchers();
+                                        if (isCartEligible && d.voucher) {
+                                          setAppliedVoucher(d.voucher);
+                                          setIsVoucherModalOpen(false);
+                                          setToast({ message: `Promo "${t.title}" berhasil diklaim & dipakai!`, type: 'success' });
                                         } else {
-                                          try {
-                                            const parsed = JSON.parse(rawProductIds);
-                                            if (Array.isArray(parsed)) validIds = parsed;
-                                          } catch {}
+                                          setToast({ message: `Promo "${t.title}" berhasil diklaim ke Voucher Saya!`, type: 'success' });
                                         }
+                                      } catch (err: any) {
+                                        setToast({ message: err.message || 'Gagal mengklaim promo', type: 'error' });
                                       }
-                                      if (validIds && validIds.length > 0 && allProducts.length > 0) {
-                                        const names = allProducts.filter(p => validIds?.includes(p.id)).map(p => p.name);
-                                        if (names.length > 0) {
-                                          return (
-                                            <div className="mt-1 flex flex-wrap gap-1">
-                                              <span className="text-[9px] font-bold text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-full">
-                                                Berlaku untuk: {names.join(', ')}
-                                              </span>
-                                            </div>
-                                          );
-                                        }
-                                      }
-                                      return null;
-                                    })()}
-                                  </div>
-                                  <div className="flex flex-col items-end gap-2.5 shrink-0">
-                                    {v.template?.bannerImage ? (
-                                      <div className="relative w-16 h-12 rounded-xl overflow-hidden border border-gray-100">
-                                        <Image src={v.template.bannerImage} alt={v.description} fill className="object-cover" sizes="64px" />
-                                      </div>
-                                    ) : (
-                                      <div className="w-10 h-10 rounded-xl bg-gray-50 border border-gray-150 flex items-center justify-center text-gray-400">
-                                        <Ticket className="w-5.5 h-5.5" />
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400">
-                                  <span>Berlaku hingga {v.expiresAt ? new Date(v.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Selamanya'}</span>
-                                  <span 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedVoucherDetail(v.template || v);
-                                      setIsDetailModalOpen(true);
                                     }}
-                                    className="text-[#B48A5E] font-bold hover:underline cursor-pointer"
+                                    className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-black text-xs shrink-0 shadow-sm shadow-orange-500/20 transition-all cursor-pointer"
                                   >
-                                    Detail
-                                  </span>
+                                    {isCartEligible ? 'Klaim & Pakai' : 'Klaim Gratis'}
+                                  </button>
                                 </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                       )}
 
-                      {usableVouchers.length === 0 && unusableVouchers.length === 0 && (
-                        <div className="text-center py-12 text-gray-400 text-sm font-medium">
-                          Tidak ada voucher tersedia
+                      {/* 3. Voucher Belum Memenuhi Syarat (Unusable Vouchers) */}
+                      {unusableVouchers.length > 0 && (
+                        <div className="space-y-3">
+                          <h3 className="font-black text-sm text-gray-500 flex items-center gap-2">
+                            <span>Belum Memenuhi Syarat Keranjang ({unusableVouchers.length})</span>
+                          </h3>
+                          <div className="space-y-3.5">
+                            {unusableVouchers.map((v) => {
+                              const title = v.template?.title || v.description;
+                              const minReq = v.template?.minPurchase || v.minPurchase || 0;
+                              const shortfall = Math.max(0, minReq - subtotal);
+                              const progressPct = minReq > 0 ? Math.min(100, Math.round((subtotal / minReq) * 100)) : 0;
+
+                              return (
+                                <div
+                                  key={v.id}
+                                  className="relative border border-gray-200 rounded-3xl bg-white/80 p-5 shadow-xs overflow-hidden"
+                                >
+                                  <div className="pb-3.5 border-b border-dashed border-gray-100 flex items-start justify-between gap-4">
+                                    <div className="space-y-1.5 flex-1 min-w-0">
+                                      <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-100">
+                                        Min. Belanja {formatRupiah(minReq)}
+                                      </span>
+                                      <h4 className="font-black text-base text-gray-700 leading-snug">{title}</h4>
+                                      <p className="text-xs text-gray-500">{v.description}</p>
+
+                                      {shortfall > 0 ? (
+                                        <div className="pt-1 space-y-1.5">
+                                          <div className="flex justify-between text-[11px] font-bold">
+                                            <span className="text-orange-600">
+                                              Kurang belanja {formatRupiah(shortfall)} lagi
+                                            </span>
+                                            <span className="text-gray-400">{progressPct}%</span>
+                                          </div>
+                                          <div className="w-full h-1.5 bg-orange-100 rounded-full overflow-hidden">
+                                            <div
+                                              className="h-full bg-gradient-to-r from-orange-400 to-amber-400 rounded-full"
+                                              style={{ width: `${progressPct}%` }}
+                                            />
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <p className="text-[11px] text-amber-700 font-bold pt-1">
+                                          Khusus pembelian menu pilihan tertentu
+                                        </p>
+                                      )}
+
+                                      {(() => {
+                                        const rawProductIds = v.validProductIds || v.template?.validProductIds || null;
+                                        let validIds: string[] | null = null;
+                                        if (rawProductIds) {
+                                          if (Array.isArray(rawProductIds)) {
+                                            validIds = rawProductIds;
+                                          } else {
+                                            try {
+                                              const parsed = JSON.parse(rawProductIds);
+                                              if (Array.isArray(parsed)) validIds = parsed;
+                                            } catch {}
+                                          }
+                                        }
+                                        if (validIds && validIds.length > 0 && allProducts.length > 0) {
+                                          const names = allProducts.filter(p => validIds?.includes(p.id)).map(p => p.name);
+                                          if (names.length > 0) {
+                                            return (
+                                              <div className="pt-1 flex flex-wrap gap-1">
+                                                <span className="text-[10px] font-bold text-gray-600 bg-gray-100 px-2.5 py-0.5 rounded-full">
+                                                  Khusus menu: {names.join(', ')}
+                                                </span>
+                                              </div>
+                                            );
+                                          }
+                                        }
+                                        return null;
+                                      })()}
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2 shrink-0">
+                                      <div className="w-10 h-10 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400">
+                                        <Ticket className="w-5 h-5" />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400 font-medium">
+                                    <span>
+                                      Berlaku s/d{' '}
+                                      {v.expiresAt
+                                        ? new Date(v.expiresAt).toLocaleDateString('id-ID', {
+                                            day: 'numeric',
+                                            month: 'short',
+                                            year: 'numeric',
+                                          })
+                                        : 'Selamanya'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedVoucherDetail(v.template || v);
+                                        setIsDetailModalOpen(true);
+                                      }}
+                                      className="text-orange-600 font-bold hover:underline cursor-pointer"
+                                    >
+                                      Lihat Syarat
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {usableVouchers.length === 0 && unusableVouchers.length === 0 && claimableTemplates.length === 0 && (
+                        <div className="text-center py-12 bg-white rounded-3xl border border-orange-100 p-6 space-y-2">
+                          <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto">
+                            <Ticket className="w-6 h-6" />
+                          </div>
+                          <p className="text-sm font-black text-gray-900">Belum Ada Voucher Tersedia</p>
+                          <p className="text-xs text-gray-500 font-medium max-w-xs mx-auto">
+                            Jika Anda memiliki kode promo khusus, silakan ketik pada kolom kode promo di atas.
+                          </p>
                         </div>
                       )}
                     </>
                   ) : (
-                    // Voucher Pack / Templates to Claim
-                    <div className="space-y-3.5">
-                      {claimableTemplates.map((t) => (
-                        <div
-                          key={t.id}
-                          className="relative border border-amber-100 rounded-2xl bg-white p-5 shadow-sm overflow-hidden"
-                        >
-                          <div className="absolute left-0 top-[70%] -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-r border-amber-100 z-10" />
-                          <div className="absolute right-0 top-[70%] translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-[#FFFBF5] border-l border-amber-100 z-10" />
-                          
-                          <div className="pb-3.5 border-b border-dashed border-gray-150 flex items-start justify-between gap-4">
-                            <div className="space-y-1 flex-1 min-w-0">
-                              <span className="inline-block px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-50">
-                                {t.type}
-                              </span>
-                              <h4 className="font-serif font-black text-base text-gray-900 leading-snug truncate">{t.title}</h4>
-                              <p className="text-[11px] text-gray-500 leading-relaxed line-clamp-2">{t.description}</p>
-                              <p className="text-[10px] text-[#B48A5E] font-bold mt-1">Kode: {t.code}</p>
-                            </div>
-                            <div className="flex flex-col items-end gap-2.5 shrink-0">
-                              {t.bannerImage && (
-                                <div className="relative w-16 h-12 rounded-xl overflow-hidden border border-gray-100">
-                                  <Image src={t.bannerImage} alt={t.title} fill className="object-cover" sizes="64px" />
+                    /* Tab 2: Klaim Promo Gratis (Templates to Claim) */
+                    <div className="space-y-4">
+                      {claimableTemplates.map((t) => {
+                        const minReq = t.minPurchase || 0;
+                        const isCartEligible = subtotal >= minReq;
+                        const val = t.discountValue || 0;
+                        const badgeText =
+                          t.type === 'DISCOUNT_RP'
+                            ? val > 0 ? `Potongan ${formatRupiah(val)}` : 'Potongan Harga'
+                            : t.type === 'DISCOUNT_PCT'
+                            ? `Diskon ${val}%`
+                            : t.type === 'B2G1'
+                            ? 'Beli 2 Gratis 1'
+                            : t.type === 'FREE_DRINK'
+                            ? 'Gratis Minuman'
+                            : 'Promo Spesial';
+
+                        return (
+                          <div
+                            key={t.id}
+                            className="relative border border-orange-200 rounded-3xl bg-white p-5 shadow-sm overflow-hidden"
+                          >
+                            <div className="pb-3.5 border-b border-dashed border-orange-100 flex items-start justify-between gap-4">
+                              <div className="space-y-1.5 flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-orange-700 bg-orange-100">
+                                    {badgeText}
+                                  </span>
+                                  <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold text-gray-600 bg-gray-100">
+                                    {minReq > 0 ? `Min. Belanja ${formatRupiah(minReq)}` : 'Tanpa Min. Belanja'}
+                                  </span>
                                 </div>
-                              )}
+                                <h4 className="font-black text-base text-gray-900 leading-snug">{t.title}</h4>
+                                <p className="text-xs text-gray-600 leading-relaxed">{t.description}</p>
+                                <p className="text-[11px] font-mono text-orange-700 font-bold pt-0.5">Kode: {t.code}</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-2 shrink-0">
+                                {t.bannerImage && (
+                                  <div className="relative w-16 h-12 rounded-xl overflow-hidden border border-orange-100">
+                                    <Image src={t.bannerImage} alt={t.title} fill className="object-cover" sizes="64px" />
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      const res = await fetch('/api/user/vouchers/claim', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ code: t.code }),
+                                      });
+                                      const d = await res.json();
+                                      if (!res.ok) throw new Error(d.error);
+                                      await fetchVouchers();
+                                      if (isCartEligible && d.voucher) {
+                                        setAppliedVoucher(d.voucher);
+                                        setIsVoucherModalOpen(false);
+                                        setToast({ message: `Promo "${t.title}" berhasil diklaim & langsung dipakai!`, type: 'success' });
+                                      } else {
+                                        setVoucherModalTab('vouchers');
+                                        setToast({ message: 'Promo berhasil diklaim ke Voucher Saya!', type: 'success' });
+                                      }
+                                    } catch (err: any) {
+                                      setToast({ message: err.message || 'Gagal mengklaim voucher', type: 'error' });
+                                    }
+                                  }}
+                                  className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-xl font-black text-xs shadow-sm shadow-orange-500/20 transition-all cursor-pointer"
+                                >
+                                  {isCartEligible ? 'Klaim & Pakai' : 'Klaim Gratis'}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="pt-3 flex justify-between items-center text-[11px] text-gray-500 font-medium">
+                              <span>
+                                Berlaku s/d{' '}
+                                {t.expiresAt
+                                  ? new Date(t.expiresAt).toLocaleDateString('id-ID', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                    })
+                                  : '30 Hari setelah klaim'}
+                              </span>
                               <button
                                 type="button"
-                                onClick={async () => {
-                                  try {
-                                    const res = await fetch('/api/user/vouchers/claim', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ code: t.code })
-                                    });
-                                    const d = await res.json();
-                                    if (!res.ok) throw new Error(d.error);
-                                    setToast({ message: 'Voucher berhasil diklaim!', type: 'success' });
-                                    fetchVouchers();
-                                  } catch (err: any) {
-                                    setToast({ message: err.message || 'Gagal mengklaim voucher', type: 'error' });
-                                  }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedVoucherDetail(t);
+                                  setIsDetailModalOpen(true);
                                 }}
-                                className="px-4.5 py-2 border-2 border-[#B48A5E] text-[#B48A5E] hover:bg-[#B48A5E] hover:text-white rounded-xl font-bold text-xs transition-all"
+                                className="text-orange-600 font-black hover:underline cursor-pointer"
                               >
-                                Klaim
+                                Lihat Syarat & Detail
                               </button>
                             </div>
                           </div>
-                          <div className="pt-3 flex justify-between items-center text-[11px] text-gray-400">
-                            <span>Masa Berlaku hingga {t.expiresAt ? new Date(t.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '30 Hari'}</span>
-                            <span 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedVoucherDetail(t);
-                                setIsDetailModalOpen(true);
-                              }}
-                              className="text-[#B48A5E] font-bold hover:underline cursor-pointer"
-                            >
-                              Detail
-                            </span>
-                          </div>
-                        </div>
-                      ))}
+                        );
+                      })}
 
                       {claimableTemplates.length === 0 && (
-                        <div className="text-center py-12 text-gray-400 text-sm font-medium">
-                          Tidak ada voucher pack baru untuk diklaim
+                        <div className="text-center py-12 bg-white rounded-3xl border border-orange-100 p-6 space-y-2">
+                          <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto">
+                            <Check className="w-6 h-6" />
+                          </div>
+                          <p className="text-sm font-black text-gray-900">Semua Promo Gratis Sudah Diklaim</p>
+                          <p className="text-xs text-gray-500 font-medium max-w-xs mx-auto">
+                            Silakan pilih voucher Anda yang sudah diklaim pada tab Voucher Saya.
+                          </p>
                         </div>
                       )}
                     </div>

@@ -12,11 +12,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Login diperlukan' }, { status: 401 })
     }
 
-    // Fetch user's active unused vouchers
-    const vouchers = await prisma.voucher.findMany({
+    // Fetch all user's vouchers (both unused and used for Profile history)
+    const allVouchers = await prisma.voucher.findMany({
       where: {
         userId: session.user.id,
-        isUsed: false,
       },
       orderBy: {
         createdAt: 'desc',
@@ -26,18 +25,11 @@ export async function GET(req: Request) {
       }
     })
 
-    // Fetch all template claims by user to correctly hide templates from Voucher Pack
-    const allUserClaims = await prisma.voucher.findMany({
-      where: {
-        userId: session.user.id
-      },
-      select: {
-        templateId: true
-      }
-    })
+    // Active unused vouchers (for Checkout & active tab compatibility)
+    const vouchers = allVouchers.filter(v => !v.isUsed)
 
-    // Fetch active claimable templates that the user hasn't claimed yet (Voucher Pack)
-    const claimedTemplateIds = allUserClaims
+    // Extract all template claims by user to hide already-claimed templates
+    const claimedTemplateIds = allVouchers
       .map(v => v.templateId)
       .filter((id): id is string => !!id)
 
@@ -53,7 +45,7 @@ export async function GET(req: Request) {
       ? (now.getTime() - new Date(dbUser.createdAt).getTime()) <= 14 * 24 * 60 * 60 * 1000
       : false
 
-    const claimableTemplates = await prisma.voucherTemplate.findMany({
+    const rawTemplates = await prisma.voucherTemplate.findMany({
       where: {
         id: {
           notIn: claimedTemplateIds.length > 0 ? claimedTemplateIds : ['placeholder']
@@ -70,9 +62,17 @@ export async function GET(req: Request) {
       }
     })
 
+    const systemCodes = ['WELCOME', 'REFERRAL_REWARD', 'TUMBLER_REWARD', 'EASTERSTELLAR']
+    const claimableTemplates = rawTemplates.filter(t => {
+      if (systemCodes.some(sc => t.code.toUpperCase().startsWith(sc))) return false
+      if (t.usageLimit > 0 && t.usageCount >= t.usageLimit) return false
+      return true
+    })
+
     return NextResponse.json({
       success: true,
       vouchers,
+      allVouchers,
       templates: claimableTemplates
     })
   } catch (error: any) {
