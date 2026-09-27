@@ -155,80 +155,84 @@ async function completeTopUpTransaction(txId: string, settings: any) {
 }
 
 async function buildFallbackServerQrisPng(
-    code: string,
+    _code: string,
     amount: number,
-    svgPath?: string | null,
-    viewBoxSize?: number,
+    _svgPath?: string | null,
+    _viewBoxSize?: number,
     qrPayloadOverride?: string | null
 ): Promise<Buffer> {
-    const formattedAmount = `Rp ${amount.toLocaleString('id-ID')}`
-    const safeCode = (code || 'AS-TOPUP').replace(/[^A-Za-z0-9-_]/g, '')
+    const qrContent = qrPayloadOverride || buildFallbackQrisString(amount)
+    const { modules } = generateServerQrSvgData(qrContent)
+    const moduleCount = modules.length
+    const quietZone = 4
+    const totalModules = moduleCount + quietZone * 2
+    const imgSize = 600
+    const scale = Math.max(1, Math.floor(imgSize / totalModules))
+    const qrPixelSize = totalModules * scale
+    const offset = Math.floor((imgSize - qrPixelSize) / 2)
 
-    let resolvedPath = svgPath || ''
-    let resolvedVb = viewBoxSize && viewBoxSize > 0 ? viewBoxSize : 37
+    // Create solid white (#FFFFFF) 600x600 RGB buffer and paint dark QR modules (#000000)
+    const rawRgb = Buffer.alloc(imgSize * imgSize * 3, 255)
 
-    if (!resolvedPath) {
-        const qrContent = qrPayloadOverride || buildFallbackQrisString(amount)
-        const generated = generateServerQrSvgData(qrContent)
-        resolvedPath = generated.path
-        resolvedVb = generated.viewBoxSize
+    for (let r = 0; r < moduleCount; r++) {
+        const row = modules[r]
+        for (let c = 0; c < moduleCount; c++) {
+            if (!row[c]) continue
+            const startY = offset + (r + quietZone) * scale
+            const startX = offset + (c + quietZone) * scale
+            for (let dy = 0; dy < scale; dy++) {
+                const py = startY + dy
+                if (py < 0 || py >= imgSize) continue
+                const rowOffset = py * imgSize * 3
+                for (let dx = 0; dx < scale; dx++) {
+                    const px = startX + dx
+                    if (px < 0 || px >= imgSize) continue
+                    const idx = rowOffset + px * 3
+                    rawRgb[idx] = 0
+                    rawRgb[idx + 1] = 0
+                    rawRgb[idx + 2] = 0
+                }
+            }
+        }
     }
 
-    const qrMarkup = resolvedPath
-        ? `<svg x="130" y="190" width="340" height="340" viewBox="0 0 ${resolvedVb} ${resolvedVb}" shape-rendering="crispEdges">
-             <rect width="${resolvedVb}" height="${resolvedVb}" fill="#FFFFFF"/>
-             <path d="${resolvedPath.replace(/[^MmLlHhVvZz0-9.,\s-]/g, '')}" fill="#111827"/>
-           </svg>`
-        : `<rect x="150" y="210" width="300" height="300" rx="16" fill="#FFF7ED" stroke="#F97316" stroke-width="4"/>`
-
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="760" viewBox="0 0 600 760">
-      <rect width="600" height="760" fill="#FFFBF5"/>
-      <rect x="24" y="24" width="552" height="712" rx="32" fill="#FFFFFF" stroke="#FDE68A" stroke-width="3"/>
-      <rect x="24" y="24" width="552" height="116" rx="32" fill="#24160E"/>
-      <text x="300" y="72" text-anchor="middle" fill="#FBBF24" font-family="sans-serif" font-size="16" font-weight="bold" letter-spacing="3">ARUM SEDUH • ARUS PAY</text>
-      <text x="300" y="108" text-anchor="middle" fill="#FFFFFF" font-family="sans-serif" font-size="26" font-weight="bold">QRIS PEMBAYARAN TOP UP</text>
-      <rect x="114" y="174" width="372" height="372" rx="24" fill="#FFFFFF" stroke="#FDBA74" stroke-width="3"/>
-      ${qrMarkup}
-      <text x="300" y="590" text-anchor="middle" fill="#6B7280" font-family="sans-serif" font-size="15" font-weight="bold">NOMINAL PEMBAYARAN</text>
-      <text x="300" y="632" text-anchor="middle" fill="#EA580C" font-family="sans-serif" font-size="36" font-weight="bold">${formattedAmount}</text>
-      <text x="300" y="676" text-anchor="middle" fill="#374151" font-family="monospace" font-size="16" font-weight="bold">Ref: ${safeCode}</text>
-      <text x="300" y="706" text-anchor="middle" fill="#9CA3AF" font-family="sans-serif" font-size="13">Berlaku 15 Menit sejak transaksi dibuat</text>
-    </svg>`
-
-    return sharp(Buffer.from(svg)).png().toBuffer()
+    return sharp(rawRgb, {
+        raw: {
+            width: imgSize,
+            height: imgSize,
+            channels: 3,
+        },
+    })
+        .png({ compressionLevel: 9 })
+        .toBuffer()
 }
 
 export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url)
 
-        // Binary PNG attachment download endpoint for QRIS image
+        // Binary PNG attachment download endpoint for QRIS image (Pure QR Code only)
         if (searchParams.get('downloadQr') === '1') {
             const code = (searchParams.get('code') || 'TOPUP').replace(/[^A-Za-z0-9-_]/g, '')
             const txId = searchParams.get('transactionId') || code
             const amount = parseInt(searchParams.get('amount') || '0', 10) || 50000
-            const svgPath = searchParams.get('path')
-            const vbSize = parseInt(searchParams.get('vb') || '37', 10) || 37
+            const qrParam = searchParams.get('qr')
             const fileName = `QRIS_ARUSPAY_${code || 'TOPUP'}.png`
 
             cleanupQrisCache()
-            const cached = qrisPngCache.get(txId) || qrisPngCache.get(code)
-            let pngBuffer: Buffer
-            if (cached) {
-                pngBuffer = cached.buffer
-            } else {
-                const cachedQrContent =
-                    dokuQrContentCache.get(txId)?.qrContent ||
-                    dokuQrContentCache.get(code)?.qrContent ||
-                    null
-                pngBuffer = await buildFallbackServerQrisPng(
-                    code,
-                    amount,
-                    svgPath,
-                    vbSize,
-                    cachedQrContent
-                )
-            }
+            const resolvedQrContent =
+                (qrParam && qrParam.trim().length > 10 ? qrParam.trim() : null) ||
+                dokuQrContentCache.get(txId)?.qrContent ||
+                dokuQrContentCache.get(code)?.qrContent ||
+                null
+
+            const pngBuffer = await buildFallbackServerQrisPng(
+                code,
+                amount,
+                null,
+                undefined,
+                resolvedQrContent
+            )
 
             return new NextResponse(new Uint8Array(pngBuffer), {
                 status: 200,

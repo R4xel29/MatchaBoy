@@ -1,5 +1,4 @@
-import React from 'react';
-import { QRCodeSVG } from 'qrcode.react';
+import { encodeQrMatrix } from '@/lib/qr-encoder';
 
 export interface PromoPackage {
   amount: number;
@@ -113,61 +112,16 @@ export function calculateTopUpBonus(
 }
 
 /**
- * Generates QR code SVG path and viewBox size directly on the server without react-dom/server.
+ * Generates QR code SVG path, boolean modules, and viewBox size directly using pure TypeScript encoder.
  */
 export function generateServerQrSvgData(qrValue: string): {
+  modules: boolean[][];
   path: string;
   svgPath: string;
   viewBoxSize: number;
 } {
-  try {
-    const internals =
-      (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE ||
-      (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?.ReactCurrentDispatcher;
-
-    if (internals) {
-      const prevH = internals.H;
-      const prevCurrent = internals.current;
-      const mockDispatcher = {
-        useMemo: (fn: () => any) => fn(),
-        useCallback: (fn: any) => fn,
-        useRef: (val: any) => ({ current: val }),
-        useState: (init: any) => [typeof init === 'function' ? init() : init, () => {}],
-        useEffect: () => {},
-      };
-      internals.H = mockDispatcher;
-      internals.current = mockDispatcher;
-      try {
-        const el = (QRCodeSVG as any).render(
-          {
-            value: qrValue || 'ARUM-SEDUH-QRIS',
-            size: 340,
-            level: 'M',
-            includeMargin: true,
-            marginSize: 2,
-          },
-          null
-        );
-        const viewBox = String(el?.props?.viewBox || '0 0 37 37');
-        const vbParts = viewBox.split(' ');
-        const viewBoxSize = parseInt(vbParts[2] || '37', 10) || 37;
-        const children = Array.isArray(el?.props?.children) ? el.props.children : [];
-        const fgChild = children.find(
-          (c: any) => c?.type === 'path' && c?.props?.fill && c.props.fill !== '#FFFFFF'
-        );
-        const d = String(fgChild?.props?.d || '');
-        if (d) {
-          return { path: d, svgPath: d, viewBoxSize };
-        }
-      } finally {
-        internals.H = prevH;
-        internals.current = prevCurrent;
-      }
-    }
-  } catch (err) {
-    console.warn('[SERVER QR SVG GEN FALLBACK]', err);
-  }
-  return { path: '', svgPath: '', viewBoxSize: 37 };
+  const { modules, path, viewBoxSize } = encodeQrMatrix(qrValue || 'ARUM-SEDUH-QRIS', 3);
+  return { modules, path, svgPath: path, viewBoxSize };
 }
 
 // Fast in-memory cache for global PaymentSettings & active BankAccount list (TTL 30s)

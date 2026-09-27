@@ -309,76 +309,23 @@ export function TopUpOverlay({
     }
   };
 
-  // High-resolution QRIS Card builder + real HTTP Content-Disposition attachment download
+  // Pure QR Code canvas builder (renders ONLY the QR code on a solid white square)
   const buildCompositeQrisCanvas = (qrCanvas: HTMLCanvasElement): HTMLCanvasElement => {
     const exportCanvas = document.createElement('canvas');
     exportCanvas.width = 600;
-    exportCanvas.height = 760;
+    exportCanvas.height = 600;
     const ctx = exportCanvas.getContext('2d');
     if (!ctx) return qrCanvas;
 
-    // 1. Solid cream-white background so gallery viewers in dark mode never invert QR modules
-    ctx.fillStyle = '#FFFBF5';
-    ctx.fillRect(0, 0, 600, 760);
-
-    // 2. Main card container
     ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = '#FDE68A';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(24, 24, 552, 712, 28);
-    ctx.fill();
-    ctx.stroke();
-
-    // 3. Top Espresso Header Banner
-    ctx.fillStyle = '#24160E';
-    ctx.beginPath();
-    ctx.roundRect(24, 24, 552, 118, [28, 28, 0, 0]);
-    ctx.fill();
-
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#FBBF24';
-    ctx.font = 'bold 15px sans-serif';
-    ctx.fillText('ARUM SEDUH • ARUS PAY', 300, 68);
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 26px serif';
-    ctx.fillText('QRIS PEMBAYARAN TOP UP', 300, 108);
-
-    // 4. QR Code Frame
-    ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = '#FDBA74';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(116, 172, 368, 368, 22);
-    ctx.fill();
-    ctx.stroke();
-
+    ctx.fillRect(0, 0, 600, 600);
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(qrCanvas, 136, 192, 328, 328);
-
-    // 5. Nominal & Metadata Footer
-    ctx.fillStyle = '#6B7280';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText('NOMINAL PEMBAYARAN', 300, 584);
-
-    ctx.fillStyle = '#EA580C';
-    ctx.font = 'bold 34px serif';
-    ctx.fillText(formatRupiah(displayAmount), 300, 626);
-
-    const codeText = activeTransaction?.paymentCode || 'AS-TOPUP';
-    ctx.fillStyle = '#374151';
-    ctx.font = 'bold 15px monospace';
-    ctx.fillText(`Ref: ${codeText}`, 300, 668);
-
-    ctx.fillStyle = '#9CA3AF';
-    ctx.font = '600 13px sans-serif';
-    ctx.fillText('Batas waktu pembayaran: 15 Menit sejak kode dibuat', 300, 702);
+    ctx.drawImage(qrCanvas, 36, 36, 528, 528);
 
     return exportCanvas;
   };
 
-  // Pre-warm composite QRIS PNG on server & upgrade DOKU QRIS in background when Step 2 QRIS opens
+  // Pre-warm pure QRIS PNG on server & upgrade DOKU QRIS in background when Step 2 QRIS opens
   useEffect(() => {
     if (step !== 'payment' || payMethod !== 'qris' || !activeTransaction?.id) {
       return;
@@ -407,7 +354,7 @@ export function TopUpOverlay({
           keepalive: true,
         }).catch(() => {});
       } catch {
-        // Ignore pre-warm error; server-side QR generator handles fallback
+        // Server QR generator handles pure QR PNG generation directly
       }
     };
 
@@ -445,34 +392,13 @@ export function TopUpOverlay({
       const txId = String(activeTransaction?.id || code);
       const fileName = `QRIS_ARUSPAY_${code}.png`;
 
-      const qrCanvas = document.getElementById('topup-qris-canvas') as HTMLCanvasElement | null;
-      if (qrCanvas) {
-        try {
-          const exportCanvas = buildCompositeQrisCanvas(qrCanvas);
-          const pngDataUrl = exportCanvas.toDataURL('image/png', 1.0);
-          // Fire non-blocking cache update without awaiting so user gesture activation stays intact
-          fetch('/api/user/wallet', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'prepare_qr_download',
-              transactionId: txId,
-              paymentCode: code,
-              qrImageBase64: pngDataUrl,
-            }),
-            keepalive: true,
-          }).catch(() => {});
-        } catch {
-          // Server fallback generates full scannable QRIS PNG directly
-        }
-      }
-
-      // Trigger HTTP attachment download synchronously inside the click gesture
+      // Trigger HTTP attachment download synchronously inside the click gesture with exact QR payload
       const params = new URLSearchParams({
         downloadQr: '1',
         transactionId: txId,
         code,
         amount: String(displayAmount),
+        qr: qrValueString,
         t: String(Date.now()),
       });
       const downloadUrl = `/api/user/wallet?${params.toString()}`;
@@ -1533,27 +1459,13 @@ export function TopUpOverlay({
                       </div>
                     </div>
 
-                    <div className="bg-white border border-amber-200/80 rounded-3xl p-5 flex flex-col items-center shadow-sm">
-                      <div className="w-full flex items-center justify-between border-b border-dashed border-gray-200 pb-3 mb-4 select-none">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg font-black italic tracking-tighter text-gray-900">
-                            QR<span className="text-orange-600">IS</span>
-                          </span>
-                          <span className="text-[9px] font-bold text-gray-500">
-                            Standar Pembayaran Nasional
-                          </span>
-                        </div>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-md">
-                          GPN • 15 Menit
-                        </span>
-                      </div>
-
-                      {/* QR Code Canvas & Hidden SVG for Server PNG Generation */}
-                      <div className="relative p-3.5 bg-white rounded-2xl border-2 border-amber-200 shadow-sm flex items-center justify-center">
+                    <div className="bg-white border border-amber-200/80 rounded-3xl p-6 flex flex-col items-center shadow-sm">
+                      {/* Pure QR Code Display */}
+                      <div className="relative p-4 bg-white rounded-2xl border-2 border-amber-200 shadow-sm flex items-center justify-center">
                         <QRCodeCanvas
                           id="topup-qris-canvas"
                           value={qrValueString}
-                          size={220}
+                          size={240}
                           level="M"
                           includeMargin={true}
                           marginSize={2}
@@ -1563,7 +1475,7 @@ export function TopUpOverlay({
                           <QRCodeSVG
                             id="topup-qris-svg"
                             value={qrValueString}
-                            size={220}
+                            size={240}
                             level="M"
                             includeMargin={true}
                             marginSize={2}
@@ -1571,20 +1483,8 @@ export function TopUpOverlay({
                         </div>
                       </div>
 
-                      <div className="text-center mt-3.5 space-y-0.5 w-full">
-                        <p className="text-[9.5px] text-gray-400 font-black uppercase tracking-widest">
-                          Merchant Resmi
-                        </p>
-                        <h4 className="text-sm font-serif font-black text-gray-900">
-                          ARUM SEDUH • ARUS PAY
-                        </h4>
-                        <p className="text-xs font-extrabold text-orange-600 pt-0.5">
-                          Nominal Scan: {formatRupiah(displayAmount)}
-                        </p>
-                      </div>
-
-                      {/* Single full-width Download QRIS button (No Salin Kode here) */}
-                      <div className="w-full mt-4 pt-3.5 border-t border-gray-100">
+                      {/* Single full-width Download QRIS button */}
+                      <div className="w-full mt-5">
                         <button
                           type="button"
                           disabled={downloadingQr}
