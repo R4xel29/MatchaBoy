@@ -195,6 +195,11 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     const checkout = fs.readFileSync(checkoutPagePath, 'utf-8');
     expect(checkout).toContain('Rincian Potongan Harga');
     expect(checkout).toContain('Sisa saldo setelah bayar:');
+    expect(checkout).toContain("setPaymentMethod('WALLET')");
+    expect(checkout).toContain("setPaymentMethod('QRIS')");
+    expect(checkout).toContain("setPaymentMethod('COD')");
+    expect(checkout.includes('Scan & Upload')).toBe(false);
+    expect(checkout.includes('QRIS Manual')).toBe(false);
 
     const orderTracking = fs.readFileSync(orderTrackingClientPath, 'utf-8');
     expect(orderTracking).toContain('Struk & Rincian Pesanan');

@@ -682,7 +682,7 @@ export async function POST(req: Request) {
         if (requestedMethod === 'COD' && !paymentSettings.codEnabled) {
             return NextResponse.json({ error: 'Metode pembayaran COD sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
-        if (requestedMethod === 'QRIS' && !paymentSettings.qrisEnabled) {
+        if (requestedMethod === 'QRIS' && !paymentSettings.qrisEnabled && !paymentSettings.dokuEnabled) {
             return NextResponse.json({ error: 'Metode pembayaran QRIS sedang tidak aktif. Silakan pilih metode lain.' }, { status: 400 })
         }
         if (requestedMethod === 'TRANSFER' && !paymentSettings.transferEnabled) {

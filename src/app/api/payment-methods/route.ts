@@ -33,10 +33,10 @@ export async function GET() {
       whatsApp: settings.codWhatsApp,
     },
     qris: {
-      enabled: settings.qrisEnabled,
+      enabled: Boolean(settings.qrisEnabled || settings.dokuEnabled),
       image: null,
       logo: null,
-      label: settings.qrisLabel,
+      label: 'QRIS',
     },
     transfer: {
       enabled: Boolean(settings.transferEnabled && banks.length > 0),
