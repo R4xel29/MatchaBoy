@@ -5,6 +5,7 @@ import {
   calculateTopUpBonus,
   parsePromoPackages,
   isQrisTransactionExpired,
+  generateServerQrSvgData,
   QRIS_EXPIRE_MINUTES,
   QRIS_EXPIRE_MS,
 } from '../src/lib/wallet-utils';
@@ -62,7 +63,7 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(repeat100.bonusType).toBe('REGULAR');
   });
 
-  it('T1.19.2: QRIS 15-minute expiration logic and security removal of instant simulation in /api/user/wallet', () => {
+  it('T1.19.2: QRIS 15-minute expiration logic, server-side QR matrix generation, and security removal of instant simulation in /api/user/wallet', () => {
     expect(QRIS_EXPIRE_MINUTES).toBe(15);
     expect(QRIS_EXPIRE_MS).toBe(15 * 60 * 1000);
 
@@ -85,6 +86,15 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
       })
     ).toBe(true);
 
+    // Default missing/null paymentMethod on legacy QRIS records also expires after 15 mins
+    expect(
+      isQrisTransactionExpired({
+        paymentMethod: null,
+        status: 'PENDING',
+        createdAt: sixteenMinsAgo,
+      })
+    ).toBe(true);
+
     // Offline and Bank do not auto-expire on 15-min QRIS rule
     expect(
       isQrisTransactionExpired({
@@ -94,14 +104,21 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
       })
     ).toBe(false);
 
+    // Server-side QR SVG generator produces real QR matrix paths without client DOM
+    const qrData = generateServerQrSvgData('ARUMSEDUH-QRIS|AS-TOPUP-TEST|50000|IDR');
+    expect(qrData.svgPath.length > 500).toBe(true);
+    expect(qrData.svgPath.startsWith('M')).toBe(true);
+    expect(qrData.viewBoxSize >= 29).toBe(true);
+
     const content = fs.readFileSync(walletRoutePath, 'utf-8');
     expect(content).toContain('Content-Disposition');
     expect(content).toContain("searchParams.get('downloadQr') === '1'");
+    expect(content).toContain('generateServerQrSvgData');
     expect(content).toContain("Simulasi pembayaran instan telah dinonaktifkan demi keamanan.");
     expect(content).toContain("Fitur unggah bukti pembayaran hanya tersedia untuk metode Transfer Bank.");
   });
 
-  it('T1.19.3: TopUpOverlay enforces single method view, 15m QRIS timer, bank-only proof upload, Kasir Booth-only Salin Kode, auto-hide empty banks, and no simulation button', () => {
+  it('T1.19.3: TopUpOverlay enforces single method view, 15m QRIS timer, synchronous QR download, bank-only proof upload, Kasir Booth-only Salin Kode, auto-hide empty banks, and no simulation button', () => {
     const content = fs.readFileSync(topUpOverlayPath, 'utf-8');
     expect(content).not.toContain('handleSwitchMethodInPayment');
     expect(content).not.toContain('handleSimulatePayment');
@@ -111,7 +128,8 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(content).toContain('Khusus Transfer Bank');
     expect(content).toContain('Salin Kode');
     expect(content).toContain('Unduh Gambar QRIS');
-    expect(content).toContain('downloadQr');
+    expect(content).toContain("downloadQr: '1'");
+    expect(content).toContain('handleDownloadQr = () =>');
     // Rule 3: Zero OS emojis in TopUpOverlay
     expect(content).not.toContain('🎁');
     expect(content).not.toContain('🎉');
@@ -120,7 +138,7 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(content).not.toContain('⚡');
   });
 
-  it('T1.19.4: Admin Arus Pay and DOKU webhook align with user features and parallel fast queries', () => {
+  it('T1.19.4: Admin Arus Pay and DOKU webhook align with user features, TOCTOU bonus recalculation, and fast queries', () => {
     const adminRoute = fs.readFileSync(adminWalletRoutePath, 'utf-8');
     const adminClient = fs.readFileSync(adminWalletClientPath, 'utf-8');
     const webhook = fs.readFileSync(dokuWebhookPath, 'utf-8');
@@ -130,14 +148,19 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
 
     expect(adminRoute).toContain('Promise.all');
     expect(adminRoute).toContain('isQrisTransactionExpired');
+    expect(adminRoute).toContain('calculateTopUpBonus');
     expect(adminClient).toContain('Antrean Verifikasi Top-Up');
     expect(adminClient).toContain('Kode Tiket Kasir Booth');
     expect(adminClient).toContain('Periksa Bukti Transfer');
     expect(adminClient).toContain('Batas Waktu QRIS (15 Menit)');
+    expect(adminClient).toContain('QRIS Kedaluwarsa');
 
     expect(webhook).toContain("invoiceNumber.startsWith('AS-TOPUP-')");
+    expect(webhook).toContain('isQrisTransactionExpired');
+    expect(webhook).toContain('calculateTopUpBonus');
     expect(storefront).toContain('Riwayat Transaksi Arus Pay');
     expect(profile).toContain('TopUpOverlay');
     expect(checkout).toContain('TopUpOverlay');
   });
 });
+

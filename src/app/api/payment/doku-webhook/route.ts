@@ -137,23 +137,38 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Transaction not found' }, { status: 404 });
         }
 
+        const { isQrisTransactionExpired, calculateTopUpBonus } = await import('@/lib/wallet-utils');
+        if (isQrisTransactionExpired(tx)) {
+          await prisma.walletTransaction.update({
+            where: { id: tx.id },
+            data: { status: 'REJECTED' },
+          });
+          return NextResponse.json(
+            { error: 'QRIS top-up transaction expired (>15 minutes)' },
+            { status: 400 }
+          );
+        }
+
         const amount = tx.amount;
         const settings = await prisma.paymentSettings.findFirst();
-        const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000;
         const bonusPercent = settings?.walletBonusPercent ?? 10;
-        const bonusMode = settings?.walletBonusMode ?? "BOTH";
-
-        const isPromoActiveMode = settings?.walletFirstTimePromoEnabled && (bonusMode === "FIRST_TIME" || bonusMode === "BOTH");
-        const isRegularActiveMode = bonusMode === "REGULAR" || bonusMode === "BOTH";
-
-        const isPromoApplied = isPromoActiveMode && tx.promoBonus !== null && tx.promoBonus > 0;
-        const hasBonus = isPromoApplied || (isRegularActiveMode && amount >= bonusMinAmount);
-        const bonusAmount = isPromoApplied ? tx.promoBonus! : (hasBonus ? Math.floor(amount * (bonusPercent / 100)) : 0);
-        const totalTopUp = amount + bonusAmount;
 
         const { incrementQuestProgress } = await import('@/lib/loyalty-utils');
 
         await prisma.$transaction(async (prismaTx) => {
+          const priorCompletedCount = await prismaTx.walletTransaction.count({
+            where: {
+              userId: tx.userId,
+              type: 'TOP_UP',
+              status: 'COMPLETED',
+              id: { not: tx.id },
+            },
+          });
+          const isFirstTimeNow = priorCompletedCount === 0;
+          const { bonusAmount, bonusType } = calculateTopUpBonus(amount, isFirstTimeNow, settings);
+          const isPromoApplied = bonusType === 'FIRST_TIME';
+          const totalTopUp = amount + bonusAmount;
+
           // Increment user's wallet balance
           await prismaTx.user.update({
             where: { id: tx.userId },
@@ -163,7 +178,10 @@ export async function POST(req: NextRequest) {
           // Mark transaction as COMPLETED
           await prismaTx.walletTransaction.update({
             where: { id: tx.id },
-            data: { status: 'COMPLETED' }
+            data: {
+              status: 'COMPLETED',
+              promoBonus: bonusAmount > 0 ? bonusAmount : null,
+            }
           });
 
           // If there's a bonus, create a COMPLETED TOP_UP_BONUS transaction
@@ -174,8 +192,8 @@ export async function POST(req: NextRequest) {
                 amount: bonusAmount,
                 type: 'TOP_UP_BONUS',
                 description: isPromoApplied
-                  ? `Bonus Top-up Pertama sebesar Rp${bonusAmount.toLocaleString('id-ID')}`
-                  : `Bonus Top-up ${bonusPercent}% sebesar Rp${bonusAmount.toLocaleString('id-ID')}`,
+                  ? `Bonus Top-Up Pertama Arus Pay +Rp${bonusAmount.toLocaleString('id-ID')}`
+                  : `Bonus Top-Up Arus Pay (${bonusPercent}%) +Rp${bonusAmount.toLocaleString('id-ID')}`,
                 status: 'COMPLETED',
                 paymentMethod: tx.paymentMethod,
                 referenceId: tx.referenceId

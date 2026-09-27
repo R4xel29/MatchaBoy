@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
-import { parsePromoPackages } from '@/lib/wallet-utils';
+import { parsePromoPackages, invalidateWalletPaymentConfigCache } from '@/lib/wallet-utils';
 
 // GET — fetch payment settings (singleton)
 export async function GET() {
@@ -24,6 +24,7 @@ export async function GET() {
       where: { id: settings.id },
       data: { walletFirstTimePromoPackages: normalizedPackages },
     });
+    invalidateWalletPaymentConfigCache();
   }
 
   const banks = await prisma.bankAccount.findMany({
@@ -76,6 +77,7 @@ export async function PUT(req: NextRequest) {
       });
     }
 
+    invalidateWalletPaymentConfigCache();
     return NextResponse.json(settings);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

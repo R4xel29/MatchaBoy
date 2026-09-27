@@ -378,100 +378,125 @@ export function TopUpOverlay({
     return exportCanvas;
   };
 
-  const handleDownloadQr = async () => {
-    if (downloadingQr) return;
-    setDownloadingQr(true);
-    try {
+  // Pre-warm composite QRIS PNG on server & upgrade DOKU QRIS in background when Step 2 QRIS opens
+  useEffect(() => {
+    if (step !== 'payment' || payMethod !== 'qris' || !activeTransaction?.id) {
+      return;
+    }
+
+    let cancelled = false;
+    const txId = String(activeTransaction.id);
+    const code = String(activeTransaction.paymentCode || 'TOPUP').replace(/[^A-Za-z0-9-_]/g, '');
+
+    const prewarmCanvasToServer = () => {
+      if (cancelled) return;
       const qrCanvas = document.getElementById('topup-qris-canvas') as HTMLCanvasElement | null;
-      if (!qrCanvas) {
-        throw new Error('Canvas QRIS belum siap');
-      }
-
-      const exportCanvas = buildCompositeQrisCanvas(qrCanvas);
-      const code = (activeTransaction?.paymentCode || 'TOPUP').replace(/[^A-Za-z0-9-_]/g, '');
-      const fileName = `QRIS_ARUSPAY_${code}.png`;
-
-      // Extract SVG path for server fallback rendering if needed
-      const svgEl = document.getElementById('topup-qris-svg');
-      const pathEl = svgEl?.querySelector('path:last-of-type');
-      const svgPath = pathEl?.getAttribute('d') || '';
-      const viewBoxAttr = svgEl?.getAttribute('viewBox') || '0 0 37 37';
-      const vbParts = viewBoxAttr.split(' ');
-      const vbSize = vbParts[2] || '37';
-
-      // Cache exact composite PNG on server (fast non-blocking timeout) so HTTP attachment download serves it
-      const pngDataUrl = exportCanvas.toDataURL('image/png', 1.0);
-      let serverReady = false;
+      if (!qrCanvas) return;
       try {
-        const prepRes = await fetch('/api/user/wallet', {
+        const exportCanvas = buildCompositeQrisCanvas(qrCanvas);
+        const pngDataUrl = exportCanvas.toDataURL('image/png', 1.0);
+        fetch('/api/user/wallet', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'prepare_qr_download',
-            transactionId: activeTransaction?.id || code,
+            transactionId: txId,
             paymentCode: code,
             qrImageBase64: pngDataUrl,
           }),
-          signal: AbortSignal.timeout(1500),
-        });
-        serverReady = prepRes.ok;
+          keepalive: true,
+        }).catch(() => {});
       } catch {
-        serverReady = false;
+        // Ignore pre-warm error; server-side QR generator handles fallback
+      }
+    };
+
+    const timerId = setTimeout(prewarmCanvasToServer, 120);
+
+    if (walletSettings?.dokuEnabled) {
+      fetch(`/api/user/wallet?transactionId=${encodeURIComponent(txId)}&qrOnly=1`, {
+        signal: AbortSignal.timeout(4000),
+      })
+        .then((r) => r.json())
+        .then((d) => {
+          if (!cancelled && d?.success && d.paymentQrContent) {
+            setActiveTransaction((prev: any) =>
+              prev && prev.id === txId
+                ? { ...prev, paymentQrContent: d.paymentQrContent }
+                : prev
+            );
+            setTimeout(prewarmCanvasToServer, 150);
+          }
+        })
+        .catch(() => {});
+    }
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timerId);
+    };
+  }, [step, payMethod, activeTransaction?.id, activeTransaction?.paymentQrContent, walletSettings?.dokuEnabled]);
+
+  const handleDownloadQr = () => {
+    if (downloadingQr) return;
+    setDownloadingQr(true);
+    try {
+      const code = (activeTransaction?.paymentCode || 'TOPUP').replace(/[^A-Za-z0-9-_]/g, '');
+      const txId = String(activeTransaction?.id || code);
+      const fileName = `QRIS_ARUSPAY_${code}.png`;
+
+      const qrCanvas = document.getElementById('topup-qris-canvas') as HTMLCanvasElement | null;
+      if (qrCanvas) {
+        try {
+          const exportCanvas = buildCompositeQrisCanvas(qrCanvas);
+          const pngDataUrl = exportCanvas.toDataURL('image/png', 1.0);
+          // Fire non-blocking cache update without awaiting so user gesture activation stays intact
+          fetch('/api/user/wallet', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'prepare_qr_download',
+              transactionId: txId,
+              paymentCode: code,
+              qrImageBase64: pngDataUrl,
+            }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch {
+          // Server fallback generates full scannable QRIS PNG directly
+        }
       }
 
-      if (serverReady || svgPath) {
-        const params = new URLSearchParams({
-          downloadQr: '1',
-          transactionId: String(activeTransaction?.id || code),
-          code,
-          amount: String(displayAmount),
-          vb: vbSize,
-          t: String(Date.now()),
-        });
-        if (!serverReady && svgPath) {
-          params.set('path', svgPath);
+      // Trigger HTTP attachment download synchronously inside the click gesture
+      const params = new URLSearchParams({
+        downloadQr: '1',
+        transactionId: txId,
+        code,
+        amount: String(displayAmount),
+        t: String(Date.now()),
+      });
+      const downloadUrl = `/api/user/wallet?${params.toString()}`;
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = fileName;
+      link.rel = 'noopener';
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+
+      // Keep link in DOM for 60s so browser download confirmation dialog never loses reference
+      setTimeout(() => {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
         }
-        const downloadUrl = `/api/user/wallet?${params.toString()}`;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = fileName;
-        link.rel = 'noopener';
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        // Keep link in DOM for 60s so browser download confirmation dialog never loses reference
-        setTimeout(() => {
-          if (link.parentNode) {
-            link.parentNode.removeChild(link);
-          }
-        }, 60000);
-      } else {
-        // Offline Blob fallback with 60-second retention before revokeObjectURL
-        const blob = await new Promise<Blob | null>((resolve) =>
-          exportCanvas.toBlob(resolve, 'image/png', 1.0)
-        );
-        if (!blob) throw new Error('Gagal membuat file gambar QRIS');
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = fileName;
-        link.style.display = 'none';
-        document.body.appendChild(link);
-        link.click();
-        setTimeout(() => {
-          if (link.parentNode) {
-            link.parentNode.removeChild(link);
-          }
-          window.URL.revokeObjectURL(blobUrl);
-        }, 60000);
-      }
+      }, 60000);
 
       showToast('Gambar QRIS berhasil diunduh ke perangkat Anda!', 'success');
     } catch (error) {
       console.error('Gagal mengunduh QRIS:', error);
       showToast('Gagal mengunduh gambar QRIS.', 'error');
     } finally {
-      setDownloadingQr(false);
+      setTimeout(() => setDownloadingQr(false), 600);
     }
   };
 
@@ -484,12 +509,20 @@ export function TopUpOverlay({
       .then((data) => {
         if (data && !data.error) {
           const loadedBanks = data.banks || [];
+          const hasActiveBank =
+            Array.isArray(loadedBanks) &&
+            loadedBanks.length > 0 &&
+            data.settings?.transferEnabled !== false;
           const loadedPending = (data.pendingTransactions || []).filter((ptx: any) => {
-            if (String(ptx.paymentMethod || '').toUpperCase() === 'QRIS' && ptx.status === 'PENDING') {
+            const pMethod = String(ptx.paymentMethod || 'QRIS').toUpperCase();
+            if (pMethod === 'QRIS' && ptx.status === 'PENDING') {
               const expMs = ptx.expiresAt
                 ? new Date(ptx.expiresAt).getTime()
                 : new Date(ptx.createdAt).getTime() + QRIS_EXPIRE_SECONDS * 1000;
               return Date.now() < expMs;
+            }
+            if (pMethod === 'BANK' && ptx.status === 'PENDING' && !hasActiveBank) {
+              return false;
             }
             return true;
           });
@@ -644,11 +677,13 @@ export function TopUpOverlay({
   const parsedAmount = parseInt(amount || '0', 10) || 0;
   const currentBonusInfo = getBonusForAmount(parsedAmount);
   const activeBonus =
-    step === 'select'
+    step === 'select' || !activeTransaction
       ? currentBonusInfo.bonus
-      : activeTransaction?.promoBonus ?? currentBonusInfo.bonus;
+      : Number(activeTransaction.promoBonus || 0);
   const displayAmount =
-    step === 'select' ? parsedAmount : activeTransaction?.amount ?? parsedAmount;
+    step === 'select' || !activeTransaction
+      ? parsedAmount
+      : Number(activeTransaction.amount || parsedAmount);
   const totalToReceive = displayAmount + activeBonus;
 
   const availableMethods = useMemo(() => {
@@ -734,8 +769,21 @@ export function TopUpOverlay({
 
     setActiveTransaction(tx);
     setAmount(String(tx.amount));
-    if (methodLower === 'bank' && hasBankOption) {
-      setPayMethod('bank');
+    if (methodLower === 'bank') {
+      if (tx.status === 'VERIFYING') {
+        setPayMethod('bank');
+        setPreview(tx.paymentProofUrl || null);
+        setPaymentProofUrl(tx.paymentProofUrl || null);
+        setUploaded(!!tx.paymentProofUrl);
+        setStep('verifying');
+        return;
+      }
+      if (hasBankOption) {
+        setPayMethod('bank');
+      } else {
+        handleCancelPending(tx.id, false);
+        return;
+      }
     } else if (methodLower === 'offline') {
       setPayMethod('offline');
     } else {

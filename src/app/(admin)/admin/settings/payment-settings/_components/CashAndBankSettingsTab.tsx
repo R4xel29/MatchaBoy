@@ -126,9 +126,12 @@ export function CashAndBankSettingsTab({
         {/* Bank List */}
         <div className="space-y-2.5">
           {banks.length === 0 ? (
-            <div className="py-8 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+            <div className="py-8 px-4 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-1">
               <Building2 className="w-8 h-8 mx-auto mb-2 opacity-30 text-slate-500" />
-              <p className="text-xs font-semibold">Belum ada rekening bank yang ditambahkan</p>
+              <p className="text-xs font-semibold text-slate-600">Belum ada rekening bank yang ditambahkan</p>
+              <p className="text-[11px] text-amber-700 font-medium">
+                Opsi Transfer Bank pada halaman Top Up Arus Pay pelanggan otomatis disembunyikan hingga minimal 1 rekening aktif ditambahkan.
+              </p>
             </div>
           ) : (
             banks.map((bank) => (

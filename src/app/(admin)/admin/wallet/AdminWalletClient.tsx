@@ -800,16 +800,23 @@ export default function AdminWalletClient() {
                     </button>
                     <button
                       type="button"
-                      disabled={processingTxId === tx.id}
+                      disabled={
+                        processingTxId === tx.id ||
+                        Boolean(method === 'QRIS' && qrisTimer && qrisTimer.diffSec <= 0)
+                      }
                       onClick={() => setConfirmActionModal({ tx, action: 'approve' })}
-                      className="flex-[1.6] py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-[10.5px] font-black uppercase tracking-wider shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="flex-[1.6] py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white text-[10.5px] font-black uppercase tracking-wider shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       {processingTxId === tx.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <CheckCircle2 className="w-3.5 h-3.5" />
                       )}
-                      <span>Setujui (+{formatRupiah(totalReceive)})</span>
+                      <span>
+                        {method === 'QRIS' && qrisTimer && qrisTimer.diffSec <= 0
+                          ? 'QRIS Kedaluwarsa'
+                          : `Setujui (+${formatRupiah(totalReceive)})`}
+                      </span>
                     </button>
                   </div>
                 </div>

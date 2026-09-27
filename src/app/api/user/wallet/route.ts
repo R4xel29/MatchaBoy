@@ -14,32 +14,44 @@ import {
     isQrisTransactionExpired,
     getQrisExpiresAt,
     calculateTopUpBonus,
+    generateServerQrSvgData,
+    getCachedWalletPaymentConfig,
 } from '@/lib/wallet-utils'
 import sharp from 'sharp'
 
-// In-memory cache for client-rendered QRIS PNG downloads (TTL 10 minutes)
+// In-memory cache for client-rendered QRIS PNG downloads & DOKU QR strings (TTL 15 minutes)
 const globalForQrisCache = globalThis as unknown as {
     __qrisPngCache?: Map<string, { buffer: Buffer; createdAt: number }>
+    __dokuQrContentCache?: Map<string, { qrContent: string; createdAt: number }>
+    __dokuQrPromiseCache?: Map<string, Promise<string | null>>
 }
 const qrisPngCache =
     globalForQrisCache.__qrisPngCache ??
     (globalForQrisCache.__qrisPngCache = new Map<string, { buffer: Buffer; createdAt: number }>())
+const dokuQrContentCache =
+    globalForQrisCache.__dokuQrContentCache ??
+    (globalForQrisCache.__dokuQrContentCache = new Map<string, { qrContent: string; createdAt: number }>())
+const dokuQrPromiseCache =
+    globalForQrisCache.__dokuQrPromiseCache ??
+    (globalForQrisCache.__dokuQrPromiseCache = new Map<string, Promise<string | null>>())
 
 function cleanupQrisCache() {
     const now = Date.now()
+    const ttl = 15 * 60 * 1000
     for (const [k, v] of qrisPngCache.entries()) {
-        if (now - v.createdAt > 10 * 60 * 1000) {
+        if (now - v.createdAt > ttl) {
             qrisPngCache.delete(k)
+        }
+    }
+    for (const [k, v] of dokuQrContentCache.entries()) {
+        if (now - v.createdAt > ttl) {
+            dokuQrContentCache.delete(k)
         }
     }
 }
 
 async function completeTopUpTransaction(txId: string, settings: any) {
-    const bonusMinAmount = settings?.walletBonusMinAmount ?? 100000
     const bonusPercent = settings?.walletBonusPercent ?? 10
-    const bonusMode = settings?.walletBonusMode ?? 'BOTH'
-    const isPromoActiveMode = bonusMode === 'FIRST_TIME' || bonusMode === 'BOTH'
-    const isRegularActiveMode = bonusMode === 'REGULAR' || bonusMode === 'BOTH'
 
     return prisma.$transaction(async (prismaTx) => {
         const currentTx = await prismaTx.walletTransaction.findUnique({
@@ -65,19 +77,19 @@ async function completeTopUpTransaction(txId: string, settings: any) {
             }
         }
 
+        // Authoritative TOCTOU-safe check: count already-completed TOP_UP transactions for this user
+        const priorCompletedCount = await prismaTx.walletTransaction.count({
+            where: {
+                userId: currentTx.userId,
+                type: 'TOP_UP',
+                status: 'COMPLETED',
+                id: { not: currentTx.id },
+            },
+        })
+        const isFirstTimeNow = priorCompletedCount === 0
         const amount = currentTx.amount
-        const hasStoredBonus =
-            currentTx.promoBonus !== null &&
-            currentTx.promoBonus !== undefined &&
-            currentTx.promoBonus > 0
-        const isPromoApplied = isPromoActiveMode && hasStoredBonus
-        const hasRegularBonus =
-            !hasStoredBonus && isRegularActiveMode && bonusPercent > 0 && amount >= bonusMinAmount
-        const bonusAmount = hasStoredBonus
-            ? currentTx.promoBonus!
-            : hasRegularBonus
-            ? Math.floor(amount * (bonusPercent / 100))
-            : 0
+        const { bonusAmount, bonusType } = calculateTopUpBonus(amount, isFirstTimeNow, settings)
+        const isPromoApplied = bonusType === 'FIRST_TIME'
         const totalTopUp = amount + bonusAmount
 
         const updatedUser = await prismaTx.user.update({
@@ -90,9 +102,29 @@ async function completeTopUpTransaction(txId: string, settings: any) {
             where: { id: currentTx.id },
             data: {
                 status: 'COMPLETED',
-                promoBonus: bonusAmount > 0 ? bonusAmount : currentTx.promoBonus,
+                promoBonus: bonusAmount > 0 ? bonusAmount : null,
             },
         })
+
+        // If this was the user's first completed top-up, recalculate any other still-pending top-ups of this user
+        if (isFirstTimeNow) {
+            const otherPending = await prismaTx.walletTransaction.findMany({
+                where: {
+                    userId: currentTx.userId,
+                    type: 'TOP_UP',
+                    status: { in: ['PENDING', 'VERIFYING'] },
+                    id: { not: currentTx.id },
+                },
+                select: { id: true, amount: true },
+            })
+            for (const other of otherPending) {
+                const nextBonus = calculateTopUpBonus(other.amount, false, settings).bonusAmount
+                await prismaTx.walletTransaction.update({
+                    where: { id: other.id },
+                    data: { promoBonus: nextBonus > 0 ? nextBonus : null },
+                })
+            }
+        }
 
         if (bonusAmount > 0) {
             await prismaTx.walletTransaction.create({
@@ -126,15 +158,26 @@ async function buildFallbackServerQrisPng(
     code: string,
     amount: number,
     svgPath?: string | null,
-    viewBoxSize?: number
+    viewBoxSize?: number,
+    qrPayloadOverride?: string | null
 ): Promise<Buffer> {
     const formattedAmount = `Rp ${amount.toLocaleString('id-ID')}`
     const safeCode = (code || 'AS-TOPUP').replace(/[^A-Za-z0-9-_]/g, '')
-    const vb = viewBoxSize && viewBoxSize > 0 ? viewBoxSize : 37
-    const qrMarkup = svgPath
-        ? `<svg x="130" y="190" width="340" height="340" viewBox="0 0 ${vb} ${vb}" shape-rendering="crispEdges">
-             <rect width="${vb}" height="${vb}" fill="#FFFFFF"/>
-             <path d="${svgPath.replace(/[^MmLlHhVvZz0-9.,\s-]/g, '')}" fill="#111827"/>
+
+    let resolvedPath = svgPath || ''
+    let resolvedVb = viewBoxSize && viewBoxSize > 0 ? viewBoxSize : 37
+
+    if (!resolvedPath) {
+        const qrContent = qrPayloadOverride || buildFallbackQrisString(amount)
+        const generated = generateServerQrSvgData(qrContent)
+        resolvedPath = generated.path
+        resolvedVb = generated.viewBoxSize
+    }
+
+    const qrMarkup = resolvedPath
+        ? `<svg x="130" y="190" width="340" height="340" viewBox="0 0 ${resolvedVb} ${resolvedVb}" shape-rendering="crispEdges">
+             <rect width="${resolvedVb}" height="${resolvedVb}" fill="#FFFFFF"/>
+             <path d="${resolvedPath.replace(/[^MmLlHhVvZz0-9.,\s-]/g, '')}" fill="#111827"/>
            </svg>`
         : `<rect x="150" y="210" width="300" height="300" rx="16" fill="#FFF7ED" stroke="#F97316" stroke-width="4"/>`
 
@@ -174,7 +217,17 @@ export async function GET(req: Request) {
             if (cached) {
                 pngBuffer = cached.buffer
             } else {
-                pngBuffer = await buildFallbackServerQrisPng(code, amount, svgPath, vbSize)
+                const cachedQrContent =
+                    dokuQrContentCache.get(txId)?.qrContent ||
+                    dokuQrContentCache.get(code)?.qrContent ||
+                    null
+                pngBuffer = await buildFallbackServerQrisPng(
+                    code,
+                    amount,
+                    svgPath,
+                    vbSize,
+                    cachedQrContent
+                )
             }
 
             return new NextResponse(new Uint8Array(pngBuffer), {
@@ -196,11 +249,27 @@ export async function GET(req: Request) {
         const transactionId = searchParams.get('transactionId')
 
         if (transactionId) {
-            const [initialTx, settings, userDb] = await Promise.all([
+            // Fast background QR-only resolution endpoint for Step 2 dynamic DOKU QRIS upgrade
+            if (searchParams.get('qrOnly') === '1') {
+                const inFlight = dokuQrPromiseCache.get(transactionId)
+                if (inFlight) {
+                    await Promise.race([
+                        inFlight,
+                        new Promise((resolve) => setTimeout(resolve, 3000)),
+                    ])
+                }
+                const resolvedQr = dokuQrContentCache.get(transactionId)?.qrContent || null
+                return NextResponse.json({
+                    success: true,
+                    paymentQrContent: resolvedQr,
+                })
+            }
+
+            const [initialTx, { settings }, userDb] = await Promise.all([
                 prisma.walletTransaction.findUnique({
                     where: { id: transactionId },
                 }),
-                prisma.paymentSettings.findFirst(),
+                getCachedWalletPaymentConfig(prisma),
                 prisma.user.findUnique({
                     where: { id: session.user.id },
                     select: { walletBalance: true },
@@ -267,7 +336,10 @@ export async function GET(req: Request) {
             }
 
             const bonusAmount = tx.promoBonus ?? 0
-            const paymentQrContent = buildFallbackQrisString(tx.amount)
+            const paymentQrContent =
+                dokuQrContentCache.get(tx.id)?.qrContent ||
+                (tx.referenceId ? dokuQrContentCache.get(tx.referenceId)?.qrContent : undefined) ||
+                buildFallbackQrisString(tx.amount)
 
             return NextResponse.json({
                 success: true,
@@ -285,7 +357,7 @@ export async function GET(req: Request) {
             })
         }
 
-        const [user, settings, banks, completedCount] = await Promise.all([
+        const [user, { settings, banks }] = await Promise.all([
             prisma.user.findUnique({
                 where: { id: session.user.id },
                 select: {
@@ -296,22 +368,27 @@ export async function GET(req: Request) {
                     },
                 },
             }),
-            prisma.paymentSettings.findFirst(),
-            prisma.bankAccount.findMany({
-                where: { isActive: true },
-                orderBy: { order: 'asc' },
-            }),
-            prisma.walletTransaction.count({
+            getCachedWalletPaymentConfig(prisma),
+        ])
+
+        if (!user) {
+            return NextResponse.json({ error: 'User tidak ditemukan' }, { status: 404 })
+        }
+
+        // Derive isFirstTime from already-fetched transactions without an extra DB round-trip when possible
+        const hasCompletedInRecent = user.walletTransactions.some(
+            (t) => t.type === 'TOP_UP' && t.status === 'COMPLETED'
+        )
+        let isFirstTime = !hasCompletedInRecent
+        if (!hasCompletedInRecent && user.walletTransactions.length >= 30) {
+            const completedCount = await prisma.walletTransaction.count({
                 where: {
                     userId: session.user.id,
                     type: 'TOP_UP',
                     status: 'COMPLETED',
                 },
-            }),
-        ])
-
-        if (!user) {
-            return NextResponse.json({ error: 'User tidak ditemukan' }, { status: 404 })
+            })
+            isFirstTime = completedCount === 0
         }
 
         // Auto-expire any PENDING QRIS transactions older than 15 minutes without slowing down response
@@ -335,7 +412,6 @@ export async function GET(req: Request) {
             )
         }
 
-        const isFirstTime = completedCount === 0
         const parsedPromoPackages = parsePromoPackages(settings?.walletFirstTimePromoPackages)
 
         const pendingTransactions = normalizedTransactions
@@ -349,7 +425,10 @@ export async function GET(req: Request) {
                 status: t.status,
                 paymentMethod: t.paymentMethod || 'QRIS',
                 paymentProofUrl: t.paymentProofUrl,
-                paymentQrContent: buildFallbackQrisString(t.amount),
+                paymentQrContent:
+                    dokuQrContentCache.get(t.id)?.qrContent ||
+                    (t.referenceId ? dokuQrContentCache.get(t.referenceId)?.qrContent : undefined) ||
+                    buildFallbackQrisString(t.amount),
                 createdAt: t.createdAt,
                 expiresAt:
                     (t.paymentMethod || 'QRIS') === 'QRIS'
@@ -412,8 +491,8 @@ export async function POST(req: Request) {
         const normalizedMethod =
             rawMethod === 'BANK' ? 'BANK' : rawMethod === 'OFFLINE' ? 'OFFLINE' : 'QRIS'
 
-        const [settings, completedCount, activeBankCount] = await Promise.all([
-            prisma.paymentSettings.findFirst(),
+        const [{ settings, banks }, completedCount] = await Promise.all([
+            getCachedWalletPaymentConfig(prisma),
             prisma.walletTransaction.count({
                 where: {
                     userId: session.user.id,
@@ -421,9 +500,6 @@ export async function POST(req: Request) {
                     status: 'COMPLETED',
                 },
             }),
-            normalizedMethod === 'BANK'
-                ? prisma.bankAccount.count({ where: { isActive: true } })
-                : Promise.resolve(1),
         ])
 
         const minTopUp = settings?.walletMinTopUp ?? 10000
@@ -437,7 +513,7 @@ export async function POST(req: Request) {
             throw new ValidationError(`Jumlah pengisian minimal adalah Rp${minTopUp.toLocaleString('id-ID')}`)
         }
 
-        if (normalizedMethod === 'BANK' && (activeBankCount === 0 || settings?.transferEnabled === false)) {
+        if (normalizedMethod === 'BANK' && (banks.length === 0 || settings?.transferEnabled === false)) {
             throw new ValidationError('Metode Transfer Bank belum tersedia saat ini. Silakan pilih metode lain.')
         }
 
@@ -473,39 +549,51 @@ export async function POST(req: Request) {
             },
         })
 
-        let paymentQrContent = buildFallbackQrisString(amount)
+        const paymentQrContent = buildFallbackQrisString(amount)
 
-        // Non-blocking fast race (max 1200ms) for DOKU MCP QRIS so POST never loads slowly
+        // Fire-and-forget DOKU MCP QRIS generation in background so POST returns immediately (< 100ms)
         if (
             normalizedMethod === 'QRIS' &&
             settings?.dokuEnabled &&
             settings.dokuClientId &&
             settings.dokuSharedKey
         ) {
-            try {
-                const dokuCreds = {
-                    clientId: settings.dokuClientId,
-                    sharedKey: settings.dokuSharedKey,
-                    isSandbox: settings.dokuSandbox ?? true,
-                }
-
-                const mcpResult = await Promise.race([
-                    createDokuMcpQrisPayment(dokuCreds, {
-                        invoiceNumber: paymentCode,
-                        amount,
-                        postalCode: '67215',
-                    }),
-                    new Promise<{ qrContent?: undefined }>((resolve) =>
-                        setTimeout(() => resolve({}), 1200)
-                    ),
-                ])
-
-                if (mcpResult?.qrContent) {
-                    paymentQrContent = mcpResult.qrContent
-                }
-            } catch (dokuErr) {
-                console.warn('[WALLET TOPUP DOKU FALLBACK]', dokuErr)
+            const dokuCreds = {
+                clientId: settings.dokuClientId,
+                sharedKey: settings.dokuSharedKey,
+                isSandbox: settings.dokuSandbox ?? true,
             }
+
+            const bgPromise = createDokuMcpQrisPayment(dokuCreds, {
+                invoiceNumber: paymentCode,
+                amount,
+                postalCode: '67215',
+            })
+                .then((mcpResult) => {
+                    if (mcpResult?.qrContent) {
+                        cleanupQrisCache()
+                        const now = Date.now()
+                        dokuQrContentCache.set(transaction.id, {
+                            qrContent: mcpResult.qrContent,
+                            createdAt: now,
+                        })
+                        dokuQrContentCache.set(paymentCode, {
+                            qrContent: mcpResult.qrContent,
+                            createdAt: now,
+                        })
+                        return mcpResult.qrContent
+                    }
+                    return null
+                })
+                .catch((dokuErr) => {
+                    console.warn('[WALLET TOPUP DOKU FALLBACK]', dokuErr)
+                    return null
+                })
+                .finally(() => {
+                    dokuQrPromiseCache.delete(transaction.id)
+                })
+
+            dokuQrPromiseCache.set(transaction.id, bgPromise)
         }
 
         const expiresAt =

@@ -1,3 +1,6 @@
+import React from 'react';
+import { QRCodeSVG } from 'qrcode.react';
+
 export interface PromoPackage {
   amount: number;
   bonus: number;
@@ -19,7 +22,7 @@ export function parsePromoPackages(raw?: string | null): PromoPackage[] {
     if (Array.isArray(parsed) && parsed.length > 0) {
       const normalized = parsed
         .map((p: any) => ({
-          amount: Number(p.amount) || 0,
+          amount: Number(p.amount ?? p.minAmount) || 0,
           bonus: Number(p.bonus) || 0,
         }))
         .filter((p) => p.amount > 0 && p.bonus >= 0)
@@ -49,7 +52,7 @@ export function isQrisTransactionExpired(tx: {
   status: string;
   createdAt: Date | string;
 }): boolean {
-  if (String(tx.paymentMethod || '').toUpperCase() !== 'QRIS') return false;
+  if (String(tx.paymentMethod || 'QRIS').toUpperCase() !== 'QRIS') return false;
   if (tx.status !== 'PENDING') return false;
   const createdMs = new Date(tx.createdAt).getTime();
   if (isNaN(createdMs)) return false;
@@ -108,3 +111,118 @@ export function calculateTopUpBonus(
 
   return { bonusAmount: 0, isPromoApplied: false, bonusType: 'NONE' };
 }
+
+/**
+ * Generates QR code SVG path and viewBox size directly on the server without react-dom/server.
+ */
+export function generateServerQrSvgData(qrValue: string): {
+  path: string;
+  svgPath: string;
+  viewBoxSize: number;
+} {
+  try {
+    const internals =
+      (React as any).__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE ||
+      (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?.ReactCurrentDispatcher;
+
+    if (internals) {
+      const prevH = internals.H;
+      const prevCurrent = internals.current;
+      const mockDispatcher = {
+        useMemo: (fn: () => any) => fn(),
+        useCallback: (fn: any) => fn,
+        useRef: (val: any) => ({ current: val }),
+        useState: (init: any) => [typeof init === 'function' ? init() : init, () => {}],
+        useEffect: () => {},
+      };
+      internals.H = mockDispatcher;
+      internals.current = mockDispatcher;
+      try {
+        const el = (QRCodeSVG as any).render(
+          {
+            value: qrValue || 'ARUM-SEDUH-QRIS',
+            size: 340,
+            level: 'M',
+            includeMargin: true,
+            marginSize: 2,
+          },
+          null
+        );
+        const viewBox = String(el?.props?.viewBox || '0 0 37 37');
+        const vbParts = viewBox.split(' ');
+        const viewBoxSize = parseInt(vbParts[2] || '37', 10) || 37;
+        const children = Array.isArray(el?.props?.children) ? el.props.children : [];
+        const fgChild = children.find(
+          (c: any) => c?.type === 'path' && c?.props?.fill && c.props.fill !== '#FFFFFF'
+        );
+        const d = String(fgChild?.props?.d || '');
+        if (d) {
+          return { path: d, svgPath: d, viewBoxSize };
+        }
+      } finally {
+        internals.H = prevH;
+        internals.current = prevCurrent;
+      }
+    }
+  } catch (err) {
+    console.warn('[SERVER QR SVG GEN FALLBACK]', err);
+  }
+  return { path: '', svgPath: '', viewBoxSize: 37 };
+}
+
+// Fast in-memory cache for global PaymentSettings & active BankAccount list (TTL 30s)
+const globalForWalletConfig = globalThis as unknown as {
+  __walletPaymentConfigCache?: {
+    settings: any;
+    banks: any[];
+    fetchedAt: number;
+  } | null;
+};
+
+export function invalidateWalletPaymentConfigCache() {
+  globalForWalletConfig.__walletPaymentConfigCache = null;
+}
+
+export async function getCachedWalletPaymentConfig(prismaClient: any): Promise<{
+  settings: any;
+  banks: any[];
+}> {
+  const now = Date.now();
+  const cached = globalForWalletConfig.__walletPaymentConfigCache;
+  if (cached && now - cached.fetchedAt < 30_000) {
+    return { settings: cached.settings, banks: cached.banks };
+  }
+
+  const [settings, banks] = await Promise.all([
+    prismaClient.paymentSettings.findFirst(),
+    prismaClient.bankAccount.findMany({
+      where: { isActive: true },
+      orderBy: { order: 'asc' },
+    }),
+  ]);
+
+  // Auto-persist 3-tier default migration in background if DB still holds legacy 2-tier string
+  if (settings) {
+    const normalizedStr = JSON.stringify(parsePromoPackages(settings.walletFirstTimePromoPackages));
+    if (settings.walletFirstTimePromoPackages !== normalizedStr) {
+      settings.walletFirstTimePromoPackages = normalizedStr;
+      Promise.resolve().then(() =>
+        prismaClient.paymentSettings
+          .update({
+            where: { id: settings.id },
+            data: { walletFirstTimePromoPackages: normalizedStr },
+          })
+          .catch(() => {})
+      );
+    }
+  }
+
+  globalForWalletConfig.__walletPaymentConfigCache = {
+    settings,
+    banks,
+    fetchedAt: now,
+  };
+
+  return { settings, banks };
+}
+
