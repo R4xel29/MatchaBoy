@@ -84,11 +84,12 @@ export default async function ProfilePage() {
     return (
       <ProfileClient 
         user={{
-          name: user.name || "Matcha Lover",
+          name: user.name || "Pelanggan Arum Seduh",
           email: user.email || "",
           phone: user.phone || "-",
           phoneVerified: !!user.phoneVerified,
           points: user.points,
+          walletBalance: user.walletBalance || 0,
           tumblerCount: (user as any).tumblerCount || 0,
           currentTumblerGoal: (user as any).currentTumblerGoal || 10,
           arusLevel: (user as any).arusLevel || "Tunas Arus",

@@ -10,9 +10,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get all users with wallet balance > 0, include latest transactions
+    // Get all users with wallet balance > 0, wallet history, or customer role
     const users = await prisma.user.findMany({
-      where: { walletBalance: { gt: 0 } },
+      where: {
+        OR: [
+          { walletBalance: { gt: 0 } },
+          { walletTransactions: { some: {} } },
+          { role: 'CUSTOMER' },
+        ],
+      },
       select: {
         id: true,
         name: true,
@@ -75,7 +81,7 @@ export async function GET() {
         totalTopUpCount: totalTopUps._count,
         totalPayments: Math.abs(totalPayments._sum.amount ?? 0),
         totalPaymentCount: totalPayments._count,
-        totalUsers: users.length,
+        totalUsers: users.filter((u) => u.walletBalance > 0).length,
       },
     });
   } catch (error: unknown) {
@@ -245,6 +251,26 @@ export async function POST(req: Request) {
         await incrementQuestProgress(tx.userId, 'TOP_UP_COUNT', 1, prismaTx);
 
         return [user, completedTx];
+      });
+
+      // Fire-and-forget customer notification
+      Promise.resolve().then(async () => {
+        try {
+          const { sendNotification } = await import('@/lib/notification-service');
+          await sendNotification({
+            userId: tx.userId,
+            type: 'system',
+            title: 'Top Up Arus Pay Berhasil!',
+            message:
+              bonusAmount > 0
+                ? `Top up Rp${amount.toLocaleString('id-ID')} + Bonus Rp${bonusAmount.toLocaleString('id-ID')} (Total Rp${totalTopUp.toLocaleString('id-ID')}) telah masuk ke saldo Arus Pay Anda.`
+                : `Top up sebesar Rp${amount.toLocaleString('id-ID')} telah masuk ke saldo Arus Pay Anda.`,
+            linkUrl: '/profile',
+            data: { transactionId: tx.id },
+          });
+        } catch (err) {
+          console.error('[ADMIN_WALLET_APPROVE_NOTIF_ERROR]', err);
+        }
       });
 
       return NextResponse.json({ success: true, user: updatedUser, transaction: updatedTx });

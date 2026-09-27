@@ -20,6 +20,7 @@ import { useCartStore } from '@/stores/cart-store';
 import { formatRupiah } from '@/lib/utils';
 import { ProductRecommendations } from '@/components/checkout/ProductRecommendations';
 import { ProductModal } from '@/components/storefront/ProductModal';
+import { TopUpOverlay } from '@/components/storefront/TopUpOverlay';
 import { CheckoutSummarySkeleton } from '@/components/ui/ShimmerSkeleton';
 import Image from 'next/image';
 import type { Product, CartItem } from '@/types';
@@ -213,6 +214,18 @@ export default function CheckoutPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [selectedVoucherDetail, setSelectedVoucherDetail] = useState<any | null>(null);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
+
+  const refreshCheckoutWallet = useCallback(() => {
+    fetch('/api/user/wallet')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && typeof d.balance === 'number') {
+          setWalletBalance(d.balance);
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isAllPaymentsOpen, setIsAllPaymentsOpen] = useState(false);
   const [isOvoSheetOpen, setIsOvoSheetOpen] = useState(false);
@@ -1882,28 +1895,22 @@ export default function CheckoutPage() {
             {paymentConfig?.wallet?.enabled && (
             <div className="space-y-2">
               <span className="block text-[10px] font-extrabold uppercase tracking-wider text-gray-400 pl-1 select-none">Metode Pembayaran Utama</span>
-              <button
-                type="button"
+              <div
                 onClick={() => { setPaymentMethod('WALLET'); setPaymentChannel(''); }}
                 className={`w-full text-left rounded-[2rem] p-5 shadow-md flex flex-col relative overflow-hidden transition-all active:scale-[0.99] cursor-pointer border-2
                   ${paymentMethod === 'WALLET'
-                    ? 'border-amber-400 bg-gradient-to-br from-[#1E2D1F] to-[#141F15] text-[#F4ECD8] shadow-amber-900/10'
-                    : 'border-gray-150 bg-white hover:border-gray-250 text-gray-800'}`}
+                    ? 'border-amber-400 bg-gradient-to-br from-[#24160E] via-[#2F1D12] to-[#180E08] text-white shadow-amber-900/15'
+                    : 'border-gray-150 bg-white hover:border-amber-200 text-gray-800'}`}
               >
-                {/* Background decorative matcha leaf pattern overlay */}
-                <div className="absolute right-0 bottom-0 opacity-5 pointer-events-none select-none">
-                  <svg width="150" height="150" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M17,8C8,10 5.9,16.17 3.82,21.34L5.71,22L6.66,19.7C12,19.7 18,16.14 19,12C20.1,7.4 17,8 17,8M17,10C17,10 18.5,9.6 17.5,12C16.8,13.7 12.5,17 7.82,17.7L9.82,12.7C11.5,13 14.5,11.5 17,10Z" />
-                  </svg>
-                </div>
+                <div className="absolute -top-12 -right-12 w-36 h-36 bg-orange-500/15 rounded-full blur-2xl pointer-events-none select-none" />
 
-                <div className="flex justify-between items-center w-full">
+                <div className="flex justify-between items-center w-full relative z-10">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 shadow-sm
-                      ${paymentMethod === 'WALLET' ? 'bg-amber-400 text-[#1E2D1F]' : 'bg-[#B48A5E]/10 text-[#B48A5E]'}`}>
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm
+                      ${paymentMethod === 'WALLET' ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white' : 'bg-amber-50 text-orange-600 border border-amber-200'}`}>
                       <Wallet className="w-5 h-5" />
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <div>
                         <p className={`text-xs font-black uppercase tracking-wider ${paymentMethod === 'WALLET' ? 'text-amber-300' : 'text-gray-400'}`}>
                           Arus Pay
@@ -1913,53 +1920,37 @@ export default function CheckoutPage() {
                         </h4>
                       </div>
                       
-                      {/* Quick instant simulated top-up button */}
+                      {/* Open TopUpOverlay button */}
                       <button
                         type="button"
-                        onClick={async (e) => {
+                        onClick={(e) => {
                           e.stopPropagation();
-                          const amountToTopUp = 100000;
-                          try {
-                            const res = await fetch('/api/user/wallet', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ amount: amountToTopUp })
-                            });
-                            const d = await res.json();
-                            if (res.ok && d.success) {
-                              setWalletBalance(d.balance);
-                              setToast({ message: `Top Up Simulasi Sukses! Saldo bertambah Rp100.000`, type: 'success' });
-                            } else {
-                              setToast({ message: d.error || 'Gagal top up', type: 'error' });
-                            }
-                          } catch (err) {
-                            setToast({ message: 'Gagal menghubungi server', type: 'error' });
-                          }
+                          setIsTopUpOpen(true);
                         }}
-                        className={`ml-2 px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all active:scale-95 flex items-center gap-1 select-none cursor-pointer
+                        className={`ml-1 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-xl border transition-all active:scale-95 flex items-center gap-1 select-none cursor-pointer
                           ${paymentMethod === 'WALLET'
-                            ? 'bg-amber-400/10 border-amber-400/20 text-amber-300 hover:bg-amber-400/20'
-                            : 'bg-stone-50 border-stone-200 text-stone-600 hover:bg-stone-100'}`}
+                            ? 'bg-gradient-to-r from-orange-500 to-amber-500 border-amber-400/40 text-white shadow-sm hover:from-orange-600 hover:to-amber-600'
+                            : 'bg-amber-50 border-amber-200 text-orange-700 hover:bg-amber-100'}`}
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>Isi Rp100k (Simulasi)</span>
+                        <span>Top Up Saldo</span>
                       </button>
                     </div>
                   </div>
                   
                   {/* Custom Checkbox/Radio Indicator */}
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors
-                    ${paymentMethod === 'WALLET' ? 'border-amber-400 bg-amber-400 text-[#1E2D1F]' : 'border-gray-300'}`}>
+                    ${paymentMethod === 'WALLET' ? 'border-amber-400 bg-amber-400 text-[#24160E]' : 'border-gray-300'}`}>
                     {paymentMethod === 'WALLET' && <Check className="w-3 h-3 stroke-[3]" />}
                   </div>
                 </div>
 
-                <div className={`mt-3.5 pt-3.5 border-t border-dashed w-full text-[10px] font-semibold flex items-center gap-1.5
-                  ${paymentMethod === 'WALLET' ? 'border-[#364d38] text-amber-200/90' : 'border-gray-100 text-[#B48A5E]'}`}>
-                  <span className="inline-block px-1.5 py-0.5 rounded bg-amber-400/10 text-amber-500 font-extrabold uppercase text-[8px] tracking-wider shrink-0">PROMO</span>
-                  <span>Bayar instan & dapatkan cashback 10% koin loyalitas!</span>
+                <div className={`mt-3.5 pt-3.5 border-t border-dashed w-full text-[10px] font-semibold flex items-center gap-1.5 relative z-10
+                  ${paymentMethod === 'WALLET' ? 'border-white/15 text-amber-200/90' : 'border-gray-100 text-orange-700'}`}>
+                  <span className="inline-block px-1.5 py-0.5 rounded bg-orange-500/20 text-amber-400 font-extrabold uppercase text-[8px] tracking-wider shrink-0">PROMO</span>
+                  <span>Bayar instan & dapatkan bonus saldo ekstra saat Top Up!</span>
                 </div>
-              </button>
+              </div>
             </div>
             )}
 
@@ -3396,30 +3387,15 @@ export default function CheckoutPage() {
                           <h4 className="text-sm font-black text-gray-900 mt-0.5">{formatRupiah(walletBalance)}</h4>
                           <button
                             type="button"
-                            onClick={async (e) => {
+                            onClick={(e) => {
                               e.stopPropagation();
-                              const amountToTopUp = 100000;
-                              try {
-                                const res = await fetch('/api/user/wallet', {
-                                  method: 'POST',
-                                  headers: { 'Content-Type': 'application/json' },
-                                  body: JSON.stringify({ amount: amountToTopUp })
-                                });
-                                const d = await res.json();
-                                if (res.ok && d.success) {
-                                  setWalletBalance(d.balance);
-                                  setToast({ message: `Top Up Simulasi Sukses! Saldo bertambah Rp100.000`, type: 'success' });
-                                } else {
-                                  setToast({ message: d.error || 'Gagal top up', type: 'error' });
-                                }
-                              } catch (err) {
-                                setToast({ message: 'Gagal menghubungi server', type: 'error' });
-                              }
+                              setIsAllPaymentsOpen(false);
+                              setIsTopUpOpen(true);
                             }}
-                            className="px-2 py-0.5 text-[8px] font-black uppercase rounded bg-amber-400 hover:bg-amber-500 text-[#1E2D1F] transition-all active:scale-95 flex items-center gap-0.5 select-none cursor-pointer"
+                            className="px-2.5 py-1 text-[9px] font-black uppercase rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white transition-all active:scale-95 flex items-center gap-0.5 select-none cursor-pointer shadow-sm"
                           >
                             <Plus className="w-2.5 h-2.5" />
-                            <span>Isi +Rp100k</span>
+                            <span>Top Up</span>
                           </button>
                         </div>
                       </div>
@@ -3936,6 +3912,13 @@ export default function CheckoutPage() {
           </div>
         )}
       </AnimatePresence>
+
+      <TopUpOverlay
+        isOpen={isTopUpOpen}
+        onClose={() => setIsTopUpOpen(false)}
+        refreshWallet={refreshCheckoutWallet}
+        showToast={(msg, type) => setToast({ message: msg, type })}
+      />
     </div>
   );
 }

@@ -54,7 +54,10 @@ import {
   Users,
   Leaf,
   Edit,
-  Calendar
+  Calendar,
+  Wallet,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import 'leaflet/dist/leaflet.css';
@@ -64,6 +67,7 @@ import Image from 'next/image';
 import { useCartStore } from '@/stores/cart-store';
 import { RegisterPasskeyButton } from '@/components/auth/PasskeyButtons';
 import { LoginBottomSheet } from '@/components/auth/LoginBottomSheet';
+import { TopUpOverlay } from '@/components/storefront/TopUpOverlay';
 
 // Data shapes
 type OrderShape = {
@@ -80,6 +84,7 @@ type UserShape = {
   phone: string;
   phoneVerified?: boolean;
   points: number;
+  walletBalance?: number;
   tumblerCount?: number;
   currentTumblerGoal?: number;
   arusLevel?: string;
@@ -188,7 +193,19 @@ export default function ProfileClient({
   const [origin, setOrigin] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isLoginSheetOpen, setIsLoginSheetOpen] = useState(false);
+  const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [storeSettings, setStoreSettings] = useState<any>(null);
+
+  const refreshProfileWallet = () => {
+    fetch('/api/user/wallet')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data.balance === 'number') {
+          setUser((prev) => ({ ...prev, walletBalance: data.balance }));
+        }
+      })
+      .catch(() => {});
+  };
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -205,6 +222,7 @@ export default function ProfileClient({
           setUser(prev => ({
             ...prev,
             points: data.points,
+            walletBalance: data.walletBalance !== undefined ? data.walletBalance : prev.walletBalance,
             name: data.name || prev.name,
             phone: data.phone || prev.phone,
             phoneVerified: data.phoneVerified !== undefined ? data.phoneVerified : prev.phoneVerified,
@@ -478,6 +496,43 @@ export default function ProfileClient({
                 </div>
               )}
 
+              {/* Arus Pay Digital Wallet Card */}
+              <div className="bg-gradient-to-br from-[#24160E] via-[#2F1D12] to-[#180E08] text-white rounded-3xl p-5 shadow-xl border border-amber-500/25 relative overflow-hidden flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="absolute -top-12 -right-12 w-40 h-40 bg-orange-500/15 rounded-full blur-2xl pointer-events-none" />
+                <div className="flex items-center gap-3.5 relative z-10">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+                    <Wallet className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-300">
+                        Arus Pay
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/25 text-amber-200 text-[8.5px] font-black uppercase">
+                        Dompet Digital
+                      </span>
+                    </div>
+                    <p className="text-2xl font-serif font-black text-white mt-0.5">
+                      {user.isGuest ? 'Rp 0' : formatRupiah(user.walletBalance || 0)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (user.isGuest) {
+                      setIsLoginSheetOpen(true);
+                    } else {
+                      setIsTopUpOpen(true);
+                    }
+                  }}
+                  className="px-5 py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black uppercase tracking-wider shadow-md transition-all active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer relative z-10 shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Top Up Arus Pay</span>
+                </button>
+              </div>
+
               <div className="bg-white/80 backdrop-blur-md rounded-[32px] border border-[#D4A574]/15 shadow-sm overflow-hidden p-3 space-y-1">
                 {menuItems.map((item) => (
                   <button
@@ -578,6 +633,13 @@ export default function ProfileClient({
       </div>
 
       <LoginBottomSheet isOpen={isLoginSheetOpen} onClose={() => setIsLoginSheetOpen(false)} />
+
+      <TopUpOverlay
+        isOpen={isTopUpOpen}
+        onClose={() => setIsTopUpOpen(false)}
+        refreshWallet={refreshProfileWallet}
+        showToast={showToast}
+      />
 
       {/* Edit Profile Overlay */}
       <AnimatePresence>

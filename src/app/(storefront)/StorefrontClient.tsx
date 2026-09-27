@@ -1048,42 +1048,83 @@ export default function StorefrontClient({
 
                 {/* Toggleable Wallet Transaction History */}
                 <AnimatePresence>
-                  {showWalletHistory && walletTransactions.length > 0 && (
+                  {showWalletHistory && (
                     <motion.div
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden border-t border-white/10 mt-4 pt-4 z-10 text-left space-y-2.5 max-h-[220px] overflow-y-auto scrollbar-hide"
+                      className="overflow-hidden border-t border-white/10 mt-4 pt-4 z-10 text-left space-y-2.5 max-h-[240px] overflow-y-auto scrollbar-hide"
                     >
-                      <p className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">
-                        Transaksi Terakhir
-                      </p>
-                      {walletTransactions.slice(0, 5).map((tx: any) => (
-                        <div
-                          key={tx.id}
-                          className="flex justify-between items-center text-xs pb-2 border-b border-white/5 last:border-0 last:pb-0"
-                        >
-                          <div className="space-y-0.5">
-                            <p className="font-bold text-white text-[11px]">{tx.description}</p>
-                            <p className="text-[9px] text-neutral-400">
-                              {new Date(tx.createdAt).toLocaleDateString('id-ID', {
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </p>
-                          </div>
-                          <span
-                            className={`font-black text-[11px] ${
-                              tx.type.startsWith('TOP_UP') ? 'text-amber-400' : 'text-rose-400'
-                            }`}
-                          >
-                            {tx.type.startsWith('TOP_UP') ? '+' : '-'}
-                            {formatRupiah(tx.amount)}
-                          </span>
-                        </div>
-                      ))}
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-black text-neutral-400 uppercase tracking-widest">
+                          Riwayat Transaksi Arus Pay
+                        </p>
+                        <span className="text-[9px] font-bold text-amber-300/80">
+                          {walletTransactions.length} aktivitas
+                        </span>
+                      </div>
+                      {walletTransactions.length === 0 ? (
+                        <p className="text-[11px] text-neutral-400 italic py-2">
+                          Belum ada riwayat transaksi. Yuk, top up saldo Arus Pay sekarang!
+                        </p>
+                      ) : (
+                        walletTransactions.slice(0, 6).map((tx: any) => {
+                          const isPositive = tx.amount > 0;
+                          const isPending = tx.status === 'PENDING' || tx.status === 'VERIFYING';
+                          const isRejected = tx.status === 'REJECTED';
+                          return (
+                            <div
+                              key={tx.id}
+                              onClick={() => {
+                                if (isPending) setIsTopUpOpen(true);
+                              }}
+                              className={`flex justify-between items-center gap-2 text-xs pb-2 border-b border-white/5 last:border-0 last:pb-0 ${
+                                isPending ? 'cursor-pointer hover:bg-white/5 rounded-lg px-1.5 py-1 -mx-1.5 transition-colors' : ''
+                              }`}
+                            >
+                              <div className="space-y-0.5 min-w-0">
+                                <p className="font-bold text-white text-[11px] truncate">
+                                  {tx.description}
+                                </p>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="text-[9px] text-neutral-400">
+                                    {new Date(tx.createdAt).toLocaleDateString('id-ID', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </p>
+                                  {isPending && (
+                                    <span className="px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-400/30 text-amber-300 text-[8px] font-black uppercase">
+                                      {tx.status === 'VERIFYING' ? 'Verifikasi' : 'Pending'}
+                                    </span>
+                                  )}
+                                  {isRejected && (
+                                    <span className="px-1.5 py-0.2 rounded bg-rose-500/20 border border-rose-400/30 text-rose-300 text-[8px] font-black uppercase">
+                                      Batal
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <span
+                                className={`font-black text-[11px] shrink-0 ${
+                                  isRejected
+                                    ? 'text-neutral-500 line-through'
+                                    : isPending
+                                    ? 'text-amber-300/80'
+                                    : isPositive
+                                    ? 'text-amber-400'
+                                    : 'text-rose-400'
+                                }`}
+                              >
+                                {isPositive ? '+' : '-'}
+                                {formatRupiah(Math.abs(tx.amount))}
+                              </span>
+                            </div>
+                          );
+                        })
+                      )}
                     </motion.div>
                   )}
                 </AnimatePresence>

@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
 
     // Update matched orders or wallet transactions to COMPLETED/PREPARING on SUCCESS
     if (paymentStatus === 'SUCCESS') {
-      if (invoiceNumber.startsWith('MB-TOPUP-')) {
+      if (invoiceNumber.startsWith('AS-TOPUP-') || invoiceNumber.startsWith('MB-TOPUP-')) {
         const tx = await prisma.walletTransaction.findFirst({
           where: { referenceId: invoiceNumber, status: { in: ['PENDING', 'VERIFYING'] } }
         });
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (paymentStatus === 'FAILED' || paymentStatus === 'EXPIRED' || paymentStatus === 'CANCELLED') {
-      if (invoiceNumber.startsWith('MB-TOPUP-')) {
+      if (invoiceNumber.startsWith('AS-TOPUP-') || invoiceNumber.startsWith('MB-TOPUP-')) {
         console.log(`[DOKU WEBHOOK] Top-up payment failed/expired/cancelled for invoice ${invoiceNumber}.`);
         await prisma.walletTransaction.updateMany({
           where: { referenceId: invoiceNumber, status: { in: ['PENDING', 'VERIFYING'] } },

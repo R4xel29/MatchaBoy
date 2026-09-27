@@ -300,7 +300,12 @@ export default function AdminWalletClient() {
                   </div>
 
                   <div className="text-right shrink-0">
-                    <p className="font-black text-sm text-[#2E5A44]">{formatRupiah(tx.amount)}</p>
+                    <p className="font-black text-sm text-orange-600">{formatRupiah(tx.amount)}</p>
+                    {tx.promoBonus > 0 && (
+                      <p className="text-[9px] font-extrabold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                        +Bonus {formatRupiah(tx.promoBonus)}
+                      </p>
+                    )}
                     <p className="text-[9px] text-muted-foreground mt-0.5 font-semibold">
                       {new Date(tx.createdAt).toLocaleDateString('id-ID')}
                     </p>
