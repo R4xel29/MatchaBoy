@@ -9,6 +9,7 @@ import crypto from "crypto"
 import { authConfig } from "./auth.config"
 import { cookies, headers } from "next/headers"
 import { parseUserAgent } from "./lib/ua-parser"
+import { syncUserGoogleEmail } from "./lib/google-oauth-utils"
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.AUTH_GOOGLE_ID
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.AUTH_GOOGLE_SECRET
@@ -455,7 +456,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return true;
         },
         ...authConfig.callbacks,
-        async jwt({ token, user, account, trigger }) {
+        async jwt({ token, user, account, profile, trigger }) {
             // On initial sign-in, user object is available
             if (user) {
                 token.sub = user.id
@@ -506,6 +507,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
                     // If user was deleted (Logout Paksa / Hapus Akun)
                     if (!dbUser) return null
+
+                    // Ensure email is synced when linking or authenticating with Google
+                    if (account?.provider === 'google') {
+                        const syncedEmail = await syncUserGoogleEmail({
+                            userId: token.sub as string,
+                            currentEmail: dbUser.email,
+                            googleEmail: (profile as any)?.email,
+                            idToken: account.id_token,
+                            forceOverwrite: true,
+                        })
+                        if (syncedEmail) {
+                            dbUser.email = syncedEmail
+                        }
+                    }
 
                     // Check if banned
                     const banned = await prisma.bannedContact.findFirst({
@@ -559,6 +574,32 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
     },
     events: {
+        async linkAccount({ user, account, profile }) {
+            if (account?.provider === 'google' && user?.id) {
+                try {
+                    const syncedEmail = await syncUserGoogleEmail({
+                        userId: user.id,
+                        currentEmail: user.email,
+                        googleEmail: (profile as any)?.email,
+                        idToken: account.id_token,
+                        forceOverwrite: true,
+                    });
+                    if (syncedEmail) {
+                        (user as any).email = syncedEmail;
+                    }
+                    const profileImage = (profile as any)?.image || (profile as any)?.picture;
+                    if (!(user as any).image && profileImage) {
+                        await prisma.user.update({
+                            where: { id: user.id },
+                            data: { image: profileImage }
+                        });
+                        (user as any).image = profileImage;
+                    }
+                } catch (e) {
+                    console.error("[AUTH] Error in linkAccount event:", e);
+                }
+            }
+        },
         async createUser({ user }) {
             if (!user?.id) return;
             try {

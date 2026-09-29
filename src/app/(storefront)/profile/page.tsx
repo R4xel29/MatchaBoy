@@ -1,5 +1,6 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { syncUserGoogleEmail } from "@/lib/google-oauth-utils"
 import ProfileClient from "./ProfileClient"
 import { redirect } from "next/navigation"
 
@@ -68,6 +69,22 @@ export default async function ProfilePage() {
       redirect('/login')
     }
 
+    const googleAccount = user.accounts.find((acc: any) => acc.provider === 'google')
+    const isGoogleConnected = !!googleAccount
+    let resolvedEmail = user.email || ""
+
+    if (googleAccount && !resolvedEmail.trim()) {
+      const synced = await syncUserGoogleEmail({
+        userId: user.id,
+        currentEmail: user.email,
+        idToken: googleAccount.id_token,
+        forceOverwrite: false,
+      })
+      if (synced) {
+        resolvedEmail = synced
+      }
+    }
+
     // Format orders for the client
     const formattedOrders = orders.map((order: any) => ({
       id: order.id,
@@ -85,7 +102,7 @@ export default async function ProfilePage() {
       <ProfileClient 
         user={{
           name: user.name || "Pelanggan Arum Seduh",
-          email: user.email || "",
+          email: resolvedEmail,
           phone: user.phone || "-",
           phoneVerified: !!user.phoneVerified,
           points: user.points,
@@ -98,7 +115,7 @@ export default async function ProfilePage() {
           referralCode: user.referralCode,
           gender: user.gender || "SECRET",
           birthDate: user.birthDate?.toISOString() || "",
-          isGoogleConnected: user.accounts.some((acc: any) => acc.provider === 'google'),
+          isGoogleConnected,
           isGuest: false,
           image: user.image,
         }}

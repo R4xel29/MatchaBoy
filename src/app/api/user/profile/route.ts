@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { extractEmailFromGoogleIdToken, syncUserGoogleEmail } from "@/lib/google-oauth-utils";
 
 export async function GET() {
     try {
@@ -28,7 +29,7 @@ export async function GET() {
                     }
                 },
                 accounts: {
-                    select: { provider: true }
+                    select: { provider: true, id_token: true }
                 },
                 driverProfile: {
                     select: {
@@ -47,12 +48,23 @@ export async function GET() {
             return NextResponse.json({ error: "User not found" }, { status: 404 });
         }
 
-        const isGoogleConnected = user.accounts.some((acc: any) => acc.provider === 'google');
+        const googleAccount = user.accounts.find((acc: any) => acc.provider === 'google');
+        const isGoogleConnected = !!googleAccount;
+        let resolvedEmail = user.email;
+
+        if (googleAccount && (!resolvedEmail || resolvedEmail.trim() === '')) {
+            resolvedEmail = await syncUserGoogleEmail({
+                userId: user.id,
+                currentEmail: user.email,
+                idToken: googleAccount.id_token,
+                forceOverwrite: false,
+            });
+        }
 
         return NextResponse.json({
             id: user.id,
             name: user.name,
-            email: user.email,
+            email: resolvedEmail,
             phone: user.phone,
             phoneVerified: !!user.phoneVerified,
             gender: user.gender,
@@ -86,7 +98,22 @@ export async function PUT(req: NextRequest) {
 
         const data: any = {};
         if (name !== undefined) data.name = name;
-        if (email !== undefined) data.email = email;
+        if (email !== undefined) {
+            if (typeof email === 'string' && email.trim() !== '') {
+                data.email = email.trim().toLowerCase();
+            } else {
+                const googleAcc = await prisma.account.findFirst({
+                    where: { userId: session.user.id, provider: 'google' },
+                    select: { id_token: true }
+                });
+                const googleEmail = extractEmailFromGoogleIdToken(googleAcc?.id_token);
+                if (googleEmail) {
+                    data.email = googleEmail;
+                } else {
+                    data.email = null;
+                }
+            }
+        }
         if (phone !== undefined && phone !== '-' && phone.trim() !== '') {
             data.phone = phone;
         }

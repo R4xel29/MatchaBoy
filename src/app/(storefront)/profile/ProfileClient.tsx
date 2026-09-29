@@ -200,7 +200,7 @@ export default function ProfileClient({
   });
   const [user, setUser] = useState(initialUser);
   const [origin, setOrigin] = useState('');
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(() => searchParams.get('edit') === 'true');
   const [isLoginSheetOpen, setIsLoginSheetOpen] = useState(false);
   const [isTopUpOpen, setIsTopUpOpen] = useState(false);
   const [storeSettings, setStoreSettings] = useState<any>(null);
@@ -237,6 +237,7 @@ export default function ProfileClient({
             phoneVerified: data.phoneVerified !== undefined ? data.phoneVerified : prev.phoneVerified,
             image: data.image || prev.image,
             email: data.email || prev.email,
+            isGoogleConnected: data.isGoogleConnected !== undefined ? data.isGoogleConnected : prev.isGoogleConnected,
             tumblerCount: data.tumblerCount !== undefined ? data.tumblerCount : prev.tumblerCount,
             currentTumblerGoal: data.currentTumblerGoal !== undefined ? data.currentTumblerGoal : prev.currentTumblerGoal,
             arusLevel: data.arusLevel || prev.arusLevel,
@@ -247,6 +248,9 @@ export default function ProfileClient({
   }, []);
 
   useEffect(() => {
+    if (searchParams.get('edit') === 'true') {
+      setIsEditingProfile(true);
+    }
     if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral', 'tickets', 'help-center', 'auto-reorder', 'quests', 'leaderboard'].includes(sectionParam)) {
       setActiveSection(sectionParam);
       
@@ -909,7 +913,9 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
                 </div>
                 <div>
                   <h4 className="text-sm font-bold text-gray-900">Google</h4>
-                  <p className="text-[11px] text-gray-500 font-medium">{user.isGoogleConnected ? 'Terhubung' : 'Belum terhubung'}</p>
+                  <p className="text-[11px] text-gray-500 font-medium">
+                    {user.isGoogleConnected ? (email || user.email ? `Terhubung (${email || user.email})` : 'Terhubung') : 'Belum terhubung'}
+                  </p>
                 </div>
               </div>
               {user.isGoogleConnected ? (
@@ -921,7 +927,7 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
                 </button>
               ) : (
                 <button 
-                  onClick={() => signIn('google', { callbackUrl: '/profile' })}
+                  onClick={() => signIn('google', { callbackUrl: '/profile?edit=true' })}
                   className="px-4 py-2 bg-[#B48A5E] text-white rounded-xl text-[12px] font-bold shadow-md shadow-[#B48A5E]/10 hover:bg-[#946F48] transition-all active:scale-95"
                 >
                   Hubungkan
@@ -937,7 +943,12 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
               <input 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#B48A5E] focus:ring-2 focus:ring-[#B48A5E]/10 transition-all outline-none text-[15px] font-semibold text-gray-900 shadow-inner"
+                readOnly={user.isGoogleConnected && !!email}
+                className={`w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl transition-all outline-none text-[15px] font-semibold shadow-inner ${
+                  user.isGoogleConnected && email
+                    ? 'text-gray-600 cursor-default'
+                    : 'text-gray-900 focus:bg-white focus:border-[#B48A5E] focus:ring-2 focus:ring-[#B48A5E]/10'
+                }`}
                 placeholder="alamat email"
               />
               <Mail className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300 group-focus-within:text-[#B48A5E]" />
