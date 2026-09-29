@@ -1,6 +1,7 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { expireOrder } from "@/lib/order-utils"
+import { buildFallbackQrisString } from "@/lib/doku"
 import OrderTrackingClient from "./OrderTrackingClient"
 import { notFound, redirect } from "next/navigation"
 
@@ -113,7 +114,11 @@ export default async function OrderTrackingPage({ params }: { params: Promise<{ 
     hasTumbler: order.hasTumbler || false,
     adminWhatsApp,
     paymentUrl: order.paymentUrl || undefined,
-    paymentQrContent: order.paymentQrContent || undefined,
+    paymentQrContent:
+      order.paymentQrContent ||
+      ((order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN' || order.notes?.includes('[CHANNEL: QRIS]'))
+        ? buildFallbackQrisString(order.total)
+        : undefined),
     queueNumber: order.queueNumber || null,
   }
 

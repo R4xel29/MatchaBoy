@@ -338,7 +338,7 @@ export async function POST(req: Request) {
           paymentMethod: requestedMethod === 'QRIS_INSTAN' ? 'QRIS' : requestedMethod,
           status: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? 'PENDING_PAYMENT' : 'PENDING',
           notes: body.notes || null,
-          paymentExpiredAt: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? new Date(Date.now() + 5 * 60 * 1000) : null,
+          paymentExpiredAt: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? new Date(Date.now() + 15 * 60 * 1000) : null,
           queueNumber,
           items: {
             create: orderItemsToCreate
@@ -356,69 +356,15 @@ export async function POST(req: Request) {
       timeout: 10000,
     });
 
-    // Generate QRIS via Doku Hosted Checkout V1 session for QRIS payment method
-    if (requestedMethod === 'QRIS') {
-      try {
-        const paymentSettings = await prisma.paymentSettings.findFirst();
-        if (paymentSettings) {
-          if (!paymentSettings.dokuEnabled) {
-            throw new Error('Metode pembayaran Doku sedang tidak aktif.');
-          }
-
-          const { createDokuCheckoutSession } = await import('@/lib/doku');
-          const callbackUrl = `${appUrl}/orders/${order.id}`;
-          const notificationUrl = `${appUrl}/api/payment/doku-webhook`;
-          
-          const dokuResult = await createDokuCheckoutSession({
-            clientId: paymentSettings.dokuClientId,
-            sharedKey: paymentSettings.dokuSharedKey,
-            isSandbox: paymentSettings.dokuSandbox,
-          }, {
-            invoiceNumber: order.id,
-            amount: secureTotal,
-            customerName: order.customerName,
-            customerPhone: order.customerPhone,
-            customerEmail: 'arumseduh@gmail.com', // Guest fallback email
-            callbackUrl,
-            notificationUrl,
-            paymentChannel: undefined // Show all channels including QRIS
-          });
-
-          if (dokuResult.error) {
-            throw new Error(dokuResult.error);
-          }
-
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { 
-              paymentUrl: dokuResult.url,
-              paymentQrContent: null,
-            }
-          });
-          console.log('[SPMB QRIS] Doku Hosted Checkout URL generated successfully for QRIS.');
-        }
-      } catch (qrisError: any) {
-        console.error('[QRIS DOKU CHECKOUT ERROR]', qrisError);
-        if (validVoucherCode) {
-          await revertVoucherUsage(prisma, validVoucherCode).catch((e) => console.error('[SPMB REVERT VOUCHER ERROR]', e));
-        }
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { status: 'CANCELLED', notes: `DOKU Checkout QRIS Failure: ${qrisError.message}` }
-        });
-        return NextResponse.json({ error: `Gagal membuat sesi pembayaran DOKU: ${qrisError.message}` }, { status: 500 });
-      }
-    }
-
-    if (requestedMethod === 'QRIS_INSTAN') {
+    // Generate QRIS via DOKU MCP Server or fallback EMVCo QRIS string so QR is always rendered directly
+    if (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') {
       const paymentSettings = await prisma.paymentSettings.findFirst();
-      let qrisGenerated = false;
+      const { createDokuMcpQrisPayment, buildFallbackQrisString } = await import('@/lib/doku');
+      let resolvedQrContent: string | null = null;
 
-      // STRATEGI 1: Coba generate QRIS dinamis via DOKU MCP Server
-      if (!qrisGenerated && paymentSettings && paymentSettings.dokuEnabled) {
+      if (paymentSettings && paymentSettings.dokuEnabled && paymentSettings.dokuClientId && paymentSettings.dokuSharedKey) {
         try {
-          const { createDokuMcpQrisPayment } = await import('@/lib/doku');
-          console.log('[SPMB QRIS INSTAN] Attempting to generate QRIS via DOKU MCP Server...');
+          console.log('[SPMB QRIS] Attempting to generate QRIS via DOKU MCP Server...');
           const mcpResult = await createDokuMcpQrisPayment({
             clientId: paymentSettings.dokuClientId,
             sharedKey: paymentSettings.dokuSharedKey,
@@ -430,70 +376,27 @@ export async function POST(req: Request) {
           });
 
           if (mcpResult.qrContent) {
-            await prisma.order.update({
-              where: { id: order.id },
-              data: { paymentQrContent: mcpResult.qrContent }
-            });
-            qrisGenerated = true;
-            console.log('[SPMB QRIS INSTAN] Dynamic QRIS generated successfully via DOKU MCP.');
+            resolvedQrContent = mcpResult.qrContent;
+            console.log('[SPMB QRIS] Dynamic QRIS generated successfully via DOKU MCP.');
           } else {
-            console.warn('[SPMB QRIS INSTAN] DOKU MCP generation failed. Error:', mcpResult.error);
+            console.warn('[SPMB QRIS] DOKU MCP returned no QR content, using EMVCo fallback:', mcpResult.error);
           }
         } catch (mcpError: any) {
-          console.error('[SPMB QRIS INSTAN MCP ERROR]', mcpError);
+          console.error('[SPMB QRIS MCP ERROR]', mcpError);
         }
       }
 
-      // STRATEGI 3 (FALLBACK): Buat Doku Hosted Checkout session
-      if (!qrisGenerated) {
-        try {
-          if (!paymentSettings || !paymentSettings.dokuEnabled) {
-            throw new Error('Metode pembayaran Doku sedang tidak aktif.');
-          }
-
-          const { createDokuCheckoutSession } = await import('@/lib/doku');
-          const callbackUrl = `${appUrl}/orders/${order.id}`;
-          const notificationUrl = `${appUrl}/api/payment/snap-webhook`;
-
-          const dokuResult = await createDokuCheckoutSession({
-            clientId: paymentSettings.dokuClientId,
-            sharedKey: paymentSettings.dokuSharedKey,
-            isSandbox: paymentSettings.dokuSandbox,
-          }, {
-            invoiceNumber: order.id,
-            amount: secureTotal,
-            customerName: order.customerName,
-            customerPhone: order.customerPhone,
-            customerEmail: 'arumseduh@gmail.com',
-            callbackUrl,
-            notificationUrl,
-            paymentChannel: 'QRIS',
-          });
-
-          if (dokuResult.error) {
-            throw new Error(dokuResult.error);
-          }
-
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { 
-              paymentUrl: dokuResult.url,
-              paymentQrContent: null,
-            }
-          });
-          console.log('[SPMB QRIS INSTAN] Fallback to Doku Hosted Checkout.');
-        } catch (qrisError: any) {
-          console.error('[QRIS INSTAN FALLBACK ERROR]', qrisError);
-          if (validVoucherCode) {
-            await revertVoucherUsage(prisma, validVoucherCode).catch((e) => console.error('[SPMB REVERT VOUCHER ERROR]', e));
-          }
-          await prisma.order.update({
-            where: { id: order.id },
-            data: { status: 'CANCELLED', notes: `Gagal membuat QRIS Instan: ${qrisError.message}` }
-          });
-          return NextResponse.json({ error: `Gagal membuat QRIS Instan: ${qrisError.message}` }, { status: 500 });
-        }
+      if (!resolvedQrContent) {
+        resolvedQrContent = buildFallbackQrisString(secureTotal);
       }
+
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          paymentQrContent: resolvedQrContent,
+          paymentUrl: null,
+        }
+      });
     }
 
     // Send admin & kitchen notification (Only for COD/immediate orders. QRIS orders will notify admin & kitchen once payment is confirmed via webhook)
@@ -508,7 +411,7 @@ export async function POST(req: Request) {
 
     const finalOrder = await prisma.order.findUnique({ 
       where: { id: order.id }, 
-      select: { paymentUrl: true, paymentQrContent: true }
+      select: { paymentUrl: true, paymentQrContent: true, paymentExpiredAt: true }
     });
 
     return NextResponse.json({
@@ -518,6 +421,7 @@ export async function POST(req: Request) {
       total: secureTotal,
       paymentUrl: finalOrder?.paymentUrl || undefined,
       paymentQrContent: finalOrder?.paymentQrContent || undefined,
+      paymentExpiredAt: finalOrder?.paymentExpiredAt?.toISOString() || undefined,
     });
   } catch (error) {
     logError(error, {

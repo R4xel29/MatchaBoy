@@ -214,17 +214,38 @@ export async function GET(req: Request) {
         // Binary PNG attachment download endpoint for QRIS image (Pure QR Code only)
         if (searchParams.get('downloadQr') === '1') {
             const code = (searchParams.get('code') || 'TOPUP').replace(/[^A-Za-z0-9-_]/g, '')
+            const rawPrefix = (searchParams.get('prefix') || 'ARUSPAY').replace(/[^A-Za-z0-9-_]/g, '')
+            const prefix = rawPrefix || 'ARUSPAY'
             const txId = searchParams.get('transactionId') || code
-            const amount = parseInt(searchParams.get('amount') || '0', 10) || 50000
+            let amount = parseInt(searchParams.get('amount') || '0', 10) || 50000
             const qrParam = searchParams.get('qr')
-            const fileName = `QRIS_ARUSPAY_${code || 'TOPUP'}.png`
+            const fileName = `QRIS_${prefix}_${code || 'QR'}.png`
 
             cleanupQrisCache()
-            const resolvedQrContent =
+            let resolvedQrContent =
                 (qrParam && qrParam.trim().length > 10 ? qrParam.trim() : null) ||
                 dokuQrContentCache.get(txId)?.qrContent ||
                 dokuQrContentCache.get(code)?.qrContent ||
                 null
+
+            if (!resolvedQrContent && txId) {
+                try {
+                    const orderRecord = await prisma.order.findUnique({
+                        where: { id: txId },
+                        select: { paymentQrContent: true, total: true },
+                    })
+                    if (orderRecord) {
+                        if (orderRecord.paymentQrContent) {
+                            resolvedQrContent = orderRecord.paymentQrContent
+                        }
+                        if (orderRecord.total > 0) {
+                            amount = orderRecord.total
+                        }
+                    }
+                } catch {
+                    // Fallback to amount-based EMVCo QR string
+                }
+            }
 
             const pngBuffer = await buildFallbackServerQrisPng(
                 code,

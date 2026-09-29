@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
 import { expireOrder } from '@/lib/order-utils'
 
 export const dynamic = 'force-dynamic'
@@ -11,12 +12,28 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await auth()
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { id } = await params
+
+    const dbOrder = await prisma.order.findUnique({
+      where: { id },
+      select: { userId: true, source: true }
+    })
+
+    if (!dbOrder) {
+      return NextResponse.json({ error: 'Pesanan tidak ditemukan' }, { status: 404 })
     }
 
-    const { id } = await params
+    const isPublicSource = dbOrder.source === 'SPMB' || dbOrder.source === 'WA'
+    if (!isPublicSource) {
+      const session = await auth()
+      if (!session?.user?.id) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+      const isStaff = ['ADMIN', 'CASHIER', 'DRIVER'].includes(session.user.role || '')
+      if (dbOrder.userId !== session.user.id && !isStaff) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      }
+    }
 
     const updatedOrder = await expireOrder(id, true); // Force cancellation if called explicitly
 

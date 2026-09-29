@@ -266,7 +266,75 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(claimClient).toContain('Pakai Voucher Sekarang');
     expect(claimClient.includes('💡')).toBe(false);
   });
+
+  it('T1.19.7: Storefront App & SPMB QRIS unify 15-minute expiry, guaranteed pure QR code display, and binary PNG download', () => {
+    const orderUtils = fs.readFileSync(
+      path.join(process.cwd(), 'src/lib/order-utils.ts'),
+      'utf-8'
+    );
+    const checkoutRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/checkout/route.ts'),
+      'utf-8'
+    );
+    const ordersRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/orders/route.ts'),
+      'utf-8'
+    );
+    const spmbCheckoutRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/checkout/spmb/route.ts'),
+      'utf-8'
+    );
+    const paymentClient = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/(storefront)/orders/[id]/payment/PaymentClient.tsx'),
+      'utf-8'
+    );
+    const qrisClient = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/(storefront)/orders/[id]/qris/QrisClient.tsx'),
+      'utf-8'
+    );
+    const spmbClient = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/(storefront)/spmb/SpmbClient.tsx'),
+      'utf-8'
+    );
+    const orderTracking = fs.readFileSync(orderTrackingClientPath, 'utf-8');
+    const walletRoute = fs.readFileSync(walletRoutePath, 'utf-8');
+
+    // 1. 15-minute expiration across order-utils, checkout, orders, and SPMB
+    expect(orderUtils).toContain('15 * 60 * 1000');
+    expect(orderUtils).toContain('orderAgeMinutes >= 15');
+    expect(checkoutRoute).toContain('15 * 60 * 1000');
+    expect(checkoutRoute).toContain('buildFallbackQrisString(secureTotal)');
+    expect(ordersRoute).toContain('15 * 60 * 1000');
+    expect(ordersRoute).toContain('buildFallbackQrisString(secureTotal)');
+    expect(spmbCheckoutRoute).toContain('15 * 60 * 1000');
+    expect(spmbCheckoutRoute).toContain('buildFallbackQrisString(secureTotal)');
+
+    // 2. Binary PNG attachment download with prefix support in /api/user/wallet
+    expect(walletRoute).toContain('rawPrefix');
+    expect(walletRoute).toContain('prisma.order.findUnique');
+
+    // 3. PaymentClient, QrisClient, OrderTrackingClient, and SpmbClient use binary download & 15-min countdown & pure QR
+    expect(paymentClient).toContain("prefix: 'ARUM_SEDUH'");
+    expect(paymentClient).toContain('/api/user/wallet?');
+    expect(paymentClient).toContain('Otomatis batal jika melewati 15 menit');
+    expect(paymentClient).toContain('qrValueString');
+    expect(paymentClient.includes('🍵')).toBe(false);
+    expect(paymentClient.includes('✅')).toBe(false);
+
+    expect(qrisClient).toContain("prefix: 'ARUM_SEDUH'");
+    expect(qrisClient).toContain('/api/user/wallet?');
+    expect(qrisClient).toContain('Batas Waktu Pembayaran QRIS (15 Menit)');
+    expect(qrisClient).toContain('qrValueString');
+
+    expect(orderTracking).toContain("prefix: 'ARUM_SEDUH'");
+    expect(orderTracking).toContain('/api/user/wallet?');
+
+    expect(spmbClient).toContain('/api/user/wallet?downloadQr=1&prefix=SPMB');
+    expect(spmbClient).toContain('Otomatis batal jika melewati 15 menit');
+    expect(spmbClient).toContain('effectiveSpmbQrContent');
+  });
 });
+
 
 
 

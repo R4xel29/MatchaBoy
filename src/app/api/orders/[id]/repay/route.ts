@@ -144,31 +144,37 @@ export async function POST(
     let paymentQrContent: string | null = null
 
     if (isQrisChannel) {
-      try {
-        const { createDokuMcpQrisPayment } = await import('@/lib/doku')
-        console.log('[REPAY QRIS] Attempting to generate QRIS via DOKU MCP Server...')
-        const mcpResult = await createDokuMcpQrisPayment({
-          clientId: paymentSettings.dokuClientId,
-          sharedKey: paymentSettings.dokuSharedKey,
-          isSandbox: paymentSettings.dokuSandbox,
-        }, {
-          invoiceNumber: id,
-          amount: secureTotal,
-          postalCode: '67215'
-        })
+      const { createDokuMcpQrisPayment, buildFallbackQrisString } = await import('@/lib/doku')
+      if (paymentSettings?.dokuEnabled && paymentSettings.dokuClientId && paymentSettings.dokuSharedKey) {
+        try {
+          console.log('[REPAY QRIS] Attempting to generate QRIS via DOKU MCP Server...')
+          const mcpResult = await createDokuMcpQrisPayment({
+            clientId: paymentSettings.dokuClientId,
+            sharedKey: paymentSettings.dokuSharedKey,
+            isSandbox: paymentSettings.dokuSandbox,
+          }, {
+            invoiceNumber: id,
+            amount: secureTotal,
+            postalCode: '67215'
+          })
 
-        if (mcpResult.qrContent) {
-          paymentQrContent = mcpResult.qrContent
-          console.log('[REPAY QRIS] Dynamic QRIS generated successfully via DOKU MCP.')
-        } else {
-          console.warn('[REPAY QRIS] DOKU MCP generation failed. Error:', mcpResult.error)
+          if (mcpResult.qrContent) {
+            paymentQrContent = mcpResult.qrContent
+            console.log('[REPAY QRIS] Dynamic QRIS generated successfully via DOKU MCP.')
+          } else {
+            console.warn('[REPAY QRIS] DOKU MCP generation failed. Error:', mcpResult.error)
+          }
+        } catch (mcpError) {
+          console.error('[REPAY QRIS MCP ERROR]', mcpError)
         }
-      } catch (mcpError) {
-        console.error('[REPAY QRIS MCP ERROR]', mcpError)
+      }
+
+      if (!paymentQrContent) {
+        paymentQrContent = buildFallbackQrisString(secureTotal)
       }
     }
 
-    if (!paymentQrContent) {
+    if (!paymentQrContent && !isQrisChannel) {
       console.log('[REPAY] Falling back to Hosted Checkout V1...')
       const callbackUrl = `${appUrl}/orders/${id}`
       const notificationUrl = `${appUrl}/api/payment/doku-webhook`

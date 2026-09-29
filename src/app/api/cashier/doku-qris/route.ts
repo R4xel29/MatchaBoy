@@ -66,7 +66,7 @@ export async function POST(req: Request) {
           voucherCode: voucherCode,
           status: 'PENDING_PAYMENT',
           paymentProofUrl: invoiceNumber,
-          paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),
+          paymentExpiredAt: new Date(Date.now() + 15 * 60 * 1000),
           notes: cleanNotes,
           items: parsedItems.length > 0 ? {
             create: parsedItems,
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
           customerName: customerName,
           notes: cleanNotes,
           status: 'PENDING_PAYMENT',
-          paymentExpiredAt: new Date(Date.now() + 5 * 60 * 1000),
+          paymentExpiredAt: new Date(Date.now() + 15 * 60 * 1000),
         },
       });
     } catch (dbErr) {

@@ -822,7 +822,7 @@ export async function POST(req: Request) {
                     voucherCode: voucherCode || null,
                     paymentExpiredAt: isWallet ? null : (
                         (body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'QRIS_INSTAN')
-                            ? new Date(Date.now() + 5 * 60 * 1000)
+                            ? new Date(Date.now() + 15 * 60 * 1000)
                             : ((isDoku || body.paymentMethod?.toUpperCase() === 'TRANSFER')
                                 ? new Date(Date.now() + 15 * 60 * 1000)
                                 : null)
@@ -878,81 +878,53 @@ export async function POST(req: Request) {
             return newOrder
         })
 
-        // Generate QRIS via Doku MCP Server or Doku Hosted Checkout V1 session for QRIS payment method
-        const isQris = body.paymentMethod?.toUpperCase() === 'QRIS'
-        if (isQris && paymentSettings) {
+        // Generate QRIS via Doku MCP Server or fallback EMVCo QRIS string so QR is always rendered directly
+        const isQris = body.paymentMethod?.toUpperCase() === 'QRIS' || body.paymentMethod?.toUpperCase() === 'QRIS_INSTAN'
+        if (isQris) {
             try {
-                if (!paymentSettings.dokuEnabled) {
-                    throw new Error('Metode pembayaran Doku sedang tidak aktif.')
-                }
+                const { createDokuMcpQrisPayment, buildFallbackQrisString } = await import('@/lib/doku')
+                let resolvedQrContent: string | null = null
 
-                const { createDokuMcpQrisPayment, createDokuCheckoutSession } = await import('@/lib/doku')
-                
-                // Try to generate QRIS dinamis directly via DOKU MCP Server first
-                console.log('[QRIS] Attempting to generate QRIS via DOKU MCP Server...')
-                const mcpResult = await createDokuMcpQrisPayment({
-                    clientId: paymentSettings.dokuClientId,
-                    sharedKey: paymentSettings.dokuSharedKey,
-                    isSandbox: paymentSettings.dokuSandbox,
-                }, {
-                    invoiceNumber: order.id,
-                    amount: secureTotal,
-                    postalCode: '67215' // Default store postal code
-                })
-
-                if (mcpResult.qrContent) {
-                    // Save the QRIS content to the order and keep paymentUrl null
-                    await prisma.order.update({
-                        where: { id: order.id },
-                        data: {
-                            paymentQrContent: mcpResult.qrContent,
-                            paymentUrl: null
-                        }
-                    })
-                    console.log('[QRIS] Dynamic QRIS generated successfully via DOKU MCP.')
-                } else {
-                    console.warn('[QRIS] DOKU MCP generation failed/returned no QR content. Error:', mcpResult.error)
-                    console.log('[QRIS] Falling back to Doku Hosted Checkout V1 session...')
-                    
-                    const callbackUrl = `${appUrl}/orders/${order.id}`
-                    const notificationUrl = `${appUrl}/api/payment/doku-webhook`
-                    
-                    const dokuResult = await createDokuCheckoutSession({
+                if (paymentSettings?.dokuEnabled && paymentSettings.dokuClientId && paymentSettings.dokuSharedKey) {
+                    console.log('[QRIS] Attempting to generate QRIS via DOKU MCP Server...')
+                    const mcpResult = await createDokuMcpQrisPayment({
                         clientId: paymentSettings.dokuClientId,
                         sharedKey: paymentSettings.dokuSharedKey,
                         isSandbox: paymentSettings.dokuSandbox,
                     }, {
                         invoiceNumber: order.id,
                         amount: secureTotal,
-                        customerName: order.customerName,
-                        customerPhone: order.customerPhone,
-                        customerEmail: session.user.email || 'arumseduh@gmail.com',
-                        callbackUrl,
-                        notificationUrl,
-                        paymentChannel: undefined // Show all channels including QRIS on Doku page
+                        postalCode: '67215'
                     })
-
-                    if (dokuResult.error) {
-                        throw new Error(`Doku Hosted Checkout fallback failed: ${dokuResult.error}`)
+                    if (mcpResult.qrContent) {
+                        resolvedQrContent = mcpResult.qrContent
+                        console.log('[QRIS] Dynamic QRIS generated successfully via DOKU MCP.')
+                    } else {
+                        console.warn('[QRIS] DOKU MCP returned no QR content, using EMVCo fallback:', mcpResult.error)
                     }
-
-                    // Save DOKU payment URL to the order and keep paymentQrContent null
-                    await prisma.order.update({
-                        where: { id: order.id },
-                        data: { 
-                            paymentUrl: dokuResult.url,
-                            paymentQrContent: null,
-                        }
-                    })
-                    console.log('[QRIS] Doku Hosted Checkout URL generated successfully for QRIS (Fallback).')
                 }
-            } catch (qrisError: any) {
-                console.error('[QRIS DOKU CHECKOUT ERROR]', qrisError)
+
+                if (!resolvedQrContent) {
+                    resolvedQrContent = buildFallbackQrisString(secureTotal)
+                }
+
                 await prisma.order.update({
                     where: { id: order.id },
-                    data: { status: 'CANCELLED', notes: `DOKU Checkout QRIS Failure: ${qrisError.message}` }
+                    data: {
+                        paymentQrContent: resolvedQrContent,
+                        paymentUrl: null,
+                    }
                 })
-                return NextResponse.json({ error: `Gagal membuat sesi pembayaran DOKU: ${qrisError.message}` }, { status: 500 })
+            } catch (qrisError: any) {
+                console.error('[QRIS CHECKOUT FALLBACK NOTICE]', qrisError)
+                const { buildFallbackQrisString } = await import('@/lib/doku')
+                await prisma.order.update({
+                    where: { id: order.id },
+                    data: {
+                        paymentQrContent: buildFallbackQrisString(secureTotal),
+                        paymentUrl: null,
+                    }
+                }).catch(() => {})
             }
         }
 
@@ -962,11 +934,10 @@ export async function POST(req: Request) {
                 const channel = body.paymentChannel?.toUpperCase()
                 
                 if (channel === 'QRIS') {
-                    const { createDokuMcpQrisPayment, createDokuCheckoutSession } = await import('@/lib/doku')
+                    const { createDokuMcpQrisPayment, createDokuCheckoutSession, buildFallbackQrisString } = await import('@/lib/doku')
                     
                     console.log('[QRIS Instan] Attempting to generate QRIS via DOKU MCP Server...')
                     let qrContent: string | null = null
-                    let mcpError: string | null = null
                     try {
                         const mcpResult = await createDokuMcpQrisPayment({
                             clientId: paymentSettings.dokuClientId,
@@ -980,16 +951,14 @@ export async function POST(req: Request) {
                         if (mcpResult.qrContent) {
                             qrContent = mcpResult.qrContent
                         } else {
-                            mcpError = mcpResult.error || 'Empty QR content'
-                            console.warn('[QRIS Instan] DOKU MCP generation failed/returned no QR content. Error:', mcpResult.error)
+                            console.warn('[QRIS Instan] DOKU MCP generation returned no QR content, using EMVCo fallback:', mcpResult.error)
                         }
                     } catch (mcpErr: any) {
-                        mcpError = mcpErr.message || String(mcpErr)
                         console.error('[QRIS Instan] DOKU MCP request threw exception:', mcpErr)
                     }
 
                     if (!qrContent) {
-                        throw new Error(`Gagal menghasilkan QRIS otomatis dari Doku API: ${mcpError || 'Unknown error'}`)
+                        qrContent = buildFallbackQrisString(secureTotal)
                     }
 
                     // Generate backup hosted checkout session URL
@@ -1101,9 +1070,19 @@ export async function POST(req: Request) {
             console.error('[CHECKOUT] Admin/Kitchen notification error:', e)
         }
 
-        // Read paymentUrl from the order record (set by DOKU block above)
-        const finalOrder = await prisma.order.findUnique({ where: { id: order.id }, select: { paymentUrl: true } })
-        return NextResponse.json({ success: true, orderId: order.id, total: secureTotal, paymentUrl: finalOrder?.paymentUrl || undefined })
+        // Read paymentUrl & paymentQrContent from the order record
+        const finalOrder = await prisma.order.findUnique({
+            where: { id: order.id },
+            select: { paymentUrl: true, paymentQrContent: true, paymentExpiredAt: true },
+        })
+        return NextResponse.json({
+            success: true,
+            orderId: order.id,
+            total: secureTotal,
+            paymentUrl: finalOrder?.paymentUrl || undefined,
+            paymentQrContent: finalOrder?.paymentQrContent || undefined,
+            paymentExpiredAt: finalOrder?.paymentExpiredAt?.toISOString() || undefined,
+        })
     } catch (error) {
         // ✅ BUG FIX #7: Proper error handling with safe responses
         logError(error, {

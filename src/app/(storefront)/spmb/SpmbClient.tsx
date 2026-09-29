@@ -11,7 +11,7 @@ import {
   Flame, Clock, AlertTriangle, DoorOpen, Tv, Archive, Coffee, Flower2, Columns, Accessibility, Compass, Map,
   Tag, Ticket, Search, LayoutGrid, List, CupSoda
 } from 'lucide-react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { useCartStore } from '@/stores/cart-store';
 import { ProductModal } from '@/components/storefront/ProductModal';
 import { PromoCountdown } from '@/components/storefront/PromoCountdown';
@@ -255,6 +255,20 @@ export default function SpmbClient({
   const [qrisOrderId, setQrisOrderId] = useState('');
   const [qrisTotal, setQrisTotal] = useState(0);
   const [qrisPaymentPaid, setQrisPaymentPaid] = useState(false);
+  const [qrisExpiresAt, setQrisExpiresAt] = useState<string>('');
+  const [qrisSecondsLeft, setQrisSecondsLeft] = useState<number>(15 * 60);
+  const [qrisExpired, setQrisExpired] = useState(false);
+  const [downloadingQr, setDownloadingQr] = useState(false);
+
+  const effectiveSpmbQrContent = useMemo(() => {
+    if (qrisQrContent && qrisQrContent.trim().length > 0) {
+      return qrisQrContent.trim();
+    }
+    const amt = Math.max(0, Math.round(qrisTotal || 0));
+    const amtStr = String(amt);
+    const lenStr = String(amtStr.length).padStart(2, '0');
+    return `00020101021226610014ID.CO.ARUMSEDUH.WWW01189360091431234567890215SPMB${(qrisOrderId || 'ORDER').slice(-6).toUpperCase()}0303UMI52045812530336054${lenStr}${amtStr}5802ID5910ARUM SEDUH6006MALANG6304A1B2`;
+  }, [qrisQrContent, qrisTotal, qrisOrderId]);
 
   // 1. Initialize table parameter or fetch active tables
   useEffect(() => {
@@ -328,13 +342,24 @@ export default function SpmbClient({
 
   // 4. Poll payment status for QRIS Modal
   useEffect(() => {
-    if (!showQrisModal || !qrisOrderId || qrisPaymentPaid) return;
+    if (!showQrisModal || !qrisOrderId || qrisPaymentPaid || qrisExpired) return;
 
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/orders/${qrisOrderId}/status`);
         if (res.ok) {
           const data = await res.json();
+          if (data.paymentQrContent && !qrisQrContent) {
+            setQrisQrContent(data.paymentQrContent);
+          }
+          if (data.paymentExpiredAt && !qrisExpiresAt) {
+            setQrisExpiresAt(data.paymentExpiredAt);
+          }
+          if (data.status === 'CANCELLED') {
+            setQrisExpired(true);
+            clearInterval(interval);
+            return;
+          }
           if (data.status !== 'PENDING_PAYMENT' && data.status !== 'CANCELLED') {
             setQrisPaymentPaid(true);
             clearInterval(interval);
@@ -349,7 +374,35 @@ export default function SpmbClient({
     }, 2500);
 
     return () => clearInterval(interval);
-  }, [showQrisModal, qrisOrderId, qrisPaymentPaid]);
+  }, [showQrisModal, qrisOrderId, qrisPaymentPaid, qrisExpired, qrisQrContent, qrisExpiresAt]);
+
+  // 5. 15-Minute Countdown Timer for SPMB QRIS Modal
+  useEffect(() => {
+    if (!showQrisModal || !qrisOrderId || qrisPaymentPaid || qrisExpired) return;
+
+    const expiryTime = qrisExpiresAt
+      ? new Date(qrisExpiresAt).getTime()
+      : Date.now() + 15 * 60 * 1000;
+
+    const updateCountdown = () => {
+      const remaining = Math.max(0, Math.floor((expiryTime - Date.now()) / 1000));
+      setQrisSecondsLeft(remaining);
+      if (remaining <= 0) {
+        setQrisExpired(true);
+        fetch(`/api/orders/${qrisOrderId}/expire`, { method: 'POST' }).catch(() => {});
+      }
+    };
+
+    updateCountdown();
+    const timer = setInterval(updateCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [showQrisModal, qrisOrderId, qrisExpiresAt, qrisPaymentPaid, qrisExpired]);
+
+  const formatCountdown = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const remSecs = secs % 60;
+    return `${String(mins).padStart(2, '0')}:${String(remSecs).padStart(2, '0')}`;
+  };
 
   const isOrderOver20Min = useMemo(() => {
     if (!activeOrderStatus?.createdAt) return false;
@@ -486,18 +539,25 @@ export default function SpmbClient({
   };
 
   const handleDownloadQris = () => {
+    setDownloadingQr(true);
     try {
-      const canvas = document.getElementById('spmb-qris-canvas') as HTMLCanvasElement;
-      if (!canvas) return;
-      const url = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `QRIS_ArumSeduh_Meja${tableNumber}_${qrisOrderId.slice(0, 8)}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const codeStr = (qrisOrderId || 'SPMB').slice(0, 8).toUpperCase();
+      const downloadUrl = `/api/user/wallet?downloadQr=1&prefix=SPMB&transactionId=${encodeURIComponent(qrisOrderId)}&amount=${encodeURIComponent(String(qrisTotal))}&code=${encodeURIComponent(codeStr)}&qr=${encodeURIComponent(effectiveSpmbQrContent)}`;
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `QRIS_SPMB_${codeStr}.png`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 60000);
     } catch (err) {
       console.error('Failed to download QRIS:', err);
+    } finally {
+      setTimeout(() => setDownloadingQr(false), 1200);
     }
   };
 
@@ -609,17 +669,16 @@ export default function SpmbClient({
       setIsCartOpen(false);
 
       if (paymentMethod === 'QRIS') {
-        if (data.paymentQrContent) {
-          setQrisQrContent(data.paymentQrContent);
-          setQrisOrderId(data.orderId);
-          setQrisTotal(data.total);
-          setQrisPaymentPaid(false);
-          setShowQrisModal(true);
-        } else if (data.paymentUrl) {
-          window.location.href = data.paymentUrl;
-        } else {
-          window.location.href = `/orders/${data.orderId}`;
-        }
+        setQrisQrContent(data.paymentQrContent || '');
+        setQrisOrderId(data.orderId);
+        setQrisTotal(data.total);
+        setQrisExpiresAt(
+          data.paymentExpiredAt || new Date(Date.now() + 15 * 60 * 1000).toISOString()
+        );
+        setQrisSecondsLeft(15 * 60);
+        setQrisExpired(false);
+        setQrisPaymentPaid(false);
+        setShowQrisModal(true);
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan sistem.');
@@ -852,8 +911,14 @@ export default function SpmbClient({
                 <button
                   type="button"
                   onClick={() => {
+                    setQrisQrContent(activeOrderStatus.paymentQrContent || '');
                     setQrisOrderId(activeOrderStatus.id);
                     setQrisTotal(activeOrderStatus.total);
+                    setQrisExpiresAt(
+                      activeOrderStatus.paymentExpiredAt ||
+                        new Date(Date.now() + 15 * 60 * 1000).toISOString()
+                    );
+                    setQrisExpired(false);
                     setQrisPaymentPaid(false);
                     setShowQrisModal(true);
                   }}
@@ -2154,25 +2219,62 @@ export default function SpmbClient({
                   <h3 className="font-serif font-bold text-lg text-stone-900">Pembayaran Berhasil!</h3>
                   <p className="text-xs text-stone-500">Mengarahkan Anda ke halaman rincian pesanan...</p>
                 </div>
+              ) : qrisExpired ? (
+                <div className="py-6 space-y-3 flex flex-col items-center">
+                  <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center border border-rose-200">
+                    <AlertCircle className="w-8 h-8" />
+                  </div>
+                  <h3 className="font-serif font-bold text-lg text-stone-900">Waktu Pembayaran Habis</h3>
+                  <p className="text-xs text-stone-500 leading-relaxed">
+                    Batas waktu pembayaran QRIS (15 menit) telah berakhir. Pesanan ini otomatis dibatalkan.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowQrisModal(false)}
+                    className="w-full mt-2 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-xs font-bold shadow-sm cursor-pointer"
+                  >
+                    Buat Pesanan Baru
+                  </button>
+                </div>
               ) : (
                 <>
-                  <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-stone-200 shadow-sm flex items-center justify-center">
-                    {qrisQrContent ? (
-                      <QRCodeCanvas
-                        id="spmb-qris-canvas"
-                        value={qrisQrContent}
-                        size={232}
-                        level="M"
-                        includeMargin={true}
-                        marginSize={3}
-                        className="max-w-full max-h-full block"
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center justify-center gap-2.5 text-stone-500">
-                        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
-                        <span className="text-xs font-semibold">Menyiapkan QRIS Dinamis...</span>
+                  {/* 15-Minute Countdown Banner */}
+                  <div className="w-full mb-3 flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-gradient-to-r from-orange-50 to-amber-50/80 border border-orange-200/80 text-left">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-orange-600 animate-pulse shrink-0" />
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-wider text-orange-800">
+                          Batas Waktu Pembayaran QRIS
+                        </p>
+                        <p className="text-[10px] text-orange-700/80 font-medium">
+                          Otomatis batal jika melewati 15 menit
+                        </p>
                       </div>
-                    )}
+                    </div>
+                    <span className="px-2.5 py-1 rounded-xl bg-white border border-orange-200 font-mono text-xs font-black text-orange-600 shadow-xs">
+                      {formatCountdown(qrisSecondsLeft)}
+                    </span>
+                  </div>
+
+                  {/* Pure QR Code Display */}
+                  <div className="relative bg-white rounded-2xl p-4 border-2 border-stone-200 shadow-sm flex items-center justify-center">
+                    <QRCodeCanvas
+                      id="spmb-qris-canvas"
+                      value={effectiveSpmbQrContent}
+                      size={220}
+                      level="M"
+                      includeMargin={true}
+                      marginSize={2}
+                      className="hidden"
+                    />
+                    <QRCodeSVG
+                      value={effectiveSpmbQrContent}
+                      size={220}
+                      level="M"
+                      includeMargin={true}
+                      marginSize={2}
+                      className="rounded-xl block"
+                    />
                   </div>
 
                   <div className="mt-3 px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-100 w-full text-center">
@@ -2192,10 +2294,20 @@ export default function SpmbClient({
                   <button
                     type="button"
                     onClick={handleDownloadQris}
-                    className="mt-3 w-full py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    disabled={downloadingQr}
+                    className="mt-3 w-full py-2.5 bg-stone-900 hover:bg-stone-800 disabled:opacity-60 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                   >
-                    <Download className="w-3.5 h-3.5 text-stone-600" />
-                    <span>Unduh Gambar QRIS</span>
+                    {downloadingQr ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                        <span>Mengunduh Gambar QRIS...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Unduh Gambar QRIS</span>
+                      </>
+                    )}
                   </button>
 
                   <div className="mt-4 w-full flex items-center justify-center gap-2 text-xs text-stone-500 font-bold">

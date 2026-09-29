@@ -269,7 +269,7 @@ export async function POST(req: Request) {
         paymentMethod: requestedMethod === 'QRIS_INSTAN' ? 'QRIS' : requestedMethod,
         status: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? 'PENDING_PAYMENT' : 'PENDING',
         notes: body.notes || null,
-        paymentExpiredAt: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? new Date(Date.now() + 5 * 60 * 1000) : null,
+        paymentExpiredAt: (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') ? new Date(Date.now() + 15 * 60 * 1000) : null,
         queueNumber,
         items: {
           create: orderItemsToCreate
@@ -300,62 +300,43 @@ export async function POST(req: Request) {
     let paymentQrContent: string | null = null;
     let paymentUrl: string | null = null;
 
-    // Handle QRIS Payment Generation
+    // Handle QRIS Payment Generation (Always produce paymentQrContent so QR is rendered directly in SPMB modal)
     if (requestedMethod === 'QRIS' || requestedMethod === 'QRIS_INSTAN') {
-      if (paymentSettings && paymentSettings.dokuEnabled) {
+      const { createDokuMcpQrisPayment, buildFallbackQrisString } = await import('@/lib/doku');
+      if (paymentSettings && paymentSettings.dokuEnabled && paymentSettings.dokuClientId && paymentSettings.dokuSharedKey) {
         try {
-          if (requestedMethod === 'QRIS_INSTAN') {
-            const { createDokuMcpQrisPayment } = await import('@/lib/doku');
-            const mcpResult = await createDokuMcpQrisPayment({
-              clientId: paymentSettings.dokuClientId,
-              sharedKey: paymentSettings.dokuSharedKey,
-              isSandbox: paymentSettings.dokuSandbox,
-            }, {
-              invoiceNumber: order.id,
-              amount: secureTotal,
-              postalCode: '67215'
-            });
+          const mcpResult = await createDokuMcpQrisPayment({
+            clientId: paymentSettings.dokuClientId,
+            sharedKey: paymentSettings.dokuSharedKey,
+            isSandbox: paymentSettings.dokuSandbox,
+          }, {
+            invoiceNumber: order.id,
+            amount: secureTotal,
+            postalCode: '67215'
+          });
 
-            if (mcpResult.qrContent) {
-              paymentQrContent = mcpResult.qrContent;
-            }
-          }
-
-          if (!paymentQrContent) {
-            const { createDokuCheckoutSession } = await import('@/lib/doku');
-            const dokuResult = await createDokuCheckoutSession({
-              clientId: paymentSettings.dokuClientId,
-              sharedKey: paymentSettings.dokuSharedKey,
-              isSandbox: paymentSettings.dokuSandbox,
-            }, {
-              invoiceNumber: order.id,
-              amount: secureTotal,
-              customerName: order.customerName,
-              customerPhone: order.customerPhone,
-              customerEmail: 'arumseduh@gmail.com',
-              callbackUrl: `${appUrl}/orders/${order.id}`,
-              notificationUrl: `${appUrl}/api/payment/doku-webhook`,
-              paymentChannel: 'QRIS'
-            });
-
-            if (dokuResult.url) {
-              paymentUrl = dokuResult.url;
-            }
-          }
-
-          // Single fast update if payment info generated
-          if (paymentQrContent || paymentUrl) {
-            await prisma.order.update({
-              where: { id: order.id },
-              data: {
-                paymentQrContent: paymentQrContent || undefined,
-                paymentUrl: paymentUrl || undefined
-              }
-            });
+          if (mcpResult.qrContent) {
+            paymentQrContent = mcpResult.qrContent;
           }
         } catch (e) {
-          console.error('[API ORDERS QRIS ERROR]', e);
+          console.error('[API ORDERS QRIS MCP ERROR]', e);
         }
+      }
+
+      if (!paymentQrContent) {
+        paymentQrContent = buildFallbackQrisString(secureTotal);
+      }
+
+      try {
+        await prisma.order.update({
+          where: { id: order.id },
+          data: {
+            paymentQrContent,
+            paymentUrl: paymentUrl || undefined
+          }
+        });
+      } catch (e) {
+        console.error('[API ORDERS QRIS UPDATE ERROR]', e);
       }
     }
 
@@ -374,6 +355,7 @@ export async function POST(req: Request) {
       status: order.status,
       paymentUrl: paymentUrl || undefined,
       paymentQrContent: paymentQrContent || undefined,
+      paymentExpiredAt: order.paymentExpiredAt?.toISOString() || undefined,
     });
   } catch (error) {
     logError(error, {

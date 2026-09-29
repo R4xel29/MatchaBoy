@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowLeft, Clock, Save, Info, CheckCircle2, ChevronRight, Upload, X, Loader2, Check, Download } from 'lucide-react'
 import { formatRupiah } from '@/lib/utils'
 import { useToast } from '@/components/ui/Toast'
-import { QRCodeCanvas } from 'qrcode.react'
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react'
 
 export default function QrisClient({ order }: { order: any }) {
   const { showToast } = useToast()
@@ -14,12 +14,18 @@ export default function QrisClient({ order }: { order: any }) {
   const [timeLeft, setTimeLeft] = useState('')
   const [percentLeft, setPercentLeft] = useState(100)
   const [isExpired, setIsExpired] = useState(false)
+  const [downloadingQr, setDownloadingQr] = useState(false)
+  const qrValueString =
+    order.paymentQrContent ||
+    `00020101021226670016ID.CO.ARUMSEDUH.WWW01189360091430000000005204581253033605802ID5910ARUM SEDUH6007JAKARTA62070703A016304ABCD`
 
-  // Countdown timer logic
+  // Countdown timer logic (15 minutes)
   useEffect(() => {
-    const expiry = new Date(order.paymentExpiredAt).getTime()
-    const start = order.createdAt ? new Date(order.createdAt).getTime() : expiry - 5 * 60 * 1000
-    const totalDuration = Math.max(expiry - start, 1000)
+    const start = order.createdAt ? new Date(order.createdAt).getTime() : Date.now()
+    const expiry = order.paymentExpiredAt
+      ? new Date(order.paymentExpiredAt).getTime()
+      : start + 15 * 60 * 1000
+    const totalDuration = Math.max(expiry - start, 15 * 60 * 1000)
     
     const updateTimer = () => {
       const now = Date.now()
@@ -42,7 +48,7 @@ export default function QrisClient({ order }: { order: any }) {
       const formattedSeconds = seconds.toString().padStart(2, '0')
 
       setTimeLeft(`${formattedMinutes}:${formattedSeconds}`)
-      setPercentLeft((diff / totalDuration) * 100)
+      setPercentLeft(Math.min(100, Math.max(0, (diff / totalDuration) * 100)))
     }
 
     updateTimer()
@@ -50,24 +56,67 @@ export default function QrisClient({ order }: { order: any }) {
     return () => clearInterval(timer)
   }, [order.paymentExpiredAt, order.createdAt, order.id, router])
 
-  const handleDownloadQr = () => {
-    try {
-      showToast("Mengunduh QRIS...", "info")
-      const canvas = document.getElementById('qris-canvas') as HTMLCanvasElement;
-      if (!canvas) {
-        throw new Error('Canvas not found');
+  // Poll order status so user is automatically redirected when QRIS payment completes
+  useEffect(() => {
+    const checkStatus = async () => {
+      try {
+        const res = await fetch(`/api/orders/${order.id}/status`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.status === 'CANCELLED') {
+            router.replace(`/orders/${order.id}/payment-failed?reason=cancelled`)
+          } else if (data.status !== 'PENDING_PAYMENT') {
+            showToast('Pembayaran QRIS berhasil diverifikasi!', 'success')
+            router.replace(`/orders/${order.id}`)
+          }
+        }
+      } catch {
+        // silent
       }
-      const url = canvas.toDataURL('image/png');
+    }
+    checkStatus()
+    const interval = setInterval(checkStatus, 3000)
+    return () => clearInterval(interval)
+  }, [order.id, router])
+
+  const handleDownloadQr = () => {
+    if (downloadingQr) return
+    setDownloadingQr(true)
+    try {
+      const code = String(order.id || 'ORDER').slice(0, 8).toUpperCase().replace(/[^A-Za-z0-9-_]/g, '')
+      const txId = String(order.id || code)
+      const fileName = `QRIS_ARUM_SEDUH_${code}.png`
+
+      const params = new URLSearchParams({
+        downloadQr: '1',
+        prefix: 'ARUM_SEDUH',
+        transactionId: txId,
+        code,
+        amount: String(order.total || 0),
+        qr: qrValueString,
+        t: String(Date.now()),
+      })
+      const downloadUrl = `/api/user/wallet?${params.toString()}`
       const link = document.createElement('a')
-      link.href = url
-      link.download = `QRIS_ARUM_SEDUH_${order.id.slice(0, 8).toUpperCase()}.png`
+      link.href = downloadUrl
+      link.download = fileName
+      link.rel = 'noopener'
+      link.style.display = 'none'
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
-      showToast("QRIS berhasil diunduh!", "success")
+
+      setTimeout(() => {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link)
+        }
+      }, 60000)
+
+      showToast("Gambar QRIS berhasil diunduh ke perangkat Anda!", "success")
     } catch (error) {
       console.error("Gagal mengunduh QRIS:", error)
-      showToast("Gagal mengunduh QRIS.", "error")
+      showToast("Gagal mengunduh gambar QRIS.", "error")
+    } finally {
+      setTimeout(() => setDownloadingQr(false), 600)
     }
   }
 
@@ -87,62 +136,57 @@ export default function QrisClient({ order }: { order: any }) {
 
       <div className="max-w-md mx-auto px-4 py-6 space-y-6 relative z-10">
         
-        {/* Countdown Info Card */}
-        <div className="bg-white border border-gray-100 shadow-sm rounded-2xl px-5 py-4 space-y-2">
+        {/* Countdown Info Card (15 Minutes) */}
+        <div className="bg-white border border-amber-200/80 shadow-sm rounded-2xl px-5 py-4 space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 select-none">
-              <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
-              <span className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">Masa Berlaku QRIS</span>
+              <Clock className="w-4 h-4 text-orange-600 animate-pulse" />
+              <span className="text-[11px] text-gray-700 font-extrabold uppercase tracking-wider">Batas Waktu Pembayaran QRIS (15 Menit)</span>
             </div>
-            <span className="font-mono text-base font-black text-gray-900">{timeLeft}</span>
+            <span className="font-mono text-base font-black text-orange-600">{timeLeft}</span>
           </div>
           {/* Visual Progress Bar */}
           <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
             <div 
               className={`h-full transition-all duration-1000 rounded-full ${
-                percentLeft > 50 ? 'bg-emerald-500' : percentLeft > 20 ? 'bg-amber-500' : 'bg-red-500'
+                percentLeft > 50 ? 'bg-orange-500' : percentLeft > 20 ? 'bg-amber-500' : 'bg-red-500'
               }`}
               style={{ width: `${percentLeft}%` }}
             />
           </div>
         </div>
 
-        {/* Realistic GPN/QRIS Merchant Frame */}
+        {/* Pure QR Code Display Frame */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-[2.5rem] border border-gray-100 p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex flex-col items-center relative overflow-hidden"
+          className="bg-white rounded-[2.5rem] border border-amber-200/80 p-6 shadow-sm flex flex-col items-center relative overflow-hidden"
         >
-          <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-5 shrink-0 select-none">
-            <span className="text-[20px] font-black italic tracking-tighter text-[#1b4353]">
-              QR<span className="text-[#e26d5c]">IS</span>
-            </span>
-            <span className="text-[9px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
-              GPN Standard
-            </span>
-          </div>
-
-          {/* QR Code Canvas Frame */}
-          <div className="relative w-72 h-72 bg-white rounded-3xl p-4 border border-gray-200 flex items-center justify-center shadow-sm group">
+          <div className="relative p-4 bg-white rounded-3xl border-2 border-amber-200 flex items-center justify-center shadow-sm">
             <QRCodeCanvas
               id="qris-canvas"
-              value={order.paymentQrContent}
+              value={qrValueString}
               size={256}
               level="M"
               includeMargin={true}
-              marginSize={3}
-              className="max-w-full max-h-full block"
+              marginSize={2}
+              className="max-w-full max-h-full block rounded-lg"
             />
+            <div className="hidden" aria-hidden="true">
+              <QRCodeSVG
+                id="qris-svg"
+                value={qrValueString}
+                size={256}
+                level="M"
+                includeMargin={true}
+                marginSize={2}
+              />
+            </div>
           </div>
 
-          {/* Merchant Info */}
-          <div className="text-center mt-5 space-y-1 w-full select-none">
-            <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Nama Merchant</p>
-            <h3 className="text-base font-serif font-black text-gray-900 leading-tight">ARUM SEDUH</h3>
-            <p className="text-[11px] text-gray-500 font-mono mt-1.5 pt-2 border-t border-gray-50">
-              Invoice ID: <span className="font-bold">{order.id.slice(0, 12).toUpperCase()}</span>
-            </p>
-            <p className="text-lg font-black text-[#B48A5E] pt-1">{formatRupiah(order.total)}</p>
+          <div className="text-center mt-4 space-y-0.5 w-full select-none">
+            <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Total Tagihan</p>
+            <p className="text-xl font-black font-serif text-orange-600">{formatRupiah(order.total)}</p>
           </div>
         </motion.div>
 
@@ -150,11 +194,16 @@ export default function QrisClient({ order }: { order: any }) {
         <div className="grid grid-cols-2 gap-3">
           <button
             type="button"
+            disabled={downloadingQr}
             onClick={handleDownloadQr}
-            className="py-3.5 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs"
+            className="py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs cursor-pointer"
           >
-            <Download className="w-4 h-4" />
-            <span>Unduh QR Code</span>
+            {downloadingQr ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span>Unduh Gambar QRIS</span>
           </button>
           <button
             type="button"
@@ -163,7 +212,7 @@ export default function QrisClient({ order }: { order: any }) {
             }}
             className="py-3.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 font-bold rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs"
           >
-            <Save className="w-4 h-4 text-[#B48A5E]" />
+            <Save className="w-4 h-4 text-orange-600" />
             <span>Screenshot</span>
           </button>
         </div>

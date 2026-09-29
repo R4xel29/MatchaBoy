@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
 import { notFound, redirect } from "next/navigation"
+import { buildFallbackQrisString } from "@/lib/doku"
 import PaymentClient from "./PaymentClient"
 
 export const dynamic = 'force-dynamic'
@@ -43,6 +44,10 @@ export default async function OrderPaymentPage({ params }: { params: Promise<{ i
     })
   ])
   const adminWhatsApp = paymentSettings?.codWhatsApp || ''
+  const isQrisOrder =
+    order.paymentMethod === 'QRIS' ||
+    order.paymentMethod === 'QRIS_INSTAN' ||
+    Boolean(order.notes?.includes('[CHANNEL: QRIS]'))
 
   const mappedOrder = {
     id: order.id,
@@ -52,8 +57,8 @@ export default async function OrderPaymentPage({ params }: { params: Promise<{ i
     createdAt: order.createdAt.toISOString(),
     paymentExpiredAt: order.paymentExpiredAt 
       ? order.paymentExpiredAt.toISOString() 
-      : new Date(Date.now() + (order.paymentMethod === 'QRIS' ? 5 : 15) * 60 * 1000).toISOString(),
-    paymentQrContent: order.paymentQrContent || '',
+      : new Date(order.createdAt.getTime() + 15 * 60 * 1000).toISOString(),
+    paymentQrContent: order.paymentQrContent || (isQrisOrder ? buildFallbackQrisString(order.total) : ''),
     paymentUrl: order.paymentUrl || '',
     paymentMethod: order.paymentMethod,
     notes: order.notes || '',

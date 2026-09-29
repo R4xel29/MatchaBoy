@@ -1156,20 +1156,34 @@ export default function OrderTrackingClient({ order }: { order: TrackingOrderSha
                 <button
                   type="button"
                   onClick={() => {
-                    const canvas = document.getElementById(`tracking-qris-${order.id}`) as HTMLCanvasElement;
-                    if (!canvas) return;
-                    const url = canvas.toDataURL('image/png');
+                    const code = String(order.id || 'ORDER').slice(0, 8).toUpperCase().replace(/[^A-Za-z0-9-_]/g, '');
+                    const fileName = `QRIS_ARUM_SEDUH_${code}.png`;
+                    const params = new URLSearchParams({
+                      downloadQr: '1',
+                      prefix: 'ARUM_SEDUH',
+                      transactionId: String(order.id),
+                      code,
+                      amount: String(order.total || 0),
+                      qr: order.paymentQrContent || '',
+                      t: String(Date.now()),
+                    });
                     const link = document.createElement('a');
-                    link.href = url;
-                    link.download = `QRIS_${order.id.slice(0, 8)}.png`;
+                    link.href = `/api/user/wallet?${params.toString()}`;
+                    link.download = fileName;
+                    link.rel = 'noopener';
+                    link.style.display = 'none';
                     document.body.appendChild(link);
                     link.click();
-                    document.body.removeChild(link);
+                    setTimeout(() => {
+                      if (link.parentNode) {
+                        link.parentNode.removeChild(link);
+                      }
+                    }, 60000);
                   }}
-                  className="flex-1 py-2.5 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs"
+                  className="flex-1 py-2.5 px-3 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  Unduh QR
+                  <Download className="w-3.5 h-3.5 text-orange-600" />
+                  Unduh Gambar QRIS
                 </button>
 
                 <button

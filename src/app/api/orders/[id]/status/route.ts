@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/auth';
 import { expireOrder, cleanupOldPaymentProofs } from '@/lib/order-utils';
+import { buildFallbackQrisString } from '@/lib/doku';
 
 export async function GET(
   _req: NextRequest,
@@ -45,6 +46,7 @@ export async function GET(
       id: true,
       status: true,
       cancelReason: true,
+      createdAt: true,
       updatedAt: true,
       orderType: true,
       pickupTime: true,
@@ -64,18 +66,25 @@ export async function GET(
     return NextResponse.json({ error: 'Order not found' }, { status: 404 });
   }
 
+  const isQrisOrder = ['QRIS', 'QRIS_INSTAN', 'DOKU_QRIS'].includes((order.paymentMethod || '').toUpperCase());
+  const effectiveQrContent = order.paymentQrContent || (isQrisOrder ? buildFallbackQrisString(order.total) : null);
+  const effectiveExpiredAt = order.paymentExpiredAt
+    ? order.paymentExpiredAt.toISOString()
+    : (isQrisOrder ? new Date(order.createdAt.getTime() + 15 * 60 * 1000).toISOString() : undefined);
+
   return NextResponse.json({
     id: order.id,
     status: order.status,
     cancelReason: order.cancelReason,
+    createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     orderType: order.orderType,
     pickupTime: order.pickupTime,
     pickupDate: order.pickupDate?.toISOString(),
     paymentMethod: order.paymentMethod,
     hasPaymentProof: !!order.paymentProofUrl,
-    paymentQrContent: order.paymentQrContent,
-    paymentExpiredAt: order.paymentExpiredAt?.toISOString(),
+    paymentQrContent: effectiveQrContent,
+    paymentExpiredAt: effectiveExpiredAt,
     paymentUrl: order.paymentUrl,
     total: order.total,
     subtotal: order.subtotal,

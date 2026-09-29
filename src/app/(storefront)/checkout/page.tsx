@@ -1369,9 +1369,11 @@ export default function CheckoutPage() {
       
       setIsSubmitting(false);
       
-      // COD and WALLET redirect straight to Order Tracking, online methods redirect to Payment detail page (or directly to paymentUrl if available)
+      // COD and WALLET redirect straight to Order Tracking, QRIS goes directly to in-app QRIS Payment page
       if (paymentMethod === 'COD' || paymentMethod === 'WALLET') {
         router.push(`/orders/${responseData.orderId}`);
+      } else if (paymentMethod === 'QRIS') {
+        router.push(`/orders/${responseData.orderId}/payment`);
       } else if (responseData.paymentUrl) {
         window.location.href = responseData.paymentUrl;
       } else {

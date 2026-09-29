@@ -61,10 +61,10 @@ export async function expireOrder(
         return order;
       }
 
-      // Cek apakah waktu pembayaran telah habis (batas QRIS standar: 5 menit)
+      // Cek apakah waktu pembayaran telah habis (batas QRIS standar: 15 menit)
       const isQris = order.paymentMethod === 'QRIS' || order.paymentMethod === 'QRIS_INSTAN';
       const orderAgeMinutes = (Date.now() - new Date(order.createdAt).getTime()) / (1000 * 60);
-      const isExpired = (order.paymentExpiredAt && new Date() > order.paymentExpiredAt) || (isQris && orderAgeMinutes >= 5);
+      const isExpired = (order.paymentExpiredAt && new Date() > order.paymentExpiredAt) || (isQris && orderAgeMinutes >= 15);
       
       if (!isExpired && !force) {
         console.log(`[Order Expiry] Pesanan ${orderId} belum kedaluwarsa dan tidak dipaksa`);
@@ -72,7 +72,7 @@ export async function expireOrder(
       }
 
       const defaultReason = isQris 
-        ? 'Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran QRIS (5 menit).'
+        ? 'Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran QRIS (15 menit).'
         : 'Dibatalkan otomatis oleh sistem karena melewati batas waktu pembayaran.';
       const finalCancelReason = cancelReasonText || defaultReason;
 
@@ -165,7 +165,7 @@ export async function expireOrder(
 
 /**
  * Memindai dan membatalkan otomatis seluruh pesanan QRIS yang belum lunas
- * setelah melewati batas waktu 5 menit atau melebihi waktu `paymentExpiredAt`.
+ * setelah melewati batas waktu 15 menit atau melebihi waktu `paymentExpiredAt`.
  *
  * Mengembalikan kuota voucher, poin, dan bahan baku untuk setiap pesanan yang dibatalkan.
  *
@@ -179,7 +179,7 @@ export async function expireOrder(
  */
 export async function autoCancelExpiredQrisOrders(): Promise<number> {
   try {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     
     const expiredPendingOrders = await prisma.order.findMany({
       where: {
@@ -190,7 +190,7 @@ export async function autoCancelExpiredQrisOrders(): Promise<number> {
         OR: [
           {
             paymentMethod: { in: ['QRIS', 'QRIS_INSTAN'] },
-            createdAt: { lt: fiveMinutesAgo }
+            createdAt: { lt: fifteenMinutesAgo }
           },
           {
             paymentExpiredAt: { lt: new Date() }
@@ -215,7 +215,7 @@ export async function autoCancelExpiredQrisOrders(): Promise<number> {
         await expireOrder(
           ord.id, 
           true, 
-          'Dibatalkan otomatis oleh sistem (QRIS belum terbayar > 5 menit).'
+          'Dibatalkan otomatis oleh sistem (QRIS belum terbayar > 15 menit).'
         );
         cancelledCount++;
       } catch (err) {
@@ -295,7 +295,7 @@ export async function cleanupOldPaymentProofs(): Promise<void> {
 
 /**
  * Menghapus pesanan tamu SPMB sementara yang belum terkonfirmasi (nomor telepon diawali 'SPMB-PENDING').
- * Batas waktu: 5 menit untuk pembayaran QRIS, atau 30 menit untuk Cash on Delivery (COD).
+ * Batas waktu: 15 menit untuk pembayaran QRIS, atau 30 menit untuk Cash on Delivery (COD).
  *
  * @returns {Promise<void>}
  *
@@ -306,14 +306,14 @@ export async function cleanupOldPaymentProofs(): Promise<void> {
  */
 export async function cleanupUnconfirmedSpmbOrders(): Promise<void> {
   try {
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
     const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
     const deleteResult = await prisma.order.deleteMany({
       where: {
         source: 'SPMB',
         customerPhone: { startsWith: 'SPMB-PENDING' },
         OR: [
-          { paymentMethod: { in: ['QRIS', 'QRIS_INSTAN'] }, createdAt: { lt: fiveMinutesAgo } },
+          { paymentMethod: { in: ['QRIS', 'QRIS_INSTAN'] }, createdAt: { lt: fifteenMinutesAgo } },
           { paymentMethod: 'COD', createdAt: { lt: thirtyMinutesAgo } }
         ]
       }

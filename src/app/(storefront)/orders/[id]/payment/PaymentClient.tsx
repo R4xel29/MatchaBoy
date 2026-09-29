@@ -44,26 +44,55 @@ export default function PaymentClient({
   const [percentLeft, setPercentLeft] = useState(100)
   const [isExpired, setIsExpired] = useState(false)
   const [showItems, setShowItems] = useState(false)
-  const [showQrisModal, setShowQrisModal] = useState(paymentChannel === 'QRIS' && !!order.paymentQrContent)
+  const [downloadingQr, setDownloadingQr] = useState(false)
+  const isQrisMethod =
+    order.paymentMethod === 'QRIS' ||
+    order.paymentMethod === 'QRIS_INSTAN' ||
+    paymentChannel === 'QRIS'
+  const qrValueString =
+    order.paymentQrContent ||
+    `00020101021226670016ID.CO.ARUMSEDUH.WWW01189360091430000000005204581253033605802ID5910ARUM SEDUH6007JAKARTA62070703A016304ABCD`
+  const [showQrisModal, setShowQrisModal] = useState(false)
 
   const handleDownloadQr = () => {
+    if (downloadingQr) return
+    setDownloadingQr(true)
     try {
-      showToast("Mengunduh QRIS...", "info")
-      const canvas = document.getElementById('qris-modal-canvas') as HTMLCanvasElement;
-      if (!canvas) {
-        throw new Error('Canvas not found');
-      }
-      const url = canvas.toDataURL('image/png');
+      const code = String(order.id || 'ORDER').slice(0, 8).toUpperCase().replace(/[^A-Za-z0-9-_]/g, '')
+      const txId = String(order.id || code)
+      const fileName = `QRIS_ARUM_SEDUH_${code}.png`
+
+      const params = new URLSearchParams({
+        downloadQr: '1',
+        prefix: 'ARUM_SEDUH',
+        transactionId: txId,
+        code,
+        amount: String(order.total || 0),
+        qr: qrValueString,
+        t: String(Date.now()),
+      })
+      const downloadUrl = `/api/user/wallet?${params.toString()}`
       const link = document.createElement('a')
-      link.href = url
-      link.download = `QRIS_ARUM_SEDUH_${order.id.slice(0, 8).toUpperCase()}.png`
+      link.href = downloadUrl
+      link.download = fileName
+      link.rel = 'noopener'
+      link.style.display = 'none'
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
-      showToast("QRIS berhasil diunduh!", "success")
+
+      // Keep link in DOM for 60s so browser download confirmation dialog never loses reference
+      setTimeout(() => {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link)
+        }
+      }, 60000)
+
+      showToast('Gambar QRIS berhasil diunduh ke perangkat Anda!', 'success')
     } catch (error) {
-      console.error("Gagal mengunduh QRIS:", error)
-      showToast("Gagal mengunduh QRIS.", "error")
+      console.error('Gagal mengunduh QRIS:', error)
+      showToast('Gagal mengunduh gambar QRIS.', 'error')
+    } finally {
+      setTimeout(() => setDownloadingQr(false), 600)
     }
   }
   
@@ -90,11 +119,13 @@ export default function PaymentClient({
 
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Countdown timer logic
+  // Countdown timer logic (15 Minutes for QRIS)
   useEffect(() => {
-    const expiry = new Date(order.paymentExpiredAt).getTime()
-    const createdAt = new Date(order.createdAt).getTime()
-    const totalDuration = expiry - createdAt
+    const createdAt = order.createdAt ? new Date(order.createdAt).getTime() : Date.now()
+    const expiry = order.paymentExpiredAt
+      ? new Date(order.paymentExpiredAt).getTime()
+      : createdAt + 15 * 60 * 1000
+    const totalDuration = Math.max(expiry - createdAt, 15 * 60 * 1000)
 
     const updateTimer = () => {
       const now = new Date().getTime()
@@ -117,7 +148,7 @@ export default function PaymentClient({
       const formattedSeconds = seconds.toString().padStart(2, '0')
 
       setTimeLeft(`${formattedMinutes}:${formattedSeconds}`)
-      setPercentLeft((diff / totalDuration) * 100)
+      setPercentLeft(Math.min(100, Math.max(0, (diff / totalDuration) * 100)))
     }
 
     updateTimer()
@@ -142,7 +173,7 @@ export default function PaymentClient({
           }
 
           if (data.status === 'CANCELLED') {
-            showToast('Pesanan ditolak/dibatalkan oleh admin.', 'error')
+            showToast('Pesanan ditolak/dibatalkan.', 'error')
             router.replace(`/orders/${order.id}/payment-failed?reason=cancelled`)
           } else if (data.status !== 'PENDING_PAYMENT') {
             showToast('Pembayaran berhasil diverifikasi!', 'success')
@@ -351,7 +382,7 @@ export default function PaymentClient({
                 cx="64"
                 cy="64"
                 r="56"
-                className={`${percentLeft < 20 ? 'stroke-red-500' : 'stroke-[#B48A5E]'}`}
+                className={`${percentLeft < 20 ? 'stroke-red-500' : 'stroke-orange-500'}`}
                 strokeWidth="6"
                 fill="transparent"
                 strokeDasharray="351.8"
@@ -360,15 +391,15 @@ export default function PaymentClient({
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center select-none pt-1">
-              <Clock className={`w-5 h-5 mb-0.5 ${percentLeft < 20 ? 'text-red-500 animate-pulse' : 'text-[#B48A5E]'}`} />
+              <Clock className={`w-5 h-5 mb-0.5 ${percentLeft < 20 ? 'text-red-500 animate-pulse' : 'text-orange-600'}`} />
               <span className="text-xl font-bold font-mono text-gray-900">{timeLeft}</span>
-              <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Sisa Waktu</span>
+              <span className="text-[8px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">Sisa Waktu (15m)</span>
             </div>
           </div>
 
           <div className="border-t border-dashed border-gray-100 pt-5 text-center">
             <p className="text-[10px] text-gray-400 font-extrabold uppercase tracking-wider">Total Tagihan</p>
-            <p className="text-3xl font-black font-serif text-[#B48A5E] mt-1 tracking-tight leading-none">
+            <p className="text-3xl font-black font-serif text-orange-600 mt-1 tracking-tight leading-none">
               {formatRupiah(order.total)}
             </p>
           </div>
@@ -415,7 +446,7 @@ export default function PaymentClient({
                     )}
                     <div className="flex justify-between font-bold text-gray-800 pt-1.5 border-t border-dashed border-gray-150">
                       <span>Total</span>
-                      <span className="text-[#B48A5E]">{formatRupiah(order.total)}</span>
+                      <span className="text-orange-600">{formatRupiah(order.total)}</span>
                     </div>
                   </div>
                 </div>
@@ -424,107 +455,111 @@ export default function PaymentClient({
           </AnimatePresence>
         </div>
 
-        {/* QRIS Instan Display Panel */}
-        {order.paymentMethod === 'QRIS' && order.paymentQrContent && (
+        {/* Pure QRIS Display Panel (Always renders QR code directly with 15-minute expiry & reliable PNG download) */}
+        {isQrisMethod && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.015)] p-5 text-center relative overflow-hidden flex flex-col items-center">
-              {/* QRIS Header */}
-              <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-4 shrink-0">
-                <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
-                  QR<span className="text-[#e26d5c]">IS</span>
-                </span>
-                <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
-                  GPN Standard
-                </span>
+            {/* 15-Minute Expiry Countdown Bar */}
+            <div
+              className={`rounded-2xl p-3.5 border flex items-center justify-between gap-3 ${
+                percentLeft < 20
+                  ? 'bg-rose-50 border-rose-200 text-rose-900'
+                  : 'bg-amber-50/90 border-amber-200 text-amber-950'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                    percentLeft < 20
+                      ? 'bg-rose-500 text-white'
+                      : 'bg-gradient-to-br from-orange-500 to-amber-500 text-white'
+                  }`}
+                >
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-wider">
+                    Batas Waktu Pembayaran QRIS
+                  </p>
+                  <p className="text-[10px] text-gray-600 font-semibold">
+                    Otomatis batal jika melewati 15 menit
+                  </p>
+                </div>
               </div>
+              <div className="px-3 py-1.5 rounded-xl bg-white border border-amber-200/80 font-mono text-sm font-black text-orange-600 shrink-0 shadow-2xs">
+                {timeLeft || '15:00'}
+              </div>
+            </div>
 
-              {/* QR Image */}
-              <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-gray-200 shadow-sm flex items-center justify-center">
-                <QRCodeSVG
-                  value={order.paymentQrContent}
-                  size={232}
+            <div className="bg-white rounded-3xl border border-amber-200/80 shadow-sm p-6 text-center relative overflow-hidden flex flex-col items-center">
+              {/* Pure QR Code Display */}
+              <div className="relative p-4 bg-white rounded-2xl border-2 border-amber-200 shadow-sm flex items-center justify-center">
+                <QRCodeCanvas
+                  id="order-qris-canvas"
+                  value={qrValueString}
+                  size={240}
                   level="M"
                   includeMargin={true}
-                  marginSize={3}
-                  className="max-w-full max-h-full block"
+                  marginSize={2}
+                  className="block rounded-lg"
                 />
+                <div className="hidden" aria-hidden="true">
+                  <QRCodeSVG
+                    id="order-qris-svg"
+                    value={qrValueString}
+                    size={240}
+                    level="M"
+                    includeMargin={true}
+                    marginSize={2}
+                  />
+                </div>
               </div>
 
-              {/* Info mode QRIS */}
-              <div className="mt-3 px-3 py-2 rounded-xl bg-orange-50 border border-orange-100 w-full text-center">
-                <p className="text-[10px] text-orange-600 font-bold">
-                  Nominal sudah otomatis terisi: <span className="text-orange-800">{formatRupiah(order.total)}</span>
-                </p>
-              </div>
+              {/* Single full-width Download QRIS button */}
+              <div className="w-full mt-5 space-y-2.5">
+                <button
+                  type="button"
+                  disabled={downloadingQr}
+                  onClick={handleDownloadQr}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-extrabold rounded-2xl shadow-md shadow-orange-500/15 transition-all flex items-center justify-center gap-2 active:scale-[0.98] text-xs cursor-pointer"
+                >
+                  {downloadingQr ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>Menyiapkan File Gambar QRIS...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 text-white" />
+                      <span>Unduh Gambar QRIS</span>
+                    </>
+                  )}
+                </button>
 
-              <p className="text-[10px] text-gray-400 font-bold uppercase mt-3">Nama Merchant</p>
-              <h3 className="text-base font-serif font-black text-gray-900 mt-0.5">ARUM SEDUH</h3>
-
-              <button
-                type="button"
-                onClick={() => router.push(`/orders/${order.id}/qris`)}
-                className="w-full mt-4 py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
-              >
-                Unduh / Buka QRIS Lebih Besar
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* QRIS Doku Hosted Redirect Panel (when QR code is null but paymentUrl is present) */}
-        {order.paymentMethod === 'QRIS' && order.paymentUrl && !order.paymentQrContent && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-4"
-          >
-            <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-5 select-none">
-              <div className="w-16 h-16 bg-gradient-to-br from-[#1b4353]/10 to-[#e26d5c]/10 border border-[#1b4353]/20 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
-                  QR<span className="text-[#e26d5c]">IS</span>
-                </span>
-              </div>
-
-              <div className="space-y-1">
-                <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Bayar dengan QRIS</h3>
-                <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
-                  Silakan buka portal pembayaran DOKU untuk melihat dan memindai QRIS resmi pembayaran Anda.
-                </p>
-              </div>
-
-              <a
-                href={order.paymentUrl}
-                target="_self"
-                className="w-full py-4 bg-gradient-to-r from-[#1b4353] to-[#2a6478] hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-[#1b4353]/15 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
-              >
-                <span>Buka Pembayaran DOKU</span>
-                <ArrowRight className="w-4.5 h-4.5" />
-              </a>
-
-              <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 w-full text-center">
-                <p className="text-[10px] text-emerald-600 font-bold">
-                  ✅ Status pesanan akan terverifikasi secara otomatis setelah pembayaran berhasil. Anda tidak perlu upload bukti transfer.
-                </p>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/orders/${order.id}/qris`)}
+                  className="w-full py-3 bg-amber-50/80 hover:bg-amber-100/80 text-amber-900 border border-amber-200/80 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
+                >
+                  Buka Layar Penuh QRIS
+                </button>
               </div>
             </div>
           </motion.div>
         )}
 
-        {/* DOKU Instan Display Panel */}
-        {order.paymentMethod === 'DOKU' && (
+        {/* DOKU Non-QRIS Display Panel */}
+        {order.paymentMethod === 'DOKU' && !isQrisMethod && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             className="space-y-4"
           >
             {paymentChannel === 'OVO' ? (
-              // ── A. OVO DIRECT PUSH SCREEN (Gambar 3) ──
               <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-5 select-none">
-                {/* OVO Branding Header */}
                 <div className="w-16 h-16 bg-[#4C2A86]/10 border border-[#4C2A86]/20 text-[#4C2A86] rounded-full flex items-center justify-center mx-auto shadow-inner">
                   <span className="font-serif font-black text-xl italic tracking-tighter">OVO</span>
                 </div>
@@ -536,13 +571,12 @@ export default function PaymentClient({
                   </p>
                 </div>
 
-                {/* Steps List (Gambar 3 style) */}
                 <div className="w-full text-left bg-gray-50/50 border border-gray-100 rounded-3xl p-5 space-y-4 font-semibold text-xs text-gray-700">
                   <div className="flex gap-3">
                     <div className="w-5 h-5 rounded-full bg-[#4C2A86] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">1</div>
                     <div>
                       <p className="font-bold text-gray-800">Buka Aplikasi OVO</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Ketuk ikon <span className="text-[#4C2A86] font-extrabold">"LONCENG"</span> di sudut kanan atas layar utama Anda.</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Ketuk ikon <span className="text-[#4C2A86] font-extrabold">&quot;LONCENG&quot;</span> di sudut kanan atas layar utama Anda.</p>
                     </div>
                   </div>
                   
@@ -563,7 +597,6 @@ export default function PaymentClient({
                   </div>
                 </div>
 
-                {/* Fallback to Web Checkout URL if push doesn't arrive */}
                 {order.paymentUrl && (
                   <a
                     href={order.paymentUrl}
@@ -575,87 +608,7 @@ export default function PaymentClient({
                   </a>
                 )}
               </div>
-            ) : paymentChannel === 'QRIS' ? (
-              // ── B. QRIS VIA DOKU PORTAL ──
-              <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-5 select-none">
-                {/* QRIS Branding Header */}
-                <div className="w-16 h-16 bg-gradient-to-br from-[#1b4353]/10 to-[#e26d5c]/10 border border-[#1b4353]/20 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                  <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
-                    QR<span className="text-[#e26d5c]">IS</span>
-                  </span>
-                </div>
-
-                <div className="space-y-1">
-                  <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Bayar dengan QRIS Instan</h3>
-                  <p className="text-xs text-gray-550 leading-relaxed font-semibold px-2">
-                    {order.paymentQrContent 
-                      ? 'Pindai QR Code dinamis resmi di bawah ini menggunakan aplikasi e-wallet atau mobile banking Anda.'
-                      : 'Scan kode QRIS di portal DOKU menggunakan aplikasi e-wallet atau mobile banking Anda.'}
-                  </p>
-                </div>
-
-                {order.paymentQrContent ? (
-                  <>
-                    {/* Render QRIS Dinamis dari DOKU secara lokal */}
-                    <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-gray-200 shadow-sm flex items-center justify-center">
-                      <QRCodeSVG
-                        value={order.paymentQrContent}
-                        size={232}
-                        level="M"
-                        includeMargin={true}
-                        marginSize={3}
-                        className="max-w-full max-h-full block"
-                      />
-                    </div>
-                    
-                    <button
-                      type="button"
-                      onClick={() => setShowQrisModal(true)}
-                      className="w-full py-3 bg-[#FAF6EE] hover:bg-[#FAF6EE]/70 text-[#946F48] border border-[#EADFC9]/30 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
-                    >
-                      Tampilkan Popup / Unduh QRIS
-                    </button>
-                  </>
-                ) : (
-                  order.paymentUrl && (
-                    <a
-                      href={order.paymentUrl}
-                      target="_self"
-                      className="w-full py-4 bg-gradient-to-r from-[#1b4353] to-[#2a6478] hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-[#1b4353]/15 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
-                    >
-                      <span>Buka QRIS di Portal DOKU</span>
-                      <ArrowRight className="w-4.5 h-4.5" />
-                    </a>
-                  )
-                )}
-
-                {/* Steps */}
-                <div className="w-full text-left bg-gray-50/50 border border-gray-100 rounded-3xl p-5 space-y-4 font-semibold text-xs text-gray-700">
-                  <div className="flex gap-3">
-                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">1</div>
-                    <div>
-                      <p className="font-bold text-gray-800">Scan Kode QRIS</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Buka aplikasi <span className="text-[#1b4353] font-extrabold">GoPay, DANA, ShopeePay, OVO, BCA Mobile</span>, atau e-wallet lainnya, lalu scan QR yang tampil.</p>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <div className="w-5 h-5 rounded-full bg-[#1b4353] text-white flex items-center justify-center text-[10px] shrink-0 font-extrabold">2</div>
-                    <div>
-                      <p className="font-bold text-gray-800">Konfirmasi Pembayaran</p>
-                      <p className="text-[10px] text-gray-400 mt-0.5">Verifikasi nominal <span className="text-[#1b4353] font-extrabold">{formatRupiah(order.total)}</span> dan selesaikan pembayaran. Status pesanan akan terupdate otomatis.</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 w-full text-center">
-                  <p className="text-[10px] text-emerald-600 font-bold">
-                    ✅ Status pesanan akan terverifikasi secara otomatis setelah pembayaran berhasil. Anda tidak perlu upload bukti transfer.
-                  </p>
-                </div>
-              </div>
             ) : (
-              // ── C. STANDARD DOKU CHECKOUT REDIRECT PANEL (Fallback) ──
               <div className="bg-white rounded-[2.5rem] border border-gray-100 p-6 text-center shadow-[0_8px_30px_rgb(0,0,0,0.015)] relative overflow-hidden flex flex-col items-center gap-4">
                 <div className="w-28 h-14 bg-white border border-gray-150 rounded-2xl flex items-center justify-center mx-auto p-2 shadow-sm overflow-hidden">
                   <img src="https://www.doku.com/wp-content/themes/doku/assets/images/logo.png" alt="DOKU" className="object-contain max-h-full max-w-full" />
@@ -671,16 +624,16 @@ export default function PaymentClient({
                   <a
                     href={order.paymentUrl}
                     target="_self"
-                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-indigo-100 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 text-white font-bold text-sm tracking-wide shadow-md shadow-orange-100 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
                   >
                     <span>Bayar Sekarang</span>
                     <ArrowRight className="w-4.5 h-4.5" />
                   </a>
                 )}
 
-                <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 w-full text-center">
-                  <p className="text-[10px] text-indigo-600 font-bold">
-                    💡 Status pesanan akan terverifikasi secara instan setelah pembayaran sukses di portal DOKU. Anda tidak perlu mengunggah bukti transfer manual.
+                <div className="bg-amber-50/70 border border-amber-200 rounded-xl p-3 w-full text-center">
+                  <p className="text-[10px] text-amber-800 font-bold">
+                    Status pesanan akan terverifikasi secara instan setelah pembayaran sukses di portal DOKU. Anda tidak perlu mengunggah bukti transfer manual.
                   </p>
                 </div>
               </div>
@@ -689,7 +642,7 @@ export default function PaymentClient({
         )}
 
         {/* Bank Accounts transfer box */}
-        {order.paymentMethod === 'TRANSFER' && (
+        {order.paymentMethod === 'TRANSFER' && bankAccounts.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
@@ -711,7 +664,7 @@ export default function PaymentClient({
                   <button
                     type="button"
                     onClick={() => handleCopy(bank.accountNumber, bank.id)}
-                    className="w-10 h-10 rounded-2xl bg-white border border-gray-150 shadow-sm flex items-center justify-center text-gray-600 hover:text-[#B48A5E] hover:border-[#B48A5E]/20 transition-all shrink-0"
+                    className="w-10 h-10 rounded-2xl bg-white border border-gray-150 shadow-sm flex items-center justify-center text-gray-600 hover:text-orange-600 hover:border-orange-200 transition-all shrink-0"
                   >
                     {copiedAccount === bank.id ? (
                       <Check className="w-4.5 h-4.5 text-green-500" />
@@ -737,7 +690,7 @@ export default function PaymentClient({
               Verifikasi Otomatis
             </p>
             <p className="text-[10.5px] text-emerald-650 mt-1 leading-relaxed font-semibold">
-              Pembayaran QRIS dan sistem transaksi Arum Seduh terverifikasi secara otomatis oleh sistem DOKU. Anda tidak perlu mengunggah bukti pembayaran manual.
+              Pembayaran QRIS dan sistem transaksi Arum Seduh terverifikasi secara otomatis oleh sistem. Anda tidak perlu mengunggah bukti pembayaran manual.
             </p>
           </motion.div>
         )}
@@ -784,7 +737,7 @@ export default function PaymentClient({
               <div className="space-y-1.5">
                 <h3 className="font-serif text-lg font-black text-gray-900 leading-tight">Bukti Pembayaran Terkirim!</h3>
                 <p className="text-xs text-gray-500 leading-relaxed font-semibold">
-                  Kasir kami akan segera memverifikasi bukti transfer Anda. Pesanan akan segera disiapkan! 🍵
+                  Kasir kami akan segera memverifikasi bukti transfer Anda. Pesanan akan segera disiapkan!
                 </p>
               </div>
               <div className="h-1.5 w-full bg-gray-50 rounded-full overflow-hidden">
@@ -821,57 +774,38 @@ export default function PaymentClient({
                 <X className="w-4 h-4" />
               </button>
 
-              {/* QRIS Logo Header */}
-              <div className="w-full flex items-center justify-between border-b border-dashed border-gray-150 pb-3 mb-2 shrink-0 select-none">
-                <span className="text-[18px] font-black italic tracking-tighter text-[#1b4353]">
-                  QR<span className="text-[#e26d5c]">IS</span>
-                </span>
-                <span className="text-[8px] font-extrabold uppercase tracking-widest text-[#1b4353] bg-gray-50 border border-gray-100 px-2.5 py-0.5 rounded-md">
-                  DOKU Instan
-                </span>
-              </div>
-
               {/* Countdown Expiry */}
-              <div className="bg-amber-50/60 border border-amber-100/60 rounded-2xl px-4 py-2 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5 text-amber-700 font-bold select-none">
-                  <Clock className="w-3.5 h-3.5 animate-pulse" />
-                  <span>Sisa Waktu Bayar</span>
+              <div className="bg-amber-50/80 border border-amber-200/80 rounded-2xl px-4 py-2.5 flex items-center justify-between text-xs mt-4">
+                <div className="flex items-center gap-1.5 text-amber-800 font-bold select-none">
+                  <Clock className="w-3.5 h-3.5 animate-pulse text-orange-600" />
+                  <span>Batas Waktu QRIS (15m)</span>
                 </div>
-                <span className="font-mono font-black text-gray-900">{timeLeft}</span>
+                <span className="font-mono font-black text-orange-600">{timeLeft}</span>
               </div>
 
               {/* QR Canvas */}
-              <div className="relative w-64 h-64 bg-white rounded-2xl p-3 border border-gray-200 flex items-center justify-center shadow-sm mx-auto">
+              <div className="relative p-4 bg-white rounded-2xl border-2 border-amber-200 flex items-center justify-center shadow-sm mx-auto w-fit">
                 <QRCodeCanvas
                   id="qris-modal-canvas"
-                  value={order.paymentQrContent}
+                  value={qrValueString}
                   size={232}
                   level="M"
                   includeMargin={true}
-                  marginSize={3}
-                  className="max-w-full max-h-full block"
+                  marginSize={2}
+                  className="max-w-full max-h-full block rounded-lg"
                 />
-              </div>
-
-              {/* Merchant & Order Details */}
-              <div className="space-y-1 select-none">
-                <p className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wider">Nama Merchant</p>
-                <h3 className="text-base font-serif font-black text-gray-900 leading-tight">Arum Seduh</h3>
-                <p className="text-[10px] text-gray-400 font-mono mt-1">
-                  Invoice ID: <span className="font-bold">{order.id.slice(0, 12).toUpperCase()}</span>
-                </p>
-                <p className="text-2xl font-black text-[#B48A5E] pt-1">{formatRupiah(order.total)}</p>
               </div>
 
               {/* Buttons */}
               <div className="grid grid-cols-2 gap-2.5 pt-2">
                 <button
                   type="button"
+                  disabled={downloadingQr}
                   onClick={handleDownloadQr}
-                  className="py-3 bg-[#B48A5E] hover:bg-[#946F48] text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-xs"
+                  className="py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98] text-xs"
                 >
                   <Download className="w-3.5 h-3.5" />
-                  <span>Unduh QR</span>
+                  <span>Unduh Gambar QRIS</span>
                 </button>
                 <button
                   type="button"

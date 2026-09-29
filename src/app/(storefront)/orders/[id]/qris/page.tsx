@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
 import { notFound, redirect } from "next/navigation"
+import { buildFallbackQrisString } from "@/lib/doku"
 import QrisClient from "./QrisClient"
 
 export const dynamic = 'force-dynamic'
@@ -28,23 +29,21 @@ export default async function OrderQrisPage({ params }: { params: Promise<{ id: 
     }
   }
 
-  // Check if QRIS is available
-  if (!order.paymentQrContent) {
-    // If not generated, redirect back to payment selection
-    redirect(`/orders/${order.id}/payment`)
-  }
-
   // If already paid
   if (order.status !== 'PENDING_PAYMENT') {
     redirect(`/orders/${order.id}`)
   }
 
+  const resolvedQrContent = order.paymentQrContent || buildFallbackQrisString(order.total)
+
   const mappedOrder = {
     id: order.id,
     total: order.total,
-    paymentExpiredAt: order.paymentExpiredAt ? order.paymentExpiredAt.toISOString() : new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    paymentExpiredAt: order.paymentExpiredAt
+      ? order.paymentExpiredAt.toISOString()
+      : new Date(order.createdAt.getTime() + 15 * 60 * 1000).toISOString(),
     createdAt: order.createdAt.toISOString(),
-    paymentQrContent: order.paymentQrContent,
+    paymentQrContent: resolvedQrContent,
   }
 
   return (
