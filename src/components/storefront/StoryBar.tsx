@@ -29,6 +29,8 @@ import {
   Send,
   Zap,
   Palette,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/components/ui/Toast';
@@ -124,6 +126,8 @@ export function StoryBar() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<'PHOTO' | 'VIDEO' | 'TEXT'>('PHOTO');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [cameraFitMode, setCameraFitMode] = useState<'FIT' | 'COVER'>('FIT'); // Default FIT agar kamera tidak nge-zoom / terpotong
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [activeFilterIndex, setActiveFilterIndex] = useState(0);
@@ -194,7 +198,6 @@ export function StoryBar() {
     fetchStories();
   }, []);
 
-  // Stop camera stream helper
   const stopCameraStream = useCallback(() => {
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
@@ -213,7 +216,7 @@ export function StoryBar() {
     setIsRecording(false);
   }, []);
 
-  // Start live camera stream when in camera studio mode
+  // Start live camera stream with natural wide sensor aspect ratio (no forced portrait crop)
   const startCameraStream = useCallback(async () => {
     if (!isCreateOpen || previewUrl || cameraMode === 'TEXT') {
       stopCameraStream();
@@ -228,16 +231,34 @@ export function StoryBar() {
     stopCameraStream();
     setCameraError(null);
 
+    const applyWideSensorReset = async (stream: MediaStream) => {
+      try {
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
+          const caps = videoTrack.getCapabilities() as any;
+          if (caps?.zoom && typeof caps.zoom.min === 'number') {
+            await videoTrack.applyConstraints({
+              advanced: [{ zoom: caps.zoom.min } as any],
+            });
+          }
+        }
+      } catch {
+        // Ignore if hardware zoom constraint is not supported
+      }
+    };
+
     try {
+      // Gunakan resolusi sensor natural (tanpa memaksa 1080x1920 yang membuat webcam/HP melakukan digital crop/zoom)
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: cameraMode === 'VIDEO',
       });
 
+      await applyWideSensorReset(stream);
       mediaStreamRef.current = stream;
       if (liveVideoRef.current) {
         liveVideoRef.current.srcObject = stream;
@@ -245,12 +266,12 @@ export function StoryBar() {
       }
       setCameraReady(true);
     } catch {
-      // Fallback coba video saja jika mikrofon ditolak saat mode VIDEO
       try {
         const fallbackStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode },
           audio: false,
         });
+        await applyWideSensorReset(fallbackStream);
         mediaStreamRef.current = fallbackStream;
         if (liveVideoRef.current) {
           liveVideoRef.current.srcObject = fallbackStream;
@@ -484,7 +505,6 @@ export function StoryBar() {
     }
   };
 
-  // Open Instagram-Style Full Camera Studio
   const handleOpenCreateStory = () => {
     if (status !== 'authenticated' || !session?.user) {
       showToast('Silakan masuk terlebih dahulu untuk membuat Story Anda.', 'error');
@@ -497,13 +517,15 @@ export function StoryBar() {
     setCapturedFile(null);
     setCompressionStats(null);
     setCameraMode('PHOTO');
+    setCameraFitMode('FIT');
+    setZoomLevel(1);
     setMediaType('IMAGE');
     setMediaDuration(5000);
     setActiveFilterIndex(0);
     setIsCreateOpen(true);
   };
 
-  // Instant Photo Capture from Live Camera -> WebP
+  // Instant Photo Capture from Live Camera -> True 9:16 WebP without unwanted zoom/crop!
   const handleCapturePhoto = async () => {
     const video = liveVideoRef.current;
     if (!video || !cameraReady) return;
@@ -511,50 +533,77 @@ export function StoryBar() {
     setFlashEffect(true);
     setTimeout(() => setFlashEffect(false), 180);
 
-    const width = video.videoWidth || 1080;
-    const height = video.videoHeight || 1920;
+    const vw = video.videoWidth || 1280;
+    const vh = video.videoHeight || 720;
+
+    // Kanvas target Story proporsional 9:16 (1080x1920)
+    const targetW = 1080;
+    const targetH = 1920;
     const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    canvas.width = targetW;
+    canvas.height = targetH;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     const currentFilter = CAMERA_FILTERS[activeFilterIndex];
-    if (currentFilter && currentFilter.css !== 'none') {
-      ctx.filter = currentFilter.css;
-    }
+    const filterCss = currentFilter && currentFilter.css !== 'none' ? currentFilter.css : '';
 
-    // Mirror horizontal jika menggunakan kamera depan (selfie)
+    // 1. Gambar latar belakang ambient blur agar bidang kosong atas/bawah tetap estetik (tanpa bar hitam kaku)
+    ctx.save();
+    ctx.filter = `${filterCss} blur(36px) brightness(0.55)`.trim();
+    const bgScale = Math.max(targetW / vw, targetH / vh) * 1.1;
+    const bgW = vw * bgScale;
+    const bgH = vh * bgScale;
+    const bgX = (targetW - bgW) / 2;
+    const bgY = (targetH - bgH) / 2;
     if (facingMode === 'user') {
-      ctx.save();
-      ctx.translate(width, 0);
+      ctx.translate(targetW, 0);
       ctx.scale(-1, 1);
-      ctx.drawImage(video, 0, 0, width, height);
-      ctx.restore();
-    } else {
-      ctx.drawImage(video, 0, 0, width, height);
+    }
+    ctx.drawImage(video, bgX, bgY, bgW, bgH);
+    ctx.restore();
+
+    // 2. Gambar frame utama kamera sesuai mode FIT (1x Wide utuh) atau COVER, ditambah zoomLevel pilihan pengguna
+    ctx.save();
+    if (filterCss) {
+      ctx.filter = filterCss;
     }
 
-    ctx.filter = 'none';
+    const baseScale =
+      cameraFitMode === 'FIT'
+        ? Math.min(targetW / vw, targetH / vh)
+        : Math.max(targetW / vw, targetH / vh);
+    const finalScale = baseScale * zoomLevel;
+    const drawW = vw * finalScale;
+    const drawH = vh * finalScale;
+    const drawX = (targetW - drawW) / 2;
+    const drawY = (targetH - drawH) / 2;
 
-    // Jika ada teks overlay pada layar, gambar ke kanvas juga
+    if (facingMode === 'user') {
+      ctx.translate(targetW, 0);
+      ctx.scale(-1, 1);
+    }
+    ctx.drawImage(video, drawX, drawY, drawW, drawH);
+    ctx.restore();
+
+    // 3. Jika ada teks overlay pada layar, gambar ke kanvas
     if (overlayText.trim()) {
-      const fontSize = Math.round(width * 0.052);
+      const fontSize = 54;
       ctx.font = `900 ${fontSize}px sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const textWidth = Math.min(width * 0.85, ctx.measureText(overlayText).width + 48);
+      const textWidth = Math.min(targetW * 0.86, ctx.measureText(overlayText).width + 56);
       const boxHeight = fontSize * 1.9;
-      const boxX = (width - textWidth) / 2;
-      const boxY = height * 0.5 - boxHeight / 2;
+      const boxX = (targetW - textWidth) / 2;
+      const boxY = targetH * 0.5 - boxHeight / 2;
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
       ctx.beginPath();
       ctx.roundRect(boxX, boxY, textWidth, boxHeight, 24);
       ctx.fill();
 
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillText(overlayText.trim(), width / 2, height * 0.5, width * 0.8);
+      ctx.fillText(overlayText.trim(), targetW / 2, targetH * 0.5, targetW * 0.82);
     }
 
     canvas.toBlob(
@@ -570,7 +619,7 @@ export function StoryBar() {
         setMediaType('IMAGE');
         setMediaDuration(5000);
         setCompressionStats({
-          originalSize: Math.round(width * height * 0.45),
+          originalSize: Math.round(targetW * targetH * 0.35),
           compressedSize: compressed.compressedSize,
           format: 'WEBP',
         });
@@ -617,7 +666,6 @@ export function StoryBar() {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Word wrap
     const words = textToRender.split(' ');
     const lines: string[] = [];
     let currentLine = '';
@@ -694,7 +742,7 @@ export function StoryBar() {
       recordedChunksRef.current = [];
       const recorder = new MediaRecorder(stream, {
         ...(mimeType ? { mimeType } : {}),
-        videoBitsPerSecond: 1_200_000, // Langsung terkompresi ~1.2 Mbps
+        videoBitsPerSecond: 1_200_000,
       });
 
       mediaRecorderRef.current = recorder;
@@ -792,7 +840,6 @@ export function StoryBar() {
     setRecordingSeconds(0);
   };
 
-  // Publish Story (Upload compressed WebP/Video -> Save 20-Day Story)
   const handleCreateStorySubmit = async () => {
     if (!capturedFile) {
       showToast('Ambil foto atau rekam video terlebih dahulu.', 'error');
@@ -827,7 +874,7 @@ export function StoryBar() {
           mediaUrl: uploadData.url,
           mediaType: uploadData.mediaType || mediaType,
           duration: mediaDuration,
-          daysActive: 20, // Tersimpan selama 20 hari
+          daysActive: 20,
         }),
       });
       const data = await res.json();
@@ -901,7 +948,7 @@ export function StoryBar() {
 
         {/* Stories Horizontal Scroll */}
         <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-0.5 pt-0.5">
-          {/* Tombol Kamera Story Pengguna (Instagram-style "Cerita Anda") */}
+          {/* Tombol Kamera Story Pengguna */}
           <button
             type="button"
             onClick={handleOpenCreateStory}
@@ -1018,31 +1065,49 @@ export function StoryBar() {
                   exit={{ scale: 0.96, opacity: 0 }}
                   transition={{ duration: 0.2 }}
                   onClick={(e) => e.stopPropagation()}
-                  className="relative w-full h-full md:h-[90vh] md:max-h-[820px] max-w-md md:rounded-3xl bg-stone-900 overflow-hidden flex flex-col justify-between shadow-2xl border-0 md:border md:border-white/10"
+                  className="relative w-full h-full md:h-[90vh] md:max-h-[820px] max-w-md md:rounded-3xl bg-stone-950 overflow-hidden flex flex-col justify-between shadow-2xl border-0 md:border md:border-white/10"
                 >
-                  <div className="absolute inset-0 z-10">
+                  {/* Story Media (Tampil proporsional tanpa zoom berlebih, dengan latar blur ambient) */}
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-stone-950">
                     {currentStory.mediaType === 'VIDEO' ? (
-                      <video
-                        ref={videoPlayerRef}
-                        key={currentStory.id}
-                        src={currentStory.mediaUrl}
-                        autoPlay
-                        playsInline
-                        muted={isMuted}
-                        onEnded={handleNext}
-                        className="w-full h-full object-cover"
-                      />
+                      <>
+                        <video
+                          src={currentStory.mediaUrl}
+                          muted
+                          playsInline
+                          className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-45 scale-110 pointer-events-none"
+                        />
+                        <video
+                          ref={videoPlayerRef}
+                          key={currentStory.id}
+                          src={currentStory.mediaUrl}
+                          autoPlay
+                          playsInline
+                          muted={isMuted}
+                          onEnded={handleNext}
+                          className="relative z-10 w-full h-full object-contain"
+                        />
+                      </>
                     ) : (
-                      <Image
-                        src={currentStory.mediaUrl}
-                        alt={currentStory.title}
-                        fill
-                        priority
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, 450px"
-                      />
+                      <>
+                        <Image
+                          src={currentStory.mediaUrl}
+                          alt={currentStory.title}
+                          fill
+                          className="object-cover blur-2xl opacity-50 scale-110 pointer-events-none"
+                          sizes="(max-width: 768px) 100vw, 450px"
+                        />
+                        <Image
+                          src={currentStory.mediaUrl}
+                          alt={currentStory.title}
+                          fill
+                          priority
+                          className="object-contain z-10"
+                          sizes="(max-width: 768px) 100vw, 450px"
+                        />
+                      </>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-transparent to-black/90 pointer-events-none" />
+                    <div className="absolute inset-0 z-20 bg-gradient-to-b from-black/70 via-transparent to-black/85 pointer-events-none" />
                   </div>
 
                   <div
@@ -1391,8 +1456,8 @@ export function StoryBar() {
                     )}
                   </AnimatePresence>
 
-                  {/* VIEWPORT AREA: LIVE CAMERA OR TEXT CANVAS OR CAPTURED PREVIEW */}
-                  <div className="absolute inset-0 z-10 overflow-hidden">
+                  {/* VIEWPORT AREA: LIVE CAMERA (WIDE / NO-ZOOM DEFAULT) OR TEXT CANVAS OR CAPTURED PREVIEW */}
+                  <div className="absolute inset-0 z-10 overflow-hidden flex items-center justify-center bg-stone-950">
                     {!previewUrl ? (
                       cameraMode === 'TEXT' ? (
                         <div
@@ -1409,6 +1474,7 @@ export function StoryBar() {
                         </div>
                       ) : (
                         <>
+                          {/* Video Kamera dengan Rasio Natural (object-contain saat FIT agar tidak nge-zoom wajah) */}
                           <video
                             ref={liveVideoRef}
                             autoPlay
@@ -1416,9 +1482,11 @@ export function StoryBar() {
                             muted
                             style={{
                               filter: activeFilter.css,
-                              transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+                              transform: `${facingMode === 'user' ? 'scaleX(-1)' : ''} scale(${zoomLevel})`.trim(),
                             }}
-                            className="w-full h-full object-cover"
+                            className={`w-full h-full transition-transform duration-200 ${
+                              cameraFitMode === 'FIT' ? 'object-contain' : 'object-cover'
+                            }`}
                           />
 
                           {/* Fallback jika kamera belum diizinkan / tidak ada */}
@@ -1458,14 +1526,14 @@ export function StoryBar() {
                         autoPlay
                         loop
                         playsInline
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                       />
                     ) : (
                       <Image
                         src={previewUrl}
                         alt="Story Preview"
                         fill
-                        className="object-cover"
+                        className="object-contain"
                       />
                     )}
 
@@ -1503,7 +1571,7 @@ export function StoryBar() {
                       </div>
                     )}
 
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-transparent to-black/85 pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
                   </div>
 
                   {/* TOP CAMERA CONTROLS BAR */}
@@ -1541,7 +1609,6 @@ export function StoryBar() {
                       </div>
                     )}
 
-                    {/* Flip Camera or Background Theme Switcher */}
                     {!previewUrl ? (
                       cameraMode === 'TEXT' ? (
                         <button
@@ -1577,7 +1644,7 @@ export function StoryBar() {
                     )}
                   </div>
 
-                  {/* RIGHT FLOATING IG TOOLS RAIL (Text & Filter) */}
+                  {/* RIGHT FLOATING IG TOOLS RAIL (Text, Filter, & Wide/Full Rasio Toggle) */}
                   {!isRecording && (
                     <div className="relative z-30 self-end pr-4 flex flex-col gap-3">
                       {cameraMode !== 'TEXT' && (
@@ -1592,22 +1659,39 @@ export function StoryBar() {
                       )}
 
                       {!previewUrl && cameraMode !== 'TEXT' && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setActiveFilterIndex((prev) => (prev + 1) % CAMERA_FILTERS.length)
-                          }
-                          className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-amber-300 flex items-center justify-center hover:bg-black/70 border border-amber-300/30 cursor-pointer shadow-lg"
-                          title={`Filter: ${activeFilter.name}`}
-                        >
-                          <Sparkles className="w-5 h-5" />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setActiveFilterIndex((prev) => (prev + 1) % CAMERA_FILTERS.length)
+                            }
+                            className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-amber-300 flex items-center justify-center hover:bg-black/70 border border-amber-300/30 cursor-pointer shadow-lg"
+                            title={`Filter: ${activeFilter.name}`}
+                          >
+                            <Sparkles className="w-5 h-5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCameraFitMode((prev) => (prev === 'FIT' ? 'COVER' : 'FIT'))
+                            }
+                            className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 border border-white/20 cursor-pointer shadow-lg"
+                            title={cameraFitMode === 'FIT' ? 'Mode Layar Penuh' : 'Mode Sudut Lebar (Wide)'}
+                          >
+                            {cameraFitMode === 'FIT' ? (
+                              <Maximize2 className="w-4.5 h-4.5" />
+                            ) : (
+                              <Minimize2 className="w-4.5 h-4.5" />
+                            )}
+                          </button>
+                        </>
                       )}
                     </div>
                   )}
 
                   {/* BOTTOM CAMERA SHUTTER DOCK OR PREVIEW SHARE BAR */}
-                  <div className="relative z-30 pb-6 px-5 space-y-4">
+                  <div className="relative z-30 pb-6 px-5 space-y-3.5">
                     {compressing && (
                       <div className="bg-black/70 backdrop-blur-md border border-orange-400/40 rounded-2xl p-3 text-xs font-bold text-amber-200 flex items-center justify-center gap-2">
                         <Loader2 className="w-4 h-4 animate-spin text-orange-400" />
@@ -1617,12 +1701,51 @@ export function StoryBar() {
 
                     {!previewUrl ? (
                       <>
-                        {/* Filter Pill Indicator */}
+                        {/* Zoom & Angle Pills (Wide Fit 1x / Full 1x / 1.5x) */}
                         {cameraMode !== 'TEXT' && (
-                          <div className="flex justify-center">
-                            <span className="px-3 py-0.5 rounded-full bg-black/45 backdrop-blur-md text-[10px] font-black text-amber-200 border border-white/10">
-                              Filter: {activeFilter.name}
-                            </span>
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCameraFitMode('FIT');
+                                setZoomLevel(1);
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all cursor-pointer border ${
+                                cameraFitMode === 'FIT' && zoomLevel === 1
+                                  ? 'bg-amber-400 text-stone-950 border-amber-300 shadow'
+                                  : 'bg-black/50 text-white border-white/15'
+                              }`}
+                            >
+                              Wide (Utuh)
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCameraFitMode('COVER');
+                                setZoomLevel(1);
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all cursor-pointer border ${
+                                cameraFitMode === 'COVER' && zoomLevel === 1
+                                  ? 'bg-amber-400 text-stone-950 border-amber-300 shadow'
+                                  : 'bg-black/50 text-white border-white/15'
+                              }`}
+                            >
+                              1x Full
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCameraFitMode('COVER');
+                                setZoomLevel(1.4);
+                              }}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-black transition-all cursor-pointer border ${
+                                zoomLevel === 1.4
+                                  ? 'bg-amber-400 text-stone-950 border-amber-300 shadow'
+                                  : 'bg-black/50 text-white border-white/15'
+                              }`}
+                            >
+                              1.4x
+                            </button>
                           </div>
                         )}
 
