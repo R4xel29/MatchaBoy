@@ -322,19 +322,55 @@ export default function StorefrontClient({
     }
   }, [status]);
 
-  // Request precise geolocation for weather
+  // Request precise geolocation for weather ONLY if already granted or cached (never force repeated browser prompts)
   useEffect(() => {
-    if (typeof window !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setGeoCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude });
-        },
-        () => {
-          // Graceful fallback to default weather
-        },
-        { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
-      );
+    if (typeof window === 'undefined') return;
+
+    // 1. Load cached coordinates immediately if available
+    try {
+      const cached = localStorage.getItem('arus_user_coords');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (typeof parsed?.lat === 'number' && typeof parsed?.lon === 'number') {
+          setGeoCoords({ lat: parsed.lat, lon: parsed.lon });
+        }
+      }
+    } catch {}
+
+    // 2. Listen for permission prompt updates
+    const handleLocationUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<{ lat: number; lon: number }>;
+      if (customEvent.detail?.lat && customEvent.detail?.lon) {
+        setGeoCoords({ lat: customEvent.detail.lat, lon: customEvent.detail.lon });
+      }
+    };
+    window.addEventListener('arus-location-updated', handleLocationUpdate);
+
+    // 3. Only refresh GPS silently if permission is already 'granted'
+    if ('geolocation' in navigator && 'permissions' in navigator && typeof navigator.permissions?.query === 'function') {
+      navigator.permissions
+        .query({ name: 'geolocation' as PermissionName })
+        .then((status) => {
+          if (status.state === 'granted') {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const coords = { lat: pos.coords.latitude, lon: pos.coords.longitude, updatedAt: Date.now() };
+                setGeoCoords({ lat: coords.lat, lon: coords.lon });
+                try {
+                  localStorage.setItem('arus_user_coords', JSON.stringify(coords));
+                } catch {}
+              },
+              () => {},
+              { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
+            );
+          }
+        })
+        .catch(() => {});
     }
+
+    return () => {
+      window.removeEventListener('arus-location-updated', handleLocationUpdate);
+    };
   }, []);
 
   // Update weather animation category when weatherData changes

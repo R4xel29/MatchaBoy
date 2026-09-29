@@ -550,15 +550,15 @@ model StoreSettings {
   cancellationTimeLimit Int    @default(15)      // waktu maksimal pembatalan pesanan COD dalam menit
   deliveryFeePerKm      Int    @default(2000)    // ongkos kirim per km
   maxDeliveryDistance   Int    @default(10)      // radius maksimal pengiriman dalam km
-  storeName           String   @default("Matchaboy HQ")
-  storeAddress        String   @default("Jl. Matcha No. 1, Jakarta Selatan")
+  storeName           String   @default("Arus HQ")
+  storeAddress        String   @default("Jl. Mastrip No 357, Probolinggo")
   storeLat            Float    @default(-6.2088)
   storeLng            Float    @default(106.8456)
   operationalDays     String   @default("[0,1,2,3,4,5,6]") // 0=Sunday, 1=Monday, etc.
   disabledDates       String   @default("[]") // JSON array of YYYY-MM-DD strings
   customHours         String   @default("{}") // JSON string of custom hours overrides
   whatsappNumber      String   @default("")
-  whatsappMessage     String   @default("Halo Matchaboy, saya ingin bertanya...")
+  whatsappMessage     String   @default("Halo Arus, saya ingin bertanya...")
   pickupAlarmLeadTime Int      @default(30)
   alarmSoundUrl       String?  @default("")
   alarmVolumeBoost    Int      @default(350)

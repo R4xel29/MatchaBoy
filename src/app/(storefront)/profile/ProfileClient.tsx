@@ -68,6 +68,7 @@ import { useCartStore } from '@/stores/cart-store';
 import { RegisterPasskeyButton } from '@/components/auth/PasskeyButtons';
 import { LoginBottomSheet } from '@/components/auth/LoginBottomSheet';
 import { TopUpOverlay } from '@/components/storefront/TopUpOverlay';
+import { ArusPayPinModal } from '@/components/storefront/ArusPayPinModal';
 
 // Data shapes
 type OrderShape = {
@@ -705,6 +706,7 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
   // Image crop states
   const [showCropModal, setShowCropModal] = useState(false);
   const [tempImageUrl, setTempImageUrl] = useState('');
+  const [isChangePinOpen, setIsChangePinOpen] = useState(false);
 
   // Sync state if user prop changes (e.g. after connecting Google)
   useEffect(() => {
@@ -980,9 +982,13 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
           </div>
 
           {/* PIN Link */}
-          <button className="flex items-center gap-2 text-[#B48A5E] font-black text-[13px] hover:opacity-80 transition-opacity px-1">
+          <button
+            type="button"
+            onClick={() => setIsChangePinOpen(true)}
+            className="flex items-center gap-2 text-orange-600 font-black text-[13px] hover:opacity-80 transition-opacity px-1 cursor-pointer"
+          >
             <Shield className="w-4 h-4" />
-            Ganti PIN
+            Ganti PIN Arum Seduh (Arus Pay)
           </button>
 
           {/* Gender Selector */}
@@ -1260,6 +1266,17 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
         }}
         onCropComplete={handleCropComplete}
         aspectRatio={1}
+      />
+
+      {/* PIN Change Modal */}
+      <ArusPayPinModal
+        isOpen={isChangePinOpen}
+        onClose={() => setIsChangePinOpen(false)}
+        mode="change"
+        onSuccess={() => {
+          setIsChangePinOpen(false);
+          showToast('PIN Arum Seduh berhasil diperbarui!', 'success');
+        }}
       />
     </motion.div>
   );
@@ -4609,6 +4626,7 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
   const [selectedAddress, setSelectedAddress] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("WALLET");
   const [submitting, setSubmitting] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -4755,6 +4773,16 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
       return;
     }
 
+    if (paymentMethod === "WALLET") {
+      setShowPinModal(true);
+      return;
+    }
+
+    await executeSaveSchedule();
+  };
+
+  const executeSaveSchedule = async (verifiedPin?: string) => {
+    setShowPinModal(false);
     setSubmitting(true);
     try {
       const payload = {
@@ -4770,6 +4798,7 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
         timeSlot,
         deliveryAddress: selectedAddress,
         paymentMethod,
+        pin: verifiedPin,
         isActive: true
       };
 
@@ -4915,8 +4944,8 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
                   <div className="flex items-center gap-2">
                     <Coins className="w-3.5 h-3.5 text-[#B48A5E] shrink-0" />
                     <span className="font-bold">Total Biaya: {formatRupiah(sched.price * sched.quantity)}</span>
-                    <span className="text-[10px] bg-[#B48A5E]/10 text-[#B48A5E] font-black px-1.5 py-0.5 rounded ml-1">
-                      {sched.paymentMethod === "WALLET" ? 'E-WALLET' : 'COD'}
+                    <span className="text-[10px] bg-orange-50 text-orange-600 font-black px-1.5 py-0.5 rounded ml-1 border border-orange-200/50">
+                      {sched.paymentMethod === "WALLET" ? 'ARUS PAY' : 'COD'}
                     </span>
                   </div>
                 </div>
@@ -5239,40 +5268,40 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
                     onClick={() => setPaymentMethod("WALLET")}
                     className={`p-4 rounded-2xl border text-left flex flex-col justify-between transition-all ${
                       paymentMethod === "WALLET"
-                        ? 'border-[#B48A5E] bg-[#B48A5E]/5 text-[#946F48] shadow-sm'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
                         : 'border-[#D4A574]/15 bg-white text-gray-500'
                     }`}
                   >
-                    <span className="text-xs font-black">E-Wallet</span>
-                    <span className="text-[10px] text-gray-400 mt-2 font-medium">Saldo: {formatRupiah(user.walletBalance || 0)}</span>
+                    <span className="text-xs font-black">Arus Pay</span>
+                    <span className="text-[10px] text-gray-500 mt-2 font-medium">Saldo: {formatRupiah(user.walletBalance || 0)}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentMethod("COD")}
                     className={`p-4 rounded-2xl border text-left flex flex-col justify-between transition-all ${
                       paymentMethod === "COD"
-                        ? 'border-[#B48A5E] bg-[#B48A5E]/5 text-[#946F48] shadow-sm'
+                        ? 'border-orange-500 bg-orange-50 text-orange-700 shadow-sm'
                         : 'border-[#D4A574]/15 bg-white text-gray-500'
                     }`}
                   >
                     <span className="text-xs font-black">Cash On Delivery</span>
-                    <span className="text-[10px] text-gray-400 mt-2 font-medium">Bayar di Tempat</span>
+                    <span className="text-[10px] text-gray-500 mt-2 font-medium">Bayar di Tempat</span>
                   </button>
                 </div>
               </div>
 
               {/* Live Preview Card */}
               {selectedProduct && (
-                <div className="bg-[#1E3F20] text-white rounded-3xl p-5 space-y-2.5 shadow-lg relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-5">
+                <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-3xl p-5 space-y-2.5 shadow-lg shadow-orange-500/20 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-4 opacity-10">
                     <Coffee className="w-24 h-24 rotate-12" />
                   </div>
                   <div className="flex justify-between items-center relative z-10">
-                    <span className="text-xs font-bold text-white/85">Estimasi Biaya ({quantity} cup):</span>
+                    <span className="text-xs font-bold text-white/90">Estimasi Biaya ({quantity} cup):</span>
                     <span className="text-lg font-black">{formatRupiah(calculatePreviewPrice())}</span>
                   </div>
-                  <p className="text-[10px] text-white/70 leading-relaxed relative z-10">
-                    * Pembayaran via E-Wallet akan dipotong secara otomatis pada setiap jadwal pemesanan. Pastikan saldo Anda mencukupi agar pengiriman tidak gagal.
+                  <p className="text-[10px] text-white/85 leading-relaxed relative z-10">
+                    * Pembayaran via Arus Pay dilindungi dengan verifikasi PIN 6 digit Arum Seduh dan akan dipotong otomatis pada setiap jadwal pemesanan.
                   </p>
                 </div>
               )}
@@ -5281,7 +5310,7 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-4 bg-[#B48A5E] hover:bg-[#946F48] text-white rounded-2xl font-bold shadow-lg shadow-[#B48A5E]/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2 text-[15px]"
+                className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl font-bold shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex justify-center items-center gap-2 text-[15px]"
               >
                 {submitting ? (
                   <>
@@ -5296,6 +5325,15 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* PIN Verification Modal for Arus Pay Auto-Reorder */}
+      <ArusPayPinModal
+        isOpen={showPinModal}
+        onClose={() => setShowPinModal(false)}
+        onSuccess={(pin) => executeSaveSchedule(pin)}
+        amount={calculatePreviewPrice()}
+        description={`Otorisasi Auto-Reorder Arus Pay (${selectedProduct?.name || 'Pesanan Rutin'})`}
+      />
     </motion.section>
   );
 }

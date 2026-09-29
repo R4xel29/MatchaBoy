@@ -72,6 +72,22 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Invalid paymentMethod (must be WALLET or COD)" }, { status: 400 });
         }
 
+        if (paymentMethod.toUpperCase() === "WALLET") {
+            const walletUser = await prisma.user.findUnique({
+                where: { id: session.user.id },
+                select: { pin: true }
+            });
+            if (walletUser?.pin && walletUser.pin.trim() !== "") {
+                const submittedPin = typeof body.pin === "string" ? body.pin.trim() : "";
+                if (!submittedPin || submittedPin !== walletUser.pin.trim()) {
+                    return NextResponse.json(
+                        { error: "PIN Arum Seduh tidak sesuai untuk mengaktifkan pembayaran Arus Pay." },
+                        { status: 400 }
+                    );
+                }
+            }
+        }
+
         // Fetch product to calculate server-side price and store productName
         const dbProduct = await prisma.product.findUnique({
             where: { id: productId }
@@ -271,6 +287,21 @@ export async function PATCH(req: NextRequest) {
         if (paymentMethod !== undefined) {
             if (!["WALLET", "COD"].includes(paymentMethod.toUpperCase())) {
                 return NextResponse.json({ error: "Invalid paymentMethod (must be WALLET or COD)" }, { status: 400 });
+            }
+            if (paymentMethod.toUpperCase() === "WALLET") {
+                const walletUser = await prisma.user.findUnique({
+                    where: { id: session.user.id },
+                    select: { pin: true }
+                });
+                if (walletUser?.pin && walletUser.pin.trim() !== "") {
+                    const submittedPin = typeof body.pin === "string" ? body.pin.trim() : "";
+                    if (!submittedPin || submittedPin !== walletUser.pin.trim()) {
+                        return NextResponse.json(
+                            { error: "PIN Arum Seduh tidak sesuai untuk menyimpan pembayaran Arus Pay." },
+                            { status: 400 }
+                        );
+                    }
+                }
             }
             updateData.paymentMethod = paymentMethod.toUpperCase();
         }

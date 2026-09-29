@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatRupiah } from '@/lib/utils';
 import type { Product } from '@/types';
-import { Trash2, Sparkles, X, Clock, CalendarDays, Plus, MapPin, CreditCard } from 'lucide-react';
+import { Trash2, Sparkles, X, Clock, CalendarDays, Plus, MapPin, CreditCard, Wallet, Banknote } from 'lucide-react';
+import { ArusPayPinModal } from './ArusPayPinModal';
 
 export interface AutoReorderOverlayProps {
   isOpen: boolean;
@@ -40,6 +41,7 @@ export function AutoReorderOverlay({
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('WALLET');
   const [submitting, setSubmitting] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
 
   const fetchSchedules = () => {
     setLoadingList(true);
@@ -56,6 +58,7 @@ export function AutoReorderOverlay({
     if (isOpen) {
       fetchSchedules();
       setShowAddForm(false);
+      setShowPinModal(false);
       setSelectedProductId(
         products.filter((p) => p.badge !== 'sold-out' && p.modifiers?.isBundle !== true)[0]?.id || ''
       );
@@ -81,13 +84,8 @@ export function AutoReorderOverlay({
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedProductId || !timeSlot || !deliveryAddress) {
-      showToast('Mohon lengkapi produk, waktu, dan alamat pengiriman', 'error');
-      return;
-    }
-
+  const executeSubmitSchedule = async (verifiedPin?: string) => {
+    setShowPinModal(false);
     setSubmitting(true);
     try {
       const res = await fetch('/api/auto-reorder', {
@@ -105,6 +103,7 @@ export function AutoReorderOverlay({
           timeSlot,
           deliveryAddress,
           paymentMethod,
+          pin: paymentMethod === 'WALLET' ? verifiedPin : undefined,
         }),
       });
       const d = await res.json();
@@ -125,9 +124,27 @@ export function AutoReorderOverlay({
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductId || !timeSlot || !deliveryAddress) {
+      showToast('Mohon lengkapi produk, waktu, dan alamat pengiriman', 'error');
+      return;
+    }
+
+    if (paymentMethod === 'WALLET') {
+      setShowPinModal(true);
+      return;
+    }
+
+    await executeSubmitSchedule();
+  };
+
   const getProductOptions = () => {
     return products.filter((p) => p.badge !== 'sold-out' && p.modifiers?.isBundle !== true);
   };
+
+  const selectedProductObj = products.find((p) => p.id === selectedProductId);
+  const estimatedPrice = (selectedProductObj?.price || 0) * quantity;
 
   return (
     <AnimatePresence>
@@ -161,7 +178,9 @@ export function AutoReorderOverlay({
           <div className="flex-1 overflow-y-auto p-6 space-y-5 scrollbar-hide text-left">
             {/* Info panel */}
             <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 flex gap-3 text-gray-800">
-              <span className="text-lg">⏱️</span>
+              <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                <Clock className="w-4 h-4" />
+              </div>
               <div className="space-y-0.5">
                 <p className="text-xs font-black text-orange-700">Pesan Otomatis Mengalir</p>
                 <p className="text-[10px] text-gray-600 font-semibold leading-tight">
@@ -335,13 +354,23 @@ export function AutoReorderOverlay({
                         type="button"
                         key={m}
                         onClick={() => setPaymentMethod(m)}
-                        className={`p-3 border rounded-xl font-black text-[10px] tracking-wide transition-all outline-none cursor-pointer ${
+                        className={`p-3 border rounded-xl font-black text-[10px] tracking-wide transition-all outline-none cursor-pointer flex items-center justify-center gap-1.5 ${
                           paymentMethod === m
                             ? 'bg-gradient-to-r from-orange-500 to-amber-500 border-orange-500 text-white'
                             : 'bg-white border-gray-200 text-gray-600'
                         }`}
                       >
-                        {m === 'WALLET' ? 'Arus Pay ⚡' : 'Bayar Ditempat (COD) 💵'}
+                        {m === 'WALLET' ? (
+                          <>
+                            <Wallet className="w-3.5 h-3.5" />
+                            <span>Arus Pay</span>
+                          </>
+                        ) : (
+                          <>
+                            <Banknote className="w-3.5 h-3.5" />
+                            <span>Bayar Ditempat (COD)</span>
+                          </>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -359,9 +388,10 @@ export function AutoReorderOverlay({
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 text-white font-black text-xs rounded-xl cursor-pointer"
+                    className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 text-white font-black text-xs rounded-xl cursor-pointer flex items-center justify-center gap-1.5"
                   >
-                    {submitting ? 'Menyimpan...' : 'Aktifkan Jadwal 🚀'}
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{submitting ? 'Menyimpan...' : 'Aktifkan Jadwal'}</span>
                   </button>
                 </div>
               </form>
@@ -375,9 +405,10 @@ export function AutoReorderOverlay({
                   <button
                     type="button"
                     onClick={() => setShowAddForm(true)}
-                    className="px-3.5 py-1.5 bg-gradient-to-tr from-amber-400 to-orange-500 text-white text-[10px] font-black rounded-full hover:shadow-md cursor-pointer border border-amber-300"
+                    className="px-3.5 py-1.5 bg-gradient-to-tr from-amber-400 to-orange-500 text-white text-[10px] font-black rounded-full hover:shadow-md cursor-pointer border border-amber-300 flex items-center gap-1"
                   >
-                    + Buat Baru
+                    <Plus className="w-3 h-3" />
+                    <span>Buat Baru</span>
                   </button>
                 </div>
 
@@ -389,7 +420,9 @@ export function AutoReorderOverlay({
                   </div>
                 ) : schedules.length === 0 ? (
                   <div className="text-center py-10 space-y-2 border border-dashed border-amber-200 rounded-3xl">
-                    <span className="text-3xl">📭</span>
+                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto">
+                      <CalendarDays className="w-6 h-6" />
+                    </div>
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">
                       Belum ada pemesanan otomatis
                     </p>
@@ -411,13 +444,13 @@ export function AutoReorderOverlay({
                         <div className="flex justify-between items-start">
                           <div>
                             <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 text-[8px] font-black uppercase tracking-wider leading-none">
-                              {s.frequency} ✦ {s.timeSlot}
+                              {s.frequency} • {s.timeSlot}
                             </span>
                             <h4 className="font-serif font-black text-sm text-gray-900 mt-1 leading-snug">
                               {s.productName}
                             </h4>
                             <p className="text-[9px] text-gray-400 font-bold uppercase tracking-wider mt-0.5">
-                              {s.size} ✦ Ice: {s.iceLevel} ✦ Sugar: {s.sugarLevel}
+                              {s.size} • Ice: {s.iceLevel} • Sugar: {s.sugarLevel}
                             </p>
                           </div>
 
@@ -430,13 +463,16 @@ export function AutoReorderOverlay({
                         </div>
 
                         <div className="text-[9.5px] text-gray-500 font-semibold border-t border-b border-gray-100 py-2 space-y-1">
-                          <p className="line-clamp-1">📍 Alamat: {s.deliveryAddress}</p>
+                          <p className="line-clamp-1 flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-orange-500 shrink-0" />
+                            <span>Alamat: {s.deliveryAddress}</span>
+                          </p>
                           <p className="flex items-center gap-1">
                             Metode:{' '}
                             <span className="font-bold text-gray-800">
                               {s.paymentMethod === 'WALLET'
-                                ? 'Arus Pay ⚡'
-                                : 'Cash On Delivery (COD) 💵'}
+                                ? 'Arus Pay (Saldo)'
+                                : 'Cash On Delivery (COD)'}
                             </span>
                           </p>
                           {s.nextTriggeredAt && (
@@ -471,6 +507,14 @@ export function AutoReorderOverlay({
             )}
           </div>
         </motion.div>
+
+        <ArusPayPinModal
+          isOpen={showPinModal}
+          onClose={() => setShowPinModal(false)}
+          amount={estimatedPrice}
+          description="Jadwal Pemesanan Otomatis Arus Pay"
+          onSuccess={(verifiedPin) => executeSubmitSchedule(verifiedPin)}
+        />
       </div>
     </AnimatePresence>
   );

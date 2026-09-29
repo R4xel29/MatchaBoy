@@ -334,6 +334,59 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(spmbClient).toContain('Otomatis batal jika melewati 15 menit');
     expect(spmbClient).toContain('effectiveSpmbQrContent');
   });
+
+  it('T1.19.8: Arum Seduh 6-Digit PIN Protection enforced on every Arus Pay (WALLET) usage', () => {
+    const pinRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/user/setup/pin/route.ts'),
+      'utf-8'
+    );
+    const pinModal = fs.readFileSync(
+      path.join(process.cwd(), 'src/components/storefront/ArusPayPinModal.tsx'),
+      'utf-8'
+    );
+    const setupPinClient = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/(setup)/setup-pin/SetupPinClient.tsx'),
+      'utf-8'
+    );
+    const checkoutRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/checkout/route.ts'),
+      'utf-8'
+    );
+    const autoReorderRoute = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/api/auto-reorder/route.ts'),
+      'utf-8'
+    );
+    const autoReorderOverlay = fs.readFileSync(
+      path.join(process.cwd(), 'src/components/storefront/AutoReorderOverlay.tsx'),
+      'utf-8'
+    );
+    const checkout = fs.readFileSync(checkoutPagePath, 'utf-8');
+    const profile = fs.readFileSync(profileClientPath, 'utf-8');
+
+    // 1. PIN API supports GET status, verify, change, and initial setup
+    expect(pinRoute).toContain('return NextResponse.json({ hasPin })');
+    expect(pinRoute).toContain("action === 'verify'");
+    expect(pinRoute).toContain("action === 'change'");
+
+    // 2. ArusPayPinModal uses Arum Seduh Orange/Amber branding and Lucide React icons
+    expect(pinModal).toContain('Masukkan PIN Arum Seduh');
+    expect(pinModal).toContain('Arum Seduh • Proteksi Arus Pay');
+    expect(pinModal).toContain('from-orange-500 to-amber-500');
+    expect(pinModal.includes('#1E3F20')).toBe(false);
+
+    // 3. SetupPinClient explains Arus Pay protection with Orange/Amber palette
+    expect(setupPinClient).toContain('Arus Pay');
+    expect(setupPinClient).toContain('from-orange-500 to-amber-500');
+    expect(setupPinClient.includes('#1E3F20')).toBe(false);
+
+    // 4. Checkout & Auto-Reorder enforce PIN verification both client-side and server-side
+    expect(checkoutRoute).toContain('PIN Arum Seduh tidak sesuai');
+    expect(autoReorderRoute).toContain('PIN Arum Seduh tidak sesuai');
+    expect(checkout).toContain('ArusPayPinModal');
+    expect(checkout).toContain('setShowArusPayPinModal(true)');
+    expect(autoReorderOverlay).toContain('ArusPayPinModal');
+    expect(profile).toContain('ArusPayPinModal');
+  });
 });
 
 

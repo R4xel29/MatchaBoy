@@ -34,6 +34,10 @@ export async function GET() {
       })
     }
 
+    const sanitizedStoreName = (settings.storeName || 'Arus HQ').replace(/matcha\s*boy/gi, 'Arus')
+    const rawWaMsg = settings.whatsappMessage || 'Halo Arus, saya ingin bertanya...'
+    const sanitizedWaMsg = rawWaMsg.replace(/matcha\s*boy/gi, 'Arus')
+
     return NextResponse.json({
       id: settings.id,
       openTime: settings.openTime,
@@ -42,7 +46,7 @@ export async function GET() {
       cancellationTimeLimit: settings.cancellationTimeLimit,
       deliveryFeePerKm: settings.deliveryFeePerKm,
       maxDeliveryDistance: settings.maxDeliveryDistance,
-      storeName: settings.storeName,
+      storeName: sanitizedStoreName,
       storeAddress: settings.storeAddress,
       storeLat: settings.storeLat,
       storeLng: settings.storeLng,
@@ -50,7 +54,7 @@ export async function GET() {
       disabledDates: settings.disabledDates || "[]",
       customHours: settings.customHours || "{}",
       whatsappNumber: settings.whatsappNumber || "",
-      whatsappMessage: settings.whatsappMessage || "Halo Arum Seduh, saya ingin bertanya...",
+      whatsappMessage: sanitizedWaMsg,
       pickupAlarmLeadTime: settings.pickupAlarmLeadTime,
       alarmSoundUrl: settings.alarmSoundUrl || "",
       alarmVolumeBoost: settings.alarmVolumeBoost ?? 350,
@@ -75,7 +79,7 @@ export async function GET() {
       disabledDates: "[]",
       customHours: "{}",
       whatsappNumber: "",
-      whatsappMessage: "Halo Arum Seduh, saya ingin bertanya...",
+      whatsappMessage: "Halo Arus, saya ingin bertanya...",
       pickupAlarmLeadTime: 30,
       alarmSoundUrl: "",
       alarmVolumeBoost: 350,

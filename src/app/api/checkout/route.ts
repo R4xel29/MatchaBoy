@@ -700,6 +700,27 @@ export async function POST(req: Request) {
 
         const isWallet = requestedMethod === 'WALLET';
 
+        if (isWallet) {
+            const walletUser = await prisma.user.findUnique({
+                where: { id: session.user.id },
+                select: { pin: true, walletBalance: true },
+            });
+
+            if (!walletUser) {
+                return NextResponse.json({ error: 'User tidak ditemukan' }, { status: 404 });
+            }
+
+            if (walletUser.pin && walletUser.pin.trim() !== '') {
+                const submittedPin = typeof body.pin === 'string' ? body.pin.trim() : '';
+                if (!submittedPin || submittedPin !== walletUser.pin.trim()) {
+                    return NextResponse.json(
+                        { error: 'PIN Arum Seduh tidak sesuai. Silakan masukkan 6 digit PIN keamanan Anda dengan benar.' },
+                        { status: 400 }
+                    );
+                }
+            }
+        }
+
         const prefix = orderType === 'PICKUP' ? 'PKP' : (orderType === 'DINE_IN' ? 'DIN' : 'DLV')
         const queueNumber = `${prefix}-${await getNextQueueSequence(prefix)}`
 

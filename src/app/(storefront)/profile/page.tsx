@@ -92,8 +92,12 @@ export default async function ProfilePage() {
         day: 'numeric', month: 'short', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
       }),
-      // Create a string like "2x Matcha Signature, 1x Dirty Matcha"
       items: order.items.map((i: any) => `${i.qty}× ${i.product.name}`).join(', '),
+      itemCount: order.items.reduce((sum: number, i: any) => sum + (i.qty || 1), 0),
+      orderType: order.orderType || 'PICKUP',
+      paymentMethod: order.paymentMethod || 'QRIS',
+      queueNumber: order.queueNumber || null,
+      tableNumber: order.tableNumber || null,
       total: order.total,
       status: order.status.toLowerCase(),
     }))
@@ -146,7 +150,7 @@ export default async function ProfilePage() {
     return (
       <ProfileClient 
         user={{
-          name: session.user.name || "Matcha Lover",
+          name: session.user.name || "Pelanggan Arum Seduh",
           email: session.user.email || "",
           phone: "-",
           points: 0,

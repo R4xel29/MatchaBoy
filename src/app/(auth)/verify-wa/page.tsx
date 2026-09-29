@@ -86,27 +86,24 @@ function VerifyWABody() {
 
   if (status === "success") {
     return (
-      <div className="fixed inset-0 z-[9999] w-screen h-screen flex flex-col items-center justify-center bg-[#0B130E] text-[#FFFBF5] overflow-hidden select-none">
-        {/* Glow backdrop */}
-        <div className="absolute w-[350px] h-[350px] rounded-full bg-[#2E5A44]/25 blur-[100px] pointer-events-none" />
-        
-        <div className="relative flex flex-col items-center justify-center z-10 space-y-6 text-center px-6">
+      <div className="fixed inset-0 z-[9999] w-screen h-screen flex flex-col items-center justify-center bg-gradient-to-b from-orange-50/70 via-[#FFFBF7] to-amber-50/60 text-slate-900 overflow-hidden select-none px-6">
+        <div className="relative flex flex-col items-center justify-center z-10 space-y-5 text-center max-w-xs w-full bg-white p-8 rounded-3xl border border-orange-100 shadow-xl shadow-orange-500/5">
           {/* Animated checkmark circle */}
           <motion.div
-            initial={{ scale: 0, rotate: -45 }}
+            initial={{ scale: 0, rotate: -20 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.1 }}
-            className="w-20 h-20 rounded-full bg-[#2E5A44] border border-[#D4A574]/40 flex items-center justify-center shadow-lg shadow-[#2E5A44]/30"
+            transition={{ type: "spring", stiffness: 220, damping: 16, delay: 0.05 }}
+            className="w-18 h-18 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center shadow-lg shadow-orange-500/25 ring-4 ring-orange-100"
           >
             <motion.svg
-              className="w-10 h-10 text-[#FFFBF5]"
+              className="w-9 h-9 text-white"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
-              strokeWidth={3.5}
+              strokeWidth={3}
               initial={{ pathLength: 0 }}
               animate={{ pathLength: 1 }}
-              transition={{ duration: 0.5, ease: "easeOut", delay: 0.3 }}
+              transition={{ duration: 0.4, ease: "easeOut", delay: 0.2 }}
             >
               <motion.path
                 strokeLinecap="round"
@@ -116,33 +113,36 @@ function VerifyWABody() {
             </motion.svg>
           </motion.div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
+            <span className="inline-block px-3 py-0.5 rounded-full bg-orange-100/80 text-orange-700 text-[10px] font-extrabold uppercase tracking-wider">
+              Arum Seduh
+            </span>
             <motion.h2
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="text-2xl font-semibold tracking-wide font-serif text-[#FFFBF5]"
+              transition={{ delay: 0.25 }}
+              className="text-xl font-extrabold text-slate-900"
             >
               Verifikasi Berhasil!
             </motion.h2>
             <motion.p
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="text-sm text-[#E8F5E9]/75 max-w-[280px] mx-auto leading-relaxed"
+              transition={{ delay: 0.35 }}
+              className="text-xs font-medium text-slate-500 leading-relaxed"
             >
-              Selamat datang di Arus. Mengarahkan Anda ke beranda...
+              Selamat datang di Arum Seduh. Mengarahkan Anda ke halaman berikutnya...
             </motion.p>
           </div>
 
-          {/* Simple premium loading line indicator */}
-          <div className="w-24 h-[2px] bg-[#2E5A44]/35 rounded-full overflow-hidden">
+          {/* Simple lightweight orange-amber loading line indicator */}
+          <div className="w-32 h-1.5 bg-orange-100 rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-[#D4A574]"
+              className="h-full bg-gradient-to-r from-orange-500 to-amber-500 rounded-full"
               initial={{ x: "-100%" }}
               animate={{ x: "100%" }}
-              transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
-              style={{ width: '60%' }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
+              style={{ width: "60%" }}
             />
           </div>
         </div>
@@ -151,17 +151,17 @@ function VerifyWABody() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      <div className="max-w-md w-full p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-lg text-center space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-[#FFFBF7] px-4">
+      <div className="max-w-md w-full p-8 bg-white rounded-3xl border border-orange-100 shadow-xl shadow-orange-500/5 text-center space-y-6">
         {status === "banned" && (
           <>
             <div className="flex justify-center">
-              <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600">
-                <AlertTriangle className="w-6 h-6" />
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-600">
+                <AlertTriangle className="w-7 h-7" />
               </div>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white font-serif">Akses Akun Ditangguhkan</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+            <h2 className="text-xl font-extrabold text-slate-900">Akses Akun Ditangguhkan</h2>
+            <p className="text-sm text-slate-500 leading-relaxed">
               Mohon maaf, akun Anda telah dinonaktifkan karena terdeteksi melanggar Ketentuan Layanan kami.
             </p>
             <div className="space-y-3 pt-2">
@@ -169,16 +169,13 @@ function VerifyWABody() {
                 href={`https://wa.me/${process.env.NEXT_PUBLIC_WA_BOT_NUMBER || "6289525672990"}?text=${encodeURIComponent("Halo Admin Arus, akun saya terdeteksi ditangguhkan saat mencoba login. Bisa tolong dibantu cek?")}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-colors font-medium w-full flex justify-center items-center gap-2 shadow-sm text-sm"
+                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl transition-all font-bold w-full flex justify-center items-center gap-2 shadow-md shadow-orange-500/20 text-sm"
               >
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.888-.788-1.487-1.761-1.663-2.06-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                </svg>
                 Hubungi Customer Service
               </a>
               <button 
                 onClick={() => router.push("/login")}
-                className="px-6 py-2 border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl transition-colors font-medium w-full text-sm"
+                className="px-6 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-2xl transition-colors font-semibold w-full text-sm"
               >
                 Kembali ke Login
               </button>
@@ -189,19 +186,19 @@ function VerifyWABody() {
         {status === "error" && (
           <>
             <div className="flex justify-center">
-              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
-                <svg className="w-6 h-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </div>
             </div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white font-serif">Link Kadaluarsa / Tidak Valid</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h2 className="text-xl font-extrabold text-slate-900">Link Kadaluarsa / Tidak Valid</h2>
+            <p className="text-sm text-slate-500">
               Link login yang Anda gunakan salah atau sudah tidak berlaku. Silakan ulangi proses login.
             </p>
             <button 
               onClick={() => router.push("/login")}
-              className="mt-4 px-6 py-2 bg-[#B48A5E] hover:bg-[#946F48] text-white rounded-xl transition-colors font-medium w-full text-sm"
+              className="mt-4 px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl transition-all font-bold w-full text-sm shadow-md shadow-orange-500/20"
             >
               Kembali ke Login
             </button>

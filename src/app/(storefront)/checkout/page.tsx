@@ -22,6 +22,7 @@ import { formatRupiah } from '@/lib/utils';
 import { ProductRecommendations } from '@/components/checkout/ProductRecommendations';
 import { ProductModal } from '@/components/storefront/ProductModal';
 import { TopUpOverlay } from '@/components/storefront/TopUpOverlay';
+import { ArusPayPinModal } from '@/components/storefront/ArusPayPinModal';
 import { CheckoutSummarySkeleton } from '@/components/ui/ShimmerSkeleton';
 import Image from 'next/image';
 import type { Product, CartItem } from '@/types';
@@ -135,6 +136,7 @@ export default function CheckoutPage() {
   const [showPickupWarning, setShowPickupWarning] = useState(false);
   const [showTumblerWarning, setShowTumblerWarning] = useState(false);
   const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+  const [showArusPayPinModal, setShowArusPayPinModal] = useState(false);
   const [tempFormData, setTempFormData] = useState<CheckoutFormData | null>(null);
 
   // Voucher restore tracking
@@ -521,14 +523,8 @@ export default function CheckoutPage() {
   const [deliveryAddress, setDeliveryAddress] = useState<{ label: string, detail: string, streetDetail: string, lat: number, lng: number, distance: number, deliveryFee: number } | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
 
-  // Saved locations/addresses from profile
-  const [savedAddresses, setSavedAddresses] = useState<any[]>([]);
-  const [loadingAddresses, setLoadingAddresses] = useState(false);
-  const [selectedSavedAddressId, setSelectedSavedAddressId] = useState<string>('');
   const [profileName, setProfileName] = useState('');
   const [profilePhone, setProfilePhone] = useState('');
-
-
 
   // Payment Config State
   const [paymentConfig, setPaymentConfig] = useState<any>(null);
@@ -577,127 +573,41 @@ export default function CheckoutPage() {
     resolver: zodResolver(checkoutSchema),
   });
 
-  // Fetch user profile and locations on mount/auth
+  // Fetch user profile on mount/auth
   useEffect(() => {
-    if (session?.user && storeSettings.storeLat) {
-      setLoadingAddresses(true);
-      
-      // Load profile and locations concurrently
-      Promise.all([
-        fetch('/api/user/profile').then(r => r.json()).catch(() => null),
-        fetch('/api/user/locations').then(r => r.json()).catch(() => null)
-      ])
-      .then(([profileData, locs]) => {
-        let pName = session.user.name || '';
-        let pPhone = '';
-        if (profileData) {
-          if (profileData.phoneVerified === false) {
-            router.push('/setup-phone?callbackUrl=/checkout');
-            return;
-          }
-          if (profileData.name) pName = profileData.name;
-          if (profileData.phone) pPhone = profileData.phone;
-          if (profileData.points !== undefined) setUserPoints(profileData.points);
-          if (profileData.walletBalance !== undefined) setWalletBalance(profileData.walletBalance);
-          if (profileData.subscription) {
-            const isActive = profileData.subscription.status === 'ACTIVE' && new Date(profileData.subscription.expiresAt) > new Date();
-            const tier = profileData.subscription.tier;
-            setHasFreeDeliverySubscription(isActive && (tier === 'MATCHA_LATTE' || tier === 'GOLDEN_MATCHA'));
-          }
-        }
-        setProfileName(pName);
-        setProfilePhone(pPhone);
-        setOvoPhone(pPhone || '');
-
-        if (Array.isArray(locs)) {
-          setSavedAddresses(locs);
-          const defaultLoc = locs.find((l: any) => l.isDefault);
-          if (defaultLoc) {
-            setSelectedSavedAddressId(defaultLoc.id);
-            const sLat = storeSettings.storeLat ?? -7.756928;
-            const sLng = storeSettings.storeLng ?? 113.211502;
-            const distance = calculateDistance(sLat, sLng, defaultLoc.lat, defaultLoc.lng);
-            const fee = calculateDeliveryFee(distance, storeSettings.deliveryFeePerKm);
-            const withinRange = isWithinDeliveryRange(distance, storeSettings.maxDeliveryDistance);
-
-            const detailsArray = [];
-            if (defaultLoc.notes) detailsArray.push(`Catatan: ${defaultLoc.notes}`);
-            if (defaultLoc.recipient) detailsArray.push(`Penerima: ${defaultLoc.recipient}`);
-            if (defaultLoc.phone) detailsArray.push(`No. Telp: ${defaultLoc.phone}`);
-            const streetDetail = detailsArray.length > 0 ? detailsArray.join(', ') : 'Tidak ada detail tambahan';
-
-            setDeliveryAddress({
-              label: defaultLoc.name || defaultLoc.address.split(',')[0],
-              detail: defaultLoc.address,
-              streetDetail,
-              lat: defaultLoc.lat,
-              lng: defaultLoc.lng,
-              distance,
-              deliveryFee: withinRange ? fee : 0
-            });
-
-            if (!withinRange) {
-              setToast({ message: `Alamat utama "${defaultLoc.name}" di luar jangkauan (${distance.toFixed(1)} km)`, type: 'error' });
+    if (session?.user) {
+      fetch('/api/user/profile')
+        .then(r => r.json())
+        .then((profileData) => {
+          let pName = session.user.name || '';
+          let pPhone = '';
+          if (profileData) {
+            if (profileData.phoneVerified === false) {
+              router.push('/setup-phone?callbackUrl=/checkout');
+              return;
             }
-
-            // Always default to profile details first
-            setValue('name', pName);
-            setValue('phone', pPhone);
-          } else {
-            // No default location, so set name and phone to profile values
-            setValue('name', pName);
-            setValue('phone', pPhone);
+            if (profileData.name) pName = profileData.name;
+            if (profileData.phone) pPhone = profileData.phone;
+            if (profileData.points !== undefined) setUserPoints(profileData.points);
+            if (profileData.walletBalance !== undefined) setWalletBalance(profileData.walletBalance);
+            if (profileData.subscription) {
+              const isActive = profileData.subscription.status === 'ACTIVE' && new Date(profileData.subscription.expiresAt) > new Date();
+              const tier = profileData.subscription.tier;
+              setHasFreeDeliverySubscription(isActive && (tier === 'MATCHA_LATTE' || tier === 'GOLDEN_MATCHA'));
+            }
           }
-        } else {
-          // Fallback to profile values
+          setProfileName(pName);
+          setProfilePhone(pPhone);
+          setOvoPhone(pPhone || '');
           setValue('name', pName);
           setValue('phone', pPhone);
-        }
-      })
-      .catch(e => {
-        console.error("Error loading checkout profile/locations:", e);
-        if (session.user.name) setValue('name', session.user.name);
-      })
-      .finally(() => setLoadingAddresses(false));
+        })
+        .catch(e => {
+          console.error("Error loading checkout profile:", e);
+          if (session.user.name) setValue('name', session.user.name);
+        });
     }
-  }, [session?.user?.id, storeSettings.storeLat, storeSettings.storeLng, storeSettings.deliveryFeePerKm, storeSettings.maxDeliveryDistance, setValue]);
-
-  const handleSelectSavedAddress = (addrId: string) => {
-    const addr = savedAddresses.find((a: any) => a.id === addrId);
-    if (!addr) return;
-    
-    setSelectedSavedAddressId(addrId);
-
-    const sLat = storeSettings.storeLat ?? -7.756928;
-    const sLng = storeSettings.storeLng ?? 113.211502;
-    const distance = calculateDistance(sLat, sLng, addr.lat, addr.lng);
-    const fee = calculateDeliveryFee(distance, storeSettings.deliveryFeePerKm);
-    const withinRange = isWithinDeliveryRange(distance, storeSettings.maxDeliveryDistance);
-
-    const detailsArray = [];
-    if (addr.notes) detailsArray.push(`Catatan: ${addr.notes}`);
-    if (addr.recipient) detailsArray.push(`Penerima: ${addr.recipient}`);
-    if (addr.phone) detailsArray.push(`No. Telp: ${addr.phone}`);
-    const streetDetail = detailsArray.length > 0 ? detailsArray.join(', ') : 'Tidak ada detail tambahan';
-
-    setDeliveryAddress({
-      label: addr.name || addr.address.split(',')[0],
-      detail: addr.address,
-      streetDetail,
-      lat: addr.lat,
-      lng: addr.lng,
-      distance,
-      deliveryFee: withinRange ? fee : 0,
-    });
-
-    if (!withinRange) {
-      setToast({ message: `Alamat "${addr.name || 'Pilihan'}" berada di luar jangkauan pengiriman (${distance.toFixed(1)} km)`, type: 'error' });
-    }
-
-    // Always default to profile name and phone (Alamat Tersimpan perbaikan)
-    setValue('name', profileName);
-    setValue('phone', profilePhone);
-  };
+  }, [session?.user?.id, setValue]);
 
   const fetchVouchers = async () => {
     setLoadingVouchers(true);
@@ -1291,7 +1201,7 @@ export default function CheckoutPage() {
     setShowPaymentConfirmation(true);
   };
 
-  const confirmAndSubmitOrder = async () => {
+  const confirmAndSubmitOrder = async (verifiedPin?: string) => {
     if (!tempFormData || !canSubmit) return;
     if (orderType === 'DELIVERY' && (!pickupDate || !pickupTime)) {
       setToast({ message: 'Waktu pengiriman harus ditentukan', type: 'error' });
@@ -1301,8 +1211,14 @@ export default function CheckoutPage() {
       setToast({ message: `Saldo Arus Pay tidak mencukupi. Saldo Anda: ${formatRupiah(walletBalance)}, Tagihan: ${formatRupiah(grandTotal)}`, type: 'error' });
       return;
     }
+    if (paymentMethod === 'WALLET' && !verifiedPin) {
+      setShowPaymentConfirmation(false);
+      setShowArusPayPinModal(true);
+      return;
+    }
     setIsSubmitting(true);
     setShowPaymentConfirmation(false);
+    setShowArusPayPinModal(false);
 
     try {
       const payload = {
@@ -1320,6 +1236,7 @@ export default function CheckoutPage() {
         pickupTime: pickupTime || undefined,
         paymentMethod,
         paymentChannel: paymentMethod === 'DOKU' ? paymentChannel : undefined,
+        pin: paymentMethod === 'WALLET' ? verifiedPin : undefined,
         groupCartId: groupCartId || undefined,
         items: checkoutItems.map((item: any) => {
           const isMatcha = item.name.toLowerCase().includes('matcha') || item.name.toLowerCase().includes('green tea');
@@ -2309,7 +2226,7 @@ export default function CheckoutPage() {
                 {paymentMethod === 'COD' 
                   ? 'Bayar tunai langsung di kasir saat pesanan diambil atau diserahkan.' 
                   : paymentMethod === 'WALLET'
-                  ? 'Pembayaran otomatis memotong saldo Arus Pay Anda tanpa antre konfirmasi manual.'
+                  ? 'Pembayaran memotong saldo Arus Pay secara instan dan dilindungi verifikasi 6 angka PIN Arum Seduh Anda.'
                   : 'Scan kode QRIS dinamis menggunakan aplikasi E-Wallet atau Mobile Banking apa saja. Terverifikasi otomatis.'}
               </span>
             </div>
@@ -3567,7 +3484,6 @@ export default function CheckoutPage() {
             onClose={() => setIsMapOpen(false)}
             onLocationSelect={(data) => {
               setDeliveryAddress(data);
-              setSelectedSavedAddressId('');
               setIsMapOpen(false);
             }}
             initialLat={deliveryAddress?.lat}
@@ -3630,10 +3546,10 @@ export default function CheckoutPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={confirmAndSubmitOrder}
+                  onClick={() => confirmAndSubmitOrder()}
                   className="flex-1 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl text-xs font-extrabold shadow-md shadow-orange-500/20 transition-all active:scale-[0.98] cursor-pointer text-center"
                 >
-                  Konfirmasi & Bayar
+                  {paymentMethod === 'WALLET' ? 'Lanjut Masukkan PIN' : 'Konfirmasi & Bayar'}
                 </button>
               </div>
             </motion.div>
@@ -3750,6 +3666,14 @@ export default function CheckoutPage() {
         onClose={() => setIsTopUpOpen(false)}
         refreshWallet={refreshCheckoutWallet}
         showToast={(msg, type) => setToast({ message: msg, type })}
+      />
+
+      <ArusPayPinModal
+        isOpen={showArusPayPinModal}
+        onClose={() => setShowArusPayPinModal(false)}
+        amount={grandTotal}
+        description="Pembayaran Pesanan Arum Seduh"
+        onSuccess={(verifiedPin) => confirmAndSubmitOrder(verifiedPin)}
       />
     </div>
   );

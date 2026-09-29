@@ -97,13 +97,13 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
     // 6. Draw Content inside the Cream Card
     // Greeting
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#1E3F20';
+    ctx.fillStyle = '#9A3412';
     ctx.font = 'bold 30px system-ui, sans-serif';
-    ctx.fillText(`Nikmat Matcha Kamu, ${customerName}!`, 400, 235);
+    ctx.fillText(`Seduhan Spesialmu, ${customerName}!`, 400, 235);
 
     ctx.fillStyle = '#6B7280';
     ctx.font = '600 15px system-ui, sans-serif';
-    ctx.fillText('Pesanan premium kamu disiapkan dengan ramah lingkungan ✨', 400, 265);
+    ctx.fillText('Pesanan spesial kamu disiapkan dengan sepenuh hati', 400, 265);
 
     // Split Layout inside the card: Order Summary on Left, Referral QR on Right
     // Divider line
@@ -116,7 +116,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
 
     // --- LEFT COLUMN: Order Details ---
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#1A3F20';
+    ctx.fillStyle = '#9A3412';
     ctx.font = 'bold 16px system-ui, sans-serif';
     ctx.fillText('RINGKASAN MENU:', 120, 320);
 
@@ -129,13 +129,13 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
     });
 
     if (items.length > 3) {
-      ctx.fillStyle = '#8C6239';
+      ctx.fillStyle = '#EA580C';
       ctx.font = 'bold italic 14px system-ui, sans-serif';
       ctx.fillText(`...dan ${items.length - 3} item lainnya`, 120, itemY);
     }
 
     // Draw Price Total
-    ctx.fillStyle = '#8C6239';
+    ctx.fillStyle = '#EA580C';
     ctx.font = 'bold 22px system-ui, sans-serif';
     ctx.fillText(`Total: Rp ${total.toLocaleString('id-ID')}`, 120, 485);
 
@@ -145,9 +145,9 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
 
     // --- RIGHT COLUMN: QR Code & Referral Info ---
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#1A3F20';
+    ctx.fillStyle = '#9A3412';
     ctx.font = 'bold 15px system-ui, sans-serif';
-    ctx.fillText('DAPATKAN DRINK GRATIS!', 600, 320);
+    ctx.fillText('DAPATKAN MINUMAN GRATIS!', 600, 320);
 
     ctx.fillStyle = '#6B7280';
     ctx.font = '500 12px system-ui, sans-serif';
@@ -159,14 +159,14 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
     ctx.beginPath();
     ctx.roundRect(500, 385, 200, 200, 16);
     ctx.fill();
-    ctx.strokeStyle = '#EADFC9';
+    ctx.strokeStyle = '#FED7AA';
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
     // 7. Load and Draw the QR code Image
     const qrImg = new window.Image();
     qrImg.crossOrigin = 'anonymous';
-    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=1a3f20&data=${encodeURIComponent(getReferralLink())}`;
+    qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&color=9a3412&data=${encodeURIComponent(getReferralLink())}`;
     
     qrImg.onload = () => {
       ctx.drawImage(qrImg, 510, 395, 180, 180);
@@ -176,7 +176,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
 
     qrImg.onerror = () => {
       // Draw fallback text inside the box if QR API fails
-      ctx.fillStyle = '#1A3F20';
+      ctx.fillStyle = '#9A3412';
       ctx.font = 'bold 12px system-ui, sans-serif';
       ctx.fillText('QR CODE', 600, 470);
       ctx.fillText('SCAN LINK', 600, 490);
@@ -185,7 +185,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
 
     // 8. Footer Note
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.font = '600 13px system-ui, sans-serif';
     ctx.fillText('Arum Seduh - Bawa Tumblermu & Kurangi Sampah Plastik', 400, 715);
 
@@ -246,23 +246,23 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
   };
 
   return (
-    <div className="w-full bg-white border border-gray-100 rounded-[2rem] p-5 md:p-6 shadow-sm space-y-5 text-center mt-6">
+    <div className="w-full bg-white border border-orange-100 rounded-[2rem] p-5 md:p-6 shadow-sm space-y-5 text-center mt-6">
       <div className="space-y-1">
         <div className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 px-3.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border border-orange-200">
           <Sparkles className="w-3.5 h-3.5 fill-orange-500 stroke-none animate-pulse" /> Arum Seduh Moments Card
         </div>
-        <h3 className="font-serif text-lg font-black text-gray-900 mt-2">Bagikan Momen Spesialmu</h3>
-        <p className="text-xs text-gray-500 font-semibold max-w-[320px] mx-auto leading-relaxed">
+        <h3 className="font-serif text-lg font-black text-slate-900 mt-2">Bagikan Momen Spesialmu</h3>
+        <p className="text-xs text-slate-500 font-semibold max-w-[320px] mx-auto leading-relaxed">
           Unduh atau bagikan kartu moments pesananmu beserta QR code referral pribadimu untuk mendapatkan reward minuman gratis!
         </p>
       </div>
 
       {/* HTML5 Canvas Render */}
-      <div className="relative max-w-[320px] sm:max-w-[360px] mx-auto aspect-square overflow-hidden rounded-[2rem] border-2 border-[#D4A574]/40 shadow-md">
-        <canvas ref={canvasRef} className="w-full h-full object-contain bg-[#1E3F20]" />
+      <div className="relative max-w-[320px] sm:max-w-[360px] mx-auto aspect-square overflow-hidden rounded-[2rem] border-2 border-orange-200/80 shadow-md">
+        <canvas ref={canvasRef} className="w-full h-full object-contain bg-orange-900" />
         {isGenerating && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white space-y-2">
-            <div className="w-8 h-8 border-4 border-yellow-300 border-t-transparent rounded-full animate-spin" />
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm flex flex-col items-center justify-center text-white space-y-2">
+            <div className="w-8 h-8 border-4 border-amber-300 border-t-transparent rounded-full animate-spin" />
             <span className="text-[10px] font-black uppercase tracking-wider">Menyiapkan Moments Card...</span>
           </div>
         )}
@@ -273,7 +273,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
         <button
           onClick={handleShareNative}
           disabled={isGenerating}
-          className="py-3 px-4.5 bg-[#2E5A44] hover:bg-[#1E3F20] text-white text-xs font-bold rounded-2xl shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+          className="py-3 px-4.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-bold rounded-2xl shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
         >
           <Share2 className="w-4 h-4 shrink-0" />
           <span>Bagikan</span>
@@ -282,7 +282,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
         <button
           onClick={handleShareWA}
           disabled={isGenerating}
-          className="py-3 px-4.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-2xl shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+          className="py-3 px-4.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-2xl shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
         >
           <MessageCircle className="w-4 h-4 shrink-0" />
           <span>WhatsApp</span>
@@ -291,7 +291,7 @@ export function SocialShareCard({ customerName, orderId, total, items }: SocialS
         <button
           onClick={handleDownload}
           disabled={isGenerating}
-          className="py-3 px-4.5 border-2 border-[#D4A574]/60 hover:bg-[#FAF8F5] text-[#8C6239] text-xs font-black rounded-2xl shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
+          className="py-3 px-4.5 border-2 border-orange-200 hover:bg-orange-50/50 text-orange-700 text-xs font-black rounded-2xl shadow-sm flex items-center justify-center gap-1.5 transition-all active:scale-95 disabled:opacity-50"
         >
           <Download className="w-4 h-4 shrink-0" />
           <span>Unduh PNG</span>

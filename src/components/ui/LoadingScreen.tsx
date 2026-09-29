@@ -13,7 +13,7 @@ interface LoadingScreenProps {
 
 const BREWING_MESSAGES = [
   "Menghangatkan teko air...",
-  "Menakar racikan matcha premium...",
+  "Menakar racikan seduhan pilihan Arum Seduh...",
   "Menyeduh kebaikan rasa...",
   "Mengocok busa susu hingga lembut...",
   "Menyaring esensi kemurnian...",

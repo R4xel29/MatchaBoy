@@ -35,11 +35,18 @@ export async function POST(req: NextRequest) {
         const giftCard = await prisma.$transaction(async (tx) => {
             const sender = await tx.user.findUnique({
                 where: { id: session.user.id },
-                select: { walletBalance: true, name: true }
+                select: { walletBalance: true, name: true, pin: true }
             });
 
             if (!sender) {
                 throw new Error("Pengirim tidak ditemukan");
+            }
+
+            if (sender.pin && sender.pin.trim() !== "") {
+                const submittedPin = typeof body.pin === "string" ? body.pin.trim() : "";
+                if (!submittedPin || submittedPin !== sender.pin.trim()) {
+                    throw new Error("PIN Arum Seduh tidak sesuai untuk pembayaran Arus Pay.");
+                }
             }
 
             if (sender.walletBalance < parsedAmount) {

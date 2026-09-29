@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShieldCheck, ArrowLeft, Delete } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function SetupPinClient() {
@@ -98,8 +98,8 @@ export default function SetupPinClient() {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] flex flex-col justify-between pt-16 pb-safe">
-      <div className="flex-1 flex flex-col items-center px-6">
+    <div className="min-h-screen bg-[#FFFBF5] flex flex-col justify-between pt-14 pb-safe">
+      <div className="flex-1 flex flex-col items-center px-6 max-w-md w-full mx-auto">
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
@@ -112,20 +112,28 @@ export default function SetupPinClient() {
             {step === 'confirm' && (
               <button
                 onClick={handleBack}
-                className="self-start mb-4 text-sm text-[#B48A5E] font-medium flex items-center gap-1 active:opacity-70"
+                className="self-start mb-4 text-sm text-orange-600 font-bold flex items-center gap-1 active:opacity-70"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                <ArrowLeft className="w-4 h-4" />
                 Ubah PIN
               </button>
             )}
 
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center mb-4 shadow-md shadow-orange-500/20">
+              <ShieldCheck className="w-7 h-7" />
+            </div>
+
+            <span className="text-[10px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 border border-orange-200/70 px-3 py-1 rounded-full mb-2">
+              Arum Seduh • Proteksi Arus Pay
+            </span>
+
             <h1 className="text-2xl font-bold text-gray-900 mb-2 font-serif">
               {step === 'create' ? 'Buat PIN' : 'Ulangi PIN'}
             </h1>
-            <p className="text-sm text-gray-500 text-center max-w-[260px] leading-relaxed mb-10">
+            <p className="text-sm text-gray-500 text-center max-w-[280px] leading-relaxed mb-8">
               {step === 'create'
-                ? 'Masukkan 6 angka untuk menjaga keamanan akun Arus kamu'
-                : 'Masukkan lagi 6 angka PIN'}
+                ? 'Masukkan 6 angka untuk menjaga keamanan akun Arum Seduh dan melindungi setiap pembayaran Arus Pay kamu'
+                : 'Masukkan lagi 6 angka PIN Arum Seduh kamu'}
             </p>
 
             <div className="flex justify-center gap-4 mb-6 w-full">
@@ -135,8 +143,16 @@ export default function SetupPinClient() {
                   initial={false}
                   animate={{
                     scale: index < currentPin.length ? 1 : 0.9,
-                    borderColor: error ? '#EF4444' : (index < currentPin.length ? '#B48A5E' : '#D1D5DB'),
-                    backgroundColor: error ? '#EF4444' : (index < currentPin.length ? '#B48A5E' : 'transparent'),
+                    borderColor: error
+                      ? '#EF4444'
+                      : index < currentPin.length
+                      ? '#F97316'
+                      : '#D1D5DB',
+                    backgroundColor: error
+                      ? '#EF4444'
+                      : index < currentPin.length
+                      ? '#F97316'
+                      : 'transparent',
                   }}
                   transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                   className="w-10 h-10 rounded-full border-2 flex items-center justify-center"
@@ -170,20 +186,20 @@ export default function SetupPinClient() {
 
         {loading && (
           <div className="mt-8 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" />
+            <Loader2 className="w-6 h-6 animate-spin text-orange-500" />
           </div>
         )}
       </div>
 
       {/* Number Pad */}
-      <div className="w-full px-8 pb-12">
+      <div className="w-full max-w-md mx-auto px-8 pb-12">
         <div className="grid grid-cols-3 gap-y-6 gap-x-6">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
             <button
               key={num}
               onClick={() => handleNumberClick(num.toString())}
               disabled={loading}
-              className="text-3xl font-semibold text-gray-800 flex items-center justify-center h-16 active:bg-gray-100 rounded-full transition-colors disabled:opacity-40"
+              className="text-3xl font-semibold text-gray-800 flex items-center justify-center h-16 active:bg-orange-50 rounded-full transition-colors disabled:opacity-40"
             >
               {num}
             </button>
@@ -192,23 +208,20 @@ export default function SetupPinClient() {
           <button
             onClick={() => handleNumberClick('0')}
             disabled={loading}
-            className="text-3xl font-semibold text-gray-800 flex items-center justify-center h-16 active:bg-gray-100 rounded-full transition-colors disabled:opacity-40"
+            className="text-3xl font-semibold text-gray-800 flex items-center justify-center h-16 active:bg-orange-50 rounded-full transition-colors disabled:opacity-40"
           >
             0
           </button>
           <button
             onClick={handleBackspace}
             disabled={loading}
-            className="flex items-center justify-center h-16 active:bg-gray-100 rounded-full transition-colors text-gray-600 disabled:opacity-40"
+            className="flex items-center justify-center h-16 active:bg-orange-50 rounded-full transition-colors text-gray-600 disabled:opacity-40"
           >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M9 4L2 12L9 20H21C21.5304 20 22.0391 19.7893 22.4142 19.4142C22.7893 19.0391 23 18.5304 23 18V6C23 5.46957 22.7893 4.96086 22.4142 4.58579C22.0391 4.21071 21.5304 4 21 4H9Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M18 9L12 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M12 9L18 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <Delete className="w-7 h-7" />
           </button>
         </div>
       </div>
     </div>
   );
 }
+
