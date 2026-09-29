@@ -43,10 +43,14 @@ describe('Tier 1.20: Interactive Community & Official Stories (20-Day Retention,
     expect(content).toContain('invalidateStoriesCache');
   });
 
-  it('T1.20.5: StoryBar on Beranda allows users to create stories, like stories, and view who liked', () => {
+  it('T1.20.5: StoryBar on Beranda opens full-screen Instagram-style camera studio (Photo, Video, Text, Filters, Flip Camera), likes, and likers list', () => {
     const storyBarPath = path.resolve(process.cwd(), 'src/components/storefront/StoryBar.tsx');
     const content = fs.readFileSync(storyBarPath, 'utf8');
     expect(content).toContain('Buat Story');
+    expect(content).toContain('getUserMedia');
+    expect(content).toContain('handleCapturePhoto');
+    expect(content).toContain('handleToggleVideoRecording');
+    expect(content).toContain('CAMERA_FILTERS');
     expect(content).toContain('handleToggleLike');
     expect(content).toContain('Disukai Oleh');
     expect(content).toContain('compressStoryMedia');

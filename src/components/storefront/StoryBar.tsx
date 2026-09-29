@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,7 +11,6 @@ import {
   ShoppingBag,
   Heart,
   Plus,
-  Upload,
   Video,
   Image as ImageIcon,
   Users,
@@ -23,6 +22,13 @@ import {
   CheckCircle2,
   Play,
   Pause,
+  Camera,
+  RefreshCw,
+  RotateCcw,
+  Type,
+  Send,
+  Zap,
+  Palette,
 } from 'lucide-react';
 import Image from 'next/image';
 import { useToast } from '@/components/ui/Toast';
@@ -60,6 +66,21 @@ export interface StoryItem {
   likes?: StoryLikeUser[];
 }
 
+const CAMERA_FILTERS = [
+  { id: 'none', name: 'Normal', css: 'none' },
+  { id: 'warm', name: 'Arum Warm', css: 'sepia(0.22) saturate(1.35) contrast(1.05) brightness(1.03)' },
+  { id: 'golden', name: 'Golden Hour', css: 'sepia(0.35) saturate(1.5) brightness(1.06)' },
+  { id: 'vivid', name: 'Vivid Crisp', css: 'saturate(1.4) contrast(1.12)' },
+  { id: 'mono', name: 'Classic B&W', css: 'grayscale(1) contrast(1.18)' },
+];
+
+const TEXT_BG_THEMES = [
+  'from-orange-600 via-amber-500 to-yellow-500',
+  'from-stone-900 via-amber-950 to-orange-900',
+  'from-amber-500 via-orange-500 to-red-500',
+  'from-orange-400 via-amber-300 to-yellow-200',
+];
+
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 KB';
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -92,23 +113,39 @@ export function StoryBar() {
   const [viewedStories, setViewedStories] = useState<Set<string>>(new Set());
   const [mounted, setMounted] = useState(false);
 
-  // Playback & interaction states
+  // Story Viewer states
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [showLikersModal, setShowLikersModal] = useState(false);
   const [likingStoryId, setLikingStoryId] = useState<string | null>(null);
   const [deletingStoryId, setDeletingStoryId] = useState<string | null>(null);
 
-  // Create Story Modal states
+  // Instagram-Style Full Camera Story Creator states
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [cameraMode, setCameraMode] = useState<'PHOTO' | 'VIDEO' | 'TEXT'>('PHOTO');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [cameraReady, setCameraReady] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [activeFilterIndex, setActiveFilterIndex] = useState(0);
+  const [textBgIndex, setTextBgIndex] = useState(0);
+  const [flashEffect, setFlashEffect] = useState(false);
+
+  // Live Video Recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+
+  // Overlay Text & Caption states
+  const [showTextOverlayInput, setShowTextOverlayInput] = useState(false);
+  const [overlayText, setOverlayText] = useState('');
   const [storyTitle, setStoryTitle] = useState('');
+
+  // Captured / Compressed Media states
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [uploadedMediaUrl, setUploadedMediaUrl] = useState<string | null>(null);
+  const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [mediaType, setMediaType] = useState<'IMAGE' | 'VIDEO'>('IMAGE');
   const [mediaDuration, setMediaDuration] = useState<number>(5000);
   const [compressing, setCompressing] = useState(false);
   const [compressionProgress, setCompressionProgress] = useState(0);
-  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [compressionStats, setCompressionStats] = useState<{
     originalSize: number;
@@ -118,6 +155,11 @@ export function StoryBar() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoPlayerRef = useRef<HTMLVideoElement>(null);
+  const liveVideoRef = useRef<HTMLVideoElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<BlobPart[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -152,6 +194,88 @@ export function StoryBar() {
     fetchStories();
   }, []);
 
+  // Stop camera stream helper
+  const stopCameraStream = useCallback(() => {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {}
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setCameraReady(false);
+    setIsRecording(false);
+  }, []);
+
+  // Start live camera stream when in camera studio mode
+  const startCameraStream = useCallback(async () => {
+    if (!isCreateOpen || previewUrl || cameraMode === 'TEXT') {
+      stopCameraStream();
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Kamera tidak tersedia di perangkat/browser ini.');
+      return;
+    }
+
+    stopCameraStream();
+    setCameraError(null);
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode,
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
+        },
+        audio: cameraMode === 'VIDEO',
+      });
+
+      mediaStreamRef.current = stream;
+      if (liveVideoRef.current) {
+        liveVideoRef.current.srcObject = stream;
+        await liveVideoRef.current.play().catch(() => {});
+      }
+      setCameraReady(true);
+    } catch {
+      // Fallback coba video saja jika mikrofon ditolak saat mode VIDEO
+      try {
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode },
+          audio: false,
+        });
+        mediaStreamRef.current = fallbackStream;
+        if (liveVideoRef.current) {
+          liveVideoRef.current.srcObject = fallbackStream;
+          await liveVideoRef.current.play().catch(() => {});
+        }
+        setCameraReady(true);
+      } catch {
+        setCameraError(
+          'Akses kamera belum diizinkan. Izinkan akses kamera di browser atau gunakan mode Cerita Teks / Galeri di bawah.'
+        );
+      }
+    }
+  }, [isCreateOpen, previewUrl, cameraMode, facingMode, stopCameraStream]);
+
+  useEffect(() => {
+    if (isCreateOpen && !previewUrl && cameraMode !== 'TEXT') {
+      startCameraStream();
+    } else {
+      stopCameraStream();
+    }
+    return () => {
+      stopCameraStream();
+    };
+  }, [isCreateOpen, previewUrl, cameraMode, facingMode, startCameraStream, stopCameraStream]);
+
   // Lock body scroll & handle keyboard navigation while story modal or create modal is active
   useEffect(() => {
     if (activeStoryIndex === null && !isCreateOpen) return;
@@ -161,7 +285,10 @@ export function StoryBar() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isCreateOpen) {
-        if (e.key === 'Escape') setIsCreateOpen(false);
+        if (e.key === 'Escape' && !submitting) {
+          stopCameraStream();
+          setIsCreateOpen(false);
+        }
         return;
       }
       if (showLikersModal) {
@@ -190,7 +317,7 @@ export function StoryBar() {
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [activeStoryIndex, stories.length, isCreateOpen, showLikersModal]);
+  }, [activeStoryIndex, stories.length, isCreateOpen, showLikersModal, submitting, stopCameraStream]);
 
   const markStoryAsViewed = (id: string) => {
     setViewedStories((prev) => {
@@ -292,7 +419,6 @@ export function StoryBar() {
     const currentLikes = story.likes || [];
     const alreadyLiked = currentLikes.some((l) => l.userId === currentUserId);
 
-    // Optimistic update
     const optimisticLikes: StoryLikeUser[] = alreadyLiked
       ? currentLikes.filter((l) => l.userId !== currentUserId)
       : [
@@ -327,7 +453,6 @@ export function StoryBar() {
         throw new Error(data.error || 'Gagal menyukai story');
       }
     } catch (err: any) {
-      // Revert optimistic update
       setStories((prev) =>
         prev.map((s) => (s.id === story.id ? { ...s, likes: currentLikes } : s))
       );
@@ -359,36 +484,291 @@ export function StoryBar() {
     }
   };
 
+  // Open Instagram-Style Full Camera Studio
   const handleOpenCreateStory = () => {
     if (status !== 'authenticated' || !session?.user) {
       showToast('Silakan masuk terlebih dahulu untuk membuat Story Anda.', 'error');
       return;
     }
     setStoryTitle('');
+    setOverlayText('');
+    setShowTextOverlayInput(false);
     setPreviewUrl(null);
-    setUploadedMediaUrl(null);
+    setCapturedFile(null);
     setCompressionStats(null);
+    setCameraMode('PHOTO');
     setMediaType('IMAGE');
     setMediaDuration(5000);
+    setActiveFilterIndex(0);
     setIsCreateOpen(true);
   };
 
+  // Instant Photo Capture from Live Camera -> WebP
+  const handleCapturePhoto = async () => {
+    const video = liveVideoRef.current;
+    if (!video || !cameraReady) return;
+
+    setFlashEffect(true);
+    setTimeout(() => setFlashEffect(false), 180);
+
+    const width = video.videoWidth || 1080;
+    const height = video.videoHeight || 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const currentFilter = CAMERA_FILTERS[activeFilterIndex];
+    if (currentFilter && currentFilter.css !== 'none') {
+      ctx.filter = currentFilter.css;
+    }
+
+    // Mirror horizontal jika menggunakan kamera depan (selfie)
+    if (facingMode === 'user') {
+      ctx.save();
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, width, height);
+      ctx.restore();
+    } else {
+      ctx.drawImage(video, 0, 0, width, height);
+    }
+
+    ctx.filter = 'none';
+
+    // Jika ada teks overlay pada layar, gambar ke kanvas juga
+    if (overlayText.trim()) {
+      const fontSize = Math.round(width * 0.052);
+      ctx.font = `900 ${fontSize}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const textWidth = Math.min(width * 0.85, ctx.measureText(overlayText).width + 48);
+      const boxHeight = fontSize * 1.9;
+      const boxX = (width - textWidth) / 2;
+      const boxY = height * 0.5 - boxHeight / 2;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.62)';
+      ctx.beginPath();
+      ctx.roundRect(boxX, boxY, textWidth, boxHeight, 24);
+      ctx.fill();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(overlayText.trim(), width / 2, height * 0.5, width * 0.8);
+    }
+
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) return;
+        const rawShot = new File([blob], `camera-story-${Date.now()}.webp`, {
+          type: 'image/webp',
+        });
+        const compressed = await compressStoryMedia(rawShot);
+        stopCameraStream();
+        setCapturedFile(compressed.file);
+        setPreviewUrl(URL.createObjectURL(compressed.file));
+        setMediaType('IMAGE');
+        setMediaDuration(5000);
+        setCompressionStats({
+          originalSize: Math.round(width * height * 0.45),
+          compressedSize: compressed.compressedSize,
+          format: 'WEBP',
+        });
+      },
+      'image/webp',
+      0.82
+    );
+  };
+
+  // Capture Story Card in TEXT Mode -> WebP
+  const handleCaptureTextStory = async () => {
+    const textToRender = overlayText.trim() || storyTitle.trim() || 'Momen Segar di Arum Seduh';
+    const width = 1080;
+    const height = 1920;
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const grad = ctx.createLinearGradient(0, 0, width, height);
+    if (textBgIndex === 0) {
+      grad.addColorStop(0, '#EA580C');
+      grad.addColorStop(0.5, '#F59E0B');
+      grad.addColorStop(1, '#EAB308');
+    } else if (textBgIndex === 1) {
+      grad.addColorStop(0, '#1C1917');
+      grad.addColorStop(0.5, '#451A03');
+      grad.addColorStop(1, '#7C2D12');
+    } else if (textBgIndex === 2) {
+      grad.addColorStop(0, '#F59E0B');
+      grad.addColorStop(0.5, '#EA580C');
+      grad.addColorStop(1, '#DC2626');
+    } else {
+      grad.addColorStop(0, '#FB923C');
+      grad.addColorStop(0.5, '#FBBF24');
+      grad.addColorStop(1, '#FEF08A');
+    }
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '900 68px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Word wrap
+    const words = textToRender.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    for (const w of words) {
+      const testLine = currentLine ? `${currentLine} ${w}` : w;
+      if (ctx.measureText(testLine).width > width * 0.78) {
+        if (currentLine) lines.push(currentLine);
+        currentLine = w;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+
+    const lineHeight = 92;
+    const startY = height / 2 - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((line, idx) => {
+      ctx.fillText(line, width / 2, startY + idx * lineHeight);
+    });
+
+    if (!storyTitle.trim()) {
+      setStoryTitle(textToRender);
+    }
+
+    canvas.toBlob(
+      async (blob) => {
+        if (!blob) return;
+        const webpFile = new File([blob], `text-story-${Date.now()}.webp`, {
+          type: 'image/webp',
+        });
+        setCapturedFile(webpFile);
+        setPreviewUrl(URL.createObjectURL(webpFile));
+        setMediaType('IMAGE');
+        setMediaDuration(5000);
+        setCompressionStats({
+          originalSize: webpFile.size,
+          compressedSize: webpFile.size,
+          format: 'WEBP',
+        });
+      },
+      'image/webp',
+      0.85
+    );
+  };
+
+  // Start / Stop Live Video Recording from Camera Stream
+  const handleToggleVideoRecording = () => {
+    if (isRecording) {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      setIsRecording(false);
+      return;
+    }
+
+    const stream = mediaStreamRef.current;
+    if (!stream) return;
+
+    const candidateMimes = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4',
+    ];
+    const mimeType =
+      candidateMimes.find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) ||
+      '';
+
+    try {
+      recordedChunksRef.current = [];
+      const recorder = new MediaRecorder(stream, {
+        ...(mimeType ? { mimeType } : {}),
+        videoBitsPerSecond: 1_200_000, // Langsung terkompresi ~1.2 Mbps
+      });
+
+      mediaRecorderRef.current = recorder;
+      const startTime = Date.now();
+      setRecordingSeconds(0);
+      setIsRecording(true);
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          recordedChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const elapsedMs = Math.min(Math.max(Date.now() - startTime, 3000), 20000);
+        const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const contentType = mimeType.includes('mp4') ? 'video/mp4' : 'video/webm';
+        const blob = new Blob(recordedChunksRef.current, { type: contentType });
+        const videoFile = new File([blob], `camera-video-${Date.now()}.${ext}`, {
+          type: contentType,
+        });
+
+        stopCameraStream();
+        setCapturedFile(videoFile);
+        setPreviewUrl(URL.createObjectURL(videoFile));
+        setMediaType('VIDEO');
+        setMediaDuration(elapsedMs);
+        setCompressionStats({
+          originalSize: Math.round(videoFile.size * 1.65),
+          compressedSize: videoFile.size,
+          format: ext.toUpperCase(),
+        });
+      };
+
+      recorder.start(250);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingSeconds((prev) => {
+          if (prev >= 19) {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+              mediaRecorderRef.current.stop();
+            }
+            if (recordingTimerRef.current) {
+              clearInterval(recordingTimerRef.current);
+              recordingTimerRef.current = null;
+            }
+            setIsRecording(false);
+            return 20;
+          }
+          return prev + 1;
+        });
+      }, 1000);
+    } catch {
+      showToast('Perekaman video langsung tidak didukung di browser ini.', 'error');
+    }
+  };
+
+  // Pick from Device Gallery (Bottom-Left Thumbnail Button in Camera View)
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawFile = e.target.files?.[0];
     if (!rawFile) return;
 
+    stopCameraStream();
     setCompressing(true);
     setCompressionProgress(5);
     setCompressionStats(null);
 
     try {
-      // 1. Kompresi media di sisi klien (Gambar -> WebP, Video -> Kompresi MP4/WebM)
       const compressed = await compressStoryMedia(rawFile, (pct) => {
         setCompressionProgress(pct);
       });
 
-      const localPreview = URL.createObjectURL(compressed.file);
-      setPreviewUrl(localPreview);
+      setCapturedFile(compressed.file);
+      setPreviewUrl(URL.createObjectURL(compressed.file));
       setMediaType(compressed.mediaType);
       setMediaDuration(compressed.durationMs);
       setCompressionStats({
@@ -396,70 +776,56 @@ export function StoryBar() {
         compressedSize: compressed.compressedSize,
         format: compressed.format.toUpperCase(),
       });
-      setCompressing(false);
-
-      // 2. Unggah ke server (Server juga memastikan gambar dikonversi ke WebP via Sharp)
-      setUploading(true);
-      const formData = new FormData();
-      formData.append('file', compressed.file);
-
-      const res = await fetch('/api/stories/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || 'Gagal mengunggah media');
-      }
-
-      setUploadedMediaUrl(data.url);
-      setMediaType(data.mediaType || compressed.mediaType);
-      if (data.compressedSize) {
-        setCompressionStats({
-          originalSize: compressed.originalSize,
-          compressedSize: data.compressedSize,
-          format: (data.format || compressed.format).toUpperCase(),
-        });
-      }
-      showToast(
-        compressed.mediaType === 'IMAGE'
-          ? 'Gambar berhasil dikompresi ke format WebP!'
-          : 'Video berhasil dikompresi & siap dibagikan!',
-        'success'
-      );
     } catch (err: any) {
-      console.error(err);
-      showToast(err.message || 'Gagal memproses media Story', 'error');
-      setPreviewUrl(null);
-      setUploadedMediaUrl(null);
+      showToast(err.message || 'Gagal memproses media', 'error');
     } finally {
       setCompressing(false);
-      setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleCreateStorySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!uploadedMediaUrl) {
-      showToast('Silakan pilih foto atau video terlebih dahulu.', 'error');
-      return;
-    }
-    if (!storyTitle.trim()) {
-      showToast('Silakan tulis cerita atau caption singkat Anda.', 'error');
+  const handleRetake = () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setCapturedFile(null);
+    setCompressionStats(null);
+    setRecordingSeconds(0);
+  };
+
+  // Publish Story (Upload compressed WebP/Video -> Save 20-Day Story)
+  const handleCreateStorySubmit = async () => {
+    if (!capturedFile) {
+      showToast('Ambil foto atau rekam video terlebih dahulu.', 'error');
       return;
     }
 
+    const finalTitle =
+      storyTitle.trim() ||
+      overlayText.trim() ||
+      `Momen ${session?.user?.name?.split(' ')[0] || 'Segar'} di Arum Seduh`;
+
     setSubmitting(true);
     try {
+      const formData = new FormData();
+      formData.append('file', capturedFile);
+
+      const uploadRes = await fetch('/api/stories/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const uploadData = await uploadRes.json();
+
+      if (!uploadRes.ok || !uploadData.url) {
+        throw new Error(uploadData.error || 'Gagal mengunggah media Story');
+      }
+
       const res = await fetch('/api/stories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: storyTitle.trim(),
-          mediaUrl: uploadedMediaUrl,
-          mediaType,
+          title: finalTitle,
+          mediaUrl: uploadData.url,
+          mediaType: uploadData.mediaType || mediaType,
           duration: mediaDuration,
           daysActive: 20, // Tersimpan selama 20 hari
         }),
@@ -470,12 +836,13 @@ export function StoryBar() {
       }
 
       setStories((prev) => [data.story, ...prev]);
+      stopCameraStream();
       setIsCreateOpen(false);
-      showToast('Story Anda berhasil dibagikan untuk 20 hari ke depan!', 'success');
+      showToast('Story Anda berhasil tayang di Beranda selama 20 hari!', 'success');
       setActiveStoryIndex(0);
       setProgress(0);
     } catch (err: any) {
-      showToast(err.message || 'Gagal membuat Story', 'error');
+      showToast(err.message || 'Gagal membagikan Story', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -493,6 +860,7 @@ export function StoryBar() {
     (currentStory.userId === session.user.id || (session.user as any).role === 'ADMIN');
   const isOfficialStory =
     !currentStory?.user || currentStory.user.role === 'ADMIN';
+  const activeFilter = CAMERA_FILTERS[activeFilterIndex] || CAMERA_FILTERS[0];
 
   return (
     <>
@@ -524,16 +892,16 @@ export function StoryBar() {
           <button
             type="button"
             onClick={handleOpenCreateStory}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-[10px] font-black shadow-sm hover:shadow transition-all active:scale-95 cursor-pointer"
           >
-            <Plus className="w-3 h-3" />
+            <Camera className="w-3 h-3" />
             <span>Buat Story</span>
           </button>
         </div>
 
         {/* Stories Horizontal Scroll */}
         <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-0.5 pt-0.5">
-          {/* Tombol Tambah Story Pengguna */}
+          {/* Tombol Kamera Story Pengguna (Instagram-style "Cerita Anda") */}
           <button
             type="button"
             onClick={handleOpenCreateStory}
@@ -547,10 +915,10 @@ export function StoryBar() {
                     alt={session.user.name || 'Buat Story'}
                     fill
                     sizes="60px"
-                    className="object-cover opacity-85"
+                    className="object-cover opacity-90"
                   />
                 ) : (
-                  <Plus className="w-6 h-6 text-orange-600" />
+                  <Camera className="w-6 h-6 text-orange-600" />
                 )}
               </div>
               <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white flex items-center justify-center border-2 border-white shadow">
@@ -606,7 +974,6 @@ export function StoryBar() {
                     )}
                   </div>
 
-                  {/* Indikator Video atau Jumlah Like */}
                   {story.mediaType === 'VIDEO' && (
                     <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-stone-900/80 text-amber-300 flex items-center justify-center border border-white/40">
                       <Play className="w-2.5 h-2.5 fill-amber-300" />
@@ -629,7 +996,7 @@ export function StoryBar() {
         </div>
       </div>
 
-      {/* FULL SCREEN INTERACTIVE STORIES OVERLAY (Portaled to document.body to escape parent stacking contexts) */}
+      {/* FULL SCREEN INTERACTIVE STORIES VIEWER OVERLAY (Portaled to document.body) */}
       {mounted &&
         createPortal(
           <AnimatePresence>
@@ -645,7 +1012,6 @@ export function StoryBar() {
                   setActiveStoryIndex(null);
                 }}
               >
-                {/* Story Visual Frame */}
                 <motion.div
                   initial={{ scale: 0.96, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
@@ -654,7 +1020,6 @@ export function StoryBar() {
                   onClick={(e) => e.stopPropagation()}
                   className="relative w-full h-full md:h-[90vh] md:max-h-[820px] max-w-md md:rounded-3xl bg-stone-900 overflow-hidden flex flex-col justify-between shadow-2xl border-0 md:border md:border-white/10"
                 >
-                  {/* Story Media (Image WebP or Compressed Video) */}
                   <div className="absolute inset-0 z-10">
                     {currentStory.mediaType === 'VIDEO' ? (
                       <video
@@ -677,12 +1042,9 @@ export function StoryBar() {
                         sizes="(max-width: 768px) 100vw, 450px"
                       />
                     )}
-
-                    {/* Ambient Shadow gradient at top and bottom */}
                     <div className="absolute inset-0 bg-gradient-to-b from-black/75 via-transparent to-black/90 pointer-events-none" />
                   </div>
 
-                  {/* Left/Right click trigger areas inside the story frame */}
                   <div
                     className="absolute inset-y-20 left-0 w-1/3 z-20 cursor-w-resize"
                     onClick={handlePrev}
@@ -694,7 +1056,7 @@ export function StoryBar() {
                     aria-label="Cerita selanjutnya"
                   />
 
-                  {/* TOP STORY INDICATORS (Progress Bars) */}
+                  {/* TOP STORY INDICATORS */}
                   <div className="relative z-30 pt-4 px-4 space-y-3 pointer-events-none">
                     <div className="flex gap-1.5">
                       {stories.map((s, idx) => {
@@ -712,7 +1074,6 @@ export function StoryBar() {
                       })}
                     </div>
 
-                    {/* STORY CREATOR INFO & CONTROLS */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
                         <div className="relative w-9 h-9 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 border border-amber-200 flex items-center justify-center text-xs text-white font-black shadow-md overflow-hidden">
@@ -804,7 +1165,7 @@ export function StoryBar() {
                     </div>
                   </div>
 
-                  {/* BOTTOM CONTENT INFO, LIKE ACTION & LIKERS LIST, AND CALL TO ACTION */}
+                  {/* BOTTOM CONTENT INFO, LIKE ACTION & LIKERS LIST */}
                   <div className="relative z-30 pb-6 px-5 space-y-3.5 pointer-events-none">
                     <div className="text-left space-y-1">
                       <h4 className="font-serif font-black text-lg text-white leading-snug drop-shadow-[0_1.5px_4px_rgba(0,0,0,0.8)]">
@@ -816,7 +1177,6 @@ export function StoryBar() {
                       </p>
                     </div>
 
-                    {/* BARIS INTERAKSI LIKE & DAFTAR SIAPA SAJA YANG LIKE */}
                     <div className="flex items-center justify-between gap-3 pointer-events-auto bg-black/45 backdrop-blur-md border border-white/15 rounded-2xl px-3.5 py-2.5">
                       <button
                         type="button"
@@ -883,7 +1243,6 @@ export function StoryBar() {
                       </motion.button>
                     </div>
 
-                    {/* Call To Action Button (Direct menu redirection) */}
                     {currentStory.linkUrl && (
                       <motion.button
                         type="button"
@@ -905,7 +1264,7 @@ export function StoryBar() {
                     )}
                   </div>
 
-                  {/* DRAWER / MODAL DAFTAR ORANG YANG MENYUKAI STORY */}
+                  {/* DRAWER DAFTAR ORANG YANG MENYUKAI STORY */}
                   <AnimatePresence>
                     {showLikersModal && (
                       <motion.div
@@ -993,7 +1352,7 @@ export function StoryBar() {
           document.body
         )}
 
-      {/* MODAL BUAT STORY BARU OLEH USER (Portaled to document.body) */}
+      {/* INSTAGRAM-STYLE FULL CAMERA STORY STUDIO OVERLAY (Portaled to document.body) */}
       {mounted &&
         createPortal(
           <AnimatePresence>
@@ -1002,169 +1361,433 @@ export function StoryBar() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-                onClick={() => !uploading && !submitting && setIsCreateOpen(false)}
+                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black select-none"
               >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,video/mp4,video/webm,video/quicktime"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+
+                {/* 9:16 Full-Screen Instagram Camera & Preview Frame */}
                 <motion.div
-                  initial={{ scale: 0.95, opacity: 0 }}
+                  initial={{ scale: 0.96, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
-                  exit={{ scale: 0.95, opacity: 0 }}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-amber-100 overflow-hidden"
+                  exit={{ scale: 0.96, opacity: 0 }}
+                  className="relative w-full h-full md:h-[92vh] md:max-h-[840px] max-w-md md:rounded-3xl bg-stone-950 overflow-hidden flex flex-col justify-between shadow-2xl border-0 md:border md:border-white/15"
                 >
-                  <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-5 h-5" />
-                      <div>
-                        <h3 className="text-sm font-black">Buat Story Arum Seduh</h3>
-                        <p className="text-[10px] text-amber-100 font-semibold">
-                          Tampil di Beranda semua pengguna selama 20 hari
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsCreateOpen(false)}
-                      className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 cursor-pointer"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleCreateStorySubmit} className="p-5 space-y-4">
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,video/mp4,video/webm,video/quicktime"
-                      onChange={handleFileChange}
-                      className="hidden"
-                    />
-
-                    {/* Area Upload / Preview Media */}
-                    {!previewUrl ? (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={compressing || uploading}
-                        className="w-full h-56 rounded-2xl border-2 border-dashed border-amber-300 bg-orange-50/40 hover:bg-orange-50/80 transition-all flex flex-col items-center justify-center gap-2.5 p-4 cursor-pointer"
-                      >
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md">
-                          <Upload className="w-6 h-6" />
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs font-black text-gray-900">
-                            Pilih Foto atau Video Story
-                          </p>
-                          <p className="text-[11px] text-gray-500 mt-0.5">
-                            Foto otomatis diubah ke WebP & video dikompresi hemat kuota
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-amber-200 text-[10px] font-bold text-orange-600">
-                            <ImageIcon className="w-3 h-3" /> Foto (Auto WebP)
-                          </span>
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-amber-200 text-[10px] font-bold text-amber-700">
-                            <Video className="w-3 h-3" /> Video (Auto Compress)
-                          </span>
-                        </div>
-                      </button>
-                    ) : (
-                      <div className="relative w-full h-64 rounded-2xl overflow-hidden bg-stone-900 border border-amber-200">
-                        {mediaType === 'VIDEO' ? (
-                          <video
-                            src={previewUrl}
-                            controls
-                            playsInline
-                            className="w-full h-full object-contain"
-                          />
-                        ) : (
-                          <Image
-                            src={previewUrl}
-                            alt="Preview Story"
-                            fill
-                            className="object-cover"
-                          />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={compressing || uploading}
-                          className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/60 backdrop-blur-md text-white text-[11px] font-bold hover:bg-black/80 cursor-pointer border border-white/20"
-                        >
-                          Ganti Media
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Status Kompresi & Konversi WebP */}
-                    {(compressing || uploading) && (
-                      <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 space-y-1.5">
-                        <div className="flex items-center justify-between text-xs font-bold text-orange-700">
-                          <span className="flex items-center gap-1.5">
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            {compressing
-                              ? `Mengompresi media (${compressionProgress}%)...`
-                              : 'Mengunggah media terkompresi...'}
-                          </span>
-                          <span>{compressing ? `${compressionProgress}%` : ''}</span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-orange-200 overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-200"
-                            style={{ width: `${compressing ? compressionProgress : 100}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {compressionStats && !compressing && !uploading && (
-                      <div className="flex items-center justify-between px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200/80 text-[11px] font-bold text-amber-900">
-                        <span className="flex items-center gap-1.5">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-orange-600" />
-                          <span>
-                            Teroptimasi ke {compressionStats.format}
-                          </span>
-                        </span>
-                        <span className="text-orange-600 font-black">
-                          {formatBytes(compressionStats.originalSize)} → {formatBytes(compressionStats.compressedSize)}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Input Judul / Caption Story */}
-                    <div>
-                      <label className="block text-xs font-black text-gray-800 mb-1.5">
-                        Caption / Cerita Singkat
-                      </label>
-                      <input
-                        type="text"
-                        value={storyTitle}
-                        onChange={(e) => setStoryTitle(e.target.value)}
-                        placeholder="Contoh: Segarnya seduhan sore ini di Arum Seduh!"
-                        maxLength={140}
-                        required
-                        className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  {/* Shutter Flash Animation */}
+                  <AnimatePresence>
+                    {flashEffect && (
+                      <motion.div
+                        initial={{ opacity: 0.9 }}
+                        animate={{ opacity: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.18 }}
+                        className="absolute inset-0 z-50 bg-white pointer-events-none"
                       />
-                    </div>
+                    )}
+                  </AnimatePresence>
 
-                    <button
-                      type="submit"
-                      disabled={compressing || uploading || submitting || !uploadedMediaUrl}
-                      className="w-full py-3 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black shadow-lg shadow-orange-500/25 hover:opacity-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer transition-all"
-                    >
-                      {submitting ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Membagikan Story...</span>
-                        </>
+                  {/* VIEWPORT AREA: LIVE CAMERA OR TEXT CANVAS OR CAPTURED PREVIEW */}
+                  <div className="absolute inset-0 z-10 overflow-hidden">
+                    {!previewUrl ? (
+                      cameraMode === 'TEXT' ? (
+                        <div
+                          className={`w-full h-full bg-gradient-to-br ${TEXT_BG_THEMES[textBgIndex]} flex flex-col items-center justify-center p-8 text-center`}
+                        >
+                          <textarea
+                            value={overlayText}
+                            onChange={(e) => setOverlayText(e.target.value)}
+                            placeholder="Ketik cerita atau momen Anda di sini..."
+                            maxLength={140}
+                            rows={4}
+                            className="w-full bg-transparent text-white placeholder:text-white/60 font-serif font-black text-2xl sm:text-3xl text-center focus:outline-none resize-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
+                          />
+                        </div>
                       ) : (
                         <>
-                          <Sparkles className="w-4 h-4" />
-                          <span>Bagikan Story (Aktif 20 Hari)</span>
+                          <video
+                            ref={liveVideoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            style={{
+                              filter: activeFilter.css,
+                              transform: facingMode === 'user' ? 'scaleX(-1)' : 'none',
+                            }}
+                            className="w-full h-full object-cover"
+                          />
+
+                          {/* Fallback jika kamera belum diizinkan / tidak ada */}
+                          {cameraError && (
+                            <div className="absolute inset-0 bg-gradient-to-b from-stone-900 via-stone-950 to-black flex flex-col items-center justify-center p-8 text-center space-y-4">
+                              <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-xl shadow-orange-500/25">
+                                <Camera className="w-8 h-8" />
+                              </div>
+                              <p className="text-xs font-bold text-gray-200 max-w-xs leading-relaxed">
+                                {cameraError}
+                              </p>
+                              <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={startCameraStream}
+                                  className="px-4 py-2 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-black flex items-center gap-1.5 border border-white/20 cursor-pointer"
+                                >
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                  <span>Aktifkan Kamera</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => fileInputRef.current?.click()}
+                                  className="px-4 py-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black flex items-center gap-1.5 shadow-lg cursor-pointer"
+                                >
+                                  <ImageIcon className="w-3.5 h-3.5" />
+                                  <span>Buka Galeri</span>
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </>
-                      )}
+                      )
+                    ) : mediaType === 'VIDEO' ? (
+                      <video
+                        src={previewUrl}
+                        autoPlay
+                        loop
+                        playsInline
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Image
+                        src={previewUrl}
+                        alt="Story Preview"
+                        fill
+                        className="object-cover"
+                      />
+                    )}
+
+                    {/* Floating Text Sticker Overlay (IG-style) */}
+                    {cameraMode !== 'TEXT' && (showTextOverlayInput || overlayText) && (
+                      <div className="absolute inset-x-6 top-1/2 -translate-y-1/2 z-30 flex flex-col items-center">
+                        {showTextOverlayInput ? (
+                          <div className="w-full bg-black/75 backdrop-blur-md border border-amber-400/50 rounded-2xl p-3 flex items-center gap-2">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={overlayText}
+                              onChange={(e) => setOverlayText(e.target.value)}
+                              placeholder="Tulis teks di atas Story..."
+                              maxLength={80}
+                              className="flex-1 bg-transparent text-white text-sm font-black text-center focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowTextOverlayInput(false)}
+                              className="px-3 py-1 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black cursor-pointer"
+                            >
+                              Selesai
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShowTextOverlayInput(true)}
+                            className="px-4 py-2 rounded-2xl bg-black/65 backdrop-blur-md text-white font-black text-sm shadow-lg border border-white/15 cursor-pointer"
+                          >
+                            {overlayText}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-transparent to-black/85 pointer-events-none" />
+                  </div>
+
+                  {/* TOP CAMERA CONTROLS BAR */}
+                  <div className="relative z-30 pt-4 px-4 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        stopCameraStream();
+                        setIsCreateOpen(false);
+                      }}
+                      disabled={submitting}
+                      aria-label="Tutup kamera story"
+                      className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/65 border border-white/15 cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
                     </button>
-                  </form>
+
+                    {/* Recording Timer or 20-Day Badge */}
+                    {isRecording ? (
+                      <div className="px-3.5 py-1.5 rounded-full bg-red-600/90 backdrop-blur-md text-white text-xs font-black flex items-center gap-2 shadow-lg animate-pulse">
+                        <span className="w-2 h-2 rounded-full bg-white" />
+                        <span>00:{String(recordingSeconds).padStart(2, '0')} / 00:20</span>
+                      </div>
+                    ) : compressionStats ? (
+                      <div className="px-3 py-1 rounded-full bg-black/55 backdrop-blur-md border border-amber-400/40 text-amber-300 text-[10px] font-black flex items-center gap-1.5">
+                        <Zap className="w-3 h-3 text-orange-400" />
+                        <span>
+                          {compressionStats.format} • {formatBytes(compressionStats.compressedSize)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="px-3 py-1 rounded-full bg-black/45 backdrop-blur-md border border-white/15 text-amber-200 text-[10px] font-black flex items-center gap-1.5">
+                        <Sparkles className="w-3 h-3 text-orange-400" />
+                        <span>Arum Story • Tayang 20 Hari</span>
+                      </div>
+                    )}
+
+                    {/* Flip Camera or Background Theme Switcher */}
+                    {!previewUrl ? (
+                      cameraMode === 'TEXT' ? (
+                        <button
+                          type="button"
+                          onClick={() => setTextBgIndex((prev) => (prev + 1) % TEXT_BG_THEMES.length)}
+                          className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/65 border border-white/15 cursor-pointer"
+                          title="Ganti Warna Latar"
+                        >
+                          <Palette className="w-5 h-5" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'))
+                          }
+                          aria-label="Putar kamera"
+                          className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/65 border border-white/15 cursor-pointer"
+                        >
+                          <RefreshCw className="w-5 h-5" />
+                        </button>
+                      )
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleRetake}
+                        disabled={submitting}
+                        title="Ambil Ulang"
+                        className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/65 border border-white/15 cursor-pointer"
+                      >
+                        <RotateCcw className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* RIGHT FLOATING IG TOOLS RAIL (Text & Filter) */}
+                  {!isRecording && (
+                    <div className="relative z-30 self-end pr-4 flex flex-col gap-3">
+                      {cameraMode !== 'TEXT' && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTextOverlayInput((prev) => !prev)}
+                          className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-white flex items-center justify-center hover:bg-black/70 border border-white/20 cursor-pointer shadow-lg"
+                          title="Tambah Teks (Aa)"
+                        >
+                          <Type className="w-5 h-5" />
+                        </button>
+                      )}
+
+                      {!previewUrl && cameraMode !== 'TEXT' && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setActiveFilterIndex((prev) => (prev + 1) % CAMERA_FILTERS.length)
+                          }
+                          className="w-10 h-10 rounded-full bg-black/45 backdrop-blur-md text-amber-300 flex items-center justify-center hover:bg-black/70 border border-amber-300/30 cursor-pointer shadow-lg"
+                          title={`Filter: ${activeFilter.name}`}
+                        >
+                          <Sparkles className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* BOTTOM CAMERA SHUTTER DOCK OR PREVIEW SHARE BAR */}
+                  <div className="relative z-30 pb-6 px-5 space-y-4">
+                    {compressing && (
+                      <div className="bg-black/70 backdrop-blur-md border border-orange-400/40 rounded-2xl p-3 text-xs font-bold text-amber-200 flex items-center justify-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin text-orange-400" />
+                        <span>Mengompresi media ({compressionProgress}%)...</span>
+                      </div>
+                    )}
+
+                    {!previewUrl ? (
+                      <>
+                        {/* Filter Pill Indicator */}
+                        {cameraMode !== 'TEXT' && (
+                          <div className="flex justify-center">
+                            <span className="px-3 py-0.5 rounded-full bg-black/45 backdrop-blur-md text-[10px] font-black text-amber-200 border border-white/10">
+                              Filter: {activeFilter.name}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Shutter Row: Gallery (Left) — Big IG Shutter (Center) — Flip Camera (Right) */}
+                        <div className="flex items-center justify-between px-4">
+                          {/* Tombol Galeri Pojok Kiri Bawah */}
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isRecording || compressing}
+                            className="w-12 h-12 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-md border-2 border-white/30 text-white flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all active:scale-95"
+                            title="Pilih dari Galeri"
+                          >
+                            <ImageIcon className="w-5 h-5" />
+                            <span className="text-[8px] font-black uppercase">Galeri</span>
+                          </button>
+
+                          {/* TOMBOL SHUTTER UTAMA ALA INSTAGRAM */}
+                          {cameraMode === 'PHOTO' && (
+                            <button
+                              type="button"
+                              onClick={
+                                cameraReady
+                                  ? handleCapturePhoto
+                                  : () => fileInputRef.current?.click()
+                              }
+                              aria-label="Ambil Foto"
+                              className="w-20 h-20 rounded-full p-1.5 border-4 border-amber-400 flex items-center justify-center shadow-[0_0_25px_rgba(249,115,22,0.5)] active:scale-90 transition-transform cursor-pointer"
+                            >
+                              <div className="w-full h-full rounded-full bg-white hover:bg-amber-50 transition-colors" />
+                            </button>
+                          )}
+
+                          {cameraMode === 'VIDEO' && (
+                            <button
+                              type="button"
+                              onClick={
+                                cameraReady
+                                  ? handleToggleVideoRecording
+                                  : () => fileInputRef.current?.click()
+                              }
+                              aria-label={isRecording ? 'Hentikan Rekaman' : 'Rekam Video'}
+                              className={`w-20 h-20 rounded-full p-1.5 border-4 ${
+                                isRecording
+                                  ? 'border-red-500 animate-pulse'
+                                  : 'border-orange-500'
+                              } flex items-center justify-center shadow-[0_0_25px_rgba(249,115,22,0.5)] active:scale-90 transition-transform cursor-pointer`}
+                            >
+                              <div
+                                className={`transition-all duration-200 ${
+                                  isRecording
+                                    ? 'w-8 h-8 rounded-lg bg-red-500'
+                                    : 'w-full h-full rounded-full bg-gradient-to-tr from-orange-600 to-amber-500'
+                                }`}
+                              />
+                            </button>
+                          )}
+
+                          {cameraMode === 'TEXT' && (
+                            <button
+                              type="button"
+                              onClick={handleCaptureTextStory}
+                              aria-label="Buat Story Teks"
+                              className="w-20 h-20 rounded-full p-1.5 border-4 border-amber-300 flex items-center justify-center shadow-[0_0_25px_rgba(249,115,22,0.5)] active:scale-90 transition-transform cursor-pointer"
+                            >
+                              <div className="w-full h-full rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 text-white flex items-center justify-center">
+                                <CheckCircle2 className="w-8 h-8" />
+                              </div>
+                            </button>
+                          )}
+
+                          {/* Tombol Flip Kamera Pojok Kanan Bawah */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              cameraMode === 'TEXT'
+                                ? setTextBgIndex((prev) => (prev + 1) % TEXT_BG_THEMES.length)
+                                : setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'))
+                            }
+                            disabled={isRecording}
+                            className="w-12 h-12 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-md border-2 border-white/30 text-white flex flex-col items-center justify-center gap-0.5 cursor-pointer transition-all active:scale-95"
+                          >
+                            <RefreshCw className="w-5 h-5" />
+                            <span className="text-[8px] font-black uppercase">
+                              {cameraMode === 'TEXT' ? 'Warna' : 'Putar'}
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* Mode Selector Pills (FOTO • VIDEO • CERITA TEKS) */}
+                        <div className="flex items-center justify-center gap-2 pt-1">
+                          {[
+                            { id: 'PHOTO', label: 'FOTO', icon: Camera },
+                            { id: 'VIDEO', label: 'VIDEO', icon: Video },
+                            { id: 'TEXT', label: 'TEKS', icon: Type },
+                          ].map((mode) => {
+                            const Icon = mode.icon;
+                            const active = cameraMode === mode.id;
+                            return (
+                              <button
+                                key={mode.id}
+                                type="button"
+                                disabled={isRecording}
+                                onClick={() => setCameraMode(mode.id as any)}
+                                className={`px-4 py-1.5 rounded-full text-[11px] font-black tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                                  active
+                                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg'
+                                    : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                                }`}
+                              >
+                                <Icon className="w-3.5 h-3.5" />
+                                <span>{mode.label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    ) : (
+                      /* LAYAR PREVIEW SIAP BAGIKAN ALA INSTAGRAM STORY */
+                      <div className="space-y-3">
+                        <div className="bg-black/55 backdrop-blur-md border border-white/20 rounded-2xl px-4 py-2.5 flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                          <input
+                            type="text"
+                            value={storyTitle}
+                            onChange={(e) => setStoryTitle(e.target.value)}
+                            placeholder="Tambahkan caption cerita Anda..."
+                            maxLength={140}
+                            className="w-full bg-transparent text-white placeholder:text-gray-300 text-xs font-semibold focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={handleRetake}
+                            disabled={submitting}
+                            className="px-4 py-3.5 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-md text-white text-xs font-black flex items-center justify-center gap-1.5 border border-white/20 cursor-pointer"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            <span>Ulangi</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleCreateStorySubmit}
+                            disabled={submitting || compressing}
+                            className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-black shadow-xl shadow-orange-500/30 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all disabled:opacity-50"
+                          >
+                            {submitting ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Membagikan Story...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="w-4 h-4" />
+                                <span>Bagikan ke Story (20 Hari)</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </motion.div>
               </motion.div>
             )}
