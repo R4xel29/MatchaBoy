@@ -83,6 +83,10 @@ model User {
   sopSubmissions         SopSubmission[] @relation("UserSopSubmissions")
   reviewedSopSubmissions SopSubmission[] @relation("AdminReviewedSopSubmissions")
 
+  // Stories & Likes
+  stories                Story[]
+  storyLikes             StoryLike[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1057,15 +1061,34 @@ model CustomRecipe {
 }
 
 model Story {
-  id        String   @id @default(cuid())
+  id        String      @id @default(cuid())
   title     String
-  mediaUrl  String   // Image or video URL
-  mediaType String   @default("IMAGE") // IMAGE, VIDEO
-  linkUrl   String?  // Optional redirect URL (e.g. to a specific promo or product)
-  isActive  Boolean  @default(true)
-  duration  Int      @default(5000) // milliseconds to display
+  mediaUrl  String      // Image (WebP) or compressed video URL
+  mediaType String      @default("IMAGE") // IMAGE, VIDEO
+  linkUrl   String?     // Optional redirect URL (e.g. to a specific promo or product)
+  isActive  Boolean     @default(true)
+  duration  Int         @default(5000) // milliseconds to display
+  userId    String?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  likes     StoryLike[]
+  createdAt DateTime    @default(now())
+  expiresAt DateTime    // 20 days expiry
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model StoryLike {
+  id        String   @id @default(cuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
-  expiresAt DateTime // 24 hours expiry
+
+  @@unique([userId, storyId])
+  @@index([storyId])
+  @@index([userId])
 }
 
 model BgmSong {
