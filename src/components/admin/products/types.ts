@@ -96,6 +96,8 @@ export interface ModifiersData {
   sugarDoses?: SugarDosesConfig | null;
   matchaDoses?: MatchaDosesConfig | null;
   shotDoses?: ShotDosesConfig | null;
+  detailImage?: string | null;
+  bannerImage?: string | null;
 }
 
 export interface ProductItem {

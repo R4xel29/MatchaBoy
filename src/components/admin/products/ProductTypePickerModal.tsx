@@ -24,37 +24,39 @@ export function ProductTypePickerModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 bg-stone-950/60 backdrop-blur-sm"
           onClick={onClose}
         />
 
         {/* Modal Content */}
         <motion.div
-          initial={{ scale: 0.95, opacity: 0, y: 20 }}
+          initial={{ scale: 0.96, opacity: 0, y: 16 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 20 }}
-          transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-          className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200 overflow-hidden z-10 p-6"
+          exit={{ scale: 0.96, opacity: 0, y: 16 }}
+          transition={{ type: 'spring', damping: 26, stiffness: 320 }}
+          className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-stone-200/90 overflow-hidden z-10 p-6 text-left"
         >
           {/* Close Button */}
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 p-2 rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
+            className="absolute top-5 right-5 p-2 rounded-xl text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
 
           {/* Header */}
-          <div className="text-center mb-6 pt-2">
-            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-3 shadow-inner">
+          <div className="flex items-center gap-3.5 mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 shrink-0">
               <Sparkles className="w-6 h-6" />
             </div>
-            <h3 className="font-heading font-extrabold text-xl text-stone-900">
-              Pilih Tipe Produk Baru
-            </h3>
-            <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
-              Sistem akan otomatis menyesuaikan opsi takaran (gula, es, matcha) sesuai jenis menu.
-            </p>
+            <div>
+              <h3 className="font-heading font-extrabold text-lg text-stone-900">
+                Tambah Menu Baru Arum Seduh
+              </h3>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Pilih jenis menu untuk menyesuaikan form varian & kustomisasi secara otomatis.
+              </p>
+            </div>
           </div>
 
           {/* Selection Cards */}
@@ -63,69 +65,71 @@ export function ProductTypePickerModal({
             <button
               type="button"
               onClick={() => onSelectType('minuman')}
-              className="w-full group p-4 rounded-2xl border-2 border-stone-100 hover:border-orange-500 bg-stone-50/50 hover:bg-orange-50/30 transition-all flex items-center justify-between text-left shadow-sm hover:shadow-md"
+              className="w-full group p-4 rounded-2xl border border-stone-200/90 hover:border-orange-400 bg-stone-50/40 hover:bg-orange-50/40 transition-all flex items-center justify-between text-left shadow-xs hover:shadow-md cursor-pointer"
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-md shadow-orange-500/20 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform shrink-0">
                   <CupSoda className="w-6 h-6" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-stone-900 group-hover:text-orange-600 transition-colors flex items-center gap-1.5">
-                    Minuman (Beverage)
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-extrabold">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold text-sm text-stone-900 group-hover:text-orange-600 transition-colors">
+                      Minuman (Beverage)
+                    </h4>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-extrabold border border-orange-200/60">
                       Kustomisasi Lengkap
                     </span>
-                  </h4>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Dilengkapi pengaturan tingkat gula, es, intensitas matcha, dan espresso shot.
+                  </div>
+                  <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                    Dilengkapi opsi ukuran cup, level es, kemanisan gula, takaran matcha & espresso shot.
                   </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-stone-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
+              <ArrowRight className="w-4 h-4 text-stone-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
             </button>
 
             {/* 2. Makanan / Pastry */}
             <button
               type="button"
               onClick={() => onSelectType('makanan')}
-              className="w-full group p-4 rounded-2xl border-2 border-stone-100 hover:border-amber-500 bg-stone-50/50 hover:bg-amber-50/30 transition-all flex items-center justify-between text-left shadow-sm hover:shadow-md"
+              className="w-full group p-4 rounded-2xl border border-stone-200/90 hover:border-amber-400 bg-stone-50/40 hover:bg-amber-50/40 transition-all flex items-center justify-between text-left shadow-xs hover:shadow-md cursor-pointer"
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-600 to-amber-700 text-white flex items-center justify-center shadow-md shadow-amber-600/20 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform shrink-0">
                   <Utensils className="w-6 h-6" />
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-stone-900 group-hover:text-amber-700 transition-colors">
                     Makanan, Pastry & Snack
                   </h4>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Form simpel tanpa opsi es/gula, cocok untuk pastry, cake, cookies, dan makanan berat.
+                  <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                    Form ringkas tanpa opsi es/gula, cocok untuk croissant, roti bakar, kue, dan makanan.
                   </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-stone-300 group-hover:text-amber-600 group-hover:translate-x-1 transition-all" />
+              <ArrowRight className="w-4 h-4 text-stone-300 group-hover:text-amber-600 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
             </button>
 
             {/* 3. Paket Combo / Bundle */}
             <button
               type="button"
               onClick={() => onSelectType('combo')}
-              className="w-full group p-4 rounded-2xl border-2 border-stone-100 hover:border-emerald-500 bg-stone-50/50 hover:bg-emerald-50/30 transition-all flex items-center justify-between text-left shadow-sm hover:shadow-md"
+              className="w-full group p-4 rounded-2xl border border-stone-200/90 hover:border-orange-500 bg-stone-50/40 hover:bg-orange-50/30 transition-all flex items-center justify-between text-left shadow-xs hover:shadow-md cursor-pointer"
             >
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 group-hover:scale-105 transition-transform">
+                <div className="w-12 h-12 rounded-2xl bg-stone-900 text-amber-400 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform shrink-0">
                   <Layers className="w-6 h-6" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-stone-900 group-hover:text-emerald-700 transition-colors">
+                  <h4 className="font-bold text-sm text-stone-900 group-hover:text-orange-600 transition-colors">
                     Paket Combo & Bundling
                   </h4>
-                  <p className="text-xs text-stone-500 mt-0.5">
-                    Kombinasi beberapa produk dengan kalkulator diskon bundle khusus.
+                  <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                    Gabungan beberapa menu sekaligus dengan kalkulator potongan harga paket.
                   </p>
                 </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-stone-300 group-hover:text-emerald-600 group-hover:translate-x-1 transition-all" />
+              <ArrowRight className="w-4 h-4 text-stone-300 group-hover:text-orange-600 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
             </button>
           </div>
         </motion.div>

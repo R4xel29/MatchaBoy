@@ -427,7 +427,7 @@ export default function StorefrontClient({
         const promo = getActivePromo(p)!;
         return {
           id: `flash-sale-${p.id}`,
-          image: p.image || '/hero/hero-1.jpg',
+          image: p.modifiers?.bannerImage || p.modifiers?.detailImage || p.image || '/hero/hero-1.jpg',
           alt: `Flash Sale ${p.name}`,
           headline: `Flash Sale: ${p.name}`,
           subheadline: `Nikmati harga spesial hanya ${formatRupiah(promo.promoPrice)} (Hemat ${formatRupiah(
@@ -438,6 +438,18 @@ export default function StorefrontClient({
           endDate: promo.endDate,
         };
       });
+
+    const productBannerSlides = products
+      .filter((p: Product) => Boolean(p.modifiers?.bannerImage) && getActivePromo(p) === null)
+      .map((p: Product) => ({
+        id: `product-banner-${p.id}`,
+        image: p.modifiers!.bannerImage!,
+        alt: p.name,
+        headline: p.name,
+        subheadline: p.description || `Menu pilihan spesial di Arum Seduh — ${formatRupiah(p.price)}`,
+        isFlashSale: false,
+        product: p,
+      }));
 
     const baseBanners =
       banners.length > 0
@@ -459,7 +471,7 @@ export default function StorefrontClient({
             },
           ];
 
-    return [...flashSaleSlides, ...baseBanners];
+    return [...flashSaleSlides, ...productBannerSlides, ...baseBanners];
   }, [banners, products]);
 
   useEffect(() => {
@@ -800,13 +812,13 @@ export default function StorefrontClient({
               return (
                 <div
                   onClick={() => {
-                    if (slide?.isFlashSale && (slide as any).product) {
+                    if ((slide as any)?.product) {
                       handleProductClick((slide as any).product);
                     }
                   }}
                   className={cn(
                     'relative w-full h-full overflow-hidden select-none',
-                    slide?.isFlashSale && 'cursor-pointer active:scale-[0.99] transition-transform duration-300'
+                    (slide as any)?.product && 'cursor-pointer active:scale-[0.99] transition-transform duration-300'
                   )}
                 >
                   <Image

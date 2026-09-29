@@ -49,6 +49,8 @@ export interface Product {
         defaultEspressoShot?: number;
         espressoShotPrice?: number;
         espressoShots?: { name: string; price: number; label?: string; shots?: number }[];
+        detailImage?: string | null;
+        bannerImage?: string | null;
     };
 }
 

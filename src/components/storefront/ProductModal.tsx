@@ -825,11 +825,11 @@ export function ProductModal({
             <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-12 overflow-y-auto md:overflow-hidden">
               {/* Left Column on Desktop / Top Hero on Mobile */}
               <div className="md:col-span-5 md:border-r md:border-amber-100/80 md:bg-amber-50/25 md:overflow-y-auto scrollbar-hide flex flex-col shrink-0 md:shrink">
-                {/* Product Image */}
+                {/* Product Image (Detail Image if set, otherwise cropped Display Image) */}
                 <div className="relative w-full aspect-[16/10] md:aspect-[4/3] bg-amber-50 shrink-0 overflow-hidden">
-                  {product.image ? (
+                  {(product.modifiers?.detailImage || product.image) ? (
                     <Image
-                      src={product.image}
+                      src={product.modifiers?.detailImage || product.image}
                       alt={product.name}
                       fill
                       sizes="(max-width: 768px) 100vw, 400px"
