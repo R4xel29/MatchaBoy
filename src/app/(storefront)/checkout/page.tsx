@@ -13,7 +13,7 @@ import {
   ChevronDown, ChevronUp, ChevronRight, Trash2, Plus, Minus,
   ShoppingBag, Truck, X, ArrowRight, Store, Clock, AlertTriangle, MapPin,
   Leaf, Ticket, Coins, CheckCircle2, XCircle, Loader2, Building2, QrCode, Wallet, Check, Coffee, Utensils, Users,
-  Sparkles, ShieldCheck, Receipt
+  Sparkles, ShieldCheck, Receipt, Gift
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 const MapPicker = dynamic(() => import('@/components/checkout/MapPicker').then(m => m.MapPicker), { ssr: false });
@@ -996,7 +996,7 @@ export default function CheckoutPage() {
   // Persist applied voucher code to localStorage
   useEffect(() => {
     if (typeof window !== 'undefined' && isVoucherRestored) {
-      if (appliedVoucher) {
+      if (appliedVoucher?.code) {
         localStorage.setItem('arumseduh_applied_voucher_code', appliedVoucher.code);
       } else {
         localStorage.removeItem('arumseduh_applied_voucher_code');

@@ -247,6 +247,7 @@ describe('Tier 1.19: Arus Pay Top-Up Bug Fixes, Security & Admin Alignment', () 
     expect(checkout).toContain('Klaim Promo Gratis');
     expect(checkout).toContain('Klaim & Pakai');
     expect(checkout).toContain('items: checkoutItems');
+    expect(checkout).toContain('Sparkles, ShieldCheck, Receipt, Gift');
     expect(checkout.includes('Tidak ada voucher pack baru untuk diklaim')).toBe(false);
 
     // 4. VoucherDetailClient & ClaimVoucherClient adhere to Arum Seduh Orange/Amber & Lucide icons (zero green, zero OS emojis)
