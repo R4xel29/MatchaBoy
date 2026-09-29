@@ -75,6 +75,11 @@ type OrderShape = {
   id: string;
   date: string;
   items: string;
+  itemCount?: number;
+  orderType?: string;
+  paymentMethod?: string;
+  queueNumber?: number | null;
+  tableNumber?: string | null;
   total: number;
   status: string;
 };
@@ -156,11 +161,10 @@ type LeaderboardData = {
   ecoChampions: LeaderboardEntry[];
 };
 
-type SectionType = 'menu' | 'orders' | 'favorites' | 'addresses' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral' | 'tickets' | 'help-center' | 'auto-reorder' | 'quests' | 'leaderboard';
+type SectionType = 'menu' | 'orders' | 'favorites' | 'notifications' | 'settings' | 'loyalty' | 'vouchers' | 'referral' | 'tickets' | 'help-center' | 'auto-reorder' | 'quests' | 'leaderboard';
 
 const profileCache: {
   favorites?: any[];
-  addresses?: any[];
   storeSettings?: any;
   referees?: any[];
   vouchers?: any[];
@@ -168,6 +172,11 @@ const profileCache: {
   tickets?: any[];
   helpArticles?: any[];
 } = {};
+
+const sanitizeCsMessage = (raw?: string | null, fallback = 'Halo Arus, saya ingin bertanya...') => {
+  if (!raw || !raw.trim()) return fallback;
+  return raw.replace(/matcha\s*boy/gi, 'Arus').replace(/Arum Seduh/gi, 'Arus');
+};
 
 export default function ProfileClient({
   user: initialUser,
@@ -252,7 +261,7 @@ export default function ProfileClient({
     if (searchParams.get('edit') === 'true') {
       setIsEditingProfile(true);
     }
-    if (sectionParam && ['menu', 'orders', 'favorites', 'addresses', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral', 'tickets', 'help-center', 'auto-reorder', 'quests', 'leaderboard'].includes(sectionParam)) {
+    if (sectionParam && ['menu', 'orders', 'favorites', 'notifications', 'settings', 'loyalty', 'vouchers', 'referral', 'tickets', 'help-center', 'auto-reorder', 'quests', 'leaderboard'].includes(sectionParam)) {
       setActiveSection(sectionParam);
       
       // If it's loyalty and there's a tab, we might want to scroll
@@ -298,7 +307,6 @@ export default function ProfileClient({
     { icon: Ticket, label: 'Voucher Saya', id: 'vouchers', badge: vouchers.filter(v => !v.isUsed).length > 0 ? vouchers.filter(v => !v.isUsed).length.toString() : null },
     { icon: Package, label: 'Pesanan Saya', id: 'orders', badge: activeOrdersCount > 0 ? activeOrdersCount.toString() : null },
     { icon: Clock, label: 'Pemesanan Otomatis', id: 'auto-reorder', badge: null },
-    { icon: MapPin, label: 'Alamat Tersimpan', id: 'addresses', badge: null },
     { icon: Bell, label: 'Notifikasi', id: 'notifications', badge: unreadCount > 0 ? unreadCount.toString() : null },
     { icon: ClipboardList, label: 'Lapor Masalah', id: 'tickets', badge: null },
     { icon: MessageCircle, label: 'Layanan WhatsApp', id: 'whatsapp', badge: null },
@@ -319,7 +327,6 @@ export default function ProfileClient({
     switch (activeSection) {
       case 'orders': return 'Riwayat Pesanan';
       case 'favorites': return 'Favorit Saya';
-      case 'addresses': return 'Alamat Tersimpan';
       case 'notifications': return 'Notifikasi';
       case 'settings': return 'Pengaturan';
       case 'loyalty': return 'Poin Saya';
@@ -423,7 +430,7 @@ export default function ProfileClient({
                       <Coins className="w-4 h-4 text-white" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[9px] text-amber-700/70 font-bold uppercase tracking-wider leading-none">💎 Loyalty</p>
+                      <p className="text-[9px] text-amber-700/70 font-bold uppercase tracking-wider leading-none">Loyalty</p>
                       <p className="text-xs font-black text-amber-900 leading-none">
                         {user.isGuest ? '-' : user.points} <span className="text-[8px] text-amber-600 font-bold">pts</span>
                       </p>
@@ -444,7 +451,7 @@ export default function ProfileClient({
                       <Leaf className="w-4 h-4 text-white" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[9px] text-emerald-700/70 font-bold uppercase tracking-wider leading-none">🌿 Eco</p>
+                      <p className="text-[9px] text-emerald-700/70 font-bold uppercase tracking-wider leading-none">Eco</p>
                       <p className="text-xs font-black text-emerald-900 leading-none">
                         {user.isGuest ? '-' : (user.tumblerCount || 0)}<span className="text-[8px] text-emerald-600 font-bold">/{user.currentTumblerGoal || 10}</span>
                       </p>
@@ -465,7 +472,7 @@ export default function ProfileClient({
                       <Award className="w-4 h-4 text-[#D4A574]" />
                     </div>
                     <div className="space-y-0.5">
-                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider leading-none truncate max-w-[90px]">🏅 Level</p>
+                      <p className="text-[9px] text-gray-500 font-bold uppercase tracking-wider leading-none truncate max-w-[90px]">Level</p>
                       <p className="text-[10px] font-black text-gray-800 leading-none truncate max-w-[90px]">{user.isGuest ? '-' : (user.arusLevel || 'Tunas Arus')}</p>
                     </div>
                   </button>
@@ -555,7 +562,8 @@ export default function ProfileClient({
                       if (item.id === 'whatsapp') {
                         if (storeSettings?.whatsappNumber) {
                           const cleanNumber = storeSettings.whatsappNumber.replace(/[^0-9]/g, '');
-                          const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Arum Seduh, saya ingin bertanya...')}`;
+                          const csText = sanitizeCsMessage(storeSettings.whatsappMessage, 'Halo Arus, saya ingin bertanya...');
+                          const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(csText)}`;
                           window.open(waUrl, '_blank');
                         } else {
                           showToast("Layanan WhatsApp sedang tidak aktif", "error");
@@ -566,20 +574,20 @@ export default function ProfileClient({
                         window.dispatchEvent(new PopStateEvent('popstate'));
                       }
                     }}
-                    className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-[#B48A5E]/5 rounded-2xl transition-all active:scale-[0.99] group"
+                    className="w-full flex items-center gap-4 px-4 py-3.5 hover:bg-orange-50/60 rounded-2xl transition-all active:scale-[0.99] group"
                   >
-                    <div className="w-10 h-10 rounded-2xl bg-[#FFFBF7] flex items-center justify-center border border-[#D4A574]/20 group-hover:bg-gradient-to-br group-hover:from-[#B48A5E] group-hover:to-[#946F48] group-hover:text-white transition-all text-[#B48A5E] shadow-sm shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-50/70 flex items-center justify-center border border-orange-200/50 group-hover:bg-gradient-to-br group-hover:from-orange-500 group-hover:to-amber-500 group-hover:text-white transition-all text-orange-600 shadow-sm shrink-0">
                       <item.icon className="w-5 h-5 transition-colors" />
                     </div>
-                    <span className="flex-1 text-[15px] font-bold text-gray-800 text-left group-hover:text-[#946F48] transition-colors">
+                    <span className="flex-1 text-[15px] font-bold text-gray-800 text-left group-hover:text-orange-600 transition-colors">
                       {item.label}
                     </span>
                     {item.badge && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-[#B48A5E]/10 text-[#B48A5E] text-xs font-black">
+                      <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-black">
                         {item.badge}
                       </span>
                     )}
-                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-[#B48A5E] group-hover:translate-x-1 transition-all shrink-0" />
+                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-1 transition-all shrink-0" />
                   </button>
                 ))}
               </div>
@@ -629,7 +637,6 @@ export default function ProfileClient({
           {activeSection === 'vouchers' && <VouchersSection vouchers={vouchers} />}
           {activeSection === 'orders' && <OrdersSection orders={orders} router={router} />}
           {activeSection === 'favorites' && <FavoritesSection />}
-          {activeSection === 'addresses' && <AddressesSection user={user} />}
           {activeSection === 'notifications' && (
             <NotificationsSection 
               notifs={notifs} 
@@ -1283,24 +1290,26 @@ function EditProfileOverlay({ user, onClose, onUpdate }: { user: UserShape, onCl
 }
 
 function OrdersSection({ orders, router }: { orders: OrderShape[], router: any }) {
+  const [filterTab, setFilterTab] = useState<'ALL' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED'>('ALL');
+
   const getStatusBadgeClass = (status: string) => {
     const s = status.toLowerCase();
     if (s.includes('complete') || s.includes('selesai')) {
-      return 'bg-emerald-50 border-emerald-150 text-emerald-700';
+      return 'bg-emerald-50 border-emerald-200 text-emerald-700';
     }
     if (s.includes('cancel') || s.includes('batal')) {
-      return 'bg-red-50 border-red-150 text-red-700';
+      return 'bg-red-50 border-red-200 text-red-700';
     }
     if (s.includes('payment') || s.includes('bayar')) {
-      return 'bg-amber-50 border-amber-150 text-amber-700 animate-pulse';
+      return 'bg-amber-50 border-amber-200 text-amber-700 animate-pulse';
     }
-    if (s.includes('prepare') || s.includes('masak') || s.includes('proses')) {
-      return 'bg-blue-50 border-blue-150 text-blue-700';
+    if (s.includes('prepare') || s.includes('masak') || s.includes('proses') || s.includes('ready')) {
+      return 'bg-orange-50 border-orange-200 text-orange-700';
     }
     if (s.includes('deliver') || s.includes('kirim')) {
-      return 'bg-indigo-50 border-indigo-150 text-indigo-700';
+      return 'bg-indigo-50 border-indigo-200 text-indigo-700';
     }
-    return 'bg-orange-50 border-orange-150 text-orange-700';
+    return 'bg-orange-50 border-orange-200 text-orange-700';
   };
 
   const getStatusLabel = (status: string) => {
@@ -1308,11 +1317,38 @@ function OrdersSection({ orders, router }: { orders: OrderShape[], router: any }
     if (s.includes('complete') || s.includes('selesai')) return 'Selesai';
     if (s.includes('cancel') || s.includes('batal')) return 'Dibatalkan';
     if (s.includes('payment') || s.includes('bayar')) return 'Menunggu Pembayaran';
-    if (s.includes('pending')) return 'Menunggu Konfirmasi';
+    if (s.includes('pending')) return 'Menunggu Masak';
     if (s.includes('prepare') || s.includes('proses')) return 'Sedang Disiapkan';
+    if (s.includes('ready')) return 'Siap Diambil';
     if (s.includes('deliver') || s.includes('kirim')) return 'Dalam Pengiriman';
     return status;
   };
+
+  const getOrderTypeLabel = (orderType?: string, tableNumber?: string | null) => {
+    const t = (orderType || '').toUpperCase();
+    if (t === 'DINE_IN') return tableNumber ? `Dine In · Meja ${tableNumber}` : 'Dine In';
+    if (t === 'DELIVERY') return 'Delivery';
+    if (t === 'TAKEAWAY' || t === 'PICKUP') return 'Take Away';
+    return 'Take Away';
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    const s = o.status.toLowerCase();
+    if (filterTab === 'ALL') return true;
+    if (filterTab === 'COMPLETED') return s.includes('complete') || s.includes('selesai');
+    if (filterTab === 'CANCELLED') return s.includes('cancel') || s.includes('batal');
+    if (filterTab === 'ACTIVE') {
+      return !s.includes('complete') && !s.includes('selesai') && !s.includes('cancel') && !s.includes('batal');
+    }
+    return true;
+  });
+
+  const tabs: { id: 'ALL' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED'; label: string }[] = [
+    { id: 'ALL', label: 'Semua' },
+    { id: 'ACTIVE', label: 'Diproses' },
+    { id: 'COMPLETED', label: 'Selesai' },
+    { id: 'CANCELLED', label: 'Dibatalkan' },
+  ];
 
   return (
     <motion.section
@@ -1320,51 +1356,105 @@ function OrdersSection({ orders, router }: { orders: OrderShape[], router: any }
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 20 }}
-      className="space-y-3.5"
+      className="space-y-4"
     >
-      {orders.length === 0 ? (
-        <div className="text-center py-16 px-6 bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm">
-          <div className="w-16 h-16 bg-[#FFFBF5] border border-[#D4A574]/15 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Coffee className="w-8 h-8 text-[#B48A5E]" />
+      {/* Filter Pills */}
+      {orders.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {tabs.map((tab) => {
+            const isActive = filterTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setFilterTab(tab.id)}
+                className={`px-4 py-2 rounded-full text-xs font-black transition-all shrink-0 cursor-pointer ${
+                  isActive
+                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                    : 'bg-white text-gray-600 border border-orange-100 hover:bg-orange-50/60 hover:text-orange-600'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {filteredOrders.length === 0 ? (
+        <div className="text-center py-16 px-6 bg-white rounded-3xl border border-orange-100 shadow-sm">
+          <div className="w-16 h-16 bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+            <Coffee className="w-8 h-8 text-orange-500" />
           </div>
-          <h3 className="font-serif text-lg text-gray-800 mb-1 font-bold">Belum Ada Pesanan</h3>
-          <p className="text-sm text-gray-500 mb-6 font-medium">Nikmati berbagai pilihan matcha terbaik kami.</p>
-          <button 
-            onClick={() => router.push('/')}
-            className="px-6 py-3 bg-[#B48A5E] text-white rounded-full text-sm font-black hover:bg-[#946F48] transition-all shadow-md shadow-[#B48A5E]/10"
-          >
-            Pesan Sekarang
-          </button>
+          <h3 className="font-serif text-lg text-gray-900 mb-1.5 font-bold">
+            {orders.length === 0 ? 'Belum Ada Pesanan' : 'Tidak Ada Pesanan di Kategori Ini'}
+          </h3>
+          <p className="text-sm text-gray-500 mb-6 font-medium max-w-xs mx-auto">
+            {orders.length === 0
+              ? 'Nikmati berbagai pilihan minuman dan hidangan segar terbaik dari Arum Seduh.'
+              : 'Coba pilih filter status pesanan lainnya di atas.'}
+          </p>
+          {orders.length === 0 && (
+            <button 
+              onClick={() => router.push('/')}
+              className="px-6 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl text-sm font-black transition-all shadow-lg shadow-orange-500/20 active:scale-95 cursor-pointer"
+            >
+              Pesan Sekarang
+            </button>
+          )}
         </div>
       ) : (
-        orders.map((order, i) => (
+        filteredOrders.map((order, i) => (
           <motion.button
             key={order.id}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
+            transition={{ delay: i * 0.04 }}
             onClick={() => router.push(`/orders/${order.id}`)}
-            className="w-full text-left p-5 rounded-3xl bg-white border border-[#D4A574]/15 shadow-sm hover:border-[#B48A5E]/30 hover:shadow-md transition-all active:scale-[0.98] group flex flex-col justify-between"
+            className="w-full text-left p-5 rounded-3xl bg-white border border-orange-100/80 shadow-sm hover:border-orange-300 hover:shadow-md transition-all active:scale-[0.98] group flex flex-col justify-between cursor-pointer"
           >
-            <div className="flex items-start justify-between mb-3 w-full">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-2xl bg-[#FFFBF5] border border-[#D4A574]/15 flex items-center justify-center">
-                  <Package className="w-4.5 h-4.5 text-[#B48A5E]" />
+            <div className="flex items-start justify-between mb-3 w-full gap-2">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 flex items-center justify-center shrink-0 text-orange-600 group-hover:from-orange-500 group-hover:to-amber-500 group-hover:text-white transition-all">
+                  <Package className="w-5 h-5" />
                 </div>
-                <div>
-                  <p className="font-mono text-xs font-black text-gray-900 leading-none">{order.id.slice(0,8).toUpperCase()}</p>
-                  <p className="text-[10px] text-gray-400 mt-1 font-medium">{order.date}</p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-mono text-xs font-black text-gray-900 leading-none">
+                      #{order.id.slice(0, 8).toUpperCase()}
+                    </p>
+                    {order.queueNumber && (
+                      <span className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-200/60 text-[10px] font-black">
+                        Antrean #{order.queueNumber}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-400 font-semibold">
+                    <span>{order.date}</span>
+                    <span>•</span>
+                    <span className="text-orange-600 font-bold">{getOrderTypeLabel(order.orderType, order.tableNumber)}</span>
+                  </div>
                 </div>
               </div>
-              <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider shadow-sm ${getStatusBadgeClass(order.status)}`}>
+              <span className={`px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider shrink-0 shadow-xs ${getStatusBadgeClass(order.status)}`}>
                 {getStatusLabel(order.status)}
               </span>
             </div>
-            <div className="pl-12 w-full">
-              <p className="text-sm text-gray-600 line-clamp-1 mb-2.5 font-bold">{order.items}</p>
-              <div className="flex items-center gap-x-2">
-                <span className="text-[11px] text-gray-400 bg-gray-50 border border-gray-100 px-2 py-0.5 rounded-full font-bold">Total</span>
-                <p className="text-[16px] font-black text-[#B48A5E]">{formatRupiah(order.total)}</p>
+
+            <div className="pt-3 border-t border-gray-100/80 w-full flex items-center justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-gray-800 line-clamp-1 font-bold">{order.items}</p>
+                {typeof order.itemCount === 'number' && order.itemCount > 0 && (
+                  <p className="text-[11px] text-gray-400 font-semibold mt-0.5">
+                    {order.itemCount} menu dipesan
+                  </p>
+                )}
+              </div>
+              <div className="text-right shrink-0 flex items-center gap-2">
+                <div>
+                  <span className="block text-[10px] uppercase tracking-wider text-gray-400 font-bold">Total Belanja</span>
+                  <p className="text-[15px] font-black text-orange-600">{formatRupiah(order.total)}</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
               </div>
             </div>
           </motion.button>
@@ -1374,7 +1464,7 @@ function OrdersSection({ orders, router }: { orders: OrderShape[], router: any }
   );
 }
 
-function SectionSkeleton({ type }: { type: 'favorites' | 'addresses' | 'notifications' | 'referral' | 'vouchers' | 'tickets' | 'help-center' | 'quests' | 'leaderboard' }) {
+function SectionSkeleton({ type }: { type: 'favorites' | 'notifications' | 'referral' | 'vouchers' | 'tickets' | 'help-center' | 'quests' | 'leaderboard' }) {
   if (type === 'quests') {
     return (
       <div className="space-y-4">
@@ -1420,32 +1510,6 @@ function SectionSkeleton({ type }: { type: 'favorites' | 'addresses' | 'notifica
               <div className="h-4 bg-gray-200/50 rounded-lg w-1/3" />
               <div className="h-3 bg-gray-200/50 rounded-lg w-3/4" />
               <div className="h-3 bg-gray-200/50 rounded-lg w-1/2" />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  if (type === 'addresses') {
-    return (
-      <div className="space-y-4">
-        {[1, 2].map((i) => (
-          <div key={i} className="bg-white rounded-3xl p-5 border border-gray-100 space-y-4 animate-pulse">
-            <div className="flex justify-between items-start">
-              <div className="space-y-2 w-2/3">
-                <div className="h-4.5 bg-gray-200/50 rounded-lg w-1/2" />
-                <div className="h-3.5 bg-gray-200/50 rounded-lg w-full" />
-              </div>
-              <div className="w-16 h-6 bg-gray-200/50 rounded-full" />
-            </div>
-            <div className="h-px bg-gray-100" />
-            <div className="flex justify-between items-center">
-              <div className="h-3.5 bg-gray-200/50 rounded-lg w-1/3" />
-              <div className="flex gap-2">
-                <div className="w-8 h-8 bg-gray-200/50 rounded-full" />
-                <div className="w-8 h-8 bg-gray-200/50 rounded-full" />
-              </div>
             </div>
           </div>
         ))}
@@ -1620,1149 +1684,6 @@ function FavoritesSection() {
   );
 }
 
-const getPlaceCategoryBadge = (className: string, typeName: string) => {
-  const cls = className?.toLowerCase();
-  const typ = typeName?.toLowerCase();
-
-  if (cls === 'amenity') {
-    if (['school', 'kindergarten', 'university', 'college'].includes(typ)) {
-      return { label: 'Sekolah / Pendidikan', bg: 'bg-blue-50 text-blue-600 border-blue-100' };
-    }
-    if (['restaurant', 'cafe', 'fast_food', 'food_court', 'bar', 'pub'].includes(typ)) {
-      return { label: 'Kuliner / Cafe', bg: 'bg-orange-50 text-orange-600 border-orange-100' };
-    }
-    if (['hospital', 'clinic', 'pharmacy', 'doctors', 'dentist'].includes(typ)) {
-      return { label: 'Kesehatan / Medis', bg: 'bg-rose-50 text-rose-600 border-rose-100' };
-    }
-    if (['place_of_worship'].includes(typ)) {
-      return { label: 'Tempat Ibadah', bg: 'bg-emerald-50 text-emerald-600 border-emerald-100' };
-    }
-    if (['bank', 'atm'].includes(typ)) {
-      return { label: 'Keuangan / Bank', bg: 'bg-amber-50 text-amber-600 border-amber-100' };
-    }
-  }
-  if (cls === 'shop') {
-    return { label: 'Toko / Perbelanjaan', bg: 'bg-purple-50 text-purple-600 border-purple-100' };
-  }
-  if (cls === 'tourism') {
-    if (['hotel', 'guest_house', 'motel', 'hostel', 'apartment'].includes(typ)) {
-      return { label: 'Penginapan / Hotel', bg: 'bg-indigo-50 text-indigo-600 border-indigo-100' };
-    }
-    return { label: 'Wisata / Rekreasi', bg: 'bg-teal-50 text-teal-600 border-teal-100' };
-  }
-  if (cls === 'leisure') {
-    return { label: 'Olahraga / Hiburan', bg: 'bg-cyan-50 text-cyan-600 border-cyan-100' };
-  }
-  if (cls === 'office') {
-    return { label: 'Kantor / Bisnis', bg: 'bg-sky-50 text-sky-600 border-sky-100' };
-  }
-  return null;
-};
-
-// Premium Saved Addresses Section with Optimized Background Preloaded Leaflet Map
-function AddressesSection({ user }: { user: UserShape }) {
-  const { showToast } = useToast();
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean;
-    title: string;
-    message: string;
-    onConfirm: () => void;
-    isDestructive?: boolean;
-  }>({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-  });
-  const [addresses, setAddresses] = useState<any[]>(profileCache.addresses || []);
-  const [loading, setLoading] = useState(!profileCache.addresses);
-  const [step, setStep] = useState<'LIST' | 'MAP' | 'DETAIL'>('LIST');
-  const [mapCameFrom, setMapCameFrom] = useState<'LIST' | 'DETAIL'>('LIST');
-  const [saving, setSaving] = useState(false);
-
-  // Form states
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [name, setName] = useState('');
-  const [notes, setNotes] = useState('');
-  const [recipient, setRecipient] = useState('');
-  const [phone, setPhone] = useState('');
-  const [isDefault, setIsDefault] = useState(false);
-
-  // Map & Geocoding states
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapAddress, setMapAddress] = useState('');
-  const [mapAddressTitle, setMapAddressTitle] = useState('');
-  const cachedSettings = profileCache.storeSettings || {};
-  const [mapLat, setMapLat] = useState(cachedSettings.storeLat || -7.756928);
-  const [mapLng, setMapLng] = useState(cachedSettings.storeLng || 113.211502);
-  const [reverseGeocoding, setReverseGeocoding] = useState(false);
-  const [isMapMoving, setIsMapMoving] = useState(false);
-  const [isDetecting, setIsDetecting] = useState(false);
-
-  // Search states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showSearchResults, setShowSearchResults] = useState(false);
-  
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const mapRef = useRef<any>(null);
-  const storeMarkerRef = useRef<any>(null);
-  const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const ignoreMoveEndRef = useRef(true);
-
-  const [storeLat, setStoreLat] = useState(cachedSettings.storeLat || -7.756928);
-  const [storeLng, setStoreLng] = useState(cachedSettings.storeLng || 113.211502);
-  const [maxDeliveryDistance, setMaxDeliveryDistance] = useState(cachedSettings.maxDeliveryDistance !== undefined ? cachedSettings.maxDeliveryDistance : 10);
-  const [deliveryFeePerKm, setDeliveryFeePerKm] = useState(cachedSettings.deliveryFeePerKm !== undefined ? cachedSettings.deliveryFeePerKm : 2000);
-
-  useEffect(() => {
-    fetch('/api/user/locations')
-      .then(r => r.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setAddresses(data);
-          profileCache.addresses = data;
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-
-    fetch('/api/admin/store-settings')
-      .then(r => r.json())
-      .then(d => {
-        profileCache.storeSettings = d;
-        if (d.storeLat && d.storeLng) {
-          setStoreLat(d.storeLat);
-          setStoreLng(d.storeLng);
-          if (d.maxDeliveryDistance !== undefined) {
-            setMaxDeliveryDistance(d.maxDeliveryDistance);
-          }
-          if (d.deliveryFeePerKm !== undefined) {
-            setDeliveryFeePerKm(d.deliveryFeePerKm);
-          }
-          setMapLat(d.storeLat);
-          setMapLng(d.storeLng);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  // Update store marker when store location changes
-  useEffect(() => {
-    if (storeMarkerRef.current) {
-      storeMarkerRef.current.setLatLng([storeLat, storeLng]);
-    }
-  }, [storeLat, storeLng]);
-
-  // Fetch address display name from coordinates
-  const triggerReverseGeocode = async (lat: number, lng: number) => {
-    setReverseGeocoding(true);
-    try {
-      const res = await fetch(`/api/geocode?mode=reverse&lat=${lat}&lng=${lng}`);
-      const data = await res.json();
-      if (data.display_name) {
-        const addr = data.address;
-        const title = addr?.road
-          ? `${addr.road}${addr.house_number ? ` No. ${addr.house_number}` : ''}`
-          : data.display_name.split(',').slice(0, 2).join(', ');
-        
-        setMapAddressTitle(title);
-        setMapAddress(data.display_name);
-      } else {
-        setMapAddressTitle(`Lokasi (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
-        setMapAddress(`Koordinat: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-      }
-    } catch {
-      setMapAddressTitle(`Lokasi (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
-      setMapAddress(`Koordinat: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-    } finally {
-      setReverseGeocoding(false);
-    }
-  };
-
-  // Leaflet map initialization - robust polling-based pattern
-  useEffect(() => {
-    if (step !== 'MAP') return;
-    
-    let mapInstance: any = null;
-    let pollInterval: NodeJS.Timeout | null = null;
-    let isInitialized = false;
-
-    const initMap = (L: any) => {
-      const container = mapContainerRef.current;
-      if (!container) return false;
-      if (mapRef.current) return true;
-
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-      });
-
-      const map = L.map(container, {
-        center: [mapLat, mapLng],
-        zoom: 16,
-        zoomControl: false,
-        attributionControl: false,
-      });
-
-      mapInstance = map;
-      mapRef.current = map;
-
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-      }).addTo(map);
-
-      const storeIcon = L.divIcon({
-        html: '<div class="relative flex items-center justify-center"><div class="absolute w-10 h-10 bg-[#D4A574]/20 rounded-full animate-pulse"></div><div class="w-7 h-7 bg-[#B48A5E] rounded-full border-2 border-white shadow-lg flex items-center justify-center z-10 text-white font-bold text-[10px]"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/><path d="M22 7v3a2 2 0 0 1-2 2v0a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12v0a2 2 0 0 1-2-2V7"/></svg></div></div>',
-        className: '',
-        iconSize: [40, 40],
-        iconAnchor: [20, 20],
-      });
-
-      storeMarkerRef.current = L.marker([storeLat, storeLng], { icon: storeIcon })
-        .bindPopup('<b>Arum Seduh Store</b>')
-        .addTo(map);
-
-      setTimeout(() => {
-        map.invalidateSize();
-        setTimeout(() => {
-          ignoreMoveEndRef.current = false;
-        }, 200);
-      }, 300);
-
-      triggerReverseGeocode(mapLat, mapLng);
-      setMapLoaded(true);
-
-      map.on('movestart', () => {
-        if (ignoreMoveEndRef.current) return;
-        setIsMapMoving(true);
-        setMapAddress('');
-        setMapAddressTitle('');
-      });
-
-      map.on('moveend', () => {
-        if (ignoreMoveEndRef.current) {
-          ignoreMoveEndRef.current = false;
-          setIsMapMoving(false);
-          return;
-        }
-        setIsMapMoving(false);
-        const center = map.getCenter();
-        setMapLat(center.lat);
-        setMapLng(center.lng);
-        triggerReverseGeocode(center.lat, center.lng);
-      });
-
-      return true;
-    };
-
-    import('leaflet').then((leaflet) => {
-      const L = leaflet.default;
-
-      // Try immediately
-      if (initMap(L)) {
-        isInitialized = true;
-        return;
-      }
-
-      // If container not ready, poll for it
-      pollInterval = setInterval(() => {
-        if (initMap(L)) {
-          isInitialized = true;
-          if (pollInterval) clearInterval(pollInterval);
-        }
-      }, 100);
-    });
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-      }
-      setMapLoaded(false);
-    };
-  }, [step]);
-
-  // Handle address text search (Forward Geocode)
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-
-    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-
-    if (value.length < 3) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
-
-    searchTimeoutRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}&lat=${mapLat}&lng=${mapLng}`);
-        const data = await res.json();
-        setSearchResults(Array.isArray(data) ? data : []);
-        setShowSearchResults(true);
-      } catch {
-        setSearchResults([]);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 500);
-  };
-
-  const handleSelectSearchResult = (result: any) => {
-    const lat = parseFloat(result.lat);
-    const lng = parseFloat(result.lon);
-    
-    ignoreMoveEndRef.current = true;
-    
-    setMapLat(lat);
-    setMapLng(lng);
-
-    const addr = result.address;
-    const title = addr?.road
-      ? `${addr.road}${addr.suburb ? `, ${addr.suburb}` : ''}`
-      : result.display_name.split(',').slice(0, 3).join(',');
-    const detail = result.display_name;
-
-    setMapAddressTitle(title);
-    setMapAddress(detail);
-    
-    if (step === 'MAP') {
-      setSearchQuery(title);
-    } else {
-      setSearchQuery('');
-    }
-    setSearchResults([]);
-    setShowSearchResults(false);
-
-    // Center map view on the selected coordinates immediately
-    if (mapRef.current) {
-      mapRef.current.flyTo([lat, lng], 17, { duration: 1.5 });
-    }
-
-    setTimeout(() => {
-      ignoreMoveEndRef.current = false;
-    }, 1600);
-
-    if (step !== 'MAP') {
-      setMapCameFrom('LIST');
-      setStep('MAP');
-    }
-  };
-
-  // Detect GPS location
-  const handleDetectGPS = () => {
-    if (!('geolocation' in navigator)) {
-      console.warn('Perangkat tidak mendukung fitur lokasi. Menggunakan lokasi default.');
-      setMapLat(storeLat);
-      setMapLng(storeLng);
-      if (mapRef.current) {
-        ignoreMoveEndRef.current = true;
-        mapRef.current.setView([storeLat, storeLng], 16);
-        setTimeout(() => {
-          ignoreMoveEndRef.current = false;
-        }, 300);
-      }
-      setMapCameFrom('LIST');
-      setStep('MAP');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setMapLat(lat);
-        setMapLng(lng);
-        if (mapRef.current) {
-          ignoreMoveEndRef.current = true;
-          mapRef.current.setView([lat, lng], 16);
-          setTimeout(() => {
-            ignoreMoveEndRef.current = false;
-          }, 300);
-        }
-        setMapCameFrom('LIST');
-        setStep('MAP');
-      },
-      (error) => {
-        console.error("GPS detection failed, falling back to store coords:", error);
-        setMapLat(storeLat);
-        setMapLng(storeLng);
-        if (mapRef.current) {
-          ignoreMoveEndRef.current = true;
-          mapRef.current.setView([storeLat, storeLng], 16);
-          setTimeout(() => {
-            ignoreMoveEndRef.current = false;
-          }, 300);
-        }
-        setMapCameFrom('LIST');
-        setStep('MAP');
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-  };
-
-  // GPS target locate while inside map view
-  const handleGPSInMap = () => {
-    if (!('geolocation' in navigator)) return;
-    setIsDetecting(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setMapLat(lat);
-        setMapLng(lng);
-        triggerReverseGeocode(lat, lng);
-        if (mapRef.current) {
-          mapRef.current.flyTo([lat, lng], 17, { duration: 1.2 });
-        }
-        setIsDetecting(false);
-      },
-      () => {
-        setIsDetecting(false);
-      },
-      { enableHighAccuracy: true }
-    );
-  };
-
-  const handleCreateNew = () => {
-    setEditingId(null);
-    setName('');
-    setNotes('');
-    
-    // Auto fill with profile name & phone to save time (Great UX!)
-    setRecipient(user.name || '');
-    setPhone(user.phone || '');
-    setIsDefault(addresses.length === 0);
-
-    // Default map position
-    setMapLat(storeLat);
-    setMapLng(storeLng);
-    setMapAddress('');
-    setMapAddressTitle('');
-
-    setSearchQuery('');
-    setSearchResults([]);
-    setShowSearchResults(false);
-
-    // Advance directly to map pin positioning screen
-    setMapCameFrom('LIST');
-    setStep('MAP');
-  };
-
-  const handleEditAddress = (addr: any) => {
-    setEditingId(addr.id);
-    setName(addr.name || '');
-    setNotes(addr.notes || '');
-    setRecipient(addr.recipient || user.name || '');
-    setPhone(addr.phone || user.phone || '');
-    setIsDefault(addr.isDefault || false);
-
-    setMapLat(addr.lat || storeLat);
-    setMapLng(addr.lng || storeLng);
-    setMapAddress(addr.address || '');
-
-    // Estimate address short title
-    const firstPart = addr.address.split(',')[0];
-    setMapAddressTitle(addr.name || firstPart);
-
-    setSearchQuery('');
-    setSearchResults([]);
-    setShowSearchResults(false);
-
-    // Go to Map Pin selection screen first so they can see/adjust the location
-    setMapCameFrom('LIST');
-    setStep('MAP');
-  };
-
-  const handleConfirmMapLocation = () => {
-    setStep('DETAIL');
-  };
-
-  // Save changes to db
-  const handleSaveAddress = async () => {
-    if (!name.trim()) {
-      showToast('Nama Alamat wajib diisi', 'error');
-      return;
-    }
-    if (!recipient.trim()) {
-      showToast('Penerima wajib diisi', 'error');
-      return;
-    }
-    if (!phone.trim()) {
-      showToast('Nomor Telepon wajib diisi', 'error');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const isNew = !editingId;
-      const url = isNew ? '/api/user/locations' : `/api/user/locations/${editingId}`;
-      const method = isNew ? 'POST' : 'PUT';
-
-      const payload = {
-        name: name.trim(),
-        address: mapAddress,
-        notes: notes.trim(),
-        recipient: recipient.trim(),
-        phone: phone.trim(),
-        isDefault,
-        lat: mapLat,
-        lng: mapLng
-      };
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        const savedLoc = await res.json();
-        if (isNew) {
-          setAddresses(prev => [savedLoc, ...prev]);
-        } else {
-          setAddresses(prev => prev.map(a => a.id === editingId ? savedLoc : a));
-        }
-
-        // If this savedLoc became default, set others as not default
-        if (isDefault) {
-          setAddresses(prev => prev.map(a => ({ ...a, isDefault: a.id === savedLoc.id })));
-        }
-
-        setStep('LIST');
-        setEditingId(null);
-      } else {
-        const data = await res.json();
-        showToast(data.error || 'Gagal menyimpan alamat', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Terjadi kesalahan koneksi', 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // Delete address
-  const handleDeleteAddress = async () => {
-    if (!editingId) return;
-    setConfirmModal({
-      isOpen: true,
-      title: 'Hapus Alamat',
-      message: 'Apakah Anda yakin ingin menghapus alamat ini?',
-      isDestructive: true,
-      onConfirm: async () => {
-        setConfirmModal(prev => ({ ...prev, isOpen: false }));
-        setSaving(true);
-        try {
-          const res = await fetch(`/api/user/locations/${editingId}`, {
-            method: 'DELETE'
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            setAddresses(prev => {
-              const filtered = prev.filter(a => a.id !== editingId);
-              if (data.newDefaultId) {
-                return filtered.map(a => a.id === data.newDefaultId ? { ...a, isDefault: true } : a);
-              }
-              return filtered;
-            });
-            setStep('LIST');
-            setEditingId(null);
-            showToast('Alamat berhasil dihapus', 'success');
-          } else {
-            showToast('Gagal menghapus alamat', 'error');
-          }
-        } catch {
-          showToast('Terjadi kesalahan koneksi', 'error');
-        } finally {
-          setSaving(false);
-        }
-      }
-    });
-  };
-
-  if (loading) {
-    return <SectionSkeleton type="addresses" />;
-  }
-
-  return (
-    <div className="relative">
-      <AnimatePresence mode="wait">
-        
-        {/* ==================== SCREEN 1: PILIH ALAMAT ==================== */}
-        {step === 'LIST' && (
-          <motion.section
-            key="list"
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -15 }}
-            className="space-y-4"
-          >
-            {/* Search Input Area */}
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-4.5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
-                <input
-                  type="text"
-                  placeholder="Cari alamat"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  className="w-full pl-12 pr-10 py-3.5 bg-[#FFFBF5] rounded-full border border-[#D4A574]/25 shadow-inner text-[15px] outline-none font-semibold focus:bg-white focus:border-[#B48A5E]/60 transition-all"
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSearchResults([]);
-                      setShowSearchResults(false);
-                    }}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-gray-200 text-gray-500 hover:bg-gray-300 transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-              
-              {searchQuery && (
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSearchResults([]);
-                    setShowSearchResults(false);
-                  }}
-                  className="text-[15px] font-bold text-[#B48A5E] hover:text-[#946F48] transition-colors shrink-0"
-                >
-                  Batal
-                </button>
-              )}
-            </div>
-
-            {/* Detect current location button (Premium outline box style matching Screen 1) */}
-            <div className="flex gap-2">
-              <button
-                onClick={handleDetectGPS}
-                className="flex-1 flex items-center justify-between p-4.5 rounded-2xl border border-[#D4A574] bg-[#FFFBF5]/45 hover:bg-[#FFFBF5]/90 transition-all active:scale-[0.98] group shadow-sm"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-xl bg-emerald-50 border border-emerald-250 flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 text-emerald-600 fill-emerald-600/10" />
-                  </div>
-                  <span className="text-[14px] font-black text-gray-800">Gunakan lokasi saat ini (GPS)</span>
-                </div>
-                <Map className="w-5 h-5 text-gray-500 group-hover:text-[#B48A5E] transition-colors" />
-              </button>
-            </div>
-
-            {/* Search results or Saved addresses list */}
-            {searchQuery ? (
-              <div className="space-y-0.5 mt-2">
-                {isSearching ? (
-                  <div className="flex justify-center py-10">
-                    <Loader2 className="w-6 h-6 animate-spin text-[#B48A5E]" />
-                  </div>
-                ) : searchResults.length > 0 ? (
-                  searchResults.map((r, i) => {
-                    const placeName = r.display_name.split(',')[0];
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => handleSelectSearchResult(r)}
-                        className="w-full flex items-start gap-4 py-4.5 text-left border-b border-gray-100 hover:bg-gray-50/50 transition-colors group"
-                      >
-                        <div className="w-10 h-10 rounded-full bg-[#FFFBF5] flex items-center justify-center shrink-0 border border-[#D4A574]/10">
-                          <MapPin className="w-5 h-5 text-gray-400 fill-gray-100" />
-                        </div>
-                        <div className="flex-1 min-w-0 pr-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[15px] font-bold text-gray-900 leading-snug">
-                              {placeName}
-                            </span>
-                            {(() => {
-                              const badge = getPlaceCategoryBadge(r.class, r.type);
-                              if (!badge) return null;
-                              return (
-                                <span className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-full border ${badge.bg} shrink-0`}>
-                                  {badge.label}
-                                </span>
-                              );
-                            })()}
-                          </div>
-                          <p className="text-[12.5px] text-gray-400 mt-1 leading-relaxed line-clamp-2">
-                            {r.display_name}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-16 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm mt-4">
-                    <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="font-serif text-lg text-gray-800 mb-1 font-bold">Tidak Ditemukan</h3>
-                    <p className="text-sm text-gray-500">Coba kata kunci pencarian yang lain.</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Saved addresses list */
-              <div className="space-y-3.5 mt-4">
-                {addresses.map((addr) => (
-                  <button
-                    key={addr.id}
-                    onClick={() => handleEditAddress(addr)}
-                    className={`w-full flex items-start gap-4 p-5 rounded-[24px] bg-white border text-left shadow-sm hover:border-[#B48A5E]/40 hover:shadow-md transition-all group ${
-                      addr.isDefault ? 'border-[#B48A5E]/40 ring-1 ring-[#B48A5E]/10' : 'border-gray-100'
-                    }`}
-                  >
-                    <div className="w-10 h-10 rounded-2xl bg-[#FFFBF5] border border-[#D4A574]/15 flex items-center justify-center shrink-0 text-[#B48A5E]">
-                      <MapPin className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-[15px] font-black text-gray-900 leading-tight">
-                          {addr.name || addr.address.split(',')[0]}
-                        </h4>
-                        {addr.isDefault && (
-                          <span className="text-[9px] font-extrabold uppercase tracking-wider text-white bg-gradient-to-r from-[#B48A5E] to-[#D4A574] px-2.5 py-0.5 rounded-full shrink-0 shadow-sm">
-                            Utama
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[13px] text-gray-500 mt-1.5 leading-relaxed line-clamp-2 font-medium">
-                        {addr.address}
-                      </p>
-                      {addr.notes && (
-                        <p className="text-[11px] text-[#B48A5E] font-bold mt-1.5 bg-[#B48A5E]/5 px-2 py-0.5 rounded-md inline-block">
-                          Catatan: "{addr.notes}"
-                        </p>
-                      )}
-                      {(addr.recipient || addr.phone) && (
-                        <p className="text-[11px] text-gray-400 mt-1.5 font-semibold">
-                          {addr.recipient || '-'} · {addr.phone || '-'}
-                        </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-[#B48A5E] group-hover:translate-x-0.5 transition-all self-center shrink-0" />
-                  </button>
-                ))}
-
-                {addresses.length === 0 && (
-                  <div className="text-center py-16 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
-                    <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="font-serif text-lg text-gray-800 mb-1 font-bold">Belum Ada Alamat</h3>
-                    <p className="text-sm text-gray-500 mb-6">Tambahkan alamat pengiriman favoritmu.</p>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleCreateNew}
-                  className="w-full py-4 rounded-2xl border-2 border-dashed border-[#B48A5E]/30 text-[#B48A5E] font-black text-[14px] hover:bg-[#B48A5E]/5 transition-all flex items-center justify-center gap-2 mt-4"
-                >
-                  <Plus className="w-4.5 h-4.5" /> Tambah Alamat Baru
-                </button>
-              </div>
-            )}
-          </motion.section>
-        )}        {/* ==================== SCREEN 2: MAP VIEW SELECT PIN ==================== */}
-        {step === 'MAP' && (
-          <motion.div
-            key="map-step"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            className="fixed inset-0 z-[100] bg-white flex flex-col pt-safe pb-safe"
-          >
-            {/* ── Leaflet Map Viewport (Visible for Map Selection) ────────────────────────────────── */}
-            <div className="absolute inset-0 bg-gray-50 z-10">
-              {!mapLoaded && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm z-[1000] gap-3">
-                  <Loader2 className="w-8 h-8 animate-spin text-[#B48A5E]" />
-                  <p className="text-xs font-semibold text-gray-500">Menyiapkan peta...</p>
-                </div>
-              )}
-              <div ref={mapContainerRef} className="w-full h-full" />
-
-              {/* ── Fixed Center Pin (Traditional Sharp Map Pin style) ────────────────────────────────── */}
-              {mapLoaded && (
-                <div className="absolute top-1/2 left-1/2 pointer-events-none z-[999]" style={{ width: '48px', height: '60px', marginLeft: '-24px', marginTop: '-60px' }}>
-                  <div className="relative w-full h-full flex flex-col items-center">
-                    {/* Visual representation of the pin floating/bouncing */}
-                    <div className={`transition-transform duration-300 ease-out transform ${
-                      isMapMoving ? '-translate-y-4 scale-105' : 'translate-y-0 scale-100'
-                    }`} style={{ transformOrigin: 'bottom center' }}>
-                      <svg width="48" height="60" viewBox="0 0 48 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="drop-shadow-[0_10px_12px_rgba(0,0,0,0.35)]">
-                        <path d="M24 0C10.7452 0 0 10.7452 0 24C0 39 24 60 24 60C24 60 48 39 48 24C48 10.7452 37.2548 0 24 0ZM24 33C19.0294 33 15 28.9706 15 24C15 19.0294 19.0294 15 24 15C28.9706 15 33 19.0294 33 24C33 28.9706 28.9706 33 24 33Z" fill="url(#pin-gradient-profile)" />
-                        <circle cx="24" cy="24" r="9" fill="#FFFFFF" />
-                        <circle cx="24" cy="24" r="5" fill="#1E3F20" />
-                        <defs>
-                          <linearGradient id="pin-gradient-profile" x1="24" y1="0" x2="24" y2="60" gradientUnits="userSpaceOnUse">
-                            <stop stopColor="#B48A5E" />
-                            <stop offset="1" stopColor="#946F48" />
-                          </linearGradient>
-                        </defs>
-                      </svg>
-                    </div>
-                    {/* Shadow at the exact bottom center (which is the pin tip location when resting) */}
-                    <div 
-                      className="absolute bottom-0 left-1/2 w-5 h-1.5 bg-black/30 rounded-full blur-[1.5px] transition-all duration-300 ease-out" 
-                      style={{ 
-                        bottom: '-3px', 
-                        transform: `translateX(-50%) ${isMapMoving ? 'scale(0.3)' : 'scale(1)'}`,
-                        opacity: isMapMoving ? 0.25 : 0.8
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Floating Quick GPS Locate Button */}
-              <button
-                type="button"
-                onClick={handleGPSInMap}
-                disabled={isDetecting}
-                className="absolute right-4 z-[1001] w-12 h-12 bg-white rounded-full shadow-2xl border border-gray-100 flex items-center justify-center text-gray-700 hover:bg-gray-50 active:scale-95 transition-all duration-300 disabled:opacity-50 bottom-[180px]"
-              >
-                {isDetecting ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-[#B48A5E]" />
-                ) : (
-                  <LocateFixed className="w-5 h-5 text-gray-700" />
-                )}
-              </button>
-            </div>
-
-            {/* ── Floating Header & Search Bar ────────────────────────────────── */}
-            <div className="absolute top-4 left-4 right-4 z-[1001] flex flex-col gap-2">
-              <div className="flex items-center gap-2">
-                {/* Back button */}
-                <button
-                  type="button"
-                  onClick={() => setStep('LIST')}
-                  className="w-11 h-11 bg-white rounded-full shadow-lg border border-gray-100 flex items-center justify-center hover:bg-gray-50 active:scale-95 transition-all text-gray-700 shrink-0 cursor-pointer"
-                >
-                  <ArrowLeft className="w-5 h-5" />
-                </button>
-
-                {/* Search box wrapper */}
-                <div className="flex-1 relative flex items-center bg-white rounded-full shadow-lg border border-gray-100 px-4 py-2.5 gap-2.5">
-                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    onFocus={() => searchResults.length > 0 && setShowSearchResults(true)}
-                    placeholder="Cari lokasi atau jalan..."
-                    className="w-full text-sm font-medium focus:outline-none placeholder:text-gray-400 bg-transparent text-gray-800"
-                  />
-                  {(isSearching || reverseGeocoding) && (
-                    <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />
-                  )}
-                  {searchQuery && !isSearching && !reverseGeocoding && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSearchQuery('');
-                        setSearchResults([]);
-                        setShowSearchResults(false);
-                      }}
-                      className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-gray-100 shrink-0"
-                    >
-                      <X className="w-3.5 h-3.5 text-gray-400" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Search Results Dropdown */}
-              <AnimatePresence>
-                {showSearchResults && searchResults.length > 0 && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: -10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="bg-white rounded-2xl border border-gray-100 shadow-2xl max-h-60 overflow-y-auto divide-y divide-gray-50 mt-1"
-                  >
-                    {searchResults.map((r, i) => (
-                      <button
-                        type="button"
-                        key={`${r.lat}-${r.lon}-${i}`}
-                        onClick={() => handleSelectSearchResult(r)}
-                        className="w-full flex items-start gap-3.5 px-4 py-3 hover:bg-[#B48A5E]/5 transition-colors text-left border-b border-border/10 last:border-0 cursor-pointer"
-                      >
-                        <MapPin className="w-4.5 h-4.5 text-[#B48A5E] mt-0.5 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-gray-800 truncate">
-                            {r.address?.road || r.display_name.split(',')[0]}
-                          </p>
-                          <p className="text-[11px] text-gray-400 line-clamp-2 mt-0.5">{r.display_name}</p>
-                        </div>
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* ── Bottom Address Display & Confirm Button ── */}
-            <div className="absolute bottom-0 left-0 right-0 z-[1001] bg-white rounded-t-[2.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] border-t border-gray-100 p-6 flex flex-col gap-4 select-none">
-              {/* Location Info Banner */}
-              <div className="flex items-start gap-3.5 pb-2.5 border-b border-gray-100 shrink-0">
-                <div className="w-9 h-9 rounded-full bg-[#B48A5E]/10 flex items-center justify-center text-[#B48A5E] shrink-0 mt-0.5">
-                  <MapPin className="w-4.5 h-4.5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="text-[10px] font-bold text-[#B48A5E] uppercase tracking-wider">Lokasi Terpilih</span>
-                  <h3 className="text-sm font-bold text-gray-900 truncate">
-                    {mapAddressTitle || (reverseGeocoding ? 'Mengambil alamat...' : 'Pilih Lokasi')}
-                  </h3>
-                  <p className="text-[11px] text-gray-400 line-clamp-1 mt-0.5">
-                    {mapAddress || (reverseGeocoding ? 'Mengambil detail alamat dari peta...' : 'Geser peta untuk memilih lokasi')}
-                  </p>
-                </div>
-              </div>
-
-              {/* Out of Range warning */}
-              {(() => {
-                const dist = calculateDistance(storeLat, storeLng, mapLat, mapLng);
-                const isOk = isWithinDeliveryRange(dist, maxDeliveryDistance);
-                if (!isOk && mapAddress) {
-                  return (
-                    <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-150 shrink-0">
-                      <AlertTriangle className="w-4.5 h-4.5 text-red-500 mt-0.5 shrink-0" />
-                      <p className="text-[10.5px] font-bold text-red-700 leading-tight">
-                        Maaf, lokasi terpilih berada di luar jangkauan pengiriman kami (maksimal {maxDeliveryDistance} km).
-                      </p>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
-
-              {/* Confirm Button */}
-              <button
-                type="button"
-                onClick={handleConfirmMapLocation}
-                disabled={!mapAddress || !isWithinDeliveryRange(calculateDistance(storeLat, storeLng, mapLat, mapLng), maxDeliveryDistance) || reverseGeocoding}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-[#B48A5E] to-[#946F48] text-white font-bold text-sm shadow-xl shadow-[#B48A5E]/15 hover:shadow-[#B48A5E]/25 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-              >
-                Pilih Lokasi Ini
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-        {/* ==================== SCREEN 3: DETAIL ALAMAT FORM ==================== */}
-        {step === 'DETAIL' && (
-          <motion.div
-            key="detail-step"
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 30 }}
-            className="fixed inset-0 z-[100] bg-[#FDFBF7] flex flex-col pt-safe pb-safe"
-          >
-            {/* Header */}
-            <div className="px-6 py-4 flex items-center gap-4 bg-white sticky top-0 z-10 border-b border-gray-100/50 shadow-sm">
-              <button
-                type="button"
-                onClick={() => {
-                  setMapCameFrom('DETAIL');
-                  setStep('MAP');
-                }}
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all active:scale-90 cursor-pointer"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
-              <h2 className="font-serif text-base font-bold text-gray-900 flex-1">Detail Alamat Pengiriman</h2>
-              {/* Map Layout Icon on top right (Screen 3) */}
-              <button
-                type="button"
-                onClick={() => {
-                  setMapCameFrom('DETAIL');
-                  setStep('MAP');
-                }}
-                className="w-10 h-10 flex items-center justify-center rounded-full text-[#B48A5E] hover:bg-[#B48A5E]/5 active:scale-95 transition-all cursor-pointer"
-              >
-                <Map className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Scrollable Form Content */}
-            <div className="flex-grow overflow-y-auto p-6 space-y-6 pb-28 scrollbar-hide">
-              {/* Selected Location Card */}
-              <div className="bg-white rounded-3xl p-5 border border-[#D4A574]/20 flex items-start gap-4 shadow-sm">
-                <div className="w-10 h-10 rounded-2xl bg-[#1E3F20]/5 border border-[#1E3F20]/15 flex items-center justify-center shrink-0 text-[#1E3F20]">
-                  <MapPin className="w-5 h-5 fill-[#1E3F20]/10" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="text-[10px] font-bold text-[#B48A5E] uppercase tracking-wider">Lokasi Dipilih</span>
-                  <h4 className="text-sm font-black text-gray-900 truncate leading-snug">{mapAddressTitle || 'Lokasi Dipilih'}</h4>
-                  <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{mapAddress}</p>
-                </div>
-              </div>
-
-              {/* Form Input fields */}
-              <div className="space-y-4">
-                {/* Special Notes (Catatan Spesial - e.g. Patokan) */}
-                <div className="space-y-1">
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
-                    <ClipboardList className="w-3.5 h-3.5 text-gray-400" />
-                    <span>Catatan Spesial / Patokan (Opsional)</span>
-                  </label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Contoh: Depan pagar hitam, rumah cat pink"
-                    rows={2}
-                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner resize-none"
-                  />
-                </div>
-
-                {/* Address Label (Nama Alamat - e.g. Rumah / Kantor) */}
-                <div className="space-y-1">
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
-                    <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                    <span>Nama Alamat / Label</span>
-                    <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Contoh: Rumah, Kantor, Sekolah"
-                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
-                  />
-                </div>
-
-                {/* Recipient Name */}
-                <div className="space-y-1">
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
-                    <User className="w-3.5 h-3.5 text-gray-400" />
-                    <span>Nama Penerima</span>
-                    <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={recipient}
-                    onChange={(e) => setRecipient(e.target.value)}
-                    placeholder="Masukkan nama penerima"
-                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
-                  />
-                </div>
-
-                {/* Phone number */}
-                <div className="space-y-1">
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-gray-400 pl-1">
-                    <Smartphone className="w-3.5 h-3.5 text-gray-400" />
-                    <span>No. Telepon Penerima</span>
-                    <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="Contoh: 0812xxxxxxxx"
-                    className="w-full px-4 py-3.5 rounded-2xl border border-[#D4A574]/20 bg-[#FFFBF5] text-xs focus:outline-none focus:bg-white focus:border-[#B48A5E] transition-all font-semibold shadow-inner"
-                  />
-                </div>
-              </div>
-
-              {/* Main Address Star toggle (Alamat Utama) */}
-              <div className="flex items-center justify-between p-4 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/25 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm border border-[#D4A574]/20">
-                    <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-gray-900">Alamat Utama</h4>
-                    <p className="text-[11px] text-gray-500 mt-0.5 font-semibold">Jadikan alamat default untuk pengantaran</p>
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={isDefault}
-                  disabled={isDefault && (addresses.length <= 1 || (editingId !== null && addresses.find(a => a.id === editingId)?.isDefault))}
-                  onChange={(e) => setIsDefault(e.target.checked)}
-                  className="w-5 h-5 rounded border-gray-300 text-[#B48A5E] focus:ring-[#B48A5E] accent-[#B48A5E] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                />
-              </div>
-
-              {/* Distance & Delivery Fee Info */}
-              {(() => {
-                const dist = calculateDistance(storeLat, storeLng, mapLat, mapLng);
-                const fee = calculateDeliveryFee(dist, deliveryFeePerKm);
-                const isOk = isWithinDeliveryRange(dist, maxDeliveryDistance);
-                return (
-                  <div className="flex items-center justify-between p-4 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/20 shadow-sm">
-                    <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Jarak Antar</p>
-                      <p className="text-xs font-extrabold text-gray-800">{dist.toFixed(1)} km</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Biaya Pengiriman</p>
-                      <p className="text-xs font-extrabold text-[#B48A5E]">
-                        {isOk ? formatRupiah(fee) : 'Di luar jangkauan'}
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Delete Address (Only visible if editing existing) */}
-              {editingId && (
-                <button
-                  type="button"
-                  onClick={handleDeleteAddress}
-                  className="w-full flex items-center justify-center gap-2 py-4 text-red-500 font-bold bg-red-50/30 rounded-2xl hover:bg-red-50 active:scale-95 transition-all border border-red-100/50 mt-4 cursor-pointer"
-                >
-                  <Trash2 className="w-4 h-4 text-red-500" />
-                  Hapus Alamat
-                </button>
-              )}
-            </div>
-
-            {/* Bottom continuous floating confirmation button */}
-            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-55 p-6 z-20 shadow-[0_-8px_30px_rgba(0,0,0,0.035)]">
-              <button
-                type="button"
-                onClick={handleSaveAddress}
-                disabled={saving || !name.trim() || !recipient.trim() || !phone.trim()}
-                className="w-full py-4.5 bg-gradient-to-r from-[#B48A5E] to-[#946F48] hover:opacity-95 text-white font-black rounded-2xl shadow-xl shadow-[#B48A5E]/15 hover:shadow-[#B48A5E]/25 active:scale-[0.98] transition-all flex items-center justify-center text-sm gap-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span>Menyimpan...</span>
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4" />
-                    <span>Konfirmasi Alamat Pengiriman</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </motion.div>
-        )}
-
-      </AnimatePresence>
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        isDestructive={confirmModal.isDestructive}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-      />
-    </div>
-  );
-}
-
 function NotificationsSection({ 
   notifs, 
   loading, 
@@ -2775,6 +1696,7 @@ function NotificationsSection({
   refresh: () => void
 }) {
   const router = useRouter();
+  const [filter, setFilter] = useState<'ALL' | 'UNREAD'>('ALL');
 
   const markRead = async (id: string, linkUrl?: string) => {
     try {
@@ -2799,18 +1721,34 @@ function NotificationsSection({
     } catch (err) { console.error(err); }
   };
 
-  const getIcon = (type: string) => {
+  const getIconConfig = (type: string) => {
     switch (type) {
-      case 'order': return <Package className="w-5 h-5 text-blue-500" />;
-      case 'promo': return <Heart className="w-5 h-5 text-pink-500" />;
-      case 'points': return <Gift className="w-5 h-5 text-emerald-500" />;
-      default: return <Bell className="w-5 h-5 text-[#B48A5E]" />;
+      case 'order':
+        return {
+          icon: <Package className="w-5 h-5 text-orange-600" />,
+          bg: 'bg-orange-50 border-orange-100',
+        };
+      case 'promo':
+        return {
+          icon: <Sparkles className="w-5 h-5 text-amber-600" />,
+          bg: 'bg-amber-50 border-amber-100',
+        };
+      case 'points':
+        return {
+          icon: <Gift className="w-5 h-5 text-emerald-600" />,
+          bg: 'bg-emerald-50 border-emerald-100',
+        };
+      default:
+        return {
+          icon: <Bell className="w-5 h-5 text-orange-500" />,
+          bg: 'bg-orange-50/70 border-orange-100',
+        };
     }
   };
 
   const timeAgo = (date: string) => {
     const diff = Date.now() - new Date(date).getTime();
-    const mins = Math.floor(diff / 60000);
+    const mins = Math.max(1, Math.floor(diff / 60000));
     if (mins < 60) return `${mins} menit lalu`;
     const hours = Math.floor(mins / 60);
     if (hours < 24) return `${hours} jam lalu`;
@@ -2819,44 +1757,110 @@ function NotificationsSection({
   };
 
   const unreadCount = notifs.filter(n => !n.isRead).length;
+  const displayedNotifs = filter === 'UNREAD' ? notifs.filter(n => !n.isRead) : notifs;
 
   return (
-    <motion.section key="notifications" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 20 }} className="space-y-4">
-      {unreadCount > 0 && (
-        <div className="flex justify-end">
-          <button onClick={markAllRead} className="text-[12px] font-semibold text-[#B48A5E] hover:underline">
-            Tandai Semua Dibaca ({unreadCount})
+    <motion.section
+      key="notifications"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 20 }}
+      className="space-y-4"
+    >
+      {/* Top Filter & Action Bar */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setFilter('ALL')}
+            className={`px-4 py-2 rounded-full text-xs font-black transition-all cursor-pointer ${
+              filter === 'ALL'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                : 'bg-white text-gray-600 border border-orange-100 hover:bg-orange-50'
+            }`}
+          >
+            Semua ({notifs.length})
+          </button>
+          <button
+            onClick={() => setFilter('UNREAD')}
+            className={`px-4 py-2 rounded-full text-xs font-black transition-all cursor-pointer ${
+              filter === 'UNREAD'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                : 'bg-white text-gray-600 border border-orange-100 hover:bg-orange-50'
+            }`}
+          >
+            Belum Dibaca ({unreadCount})
           </button>
         </div>
-      )}
+
+        {unreadCount > 0 && (
+          <button
+            onClick={markAllRead}
+            className="text-xs font-black text-orange-600 hover:text-orange-700 bg-orange-50 hover:bg-orange-100/80 px-3 py-2 rounded-full transition-colors cursor-pointer shrink-0"
+          >
+            Tandai Dibaca
+          </button>
+        )}
+      </div>
 
       {loading ? (
         <SectionSkeleton type="notifications" />
-      ) : notifs.length === 0 ? (
-        <div className="text-center py-12 px-6 bg-white rounded-3xl border border-gray-100 shadow-sm">
-          <Bell className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-          <h3 className="font-serif text-lg text-gray-800 mb-1">Belum Ada Notifikasi</h3>
-          <p className="text-sm text-gray-500">Pesan dan informasi penting akan muncul di sini.</p>
+      ) : displayedNotifs.length === 0 ? (
+        <div className="text-center py-14 px-6 bg-white rounded-3xl border border-orange-100 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 flex items-center justify-center mx-auto mb-4">
+            <Bell className="w-8 h-8 text-orange-400" />
+          </div>
+          <h3 className="font-serif text-lg text-gray-900 font-bold mb-1">
+            {filter === 'UNREAD' ? 'Semua Notifikasi Sudah Dibaca' : 'Belum Ada Notifikasi'}
+          </h3>
+          <p className="text-sm text-gray-500 font-medium max-w-xs mx-auto">
+            {filter === 'UNREAD'
+              ? 'Tidak ada pesan baru yang belum Anda baca saat ini.'
+              : 'Update status pesanan, promo spesial, dan info poin Arum Seduh akan muncul di sini.'}
+          </p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-2">
-          {notifs.map((notif) => (
-            <div
-              key={notif.id}
-              onClick={() => markRead(notif.id, notif.linkUrl)}
-              className={`flex gap-3 p-4 rounded-2xl ${notif.isRead ? 'bg-white hover:bg-gray-50' : 'bg-[#B48A5E]/5'} mb-1 last:mb-0 relative transition-colors cursor-pointer`}
-            >
-              {!notif.isRead && <span className="absolute top-5 right-4 w-2 h-2 rounded-full bg-[#B48A5E]" />}
-              <div className={`mt-0.5 p-2 rounded-xl h-fit ${!notif.isRead ? 'bg-white shadow-sm' : 'bg-gray-50'}`}>
-                {getIcon(notif.type)}
-              </div>
-              <div className="pr-4">
-                <h4 className={`text-sm mb-1 ${!notif.isRead ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>{notif.title}</h4>
-                <p className={`text-[13px] leading-relaxed mb-1.5 ${!notif.isRead ? 'text-gray-600' : 'text-gray-500'}`}>{notif.message}</p>
-                <span className="text-[10px] text-gray-400 font-medium">{timeAgo(notif.createdAt)}</span>
-              </div>
-            </div>
-          ))}
+        <div className="space-y-2.5">
+          {displayedNotifs.map((notif, idx) => {
+            const iconCfg = getIconConfig(notif.type);
+            return (
+              <motion.div
+                key={notif.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.03 }}
+                onClick={() => markRead(notif.id, notif.linkUrl)}
+                className={`flex gap-3.5 p-4 rounded-3xl border transition-all cursor-pointer relative overflow-hidden ${
+                  notif.isRead
+                    ? 'bg-white border-gray-100 hover:border-orange-200/70'
+                    : 'bg-gradient-to-r from-orange-50/70 via-amber-50/40 to-white border-orange-200/80 shadow-sm'
+                }`}
+              >
+                {!notif.isRead && (
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-orange-500 to-amber-500 rounded-l-full" />
+                )}
+                <div className={`w-11 h-11 rounded-2xl border flex items-center justify-center shrink-0 mt-0.5 ${iconCfg.bg}`}>
+                  {iconCfg.icon}
+                </div>
+                <div className="flex-1 min-w-0 pr-4">
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <h4 className={`text-sm leading-snug ${!notif.isRead ? 'font-black text-gray-900' : 'font-bold text-gray-700'}`}>
+                      {notif.title}
+                    </h4>
+                  </div>
+                  <p className={`text-xs leading-relaxed mb-2 ${!notif.isRead ? 'text-gray-700 font-medium' : 'text-gray-500'}`}>
+                    {notif.message}
+                  </p>
+                  <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
+                    <Clock className="w-3 h-3 text-orange-400" />
+                    <span>{timeAgo(notif.createdAt)}</span>
+                  </div>
+                </div>
+                {!notif.isRead && (
+                  <span className="absolute top-4 right-4 w-2.5 h-2.5 rounded-full bg-orange-500 ring-4 ring-orange-500/15" />
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       )}
     </motion.section>
@@ -3026,27 +2030,29 @@ function ManualReferralInput({ user }: { user: UserShape }) {
 
   if (alreadyReferred) {
     return (
-      <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-5 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-2xl bg-emerald-100 flex items-center justify-center flex-shrink-0">
-          <Check className="w-5 h-5 text-emerald-600" />
+      <div className="bg-orange-50/70 border border-orange-200 rounded-3xl p-5 flex items-center gap-3.5">
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 flex items-center justify-center flex-shrink-0 shadow-sm shadow-orange-500/20">
+          <Check className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h4 className="text-[13px] font-black text-emerald-800">Kode Referral Sudah Terhubung</h4>
-          <p className="text-[11px] text-emerald-600 font-medium">Akun Anda sudah memiliki referrer. Voucher welcome Rp3.000 telah ditambahkan.</p>
+          <h4 className="text-[13px] font-black text-orange-950">Kode Referral Sudah Terhubung</h4>
+          <p className="text-[11px] text-orange-700 font-medium">Akun Anda sudah memiliki referrer. Voucher welcome Rp3.000 telah ditambahkan.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-3">
+    <div className="bg-white rounded-3xl border border-orange-100 shadow-sm p-5 space-y-3.5">
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-2xl bg-[#2E5A44]/8 flex items-center justify-center border border-[#2E5A44]/15 text-[#2E5A44] flex-shrink-0">
-          <Users className="w-4 h-4" />
+        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center border border-orange-100 text-orange-600 flex-shrink-0">
+          <Gift className="w-5 h-5" />
         </div>
         <div>
           <h4 className="text-[14px] font-black text-gray-900">Punya Kode dari Teman?</h4>
-          <p className="text-[11px] text-gray-500 font-medium">Masukkan kode referral teman & dapatkan diskon <span className="text-[#2E5A44] font-bold">Rp3.000</span> <span className="text-gray-400">(min. belanja Rp30.000)</span></p>
+          <p className="text-[11px] text-gray-500 font-medium">
+            Masukkan kode referral teman & dapatkan voucher diskon <span className="text-orange-600 font-extrabold">Rp3.000</span>
+          </p>
         </div>
       </div>
       <form onSubmit={handleSubmit} className="flex gap-2">
@@ -3055,15 +2061,15 @@ function ManualReferralInput({ user }: { user: UserShape }) {
           value={code}
           onChange={e => setCode(e.target.value.toUpperCase())}
           placeholder="Masukkan kode teman..."
-          className="flex-1 min-w-0 px-3 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl focus:bg-white focus:border-[#2E5A44]/40 outline-none text-sm font-bold uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
+          className="flex-1 min-w-0 px-4 py-3.5 bg-orange-50/40 border border-orange-200/70 rounded-2xl focus:bg-white focus:border-orange-500 outline-none text-sm font-black uppercase placeholder:normal-case placeholder:font-medium placeholder:text-gray-400 transition-all shadow-inner"
           disabled={loading}
         />
         <button
           type="submit"
           disabled={loading || !code.trim()}
-          className="px-4.5 py-3.5 bg-[#2E5A44] hover:bg-[#1E3F20] disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-sm shadow-md cursor-pointer"
+          className="px-5 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:from-gray-100 disabled:to-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed text-white font-black rounded-2xl transition-all flex items-center justify-center shrink-0 text-xs uppercase tracking-wider shadow-md shadow-orange-500/15 cursor-pointer"
         >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Use'}
+          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Pakai'}
         </button>
       </form>
       {msg && (
@@ -3290,6 +2296,7 @@ function LoyaltySection({ user, milestones }: { user: UserShape; milestones: Mil
 
 function ReferralSection({ user }: { user: UserShape }) {
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [origin, setOrigin] = useState('');
   const [referees, setReferees] = useState<any[]>(profileCache.referees || []);
   const [loadingReferees, setLoadingReferees] = useState(!profileCache.referees);
@@ -3328,7 +2335,16 @@ function ReferralSection({ user }: { user: UserShape }) {
   const copyReferralCodeOnly = () => {
     navigator.clipboard.writeText(user.referralCode);
     setCopiedCode(true);
+    showToast('Kode referral berhasil disalin!', 'success');
     setTimeout(() => setCopiedCode(false), 2000);
+  };
+
+  const copyReferralLink = () => {
+    const referralUrl = `${origin || window.location.origin}/register?ref=${user.referralCode}`;
+    navigator.clipboard.writeText(referralUrl);
+    setCopiedLink(true);
+    showToast('Link undangan berhasil disalin!', 'success');
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const handleClaim = async (refereeId: string) => {
@@ -3390,77 +2406,108 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
       exit={{ opacity: 0, y: 20 }}
       className="space-y-4 animate-in fade-in duration-300"
     >
-      {/* Referral Code & WhatsApp sharing */}
-      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
-            <Share2 className="w-5 h-5" />
-          </div>
-          <div>
-            <h4 className="text-[14px] font-black text-gray-850">Ajak Teman, Dapat Reward!</h4>
-            <p className="text-[11px] text-gray-500 font-medium">Bagikan kode Anda atau bagikan langsung lewat WhatsApp</p>
+      {/* Hero Referral Card - Arum Seduh Orange-Amber */}
+      <div className="bg-white rounded-3xl border border-orange-100 shadow-sm overflow-hidden">
+        <div className="bg-gradient-to-r from-orange-500 via-orange-500 to-amber-500 p-5 text-white relative overflow-hidden">
+          <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/15 blur-xl pointer-events-none" />
+          <div className="relative z-10 flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center shrink-0 shadow-inner">
+              <Gift className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/20 text-[10px] font-black uppercase tracking-wider mb-1">
+                <Sparkles className="w-3 h-3" /> Program Teman Arus
+              </span>
+              <h4 className="text-base font-serif font-bold leading-snug">Bagikan ke Teman, Dapat Voucher!</h4>
+              <p className="text-xs text-orange-50 font-medium mt-0.5">
+                Teman dapat diskon Rp3.000 & kamu dapat reward setelah mereka bertransaksi
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Kode Referral */}
-        <div className="space-y-1.5">
-          <label className="text-[10px] uppercase tracking-wider font-bold text-gray-400">Kode Referral</label>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 px-3.5 py-3 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/15 text-[14px] font-mono font-bold text-gray-800 shadow-inner">
-              {user.referralCode}
+        <div className="p-5 space-y-4">
+          {/* Kode Referral */}
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase tracking-wider font-extrabold text-orange-600">Kode Referral Kamu</label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 px-4 py-3.5 bg-gradient-to-r from-orange-50/70 to-amber-50/50 rounded-2xl border border-orange-200/70 text-base font-mono font-black text-orange-950 tracking-wider shadow-inner">
+                {user.referralCode}
+              </div>
+              <button
+                onClick={copyReferralCodeOnly}
+                className={`px-4 py-3.5 rounded-2xl flex items-center gap-1.5 font-black text-xs transition-all active:scale-95 cursor-pointer shrink-0 ${
+                  copiedCode
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                    : 'bg-orange-50 text-orange-700 border border-orange-200 hover:bg-orange-100'
+                }`}
+                title={copiedCode ? 'Disalin!' : 'Salin Kode'}
+              >
+                {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedCode ? 'Tersalin' : 'Salin Kode'}</span>
+              </button>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 pt-1">
             <button
-              onClick={copyReferralCodeOnly}
-              className={`p-3.5 rounded-2xl flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0 ${
-                copiedCode ? 'bg-emerald-50 text-emerald-600 border border-green-200' : 'bg-[#B48A5E] text-white hover:bg-[#946F48] shadow-md shadow-[#B48A5E]/10'
-              }`}
-              title={copiedCode ? 'Disalin!' : 'Salin Kode'}
+              onClick={copyReferralLink}
+              className="py-3.5 px-4 bg-orange-50/80 hover:bg-orange-100/80 text-orange-700 border border-orange-200/80 font-black rounded-2xl text-xs flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
             >
-              {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copiedLink ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+              <span>{copiedLink ? 'Link Tersalin' : 'Salin Link'}</span>
+            </button>
+            <button
+              onClick={handleShare}
+              className="py-3.5 px-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-black rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-500/20 active:scale-95 cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" />
+              <span>Bagikan ke WA</span>
             </button>
           </div>
-        </div>
-
-        <div className="pt-1">
-          <button
-            onClick={handleShare}
-            className="w-full py-3.5 px-4 bg-[#2E5A44] hover:bg-[#1E3F20] text-white font-black rounded-2xl text-[13px] flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-800/10 active:scale-95 cursor-pointer font-sans"
-          >
-            <Share2 className="w-4 h-4" />
-            <span>Bagikan via WhatsApp</span>
-          </button>
         </div>
       </div>
 
       {/* Daftar Teman yang Diajak */}
-      <div className="bg-white rounded-3xl border border-[#D4A574]/15 shadow-sm p-5 space-y-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-2xl bg-[#B48A5E]/5 flex items-center justify-center border border-[#B48A5E]/15 text-[#B48A5E]">
-            <Users className="w-5 h-5" />
+      <div className="bg-white rounded-3xl border border-orange-100 shadow-sm p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 flex items-center justify-center border border-orange-100 text-orange-600">
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-[14px] font-black text-gray-900">Teman yang Diajak</h4>
+              <p className="text-[11px] text-gray-500 font-medium">Pantau progres belanja teman & klaim voucher Anda</p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-[14px] font-black text-gray-850">Teman yang Diajak</h4>
-            <p className="text-[11px] text-gray-500 font-medium">Pantau progress teman dan klaim voucher Anda</p>
-          </div>
+          {referees.length > 0 && (
+            <span className="px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200/60 text-[11px] font-black">
+              {referees.length} Teman
+            </span>
+          )}
         </div>
 
         {loadingReferees ? (
           <SectionSkeleton type="referral" />
         ) : referees.length === 0 ? (
-          <div className="text-center py-6 text-gray-400 text-xs font-semibold">
-            Belum ada teman yang mendaftar menggunakan kode Anda.
+          <div className="text-center py-8 px-4 bg-orange-50/30 rounded-2xl border border-dashed border-orange-200/70">
+            <Users className="w-8 h-8 text-orange-300 mx-auto mb-2" />
+            <p className="text-gray-600 text-xs font-bold">Belum Ada Teman Terdaftar</p>
+            <p className="text-gray-400 text-[11px] font-medium mt-0.5">
+              Bagikan kode referral Anda ke teman untuk mulai mendapatkan voucher gratis.
+            </p>
           </div>
         ) : (
           <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
             {referees.map((ref) => {
               const isQualified = ref.highestOrderAmount >= minPurchaseNeeded;
               return (
-                <div key={ref.id} className="flex flex-col gap-3.5 p-4 bg-[#FFFBF5] rounded-2xl border border-[#D4A574]/10 shadow-sm">
+                <div key={ref.id} className="flex flex-col gap-3.5 p-4 bg-orange-50/30 rounded-2xl border border-orange-100 shadow-xs">
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1">
-                      <p className="text-sm font-bold text-gray-800 leading-tight">{ref.name}</p>
+                      <p className="text-sm font-black text-gray-900 leading-tight">{ref.name}</p>
                       <p className="text-[10px] text-gray-400 font-semibold">
-                        Gabung: {new Date(ref.joinedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        Bergabung: {new Date(ref.joinedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </p>
                       <div className="flex items-center gap-1.5 mt-1">
                         <span className={`inline-block w-2.5 h-2.5 rounded-full ${
@@ -3469,10 +2516,10 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
                             : isQualified 
                               ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse' 
                               : ref.totalOrdersCount > 0 
-                                ? 'bg-amber-400' 
+                                ? 'bg-orange-400' 
                                 : 'bg-gray-300'
                         }`} />
-                        <span className="text-[10px] font-bold text-gray-500">
+                        <span className="text-[10px] font-bold text-gray-600">
                           {ref.bonusClaimed 
                             ? 'Bonus Sudah Diklaim' 
                             : isQualified 
@@ -3485,14 +2532,14 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
                     </div>
 
                     {ref.bonusClaimed ? (
-                      <span className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-400 text-xs font-extrabold border border-gray-200/50">
+                      <span className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-500 text-xs font-extrabold border border-gray-200/60">
                         Sudah Diklaim
                       </span>
                     ) : isQualified ? (
                       <button
                         disabled={claimingId === ref.id}
                         onClick={() => handleClaim(ref.id)}
-                        className="px-4 py-2 bg-[#2E5A44] hover:bg-[#1E3F20] text-white text-xs font-black rounded-xl shadow-md shadow-emerald-800/10 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer text-sans"
+                        className="px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white text-xs font-black rounded-xl shadow-md shadow-orange-500/20 flex items-center gap-1.5 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
                       >
                         {claimingId === ref.id ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -3502,7 +2549,7 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
                         Klaim Voucher
                       </button>
                     ) : (
-                      <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-100 text-[10px] font-extrabold select-none">
+                      <span className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 border border-amber-200/70 text-[10px] font-extrabold select-none">
                         Menunggu Belanja
                       </span>
                     )}
@@ -3510,26 +2557,26 @@ Voucher hanya berlaku 7 hari setelah kamu mendapatkan pesan ini. Buruan pakai vo
 
                   {/* Progress Bar & Info */}
                   {!ref.bonusClaimed && (
-                    <div className="space-y-1.5 pt-2.5 border-t border-[#D4A574]/10">
+                    <div className="space-y-1.5 pt-2.5 border-t border-orange-100/80">
                       <div className="flex justify-between items-center text-[10px] font-bold text-gray-500">
-                        <span>Progress Belanja Teman</span>
-                        <span className={isQualified ? 'text-emerald-600 font-extrabold' : 'text-[#B48A5E] font-extrabold'}>
+                        <span>Progres Belanja Teman</span>
+                        <span className={isQualified ? 'text-emerald-600 font-extrabold' : 'text-orange-600 font-extrabold'}>
                           {formatRupiah(ref.highestOrderAmount)} / {formatRupiah(minPurchaseNeeded)}
                         </span>
                       </div>
                       
-                      <div className="h-2.5 bg-gray-150 rounded-full overflow-hidden p-[1px] border border-gray-50">
+                      <div className="h-2.5 bg-orange-100/70 rounded-full overflow-hidden p-[1px]">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ease-out ${
-                            isQualified ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-r from-[#D4A574] to-[#B48A5E]'
+                            isQualified ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-gradient-to-r from-orange-500 to-amber-500'
                           }`}
                           style={{ width: `${Math.min((ref.highestOrderAmount / minPurchaseNeeded) * 100, 100)}%` }}
                         />
                       </div>
                       
                       {!isQualified && (
-                        <p className="text-[9px] text-gray-400 font-medium leading-tight mt-0.5">
-                          * Teman harus belanja min. <strong className="text-gray-650">{formatRupiah(minPurchaseNeeded)}</strong> dalam satu order selesai untuk mengaktifkan voucher reward Anda.
+                        <p className="text-[9px] text-gray-500 font-medium leading-tight mt-0.5">
+                          * Teman harus belanja min. <strong className="text-orange-700">{formatRupiah(minPurchaseNeeded)}</strong> dalam satu pesanan selesai untuk mengaktifkan voucher reward Anda.
                         </p>
                       )}
                     </div>
@@ -4215,6 +3262,52 @@ function TicketsSection({ user, showToast }: { user: UserShape; showToast: any }
   const [history, setHistory] = useState<any[]>(profileCache.tickets || []);
   const [historyLoading, setHistoryLoading] = useState(!user.isGuest && !profileCache.tickets);
 
+  const reportCategories = [
+    {
+      id: 'BUG',
+      label: 'Bug Aplikasi',
+      desc: 'Kendala fitur / tampilan',
+      icon: AlertTriangle,
+    },
+    {
+      id: 'ISSUE',
+      label: 'Kendala Pesanan',
+      desc: 'Transaksi / pelayanan toko',
+      icon: Package,
+    },
+    {
+      id: 'QUESTION',
+      label: 'Pertanyaan & Saran',
+      desc: 'Masukan untuk Arum Seduh',
+      icon: HelpCircle,
+    },
+    {
+      id: 'PARTNERSHIP',
+      label: 'Kemitraan',
+      desc: 'Kerjasama & kolaborasi',
+      icon: Briefcase,
+    },
+  ];
+
+  const getTicketTypeLabel = (t: string) => {
+    switch (t) {
+      case 'BUG': return 'Bug Aplikasi';
+      case 'ISSUE': return 'Kendala Pesanan';
+      case 'QUESTION': return 'Pertanyaan & Saran';
+      case 'PARTNERSHIP': return 'Kemitraan';
+      default: return t;
+    }
+  };
+
+  const getTicketStatusLabel = (s: string) => {
+    switch (s) {
+      case 'OPEN': return 'Menunggu Tinjauan';
+      case 'IN_PROGRESS': return 'Sedang Ditangani';
+      case 'RESOLVED': return 'Selesai';
+      default: return s;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !title || !description) {
@@ -4276,165 +3369,209 @@ function TicketsSection({ user, showToast }: { user: UserShape; showToast: any }
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -15 }}
-      className="space-y-6"
+      className="space-y-5"
     >
+      {/* Header Banner */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl p-5 text-white relative overflow-hidden shadow-sm">
+        <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full bg-white/15 blur-xl pointer-events-none" />
+        <div className="relative z-10 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h3 className="text-base font-serif font-bold leading-snug">Lapor Masalah & Bantuan</h3>
+            <p className="text-xs text-orange-50 font-medium mt-0.5">
+              Sampaikan kendala pesanan, laporan bug, atau masukan untuk Arum Seduh
+            </p>
+          </div>
+        </div>
+      </div>
+
       {!user.isGuest && (
-        <div className="flex bg-[#FFFBF7] p-1 rounded-2xl border border-[#D4A574]/20 shadow-sm max-w-xs mx-auto">
+        <div className="flex bg-white p-1.5 rounded-2xl border border-orange-100 shadow-xs">
           <button
             onClick={() => setActiveTab('submit')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+            className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
               activeTab === 'submit'
-                ? 'bg-[#B48A5E] text-white shadow-md'
-                : 'text-gray-500 hover:text-gray-800'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                : 'text-gray-500 hover:text-orange-600'
             }`}
           >
-            Kirim Laporan
+            Buat Laporan Baru
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
+            className={`flex-1 py-2.5 text-xs font-black rounded-xl transition-all cursor-pointer ${
               activeTab === 'history'
-                ? 'bg-[#B48A5E] text-white shadow-md'
-                : 'text-gray-500 hover:text-gray-800'
+                ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                : 'text-gray-500 hover:text-orange-600'
             }`}
           >
-            Riwayat Laporan
+            Riwayat Laporan {history.length > 0 ? `(${history.length})` : ''}
           </button>
         </div>
       )}
 
       {activeTab === 'submit' ? (
-        <div className="bg-white/80 backdrop-blur-md rounded-[32px] border border-[#D4A574]/15 shadow-sm p-6 space-y-4">
+        <div className="bg-white rounded-3xl border border-orange-100 shadow-sm p-5 space-y-5">
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Category Selector Grid */}
             <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Tipe Laporan</label>
-              <select
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-800 focus:border-[#B48A5E]"
-              >
-                <option value="BUG">Bug / Masalah Aplikasi</option>
-                <option value="ISSUE">Kendala Transaksi / Toko</option>
-                <option value="QUESTION">Pertanyaan / Saran</option>
-                <option value="PARTNERSHIP">Kemitraan / Partnership</option>
-              </select>
+              <label className="text-[11px] uppercase tracking-wider font-extrabold text-gray-500">Pilih Kategori Laporan</label>
+              <div className="grid grid-cols-2 gap-2.5">
+                {reportCategories.map((cat) => {
+                  const Icon = cat.icon;
+                  const isSelected = type === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setType(cat.id)}
+                      className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col gap-2 cursor-pointer ${
+                        isSelected
+                          ? 'bg-gradient-to-br from-orange-50 to-amber-50/70 border-orange-400 ring-2 ring-orange-500/15 shadow-xs'
+                          : 'bg-white border-gray-150 hover:border-orange-200 hover:bg-orange-50/20'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                        isSelected ? 'bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-xs' : 'bg-orange-50 text-orange-500'
+                      }`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <p className={`text-xs font-black leading-tight ${isSelected ? 'text-orange-950' : 'text-gray-800'}`}>
+                          {cat.label}
+                        </p>
+                        <p className="text-[10px] text-gray-400 font-medium mt-0.5 leading-tight">
+                          {cat.desc}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Nama Pengirim *</label>
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider font-extrabold text-gray-500">Nama Pengirim *</label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Masukkan nama Anda"
-                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+                placeholder="Masukkan nama lengkap Anda"
+                className="w-full px-4 py-3.5 bg-orange-50/30 border border-orange-200/60 rounded-2xl outline-none text-sm font-bold text-gray-900 focus:bg-white focus:border-orange-500 transition-all"
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Email Pengirim</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className="text-[11px] uppercase tracking-wider font-extrabold text-gray-500">Email (Opsional)</label>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="email@domain.com"
-                  className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+                  placeholder="nama@email.com"
+                  className="w-full px-4 py-3.5 bg-orange-50/30 border border-orange-200/60 rounded-2xl outline-none text-sm font-bold text-gray-900 focus:bg-white focus:border-orange-500 transition-all"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">No. Telepon/WA</label>
+              <div className="space-y-1.5">
+                <label className="text-[11px] uppercase tracking-wider font-extrabold text-gray-500">No. WhatsApp</label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="08123456789"
-                  className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+                  className="w-full px-4 py-3.5 bg-orange-50/30 border border-orange-200/60 rounded-2xl outline-none text-sm font-bold text-gray-900 focus:bg-white focus:border-orange-500 transition-all"
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Judul Laporan *</label>
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider font-extrabold text-gray-500">Judul Laporan *</label>
               <input
                 type="text"
                 required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Contoh: Gagal memasukkan voucher"
-                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E]"
+                placeholder="Contoh: Kendala saat klaim voucher promo"
+                className="w-full px-4 py-3.5 bg-orange-50/30 border border-orange-200/60 rounded-2xl outline-none text-sm font-bold text-gray-900 focus:bg-white focus:border-orange-500 transition-all"
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Deskripsi Masalah / Pertanyaan *</label>
+            <div className="space-y-1.5">
+              <label className="text-[11px] uppercase tracking-wider font-extrabold text-gray-500">Detail Masalah / Masukan *</label>
               <textarea
                 required
-                rows={5}
+                rows={4}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Tuliskan secara lengkap detail masalah, pertanyaan, atau penawaran partnership Anda di sini..."
-                className="w-full px-4 py-3 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 focus:border-[#B48A5E] resize-none"
+                placeholder="Ceritakan kronologi kendala atau detail pertanyaan Anda secara jelas..."
+                className="w-full px-4 py-3.5 bg-orange-50/30 border border-orange-200/60 rounded-2xl outline-none text-sm font-semibold text-gray-900 focus:bg-white focus:border-orange-500 transition-all resize-none"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-4 bg-[#B48A5E] text-white rounded-2xl text-base font-bold shadow-md hover:bg-[#946F48] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
             >
               {loading && <Loader2 className="w-5 h-5 animate-spin" />}
-              Kirim Laporan
+              <span>Kirim Laporan Sekarang</span>
             </button>
           </form>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {historyLoading ? (
             <SectionSkeleton type="tickets" />
           ) : history.length === 0 ? (
-            <div className="bg-white/80 rounded-[32px] border border-[#D4A574]/15 p-12 text-center">
-              <ClipboardList className="w-12 h-12 text-[#B48A5E]/40 mx-auto mb-3" />
-              <h4 className="font-serif text-base text-gray-800 mb-1 font-bold">Tidak Ada Laporan</h4>
-              <p className="text-xs text-gray-400 font-medium">Anda belum pernah mengirimkan laporan masalah.</p>
+            <div className="bg-white rounded-3xl border border-orange-100 p-12 text-center shadow-sm">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 flex items-center justify-center mx-auto mb-3">
+                <ClipboardList className="w-7 h-7 text-orange-400" />
+              </div>
+              <h4 className="font-serif text-base text-gray-900 mb-1 font-bold">Belum Ada Riwayat Laporan</h4>
+              <p className="text-xs text-gray-500 font-medium">Anda belum pernah mengirimkan laporan masalah sebelumnya.</p>
             </div>
           ) : (
             <div className="space-y-3">
               {history.map((ticket) => (
-                <div key={ticket.id} className="bg-white border border-[#D4A574]/15 rounded-2xl p-5 shadow-sm space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider ${
-                      ticket.type === 'BUG' ? 'bg-red-50 text-red-500 border border-red-100' :
-                      ticket.type === 'ISSUE' ? 'bg-orange-50 text-orange-500 border border-orange-100' :
-                      ticket.type === 'QUESTION' ? 'bg-blue-50 text-blue-500 border border-blue-100' :
-                      'bg-purple-50 text-purple-500 border border-purple-100'
+                <div key={ticket.id} className="bg-white border border-orange-100 rounded-3xl p-5 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                      ticket.type === 'BUG' ? 'bg-red-50 text-red-600 border-red-200' :
+                      ticket.type === 'ISSUE' ? 'bg-orange-50 text-orange-600 border-orange-200' :
+                      ticket.type === 'QUESTION' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      'bg-purple-50 text-purple-600 border-purple-200'
                     }`}>
-                      {ticket.type}
+                      {getTicketTypeLabel(ticket.type)}
                     </span>
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider ${
-                      ticket.status === 'OPEN' ? 'bg-[#B48A5E]/10 text-[#B48A5E]' :
-                      ticket.status === 'IN_PROGRESS' ? 'bg-amber-100 text-amber-700' :
-                      ticket.status === 'RESOLVED' ? 'bg-green-100 text-green-700' :
-                      'bg-gray-100 text-gray-500'
+                    <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                      ticket.status === 'OPEN' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                      ticket.status === 'IN_PROGRESS' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      ticket.status === 'RESOLVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      'bg-gray-100 text-gray-600 border-gray-200'
                     }`}>
-                      {ticket.status}
+                      {getTicketStatusLabel(ticket.status)}
                     </span>
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-800 text-[15px]">{ticket.title}</h4>
-                    <p className="text-xs text-gray-500 mt-1 leading-relaxed whitespace-pre-wrap">{ticket.description}</p>
+                    <h4 className="font-black text-gray-900 text-sm">{ticket.title}</h4>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed whitespace-pre-wrap">{ticket.description}</p>
                   </div>
                   {ticket.adminNotes && (
-                    <div className="bg-[#FFFBF7] border-l-2 border-[#B48A5E] p-3 rounded-r-xl">
-                      <p className="text-[10px] text-gray-400 font-bold uppercase">Catatan Admin</p>
-                      <p className="text-xs text-gray-700 font-medium mt-0.5 leading-relaxed">{ticket.adminNotes}</p>
+                    <div className="bg-orange-50/60 border-l-4 border-orange-500 p-3.5 rounded-r-2xl">
+                      <p className="text-[10px] text-orange-700 font-black uppercase tracking-wider">Tanggapan Tim Arum Seduh</p>
+                      <p className="text-xs text-gray-800 font-semibold mt-1 leading-relaxed">{ticket.adminNotes}</p>
                     </div>
                   )}
-                  <p className="text-[10px] text-gray-400 text-right">
-                    Dikirim pada {new Date(ticket.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-semibold">
+                    <span>ID #{ticket.id.slice(0, 8).toUpperCase()}</span>
+                    <span>
+                      {new Date(ticket.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -4483,7 +3620,8 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
   const handleWAContact = () => {
     if (storeSettings?.whatsappNumber) {
       const cleanNumber = storeSettings.whatsappNumber.replace(/[^0-9]/g, '');
-      const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(storeSettings.whatsappMessage || 'Halo Arum Seduh, saya butuh bantuan...')}`;
+      const cleanMessage = sanitizeCsMessage(storeSettings.whatsappMessage);
+      const waUrl = `https://wa.me/${cleanNumber}?text=${encodeURIComponent(cleanMessage)}`;
       window.open(waUrl, '_blank');
     } else {
       showToast('Layanan WhatsApp tidak tersedia.', 'error');
@@ -4504,9 +3642,9 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Cari solusi atau pertanyaan..."
-          className="w-full pl-12 pr-4 py-3.5 bg-white border border-[#D4A574]/20 rounded-2xl focus:border-[#B48A5E] focus:ring-2 focus:ring-[#B48A5E]/10 transition-all outline-none text-[15px] font-semibold text-gray-800 shadow-sm"
+          className="w-full pl-12 pr-4 py-3.5 bg-white border border-orange-100 rounded-2xl focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all outline-none text-[15px] font-semibold text-gray-800 shadow-sm"
         />
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-[#B48A5E] transition-colors" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-orange-500 transition-colors" />
       </div>
 
       {/* Category Tabs */}
@@ -4516,10 +3654,10 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className={`px-4 py-2 text-xs font-black rounded-full border shrink-0 transition-all ${
+              className={`px-4 py-2 text-xs font-black rounded-full border shrink-0 transition-all cursor-pointer ${
                 selectedCategory === cat
-                  ? 'bg-[#B48A5E] text-white border-[#B48A5E] shadow-sm'
-                  : 'bg-white text-gray-500 border-[#D4A574]/15 hover:bg-[#B48A5E]/5'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white border-orange-500 shadow-sm'
+                  : 'bg-white text-gray-600 border-orange-100 hover:bg-orange-50'
               }`}
             >
               {cat}
@@ -4533,29 +3671,29 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
         {loading ? (
           <SectionSkeleton type="help-center" />
         ) : filteredArticles.length === 0 ? (
-          <div className="bg-white/80 rounded-[32px] border border-[#D4A574]/15 p-12 text-center">
-            <HelpCircle className="w-12 h-12 text-[#B48A5E]/40 mx-auto mb-3" />
+          <div className="bg-white rounded-[32px] border border-orange-100 p-12 text-center shadow-sm">
+            <HelpCircle className="w-12 h-12 text-orange-400 mx-auto mb-3" />
             <h4 className="font-serif text-base text-gray-800 mb-1 font-bold">Tidak Menemukan Solusi?</h4>
-            <p className="text-xs text-gray-400 font-medium">Coba ganti kata kunci pencarian Anda atau langsung hubungi admin.</p>
+            <p className="text-xs text-gray-500 font-medium">Coba ganti kata kunci pencarian Anda atau langsung hubungi CS Arus.</p>
           </div>
         ) : (
           filteredArticles.map((art) => (
             <div
               key={art.id}
-              className="bg-white border border-[#D4A574]/15 rounded-2xl shadow-sm overflow-hidden transition-all duration-300"
+              className="bg-white border border-orange-100 rounded-2xl shadow-sm overflow-hidden transition-all duration-300"
             >
               <button
                 onClick={() => toggleExpand(art.id)}
-                className="w-full flex items-center justify-between gap-4 p-5 hover:bg-[#B48A5E]/5 transition-colors text-left"
+                className="w-full flex items-center justify-between gap-4 p-5 hover:bg-orange-50/40 transition-colors text-left cursor-pointer"
               >
                 <div>
-                  <span className="text-[10px] font-black text-[#B48A5E] uppercase tracking-wider bg-[#B48A5E]/5 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] font-black text-orange-600 uppercase tracking-wider bg-orange-50 px-2.5 py-0.5 rounded-md border border-orange-100">
                     {art.category}
                   </span>
                   <h4 className="font-bold text-gray-800 text-[15px] mt-1.5">{art.title}</h4>
                 </div>
                 <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
-                  expandedId === art.id ? 'rotate-90 text-[#B48A5E]' : ''
+                  expandedId === art.id ? 'rotate-90 text-orange-500' : ''
                 }`} />
               </button>
               
@@ -4567,7 +3705,7 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
                     exit={{ height: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="px-5 pb-5 pt-1 text-xs text-gray-600 border-t border-gray-100/50 leading-relaxed whitespace-pre-wrap">
+                    <div className="px-5 pb-5 pt-2 text-xs text-gray-600 border-t border-orange-50 leading-relaxed whitespace-pre-wrap">
                       {art.content}
                     </div>
                   </motion.div>
@@ -4579,21 +3717,22 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
       </div>
 
       {/* WhatsApp Help CTA */}
-      <div className="bg-[#FFFBF5] rounded-[32px] border border-[#D4A574]/20 p-6 text-center space-y-4 shadow-sm">
-        <div className="w-12 h-12 rounded-2xl bg-white border border-[#D4A574]/20 flex items-center justify-center mx-auto text-[#B48A5E] shadow-sm">
+      <div className="bg-gradient-to-br from-orange-50/80 via-[#FFFBF7] to-amber-50/60 rounded-[32px] border border-orange-200/70 p-6 text-center space-y-4 shadow-sm">
+        <div className="w-12 h-12 rounded-2xl bg-white border border-orange-100 flex items-center justify-center mx-auto text-orange-600 shadow-sm">
           <MessageCircle className="w-6 h-6" />
         </div>
         <div className="space-y-1">
-          <h4 className="font-serif text-base text-gray-800 font-bold">Masih Butuh Bantuan?</h4>
-          <p className="text-xs text-gray-500 font-medium max-w-xs mx-auto">
-            Tim customer service kami siap membantu kendala Anda langsung melalui WhatsApp.
+          <h4 className="font-serif text-base text-gray-900 font-bold">Masih Butuh Bantuan?</h4>
+          <p className="text-xs text-gray-600 font-medium max-w-xs mx-auto">
+            Tim Customer Service Arus siap membantu kendala Anda langsung melalui WhatsApp.
           </p>
         </div>
         <button
           onClick={handleWAContact}
-          className="inline-flex items-center gap-2 px-6 py-3 bg-[#1E3F20] hover:bg-[#152e16] text-white rounded-2xl text-xs font-bold transition-all shadow-md active:scale-95"
+          className="inline-flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white rounded-2xl text-xs font-black transition-all shadow-lg shadow-orange-500/20 active:scale-95 cursor-pointer"
         >
-          Hubungi Customer Service
+          <MessageCircle className="w-4 h-4" />
+          <span>Hubungi CS Arus</span>
         </button>
       </div>
     </motion.section>
@@ -4607,7 +3746,6 @@ function HelpCenterSection({ storeSettings, showToast }: { storeSettings: any; s
 function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) {
   const [schedules, setSchedules] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
-  const [addresses, setAddresses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -4631,10 +3769,9 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [schedulesRes, productsRes, addressesRes] = await Promise.all([
+      const [schedulesRes, productsRes] = await Promise.all([
         fetch('/api/auto-reorder'),
         fetch('/api/products'),
-        fetch('/api/user/locations')
       ]);
 
       if (schedulesRes.ok) {
@@ -4644,10 +3781,6 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
       if (productsRes.ok) {
         const prodData = await productsRes.json();
         setProducts(prodData.products || []);
-      }
-      if (addressesRes.ok) {
-        const addrData = await addressesRes.json();
-        setAddresses(addrData || []);
       }
     } catch (err) {
       console.error("Error fetching auto-reorder data:", err);
@@ -4695,7 +3828,7 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
     setDayOfWeek(1);
     setDayOfMonth(1);
     setTimeSlot("08:00");
-    setSelectedAddress(addresses.find(a => a.isDefault)?.address || addresses[0]?.address || "");
+    setSelectedAddress("");
     setPaymentMethod("WALLET");
     setIsFormOpen(true);
   };
@@ -5231,32 +4364,16 @@ function AutoReorderSection({ user, showToast }: { user: any; showToast: any }) 
                 </div>
               </div>
 
-              {/* Delivery Address selection */}
+              {/* Delivery Address input */}
               <div className="space-y-2">
                 <label className="text-[11px] uppercase tracking-wider font-bold text-gray-400">Alamat Pengantaran</label>
-                {addresses.length === 0 ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      placeholder="Masukkan alamat pengiriman manual"
-                      value={selectedAddress}
-                      onChange={(e) => setSelectedAddress(e.target.value)}
-                      className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 shadow-inner"
-                    />
-                    <p className="text-[10px] text-amber-600 font-bold">⚠️ Anda belum memiliki alamat tersimpan. Silakan tambahkan alamat tersimpan terlebih dahulu di profil untuk ketepatan pinpoint delivery.</p>
-                  </div>
-                ) : (
-                  <select
-                    value={selectedAddress}
-                    onChange={(e) => setSelectedAddress(e.target.value)}
-                    className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 shadow-inner"
-                  >
-                    <option value="" disabled>-- Pilih Alamat Pengantaran --</option>
-                    {addresses.map(a => (
-                      <option key={a.id} value={a.address}>{a.name || 'Alamat'} - {a.address.slice(0, 45)}...</option>
-                    ))}
-                  </select>
-                )}
+                <input
+                  type="text"
+                  placeholder="Masukkan alamat lengkap pengiriman..."
+                  value={selectedAddress}
+                  onChange={(e) => setSelectedAddress(e.target.value)}
+                  className="w-full px-4 py-3.5 bg-[#FFFBF5] border border-[#D4A574]/20 rounded-2xl outline-none text-[15px] font-semibold text-gray-900 shadow-inner"
+                />
               </div>
 
               {/* Payment Method */}
