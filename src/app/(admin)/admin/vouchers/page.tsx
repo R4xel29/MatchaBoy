@@ -13,7 +13,12 @@ export default async function AdminVouchersPage() {
 
   // Fetch all voucher templates
   const templates = await prisma.voucherTemplate.findMany({
-    orderBy: { createdAt: 'desc' }
+    orderBy: { createdAt: 'desc' },
+    include: {
+      _count: {
+        select: { vouchers: true }
+      }
+    }
   })
 
   // Fetch all products for selector in the creation/editing form
